@@ -94,7 +94,7 @@ extension GestureRecognizerTests {
         #expect(fired(frames) == [.three])
     }
 
-    @Test func fingerCountIsThePeakNotTheCountAtTheLastLift() {
+    @Test func everyFingerThatTouchedCountsNotTheMostDownAtOnce() {
         let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
             .tap(fingers: 3, stagger: .milliseconds(50)).frames
         #expect(fired(frames) == [.three])
@@ -147,10 +147,16 @@ extension GestureRecognizerTests {
         #expect(fired(frames) == [Gesture(fingerCount: fingers)!])
     }
 
-    @Test(arguments: [(holdMS: 290, fires: true), (holdMS: 310, fires: false)])
-    func tapLongerThanThreeHundredMillisecondsIsNotATap(holdMS: Int, fires: Bool) {
-        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10)).tap(fingers: 1, hold: .milliseconds(holdMS)).frames
-        #expect(fired(frames) == (fires ? [.one] : []))
+    @Test(arguments: [(holdMS: 390, fired: [Gesture.one, .one]), (holdMS: 410, fired: [.one])])
+    func tapMustEndWithinFourHundredMillisecondsOfItsFirstLanding(holdMS: Int, fired expected: [Gesture]) {
+        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
+            .tap(fingers: 1, hold: .milliseconds(holdMS)).tap(fingers: 1).frames
+        #expect(fired(frames) == expected)
+    }
+
+    @Test func twoFingersHeldFiveHundredMillisecondsFireNothing() {
+        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10)).tap(fingers: 2, hold: .milliseconds(500)).frames
+        #expect(fired(frames).isEmpty)
     }
 
     @Test(arguments: [(rollToXMM: 26.5, fires: true), (rollToXMM: 28.0, fires: false)])
@@ -175,6 +181,77 @@ extension GestureRecognizerTests {
         var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14)
         let perFrame = frames.map { recognizer.step($0) }
         #expect(perFrame == [nil, nil, nil, nil, .one, nil, nil, .one])
+    }
+}
+
+extension GestureRecognizerTests {
+    @Test func fourFingersLandingOneByOneWhileEarlierOnesLiftFireFour() {
+        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
+            .tap(fingers: 4, stagger: .milliseconds(40), hold: .milliseconds(100)).frames
+        #expect(fired(frames) == [.four])
+    }
+
+    @Test func fiveFingersInARollingTapFireNothing() {
+        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
+            .tap(fingers: 5, stagger: .milliseconds(40), hold: .milliseconds(100)).frames
+        #expect(fired(frames).isEmpty)
+    }
+
+    @Test func tapsTwoHundredMillisecondsApartBothFire() {
+        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
+            .tap(fingers: 1).wait(.milliseconds(100)).tap(fingers: 1).frames
+        #expect(fired(frames) == [.one, .one])
+    }
+
+    @Test func aFingerThatBouncesCountsOnce() {
+        let h = HandFrames()
+        let frames = [
+            h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)]),
+            h.frame(atMS: 100, [h.contact(9, atMM: 10, 10)] + (1...4).map { h.contact(Int32($0), .landing, atMM: 62 + 8 * Double($0), 45) }),
+            h.frame(atMS: 110, [h.contact(9, atMM: 10, 10)] + (1...4).map { h.contact(Int32($0), atMM: 62 + 8 * Double($0), 45) }),
+            h.frame(atMS: 120, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 70, 45), h.contact(2, .landing, atMM: 78, 45),
+                                h.contact(3, atMM: 86, 45), h.contact(4, atMM: 94, 45)]),
+            h.frame(atMS: 130, [h.contact(9, atMM: 10, 10)] + (1...4).map { h.contact(Int32($0), atMM: 62 + 8 * Double($0), 45) }),
+            h.frame(atMS: 150, [h.contact(9, atMM: 10, 10)]),
+        ]
+        #expect(fired(frames) == [.four])
+    }
+
+    @Test func unevenThreeFingerTapOverThreeHundredFiftyMillisecondsFires() {
+        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
+            .tap(fingers: 3, stagger: .milliseconds(75), hold: .milliseconds(200)).frames
+        #expect(fired(frames) == [.three])
+    }
+
+    @Test func noTapBeginsWhileAnOverlongTapsFingersAreStillDown() {
+        let h = HandFrames()
+        let frames = [
+            h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)]),
+            h.frame(atMS: 100, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45)]),
+            h.frame(atMS: 300, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 62, 45)]),
+            h.frame(atMS: 520, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 62, 45)]),
+            h.frame(atMS: 540, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]),
+            h.frame(atMS: 560, [h.contact(9, atMM: 10, 10), h.contact(2, atMM: 70, 45)]),
+            h.frame(atMS: 600, [h.contact(9, atMM: 10, 10)]),
+            h.frame(atMS: 700, [h.contact(9, atMM: 10, 10), h.contact(3, .landing, atMM: 62, 45)]),
+            h.frame(atMS: 800, [h.contact(9, atMM: 10, 10)]),
+        ]
+        #expect(fired(frames) == [.one])
+    }
+
+    @Test func firesOnTheFirstFrameTheLastFingerIsAbsentAndOnNoLaterOne() {
+        let h = HandFrames()
+        let frames = [
+            h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)]),
+            h.frame(atMS: 100, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45)]),
+            h.frame(atMS: 110, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 62, 45)]),
+            h.frame(atMS: 120, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 62, 45)]),
+            h.frame(atMS: 130, [h.contact(9, atMM: 10, 10)]),
+            h.frame(atMS: 140, [h.contact(9, atMM: 10, 10)]),
+            h.frame(atMS: 150, []),
+        ]
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14)
+        #expect(frames.map { recognizer.step($0) } == [nil, nil, nil, nil, .one, nil, nil])
     }
 }
 

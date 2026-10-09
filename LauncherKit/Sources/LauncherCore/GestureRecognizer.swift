@@ -31,26 +31,25 @@ public struct GestureRecognizer: Sendable {
         case .armed(let anchor):
             let fingers = landed.filter { $0.id != anchor.id }
             if !fingers.isEmpty {
-                state = frame.buttonDown ? .spoiled(anchor) : Self.tapping(anchor, landed: fingers, at: frame.time)
+                state = frame.buttonDown ? .spoiled(anchor) : .tapping(anchor, Tap(start: frame.time, landing: fingers))
             }
-        case .tapping(let anchor, var fingers, var peak, let start):
-            fingers = fingers.filter { !lifted.contains($0.key) }
+        case .tapping(let anchor, var tap):
+            for id in lifted { tap.down[id] = nil }
             if frame.buttonDown
-                || frame.time - start > GestureRules.maxTapDuration
-                || fingers.contains(where: { id, origin in
+                || frame.time - tap.start > GestureRules.maxTapDuration
+                || tap.down.contains(where: { id, origin in
                     down[id].map { surface.distanceMM(origin, $0.position) > GestureRules.dragThresholdMM } ?? false
                 }) {
                 state = .spoiled(anchor)
-            } else if fingers.isEmpty {
-                fired = Gesture(fingerCount: peak)
+            } else if tap.down.isEmpty {
+                fired = Gesture(fingerCount: tap.touched.count)
                 let new = landed.filter { $0.id != anchor.id }
-                state = new.isEmpty ? .armed(anchor) : Self.tapping(anchor, landed: new, at: frame.time)
+                state = new.isEmpty ? .armed(anchor) : .tapping(anchor, Tap(start: frame.time, landing: new))
             } else {
                 for touch in landed where touch.id != anchor.id {
-                    fingers[touch.id] = touch.position
+                    tap.land(touch)
                 }
-                peak = max(peak, fingers.count)
-                state = .tapping(anchor, fingers: fingers, peak: peak, start: start)
+                state = .tapping(anchor, tap)
             }
         case .spoiled(let anchor):
             if down.keys.allSatisfy({ $0 == anchor.id }) {
@@ -60,30 +59,43 @@ public struct GestureRecognizer: Sendable {
         return fired
     }
 
-    private static func tapping(_ anchor: Anchor, landed: [Touch], at time: FrameTime) -> State {
-        .tapping(anchor, fingers: landingPoints(landed), peak: landed.count, start: time)
-    }
-
     private struct Anchor: Sendable {
         let id: TouchID
+    }
+
+    private struct Tap: Sendable {
+        let start: FrameTime
+        /// Fingers down now, with their landing points (the drag check).
+        var down: [TouchID: SurfacePoint]
+        /// Every finger that touched during this tap. Always a superset of `down.keys`.
+        private(set) var touched: Set<TouchID>
+
+        init(start: FrameTime, landing: [Touch]) {
+            self.start = start
+            down = [:]
+            touched = []
+            for touch in landing { land(touch) }
+        }
+
+        /// The only way a finger joins: a re-landed id gets a new origin but still counts once.
+        mutating func land(_ touch: Touch) {
+            down[touch.id] = touch.position
+            touched.insert(touch.id)
+        }
     }
 
     private enum State: Sendable {
         case idle
         case armed(Anchor)
-        case tapping(Anchor, fingers: [TouchID: SurfacePoint], peak: Int, start: FrameTime)
+        case tapping(Anchor, Tap)
         case spoiled(Anchor)
 
         var anchor: Anchor? {
             switch self {
             case .idle: nil
-            case .armed(let a), .tapping(let a, _, _, _), .spoiled(let a): a
+            case .armed(let a), .tapping(let a, _), .spoiled(let a): a
             }
         }
-    }
-
-    private static func landingPoints(_ touches: [Touch]) -> [TouchID: SurfacePoint] {
-        Dictionary(touches.map { ($0.id, $0.position) }, uniquingKeysWith: { first, _ in first })
     }
 
     private let corner: AnchorCorner

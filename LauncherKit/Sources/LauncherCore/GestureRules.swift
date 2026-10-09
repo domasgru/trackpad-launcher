@@ -9,7 +9,7 @@ package enum GestureRules {
     /// An anchored thumb may roll this far past the zone edge before it stops being the anchor.
     static let anchorReleaseMarginMM = 2.0
     /// First finger down to last finger up.
-    static let maxTapDuration = Duration.milliseconds(300)
+    static let maxTapDuration = Duration.milliseconds(400)
     /// A finger farther than this from its landing point is dragging, not tapping.
     static let dragThresholdMM = 3.0
 }

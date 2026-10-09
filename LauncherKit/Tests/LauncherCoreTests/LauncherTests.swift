@@ -33,6 +33,33 @@ extension Launcher {
         #expect(world.hardware.feedback.count == 2)
     }
 
+    @Test func fourFingerTapWithEarlyLiftsOpensTheFourFingerApp() {
+        let world = World(apps: ["Spotify", "Notion"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Spotify")), for: .four)
+        world.launcher.setAssignment(.app(world.app("Notion")), for: .three)
+
+        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
+            .tap(fingers: 4, stagger: .milliseconds(40), hold: .milliseconds(100)).frames
+        world.hardware.touch(frames, on: Trackpad.macBook14.id)
+
+        #expect(world.system.broughtToFront == [world.app("Spotify")])
+        #expect(world.hardware.feedback.count == 1)
+    }
+
+    @Test func twoQuickOneFingerTapsOpenTheAppTwice() {
+        let world = World(apps: ["Arc", "Figma"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
+
+        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
+            .tap(fingers: 1).wait(.milliseconds(100)).tap(fingers: 1).frames
+        world.hardware.touch(frames, on: Trackpad.macBook14.id)
+
+        #expect(world.system.broughtToFront == [world.app("Arc"), world.app("Arc")])
+    }
+
     @Test func unassignedGestureIsSilentAndLeavesTheWindowOpen() {
         let world = World(apps: ["Arc"])
         world.launcher.start()
