@@ -1,17 +1,21 @@
-import Foundation
+import AppKit
 import IOKit
 import LauncherCore
 
 /// TrackpadHardware over MultitouchSupport and IOKit.
+/// Frames arrive on MultitouchSupport's thread and are recognised there; only fired gestures hop to main.
 /// IOKit matched/terminated notifications are delivered on the main queue and drained there; the initial
-/// matches are drained at init so they do not count as a change.
+/// matches are drained at init so they do not count as a change. Waking the Mac is reported as a change too,
+/// because devices stop delivering frames across sleep and `run` restarts them.
 @MainActor public final class MultitouchTrackpads: TrackpadHardware {
     public var onEvent: (@MainActor (TrackpadEvent) -> Void)?
 
     private let framework: MultitouchSupport?
     private let notificationPort: IONotificationPortRef
     private var iterators: [io_iterator_t] = []
-    private var running: Set<TrackpadID> = []
+    private var startedDevices: [AnyObject] = []
+    private var actuators: [TrackpadID: CFTypeRef] = [:]
+    private var wakeObserver: (any NSObjectProtocol)?
 
     /// On a failed `dlopen`, `connected()` is empty: the app shows "No trackpad connected".
     public init() {
@@ -36,15 +40,70 @@ import LauncherCore
             Self.drain(iterator)
             iterators.append(iterator)
         }
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.onEvent?(.trackpadsChanged) }
+        }
     }
 
     isolated deinit {
+        wakeObserver.map { NSWorkspace.shared.notificationCenter.removeObserver($0) }
         iterators.forEach { IOObjectRelease($0) }
         IONotificationPortDestroy(notificationPort)
     }
 
-    /// Every multitouch device that is a trackpad. A device with an unreadable ID, surface or product is skipped.
+    /// Every multitouch device that is a trackpad.
     public func connected() -> [Trackpad] {
+        listTrackpads().map(\.trackpad)
+    }
+
+    /// Forgets every session, stops every device, then starts exactly `trackpads` with a fresh recognizer each.
+    public func run(_ trackpads: [Trackpad], handMode: HandMode) {
+        guard let framework else { return }
+        sessions.withLock { $0 = [:] }
+        for device in startedDevices {
+            let ref = Unmanaged.passUnretained(device).toOpaque()
+            framework.unregisterContactFrameCallback(ref, contactFrameCallback)
+            _ = framework.stop(ref)
+        }
+        actuators.values.forEach { _ = framework.actuatorClose($0) }
+        actuators = [:]
+        startedDevices = []
+
+        let wanted = Set(trackpads.map(\.id))
+        for (device, trackpad) in listTrackpads() where wanted.contains(trackpad.id) {
+            let ref = Unmanaged.passUnretained(device).toOpaque()
+            let session = DeviceSession(
+                trackpad: trackpad.id,
+                recognizer: GestureRecognizer(handMode: handMode, surface: trackpad.surface),
+                deliver: { [weak self] event in
+                    Task { @MainActor in self?.onEvent?(.gesture(event)) }
+                })
+            if let actuator = framework.actuatorCreateFromDeviceID(trackpad.id.rawValue)?.takeRetainedValue(),
+                framework.actuatorOpen(actuator) == 0
+            {
+                actuators[trackpad.id] = actuator
+            }
+            sessions.withLock { $0[UInt(bitPattern: ref)] = session }
+            framework.registerContactFrameCallback(ref, contactFrameCallback)
+            _ = framework.start(ref, 0)
+            startedDevices.append(device)
+        }
+    }
+
+    /// No-op for a trackpad that is not running or whose actuator would not open.
+    public func playFeedback(on trackpad: TrackpadID) {
+        guard let framework, let actuator = actuators[trackpad] else { return }
+        _ = framework.actuatorActuate(actuator, Self.feedbackActuation, 0, 0, 0)
+    }
+
+    /// Chosen by feel: 3 weak, 4 medium, 6 strong.
+    static let feedbackActuation: Int32 = 6
+
+    /// Devices stay retained here for as long as their callbacks are registered, so the refs used as
+    /// registry keys remain valid.
+    private func listTrackpads() -> [(device: AnyObject, trackpad: Trackpad)] {
         guard let framework else { return [] }
         let devices = framework.createList().takeRetainedValue() as [AnyObject]
         return devices.compactMap { device in
@@ -57,20 +116,13 @@ import LauncherCore
                 let product = Self.product(of: framework.getService(ref)),
                 let kind = trackpadKind(product: product, isBuiltIn: framework.isBuiltIn(ref))
             else { return nil }
-            return Trackpad(
-                id: TrackpadID(rawValue: id), kind: kind,
-                surface: SurfaceSize(widthMM: Double(width) / 100, heightMM: Double(height) / 100))
+            return (
+                device,
+                Trackpad(
+                    id: TrackpadID(rawValue: id), kind: kind,
+                    surface: SurfaceSize(widthMM: Double(width) / 100, heightMM: Double(height) / 100))
+            )
         }
-    }
-
-    /// Session bookkeeping only: no device is started and no frame is read here yet.
-    public func run(_ trackpads: [Trackpad], handMode: HandMode) {
-        running = Set(trackpads.map(\.id))
-    }
-
-    /// No-op for a trackpad that is not running; actuators are not opened yet.
-    public func playFeedback(on trackpad: TrackpadID) {
-        guard running.contains(trackpad) else { return }
     }
 
     private static func product(of service: io_service_t) -> String? {
