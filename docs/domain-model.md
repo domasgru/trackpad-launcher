@@ -52,3 +52,9 @@ The message in the launcher window, shown while gestures are inactive, that name
 
 ## Feedback
 The haptic pulse the trackpad gives when a gesture fires for an assigned, present target app.
+
+## Click blocking
+Ignoring trackpad clicks (left-click, right-click, Force Click) for the first 3 seconds after a thumb becomes anchored, while it stays anchored, another finger is on the trackpad, and gestures are active. A press is blocked or passed whole. It needs the Accessibility permission; without it, clicks are never blocked. Pointer movement, scrolling and mouse clicks are never blocked.
+
+## Accessibility hint
+The message in the launcher window, shown while Trackpad Launcher lacks the Accessibility permission, that says clicks are not blocked during gestures and opens System Settings for the user.
