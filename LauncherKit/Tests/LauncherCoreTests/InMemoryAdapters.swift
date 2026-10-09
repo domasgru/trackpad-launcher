@@ -108,14 +108,27 @@ import LauncherCore
 @MainActor final class RecordingSystemActions: SystemActions {
     private(set) var broughtToFront: [AppEntry] = []
     private(set) var loginItemRegistrations = 0
+    /// One entry per play, in order.
+    private(set) var launchAnimations: [AppEntry] = []
+    /// The latest set prepared; each prepare replaces the one before.
+    private(set) var preparedLaunchAnimations: [AppEntry] = []
     /// Runs inside `registerLoginItem()` so a test can observe what is stored at that moment.
     var onRegisterLoginItem: (() -> Void)?
+    /// Runs inside `playLaunchAnimation(for:)` so a test can observe the other effects at that moment.
+    var onPlayLaunchAnimation: (() -> Void)?
 
     func bringToFront(_ app: AppEntry) { broughtToFront.append(app) }
 
     func registerLoginItem() {
         loginItemRegistrations += 1
         onRegisterLoginItem?()
+    }
+
+    func prepareLaunchAnimations(for apps: [AppEntry]) { preparedLaunchAnimations = apps }
+
+    func playLaunchAnimation(for app: AppEntry) {
+        launchAnimations.append(app)
+        onPlayLaunchAnimation?()
     }
 }
 

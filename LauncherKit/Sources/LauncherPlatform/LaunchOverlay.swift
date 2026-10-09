@@ -1,0 +1,121 @@
+import AppKit
+import LauncherCore
+import QuartzCore
+
+/// Plays launch animations. Each play gets its own borderless, click-through panel above everything on every Space,
+/// holding one icon layer that Core Animation drives through the keyframes `LaunchFlight` staged. The panel is closed
+/// from the animation's completion callback; no code of ours runs while it plays.
+@MainActor final class LaunchOverlay {
+    private var flights = LaunchFlights()
+    /// Rendered app icons, keyed by bundle location.
+    private var icons: [URL: CGImage] = [:]
+    /// Panels still playing. AppKit keeps closed panels in its window list, so the overlay tracks its own.
+    private var live: Set<NSPanel> = []
+
+    init() {
+        // A process's first window-server window costs about 27 ms to create, against 1 ms afterwards; pay it now
+        // instead of at the first gesture.
+        Self.makePanel(frame: CGRect(x: 0, y: 0, width: 1, height: 1)).close()
+    }
+
+    /// Renders each app's icon now, replacing the previous set: a first render of an icon at this size can take over
+    /// 100 ms, which must not land on a gesture.
+    func prepare(for apps: [AppEntry]) {
+        let scale = Self.highestScale
+        var icons: [URL: CGImage] = [:]
+        for app in apps where icons[app.url] == nil {
+            icons[app.url] = Self.renderIcon(of: app, scale: scale)
+        }
+        self.icons = icons
+    }
+
+    func play(for app: AppEntry) {
+        let pointer = NSEvent.mouseLocation
+        let displays = NSScreen.screens.map { LaunchDisplay(frame: $0.frame, scale: $0.backingScaleFactor) }
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let flight = flights.next(draw: .random(in: -1...1), reduceMotion: reduceMotion)
+        guard let stage = flight.staged(at: pointer, among: displays) else { return }
+
+        let panel = Self.makePanel(frame: stage.frame)
+        guard let host = panel.contentView?.layer else { return }
+        live.insert(panel)
+        panel.orderFrontRegardless()
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        CATransaction.setCompletionBlock { [weak self] in
+            MainActor.assumeIsolated {
+                panel.close()
+                self?.live.remove(panel)
+            }
+        }
+        let icon = CALayer()
+        icon.bounds = CGRect(x: 0, y: 0, width: stage.iconSide, height: stage.iconSide)
+        icon.position = stage.iconCentre
+        icon.contents = bitmap(for: app)
+        icon.contentsScale = stage.scale
+        icon.minificationFilter = .trilinear
+        icon.allowsEdgeAntialiasing = true
+        for animation in stage.animations {
+            guard let keyPath = animation.keyPath else { continue }
+            // The model holds the last keyframe, so nothing flashes once the animation is removed.
+            icon.setValue(animation.values?.last, forKeyPath: keyPath)
+            icon.add(animation, forKey: keyPath)
+        }
+        host.addSublayer(icon)
+        CATransaction.commit()
+    }
+
+    /// The prepared icon; an app that moved since the last prepare is rendered now.
+    private func bitmap(for app: AppEntry) -> CGImage? {
+        if let prepared = icons[app.url] { return prepared }
+        let rendered = Self.renderIcon(of: app, scale: Self.highestScale)
+        icons[app.url] = rendered
+        return rendered
+    }
+
+    private static var highestScale: CGFloat {
+        NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
+    }
+
+    /// The icon Finder shows for the app, as a bitmap of exactly the icon's start size in pixels at `scale`, so the
+    /// first, nearly still frames map one to one onto the display.
+    private static func renderIcon(of app: AppEntry, scale: CGFloat) -> CGImage? {
+        let pixels = Int((LaunchFlight.iconSide * scale).rounded())
+        guard let space = CGColorSpace(name: CGColorSpace.displayP3),
+              let context = CGContext(
+                data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        context.interpolationQuality = .high
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        NSWorkspace.shared.icon(forFile: app.url.path).draw(in: CGRect(x: 0, y: 0, width: pixels, height: pixels))
+        NSGraphicsContext.restoreGraphicsState()
+        return context.makeImage()
+    }
+
+    /// Borderless, non-activating, click-through and never key. Screen-saver level puts it above the menu bar, menus,
+    /// the launcher window and full-screen apps; it shows on every Space and holds still while Spaces slide. Its
+    /// content view is plain, non-flipped and layer-backed, so the staged y-up keyframes apply to its sublayers as
+    /// they are.
+    private static func makePanel(frame: CGRect) -> NSPanel {
+        let panel = NSPanel(
+            contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        // The icon art carries its own shadow.
+        panel.hasShadow = false
+        panel.ignoresMouseEvents = true
+        panel.level = .screenSaver
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        // The app is never active, so it never deactivates either.
+        panel.hidesOnDeactivate = false
+        panel.animationBehavior = .none
+        panel.isReleasedWhenClosed = false
+        let content = NSView(frame: CGRect(origin: .zero, size: frame.size))
+        content.wantsLayer = true
+        panel.contentView = content
+        return panel
+    }
+}
