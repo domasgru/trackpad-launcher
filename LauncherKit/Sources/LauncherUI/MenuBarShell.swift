@@ -11,16 +11,18 @@ import UniformTypeIdentifiers
 /// exists only while the window is open and dismisses; Escape closes; a fired gesture closes it through the model.
 public final class MenuBarShell: NSObject {
     private let launcher: Launcher
+    private let icons = AppIcons()
     private let statusItem: NSStatusItem
     private let panel: LauncherPanel
     private var mouseDownMonitor: Any?
     private var observations: [Task<Void, Never>] = []
     private var statusWindowMoved: NSObjectProtocol?
 
-    public init(launcher: Launcher, catalog: AppCatalog) {
+    public init(launcher: Launcher) {
         self.launcher = launcher
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        let actions = Self.makeActions(launcher: launcher, catalog: catalog)
+        icons.renderNow(Self.iconTargets(launcher))
+        let actions = Self.makeActions(launcher: launcher, icons: icons)
         panel = LauncherPanel(content: LauncherView(launcher: launcher, actions: actions))
         super.init()
 
@@ -49,6 +51,12 @@ public final class MenuBarShell: NSObject {
             })
         observations.append(
             Task { [weak self] in
+                for await _ in Observations({ launcher.installedApps }) {
+                    self?.renderIcons()
+                }
+            })
+        observations.append(
+            Task { [weak self] in
                 for await open in Observations({ launcher.isWindowOpen }) {
                     if open { self?.show() } else { self?.hide() }
                 }
@@ -70,7 +78,18 @@ public final class MenuBarShell: NSObject {
         if !isStatusButtonClick { launcher.dismissWindow() }
     }
 
+    /// The listed apps plus the rows' present apps, which may sit outside the list.
+    private static func iconTargets(_ launcher: Launcher) -> [AppEntry] {
+        let rowApps = launcher.rows.compactMap { row -> AppEntry? in
+            if case .present(let entry) = row.app { entry } else { nil }
+        }
+        return launcher.installedApps.recent + launcher.installedApps.others + rowApps
+    }
+
+    private func renderIcons() { icons.render(Self.iconTargets(launcher)) }
+
     private func show() {
+        renderIcons()
         refit()
         panel.makeKeyAndOrderFront(nil)
         guard mouseDownMonitor == nil else { return }
@@ -104,9 +123,10 @@ public final class MenuBarShell: NSObject {
         panel.fitToContent(centeredOn: anchorX, topEdge: topEdge, within: visible)
     }
 
-    private static func makeActions(launcher: Launcher, catalog: AppCatalog) -> LauncherActions {
+    private static func makeActions(launcher: Launcher, icons: AppIcons) -> LauncherActions {
         LauncherActions(
-            installedApps: { catalog.installedApps() },
+            cachedIcon: { icons.cachedIcon(for: $0) },
+            icon: { icons.icon(for: $0) },
             chooseOtherApp: { gesture in
                 launcher.closeWindow()
                 NSApp.activate()

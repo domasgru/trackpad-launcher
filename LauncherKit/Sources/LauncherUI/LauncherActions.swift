@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import LauncherCore
 
 /// The System Settings panes the window opens.
@@ -17,8 +17,10 @@ enum SettingsPane {
 
 /// AppKit-only actions and suppliers the views use.
 struct LauncherActions {
-    /// The catalog, enumerated each time a picker's menu opens.
-    let installedApps: () -> [AppEntry]
+    /// The cached icon, or a generic one: never draws, so the menu can use it on the click path.
+    let cachedIcon: (URL) -> NSImage
+    /// Draws a missing icon on the spot. Only for the closed button's app.
+    let icon: (URL) -> NSImage
     let chooseOtherApp: (Gesture) -> Void
     /// Closes the window explicitly (System Settings takes focus; a held window must not sit over it), then opens the pane.
     let openSettings: (SettingsPane) -> Void

@@ -46,3 +46,12 @@ public enum TrackpadEvent: Sendable {
     /// Shows the system's Accessibility prompt. Returns at once; the prompt belongs to another process.
     func prompt()
 }
+
+/// Reads the listed apps off the main actor and pushes the result. Real: SystemAppScanner. Test: InMemoryAppScanner.
+@MainActor public protocol AppScanner: AnyObject {
+    /// On the main actor with each finished scan.
+    var onScan: (@MainActor (InstalledApps) -> Void)? { get set }
+    /// Returns at once. Requests made while a scan runs coalesce into exactly one more scan after it.
+    /// The scanner also scans by itself after an app is installed, removed or renamed, and at no other time.
+    func scan()
+}
