@@ -1,0 +1,6 @@
+OK gesture-1: size=(48.0, 31.0) reps=[_NSSVGImageRep] opaquePixels(96x62)=980
+OK gesture-2: size=(48.0, 31.0) reps=[_NSSVGImageRep] opaquePixels(96x62)=1136
+OK gesture-3: size=(48.0, 31.0) reps=[_NSSVGImageRep] opaquePixels(96x62)=1294
+OK gesture-4: size=(48.0, 31.0) reps=[_NSSVGImageRep] opaquePixels(96x62)=1458
+OK thumb-mark: size=(8.0, 8.0) reps=[_NSSVGImageRep] opaquePixels(96x62)=4676
+OK other-finger-mark: size=(10.0, 10.0) reps=[_NSSVGImageRep] opaquePixels(96x62)=2576

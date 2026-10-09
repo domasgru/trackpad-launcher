@@ -1,0 +1,5 @@
+AXIsProcessTrusted: false
+tapCreate(.cgSessionEventTap, .headInsertEventTap, listenOnly, mouse buttons): created
+  tapIsEnabled: false
+tapCreate(.cgSessionEventTap, .headInsertEventTap, default(active), mouse buttons): nil
+No active tap: the dropped-press button-state check cannot run here.

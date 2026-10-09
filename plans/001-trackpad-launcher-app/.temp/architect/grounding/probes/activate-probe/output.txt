@@ -1,0 +1,45 @@
+driver pid=36058 frontmost before=com.mitchellh.ghostty
+1. launch (not running)
+  open[launch] -> pid=36092 err=nil
+[launch] instances=1 isActive=true isHidden=false frontmost=com.trackpadlauncher.probe.target
+2. hide via NSRunningApplication.hide(), then open
+[hidden] instances=1 isActive=false isHidden=true frontmost=com.mitchellh.ghostty
+  open[unhide] -> pid=36092 err=nil
+[after-open] instances=1 isActive=true isHidden=false frontmost=com.trackpadlauncher.probe.target
+3. minimize window, then open
+  open[deminiaturize] -> pid=36092 err=nil
+[after-open] instances=1 isActive=true isHidden=false frontmost=com.trackpadlauncher.probe.target
+4. close the only window, then open (expect reopen hasVisibleWindows=false)
+  open[reopen-no-windows] -> pid=36092 err=nil
+[after-open] instances=1 isActive=true isHidden=false frontmost=com.trackpadlauncher.probe.target
+5. already active: open again (expect reopen hasVisibleWindows=true, frame unchanged)
+  open[already-active] -> pid=36092 err=nil
+[after-open] instances=1 isActive=true isHidden=false frontmost=com.trackpadlauncher.probe.target
+6. quit, then open twice within 50 ms
+[quit] instances=0 isActive=false isHidden=false frontmost=com.mitchellh.ghostty
+  open[double-1] -> pid=37541 err=nil
+  open[double-2] -> pid=37541 err=nil
+[double] instances=1 isActive=true isHidden=false frontmost=com.trackpadlauncher.probe.target
+[final] instances=0 isActive=false isHidden=false frontmost=com.mitchellh.ghostty
+--- target log ---
+1791495398.13838 launched pid=36092 frame=(200.0, 200.0, 320.0, 208.0)
+1791495398.148847 didBecomeActive hidden=false mini=false visible=true frame=(200.0, 200.0, 320.0, 208.0)
+1791495400.156101 didHide
+1791495400.174094 didResignActive
+1791495401.1854482 didUnhide
+1791495401.18752 didBecomeActive hidden=false mini=false visible=true frame=(200.0, 200.0, 320.0, 208.0)
+1791495401.211269 reopen hasVisibleWindows=true hidden=false mini=false frame=(200.0, 200.0, 320.0, 208.0)
+1791495402.666218 minimized mini=false
+1791495403.179874 windowDidMiniaturize
+1791495403.695562 reopen hasVisibleWindows=true hidden=false mini=true frame=(200.0, 200.0, 320.0, 208.0)
+1791495404.316072 windowDidDeminiaturize frame=(200.0, 200.0, 320.0, 208.0)
+1791495405.19063 closed visible=false
+1791495406.20891 reopen hasVisibleWindows=false hidden=false mini=false frame=(200.0, 200.0, 320.0, 208.0)
+1791495407.746972 reopen hasVisibleWindows=false hidden=false mini=false frame=(200.0, 200.0, 320.0, 208.0)
+1791495409.205102 terminating
+1791495411.369217 launched pid=37541 frame=(200.0, 200.0, 320.0, 208.0)
+1791495411.3768091 reopen hasVisibleWindows=true hidden=false mini=false frame=(200.0, 200.0, 320.0, 208.0)
+1791495411.3788738 didBecomeActive hidden=false mini=false visible=true frame=(200.0, 200.0, 320.0, 208.0)
+1791495414.276012 terminating
+
+cleanup done: ls: /tmp/tlprobe.w2KPfF: No such file or directory

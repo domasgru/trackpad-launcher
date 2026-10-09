@@ -1,0 +1,16 @@
+OK all symbols resolved; MemoryLayout<MTTouch>.stride = 96 (expect 96)
+MTDeviceCreateList count = 1
+device builtIn=true id=504403158265495834 (0x70000000000011a) rc=0 surface=12480x7680 rc=0 family=109 rc=0 alive=false running=false
+IOServiceAddMatchingNotification rc=0
+  IOKit matched AppleMultitouchDevice Multitouch ID = 504403158265495834
+IOKit first-match callback: 1 device(s)
+*** Recognized (0x6d) family*** (24 cols X 18 rows)
+MTDeviceStart rc=0 running=true
+CGEventSourceButtonState(left) now = false
+Listening 25 s. Touch the trackpad if you are there...
+frames=0 emptyFrames=0 threads=[] states=[]
+MTDeviceStop rc=0
+MTActuatorCreateFromDeviceID ok; MTActuatorOpen rc=0 isOpen=true
+MTActuatorActuate(id 6) rc=0 (0 = kIOReturnSuccess)
+MTActuatorClose rc=0
+done

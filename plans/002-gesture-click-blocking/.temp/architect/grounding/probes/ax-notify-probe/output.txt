@@ -1,0 +1,6 @@
+notify_register_dispatch(com.apple.tcc.access.changed) status 0 (0 = NOTIFY_STATUS_OK)
+listening; baseline 2 s, then tccutil reset Accessibility com.example.tl-probe-nonexistent, then 6 s more
+baseline hits in 2 s: 0
+tccutil ran at t+2.01s, exit 0: Successfully reset Accessibility approval status for com.example.tl-probe-nonexistent
+total hits: 1
+  t+2.04s darwin com.apple.tcc.access.changed thread=main

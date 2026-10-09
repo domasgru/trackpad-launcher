@@ -1,0 +1,10 @@
+Clicking (read via suite) = Optional(0)
+TrackpadThreeFingerTapGesture = Optional(0)
+CFPreferencesCopyAppValue Clicking = Optional(0)
+ran defaults write com.apple.AppleMultitouchTrackpad TLProbeKey -int 1 -> 0
+KVO TLProbeKey old=Optional(<null>) new=Optional(1) main=true
+KVO TLProbeKey old=Optional(1) new=Optional(<null>) main=true
+ran defaults delete com.apple.AppleMultitouchTrackpad TLProbeKey -> 0
+hits=2 didChangeNotifications=0
+after cleanup, suite value for TLProbeKey = nil
+defaults read TLProbeKey exit=1 (1 = key absent, machine as found)

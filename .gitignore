@@ -1,0 +1,6 @@
+.build/
+.swiftpm/
+.DS_Store
+TrackpadLauncher.xcodeproj/
+TrackpadLauncher/Info.plist
+DerivedData/
