@@ -59,7 +59,8 @@ import LauncherCore
     }
 
     /// Forgets every session, stops every device, then starts exactly `trackpads` with a fresh recognizer each.
-    public func run(_ trackpads: [Trackpad], handMode: HandMode) {
+    /// `blockClicks` is accepted but installs nothing yet: presses are sampled from the button state alone.
+    public func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool) {
         guard let framework else { return }
         sessions.withLock { $0 = [:] }
         for device in startedDevices {

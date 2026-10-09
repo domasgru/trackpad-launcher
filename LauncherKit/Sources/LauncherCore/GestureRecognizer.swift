@@ -1,5 +1,20 @@
 import Foundation
 
+/// What one frame meant on one trackpad.
+public struct Recognition: Equatable, Sendable {
+    /// At most once per tap, on the frame where its last finger is gone.
+    public let fired: Gesture?
+    /// This trackpad's half of click blocking: a thumb this recognizer saw land less than 3 s ago is still anchored,
+    /// and another contact is down. Whether a press is really blocked also needs the click filter armed (access
+    /// granted, gestures active), which the recognizer never knows.
+    public let blocksClicks: Bool
+
+    public init(fired: Gesture?, blocksClicks: Bool) {
+        self.fired = fired
+        self.blocksClicks = blocksClicks
+    }
+}
+
 /// The tap-with-anchored-thumb rules for ONE trackpad, as a pure state machine. Feed every frame in order.
 /// Owned by exactly one frame thread (real adapter) or by the test (in-memory adapter); never shared.
 public struct GestureRecognizer: Sendable {
@@ -8,12 +23,13 @@ public struct GestureRecognizer: Sendable {
         self.surface = surface
     }
 
-    /// The gesture that fired on this frame, if any. At most once per tap, on the frame where the last finger lifts.
-    public mutating func step(_ frame: TouchFrame) -> Gesture? {
+    public mutating func step(_ frame: TouchFrame) -> Recognition {
+        let isFirstFrame = previouslyDown == nil
+        let before = previouslyDown ?? []
         let down = Dictionary(frame.touches.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let reused = Set(frame.touches.filter { $0.phase == .landing && previouslyDown.contains($0.id) }.map(\.id))
-        let lifted = previouslyDown.subtracting(down.keys).union(reused)
-        let landed = frame.touches.filter { $0.phase == .landing || !previouslyDown.contains($0.id) }
+        let reused = Set(frame.touches.filter { $0.phase == .landing && before.contains($0.id) }.map(\.id))
+        let lifted = before.subtracting(down.keys).union(reused)
+        let landed = frame.touches.filter { $0.phase == .landing || !before.contains($0.id) }
         defer { previouslyDown = Set(down.keys) }
 
         if let anchor = state.anchor,
@@ -25,17 +41,19 @@ public struct GestureRecognizer: Sendable {
         switch state {
         case .idle:
             if let thumb = landed.first(where: { corner.admits($0.position) }) {
-                let anchor = Anchor(id: thumb.id)
+                // A contact present on the first frame (a reconcile under a resting hand) anchors but opens no
+                // blocking window: its real landing time is unknown, whatever phase the driver reports.
+                let anchor = Anchor(id: thumb.id, landedAt: isFirstFrame ? nil : frame.time)
                 state = down.count == 1 ? .armed(anchor) : .spoiled(anchor)
             }
         case .armed(let anchor):
             let fingers = landed.filter { $0.id != anchor.id }
             if !fingers.isEmpty {
-                state = frame.buttonDown ? .spoiled(anchor) : .tapping(anchor, Tap(start: frame.time, landing: fingers))
+                state = frame.press == .click ? .spoiled(anchor) : .tapping(anchor, Tap(start: frame.time, landing: fingers))
             }
         case .tapping(let anchor, var tap):
             for id in lifted { tap.down[id] = nil }
-            if frame.buttonDown
+            if frame.press == .click
                 || frame.time - tap.start > GestureRules.maxTapDuration
                 || tap.down.contains(where: { id, origin in
                     down[id].map { surface.distanceMM(origin, $0.position) > GestureRules.dragThresholdMM } ?? false
@@ -56,11 +74,19 @@ public struct GestureRecognizer: Sendable {
                 state = .armed(anchor)
             }
         }
-        return fired
+        let blocksClicks = state.anchor.flatMap { anchor in
+            anchor.landedAt.map { landedAt in
+                frame.time - landedAt < GestureRules.clickBlockingWindow
+                    && down.keys.contains { $0 != anchor.id }
+            }
+        } ?? false
+        return Recognition(fired: fired, blocksClicks: blocksClicks)
     }
 
     private struct Anchor: Sendable {
         let id: TouchID
+        /// When this recognizer saw the thumb land. nil: the thumb was already there on the first frame.
+        let landedAt: FrameTime?
     }
 
     private struct Tap: Sendable {
@@ -101,5 +127,6 @@ public struct GestureRecognizer: Sendable {
     private let corner: AnchorCorner
     private let surface: SurfaceSize
     private var state: State = .idle
-    private var previouslyDown: Set<TouchID> = []
+    /// Contacts down on the previous frame. nil until the first frame.
+    private var previouslyDown: Set<TouchID>?
 }

@@ -140,8 +140,8 @@ extension GestureRecognizerTests {
         #expect(fired(frames) == (fires ? [.one] : []))
     }
 
-    @Test(arguments: [1, 3], [TouchScript.ClickTiming.onLanding, .midway])
-    func physicalClickIsNotATapAndTheNextTapStillFires(fingers: Int, click: TouchScript.ClickTiming) {
+    @Test(arguments: [1, 3], [TouchScript.ClickTiming.onLanding, .firm, .midway])
+    func deliveredClickIsNotATapAndTheNextTapStillFires(fingers: Int, click: TouchScript.ClickTiming) {
         let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
             .tap(fingers: fingers, click: click).tap(fingers: fingers).frames
         #expect(fired(frames) == [Gesture(fingerCount: fingers)!])
@@ -179,7 +179,7 @@ extension GestureRecognizerTests {
             h.frame(atMS: 160, [h.contact(9, atMM: 10, 10)]),
         ]
         var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14)
-        let perFrame = frames.map { recognizer.step($0) }
+        let perFrame = frames.map { recognizer.step($0).fired }
         #expect(perFrame == [nil, nil, nil, nil, .one, nil, nil, .one])
     }
 }
@@ -251,7 +251,7 @@ extension GestureRecognizerTests {
             h.frame(atMS: 150, []),
         ]
         var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14)
-        #expect(frames.map { recognizer.step($0) } == [nil, nil, nil, nil, .one, nil, nil])
+        #expect(frames.map { recognizer.step($0).fired } == [nil, nil, nil, nil, .one, nil, nil])
     }
 }
 

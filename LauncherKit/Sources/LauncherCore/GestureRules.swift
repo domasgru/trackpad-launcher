@@ -1,6 +1,6 @@
 import Foundation
 
-/// Every fixed number in gesture recognition, in one place. Not user-tunable.
+/// Every fixed number in gesture recognition and click blocking, in one place. Not user-tunable.
 package enum GestureRules {
     /// Fraction of the surface width, measured from the anchor-side edge.
     static let cornerWidth = 0.20
@@ -12,4 +12,6 @@ package enum GestureRules {
     static let maxTapDuration = Duration.milliseconds(400)
     /// A finger farther than this from its landing point is dragging, not tapping.
     static let dragThresholdMM = 3.0
+    /// Clicks are blocked for this long after a thumb anchors. Strictly less blocks.
+    static let clickBlockingWindow = Duration.seconds(3)
 }

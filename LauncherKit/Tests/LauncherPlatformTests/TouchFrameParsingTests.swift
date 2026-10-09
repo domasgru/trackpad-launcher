@@ -16,11 +16,11 @@ import Testing
             MTTouchMirror(identifier: 10, state: 5, x: 0.4, y: 0.4),
         ]
         let frame = buffer.withUnsafeMutableBytes {
-            TouchFrame(parsing: $0.baseAddress, count: 4, timestamp: 12.5, buttonDown: false)
+            TouchFrame(parsing: $0.baseAddress, count: 4, timestamp: 12.5, press: nil)
         }
 
         #expect(frame.time.seconds == 12.5)
-        #expect(frame.buttonDown == false)
+        #expect(frame.press == nil)
         #expect(frame.touches.map(\.id.rawValue) == [7, 8])
         #expect(frame.touches.map(\.phase) == [.landing, .down])
         #expect(frame.touches.map(\.position.x) == [Double(Float(0.1)), 0.5])
@@ -29,8 +29,8 @@ import Testing
     }
 
     @Test func emptyFrameHasNoTouches() {
-        let frame = TouchFrame(parsing: nil, count: 0, timestamp: 1, buttonDown: true)
+        let frame = TouchFrame(parsing: nil, count: 0, timestamp: 1, press: .click)
         #expect(frame.touches.isEmpty)
-        #expect(frame.buttonDown)
+        #expect(frame.press == .click)
     }
 }

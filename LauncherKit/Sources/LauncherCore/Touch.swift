@@ -43,12 +43,41 @@ public struct FrameTime: Sendable {
 public struct TouchFrame: Sendable {
     public let time: FrameTime
     public let touches: [Touch]
-    /// Any mouse button pressed, sampled when the frame arrived: a click is not a tap.
-    public let buttonDown: Bool
+    /// nil: no press matters to this tap.
+    public let press: Press?
 
-    public init(time: FrameTime, touches: [Touch], buttonDown: Bool) {
+    public init(time: FrameTime, touches: [Touch], press: Press?) {
         self.time = time
         self.touches = touches
-        self.buttonDown = buttonDown
+        self.press = press
+    }
+
+    /// A pressed button, as it matters to a tap.
+    public enum Press: Equatable, Sendable {
+        /// macOS delivered this press to apps as a click (any pointing device). It cancels a tap.
+        case click
+        /// The click filter is withholding this press from apps. It is part of the tap.
+        case blocked
+
+        /// The one precedence rule, used by both hardware adapters. `holding` is the click filter's summary, nil when
+        /// no filter is live (no tap, no permission). A withheld press is `.blocked` whatever the button state reads;
+        /// a passed press is `.click` while the button is still down (so a release the tap missed heals on the next
+        /// frame); a press the filter has not seen yet is nothing (it reads `.click` once the tap passes it, or
+        /// `.blocked` once it drops it). Without a filter the button state alone decides.
+        public init?(holding: ClickFilter.Holding?, buttonDown: Bool) {
+            switch holding {
+            case .withheld:
+                self = .blocked
+            case .passed:
+                guard buttonDown else { return nil }
+                self = .click
+            case .nothing:
+                return nil
+            case nil:
+                guard buttonDown else { return nil }
+                self = .click
+            }
+        }
     }
 }
+

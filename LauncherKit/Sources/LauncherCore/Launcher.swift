@@ -114,7 +114,9 @@ public final class Launcher {
         // A grant ends the hold: the hint has done its job and the user is in System Settings.
         if granted && !isAccessibilityGranted && window == .heldOpen { window = .closed }
         isAccessibilityGranted = granted
-        hardware.run(activity.isActive ? connected : [], handMode: settings.handMode)
+        let active = activity.isActive
+        // Blocking needs gestures active and access granted; without either, presses are plain clicks.
+        hardware.run(active ? connected : [], handMode: settings.handMode, blockClicks: active && granted)
     }
 
     /// Every silent case decided here and only here: inactive, unassigned, missing.

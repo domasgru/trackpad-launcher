@@ -12,9 +12,11 @@ public enum TrackpadEvent: Sendable {
     var onEvent: (@MainActor (TrackpadEvent) -> Void)? { get set }
     /// Trackpads connected now. Excludes multitouch devices that are not trackpads (Magic Mouse, Touch Bar).
     func connected() -> [Trackpad]
-    /// Forgets every session, stops every running device, then starts exactly `trackpads`, each with a fresh
-    /// GestureRecognizer for `handMode`. Idempotent. [] = nothing runs.
-    func run(_ trackpads: [Trackpad], handMode: HandMode)
+    /// Forgets every session, removes the click tap, stops every device, then starts exactly `trackpads` with a fresh
+    /// recognizer each and, if `blockClicks` and `trackpads` is not empty, a fresh click tap. Idempotent.
+    /// The tap needs Accessibility. If the system refuses it, nothing is filtered, presses are sampled as before,
+    /// and taps behave exactly as without access. [] = nothing runs.
+    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool)
     /// One haptic pulse on that trackpad. No-op if it is gone.
     func playFeedback(on trackpad: TrackpadID)
 }

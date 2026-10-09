@@ -4,7 +4,10 @@ import LauncherCore
 /// Frames in millimetres on a surface, 10 ms apart; `.landing` on each contact's first frame.
 /// The builder sequences thumb, taps and lifts left to right on one timeline.
 struct TouchScript {
-    enum ClickTiming { case none, onLanding, midway }
+    /// `.onLanding`: the press starts on the landing frame, before the tap could know a finger is down (the accepted
+    /// race). `.firm`: from the frame after the first landing to the last lift, as a real firm tap. `.midway`: halfway
+    /// through the hold.
+    enum ClickTiming { case none, onLanding, firm, midway }
 
     private struct Waypoint {
         var ms: Int
@@ -84,6 +87,7 @@ struct TouchScript {
         switch click {
         case .none: break
         case .onLanding: s.presses.append(start...lastLift)
+        case .firm: s.presses.append((start + Self.frameIntervalMS)...lastLift)
         case .midway: s.presses.append((start + holdMS / 2)...lastLift)
         }
         s.cursorMS = lastLift + 100
@@ -116,8 +120,10 @@ struct TouchScript {
         return s
     }
 
+    /// Starts with an empty frame: the hand reaches an idle pad, so a thumb landing on the script's first contact
+    /// frame is one the recognizer saw land (a recognizer's very first frame holding a thumb is a resting hand).
     var frames: [TouchFrame] {
-        stride(from: 0, through: cursorMS, by: Self.frameIntervalMS).map { ms in
+        stride(from: -Self.frameIntervalMS, through: cursorMS, by: Self.frameIntervalMS).map { ms in
             let touches = contacts.filter { $0.isDown(atMS: ms) }.map { contact in
                 let p = contact.position(atMS: ms)
                 return Touch(
@@ -128,7 +134,7 @@ struct TouchScript {
             return TouchFrame(
                 time: FrameTime(seconds: 1.0 + Double(ms) / 1000),
                 touches: touches,
-                buttonDown: presses.contains { $0.contains(ms) })
+                press: presses.contains { $0.contains(ms) } ? .click : nil)
         }
     }
 

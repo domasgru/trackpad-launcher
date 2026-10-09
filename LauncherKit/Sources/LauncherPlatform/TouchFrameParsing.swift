@@ -37,7 +37,7 @@ struct MTTouchMirror {
 extension TouchFrame {
     /// MTTouch[] to TouchFrame. Keeps MakeTouch (a landing) and Touching only, and maps the
     /// framework's bottom-left normalised origin to SurfacePoint's top-left one.
-    init(parsing touches: UnsafeMutableRawPointer?, count: Int32, timestamp: Double, buttonDown: Bool) {
+    init(parsing touches: UnsafeMutableRawPointer?, count: Int32, timestamp: Double, press: Press?) {
         var parsed: [Touch] = []
         if let touches, count > 0 {
             let records = UnsafeBufferPointer(
@@ -51,7 +51,7 @@ extension TouchFrame {
                         position: SurfacePoint(x: Double(record.normalizedX), y: 1 - Double(record.normalizedY))))
             }
         }
-        self.init(time: FrameTime(seconds: timestamp), touches: parsed, buttonDown: buttonDown)
+        self.init(time: FrameTime(seconds: timestamp), touches: parsed, press: press)
     }
 }
 
