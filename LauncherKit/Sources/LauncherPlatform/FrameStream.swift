@@ -10,11 +10,17 @@ final class DeviceSession: Sendable {
     private let recognizer: Mutex<GestureRecognizer>
     /// Writer: this device's frame callback. Reader: the click tap's thread.
     private let blocking = Mutex(false)
+    /// Installed by the same `run`, if any.
+    private let clickTap: ClickTap?
     private let deliver: @Sendable (GestureEvent) -> Void
 
-    init(trackpad: TrackpadID, recognizer: GestureRecognizer, deliver: @escaping @Sendable (GestureEvent) -> Void) {
+    init(
+        trackpad: TrackpadID, recognizer: GestureRecognizer, clickTap: ClickTap?,
+        deliver: @escaping @Sendable (GestureEvent) -> Void
+    ) {
         self.trackpad = trackpad
         self.recognizer = Mutex(recognizer)
+        self.clickTap = clickTap
         self.deliver = deliver
     }
 
@@ -27,8 +33,8 @@ final class DeviceSession: Sendable {
         }
     }
 
-    /// Frame thread: the click filter's summary when a tap is live, nil otherwise. No tap exists yet.
-    var holding: ClickFilter.Holding? { nil }
+    /// Frame thread: the click filter's summary when a tap is live, nil otherwise.
+    var holding: ClickFilter.Holding? { clickTap?.holding }
 
     /// Click tap thread.
     var blocksClicks: Bool { blocking.withLock { $0 } }
@@ -46,7 +52,13 @@ let contactFrameCallback: MultitouchSupport.ContactFrameCallback = { device, tou
     return 0
 }
 
-/// A state query on the session's event source: no event tap, no permission.
+/// A state query on the session's event source, no permission: the no-tap path and the "still down" check of a passed press.
 func anyMouseButtonDown() -> Bool {
     [CGMouseButton.left, .right, .center].contains { CGEventSource.buttonState(.combinedSessionState, button: $0) }
+}
+
+/// Whether some running trackpad is inside its blocking window, merged across trackpads at the read.
+/// Copies the sessions out first, so no lock is held while another is taken.
+func anyTrackpadBlocksClicks() -> Bool {
+    Array(sessions.withLock { $0.values }).contains { $0.blocksClicks }
 }

@@ -14,6 +14,7 @@ import LauncherCore
     private let notificationPort: IONotificationPortRef
     private var iterators: [io_iterator_t] = []
     private var startedDevices: [AnyObject] = []
+    private var clickTap: ClickTap?
     private var actuators: [TrackpadID: CFTypeRef] = [:]
     private var wakeObserver: (any NSObjectProtocol)?
 
@@ -59,10 +60,13 @@ import LauncherCore
     }
 
     /// Forgets every session, stops every device, then starts exactly `trackpads` with a fresh recognizer each.
-    /// `blockClicks` is accepted but installs nothing yet: presses are sampled from the button state alone.
+    /// A click tap exists afterwards iff `blockClicks`, the system allows it and a trackpad is running.
     public func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool) {
         guard let framework else { return }
         sessions.withLock { $0 = [:] }
+        // A withheld press's release may now reach apps: a harmless stray mouse-up.
+        clickTap?.remove()
+        clickTap = nil
         for device in startedDevices {
             let ref = Unmanaged.passUnretained(device).toOpaque()
             framework.unregisterContactFrameCallback(ref, contactFrameCallback)
@@ -73,11 +77,14 @@ import LauncherCore
         startedDevices = []
 
         let wanted = Set(trackpads.map(\.id))
-        for (device, trackpad) in listTrackpads() where wanted.contains(trackpad.id) {
+        let devices = listTrackpads().filter { wanted.contains($0.trackpad.id) }
+        if blockClicks && !devices.isEmpty { clickTap = ClickTap.install() }
+        for (device, trackpad) in devices {
             let ref = Unmanaged.passUnretained(device).toOpaque()
             let session = DeviceSession(
                 trackpad: trackpad.id,
                 recognizer: GestureRecognizer(handMode: handMode, surface: trackpad.surface),
+                clickTap: clickTap,
                 deliver: { [weak self] event in
                     Task { @MainActor in self?.onEvent?(.gesture(event)) }
                 })
