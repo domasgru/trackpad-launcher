@@ -15,6 +15,7 @@ struct LauncherView: View {
                     GestureRowView(row: row, launcher: launcher, actions: actions)
                 }
                 HandModeToggle(launcher: launcher)
+                    .padding(.top, 16)
                 Divider()
                 switch launcher.activity {
                 case .active:
@@ -149,7 +150,8 @@ struct TrackpadSettingsNotice: View {
 
 private extension View {
     func hintStyle() -> some View {
-        font(.system(size: 13))
+        // macOS body text: 13 pt, with SF Pro's loose leading (the roomier of its built-in line heights).
+        font(.body.leading(.loose))
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
