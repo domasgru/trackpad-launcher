@@ -1,0 +1,36 @@
+import Foundation
+
+public enum TrackpadEvent: Sendable {
+    case gesture(GestureEvent)
+    /// Attached, detached, or the Mac woke.
+    case trackpadsChanged
+}
+
+/// The multitouch hardware.
+@MainActor public protocol TrackpadHardware: AnyObject {
+    /// Always called on the main actor.
+    var onEvent: (@MainActor (TrackpadEvent) -> Void)? { get set }
+    /// Trackpads connected now. Excludes multitouch devices that are not trackpads (Magic Mouse, Touch Bar).
+    func connected() -> [Trackpad]
+    /// Forgets every session, stops every running device, then starts exactly `trackpads`, each with a fresh
+    /// GestureRecognizer for `handMode`. Idempotent. [] = nothing runs.
+    func run(_ trackpads: [Trackpad], handMode: HandMode)
+    /// One haptic pulse on that trackpad. No-op if it is gone.
+    func playFeedback(on trackpad: TrackpadID)
+}
+
+/// The two trackpad preference domains.
+@MainActor public protocol TrackpadPreferences: AnyObject {
+    /// Called on the main actor after any table key changes in either domain.
+    var onChange: (@MainActor () -> Void)? { get set }
+    /// Current raw values of every table key, per kind, read fresh. Reads only; never writes a system domain.
+    func current() -> [TrackpadKind: TrackpadPreferenceValues]
+}
+
+/// Effects the core decides and macOS performs.
+@MainActor public protocol SystemActions: AnyObject {
+    /// Bring to front: launch, or unhide / restore / reopen / activate exactly like a Dock click.
+    func bringToFront(_ app: AppEntry)
+    /// Open at Login. Idempotent. Called only on first launch.
+    func registerLoginItem()
+}
