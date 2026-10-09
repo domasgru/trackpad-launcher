@@ -68,12 +68,9 @@ public struct TouchFrame: Sendable {
             switch holding {
             case .withheld:
                 self = .blocked
-            case .passed:
-                guard buttonDown else { return nil }
-                self = .click
             case .nothing:
                 return nil
-            case nil:
+            case .passed, nil:
                 guard buttonDown else { return nil }
                 self = .click
             }

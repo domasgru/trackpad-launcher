@@ -27,18 +27,6 @@ func fired(
     return frames.compactMap { recognizer.step($0).fired }
 }
 
-/// Runs a fresh recognizer, already past an idle first frame, over `frames` and returns each frame's `blocksClicks`.
-/// The priming frame is what makes a thumb in `frames[0]` a thumb the recognizer saw land.
-func blocking(
-    _ frames: [TouchFrame],
-    handMode: HandMode = .right,
-    surface: SurfaceSize = .macBook14
-) -> [Bool] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface)
-    _ = recognizer.step(TouchFrame(time: FrameTime(seconds: 0), touches: [], press: nil))
-    return frames.map { recognizer.step($0).blocksClicks }
-}
-
 /// Hand-built frames for the interleavings `TouchScript` cannot sequence.
 struct HandFrames {
     let surface: SurfaceSize

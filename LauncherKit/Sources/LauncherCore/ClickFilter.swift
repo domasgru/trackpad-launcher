@@ -53,7 +53,7 @@ public struct ClickFilter: Sendable {
             return .pass
         case .pressure:
             // A Force Click's stages belong to its press.
-            return held.values.contains { if case .withheld = $0 { true } else { false } } ? .drop : .pass
+            return holding == .withheld ? .drop : .pass
         }
     }
 

@@ -38,3 +38,13 @@
 - Test planner (rejected): the merge across trackpads (`anyTrackpadBlocksClicks()`) has no in-process seam → no change: it is one `contains` over the sessions' flags and a seam for it would be a pass-through; checked manually with a Magic Trackpad under R4.
 - Test planner (round 2): the two open questions the amended R6 and R9 now answer were stale, and the tradeoff on mouse clicks read as a concession → replaced by one note recording the amendments for the human's confirmation and the subtype probe as a future option; the tradeoff cites R6.
 - Test planner (round 2): `docs/domain-model.md` *Click blocking* still said mouse clicks are never blocked, contradicting the amended R6 → the entry follows R6's wording; the design's Phase D paragraph names it. No signature or seam changed, so the testing sections were not re-run.
+
+## Implement
+- S3 added an empty frame before every scripted touch, plus a primed recognizer in the `blocking` helper. The design gives a thumb on a recognizer's first frame no blocking window. The device sends no frames while nothing touches, so the first thumb landing after every launch, wake or grant opened no window. That broke R4, R7 and R8 on hardware, and the extra fixture frame hid it. Fix: on the first frame, a thumb reported as landing (`.landing`) gets its landing time; one reported as already resting (`.down`) does not. Removed the priming frame from the fixtures and flipped T14's `.landing` row. Added a Launcher test: a firm tap right after a grant, with no earlier frame, is blocked and fronts the app. Updated the design text. New open question: does the driver report a resting thumb as `.down` when a device restarts under it?
+- `TouchFrame.Press(holding:buttonDown:)`: merged its two identical branches.
+- `ClickFilter`: pressure now reads `holding == .withheld` instead of working out the same thing again.
+- Renamed `policyListsMatchPlanTwo` to say what it checks.
+- Rejected: splitting `SettingsNotice` by glossary term. The design has both notices share one view on purpose.
+- Rejected: moving "no tap when no trackpads" into `Launcher`. The adapters decide from the trackpads they actually start.
+- Rejected: wrapping `button: Int` in its own type.
+- Rejected: removing `DeviceSession`'s forwarding of `holding`. The design puts that read on the frame path.

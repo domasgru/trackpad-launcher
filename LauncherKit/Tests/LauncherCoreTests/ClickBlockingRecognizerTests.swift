@@ -4,6 +4,11 @@ import LauncherCore
 @Suite struct ClickBlockingRecognizerTests {
     private let h = HandFrames()
 
+    private func blocking(_ frames: [TouchFrame]) -> [Bool] {
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14)
+        return frames.map { recognizer.step($0).blocksClicks }
+    }
+
     @Test(arguments: [1000, 2900, 3100, 4000])
     func clicksAreBlockedOnlyWithinThreeSecondsOfTheThumbLanding(landMS: Int) {
         let frames = [
@@ -51,18 +56,24 @@ import LauncherCore
         #expect(blocking(frames) == [false, true, blocks])
     }
 
-    @Test(arguments: [Touch.Phase.down, .landing])
-    func aThumbAlreadyRestingOnTheFirstFrameOpensNoWindow(phase: Touch.Phase) {
+    @Test func aThumbLandingOnTheFirstFrameOpensAWindow() {
         let frames = [
-            h.frame(atMS: 0, [h.contact(9, phase, atMM: 10, 10)]),
+            h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)]),
+            h.frame(atMS: 10, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45)]),
+        ]
+        #expect(blocking(frames) == [false, true])
+    }
+
+    @Test func aThumbAlreadyRestingOnTheFirstFrameOpensNoWindow() {
+        let frames = [
+            h.frame(atMS: 0, [h.contact(9, .down, atMM: 10, 10)]),
             h.frame(atMS: 10, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45)]),
             h.frame(atMS: 100, [h.contact(9, atMM: 10, 10)]),
             h.frame(atMS: 200, []),
             h.frame(atMS: 300, [h.contact(9, .landing, atMM: 10, 10)]),
             h.frame(atMS: 350, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45)]),
         ]
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14)
-        #expect(frames.map { recognizer.step($0).blocksClicks } == [false, false, false, false, false, true])
+        #expect(blocking(frames) == [false, false, false, false, false, true])
     }
 
     @Test(arguments: [TouchFrame.Press.blocked, .click], [true, false])

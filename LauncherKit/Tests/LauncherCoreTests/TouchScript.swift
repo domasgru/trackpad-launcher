@@ -120,10 +120,9 @@ struct TouchScript {
         return s
     }
 
-    /// Starts with an empty frame: the hand reaches an idle pad, so a thumb landing on the script's first contact
-    /// frame is one the recognizer saw land (a recognizer's very first frame holding a thumb is a resting hand).
+    /// The first frame is the first contact's landing: a pad delivers no frames while nothing touches it.
     var frames: [TouchFrame] {
-        stride(from: -Self.frameIntervalMS, through: cursorMS, by: Self.frameIntervalMS).map { ms in
+        stride(from: 0, through: cursorMS, by: Self.frameIntervalMS).map { ms in
             let touches = contacts.filter { $0.isDown(atMS: ms) }.map { contact in
                 let p = contact.position(atMS: ms)
                 return Touch(

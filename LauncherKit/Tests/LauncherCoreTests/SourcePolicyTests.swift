@@ -106,7 +106,7 @@ import Testing
 
     /// Pins both halves of the policy edit so neither drifts back: no confined token is also banned, and the kept
     /// IOHID, Input Monitoring, timer and polling tokens are still banned.
-    @Test func policyListsMatchPlanTwo() {
+    @Test func confinedAndBannedListsNeverOverlapAndKeepTheTimerAndInputMonitoringBans() {
         let banned = Self.banned.map(\.token)
         for entry in Self.confined {
             for token in banned {

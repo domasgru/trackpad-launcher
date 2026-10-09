@@ -41,9 +41,10 @@ public struct GestureRecognizer: Sendable {
         switch state {
         case .idle:
             if let thumb = landed.first(where: { corner.admits($0.position) }) {
-                // A contact present on the first frame (a reconcile under a resting hand) anchors but opens no
-                // blocking window: its real landing time is unknown, whatever phase the driver reports.
-                let anchor = Anchor(id: thumb.id, landedAt: isFirstFrame ? nil : frame.time)
+                // The pad sends no frames while nothing touches it, so a thumb landing on the first frame really
+                // landed now. Only an already-resting contact (`.down`) has an unknown landing time: no window.
+                let landedNow = !isFirstFrame || thumb.phase == .landing
+                let anchor = Anchor(id: thumb.id, landedAt: landedNow ? frame.time : nil)
                 state = down.count == 1 ? .armed(anchor) : .spoiled(anchor)
             }
         case .armed(let anchor):
@@ -85,7 +86,7 @@ public struct GestureRecognizer: Sendable {
 
     private struct Anchor: Sendable {
         let id: TouchID
-        /// When this recognizer saw the thumb land. nil: the thumb was already there on the first frame.
+        /// When this recognizer saw the thumb land. nil: the thumb was already resting on the first frame.
         let landedAt: FrameTime?
     }
 

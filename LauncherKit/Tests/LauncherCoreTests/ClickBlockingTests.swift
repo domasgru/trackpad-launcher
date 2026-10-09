@@ -63,12 +63,19 @@ import LauncherCore
         #expect(world.system.broughtToFront == [world.app("Arc")])
     }
 
+    @Test func aTapRightAfterAccessIsGrantedBlocksItsPressWithNoFrameBeforeTheThumb() {
+        let world = world(granted: false)
+        world.access.set(granted: true)
+        world.hardware.touch(script().tap(fingers: 1, click: .firm).frames, on: trackpad.id)
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+        #expect(world.hardware.pressVerdicts == [.drop, .drop])
+    }
+
     @Test func aThumbLandingDuringADragLeavesTheDragAlone() {
         let world = world()
         let finger = h.contact(1, atMM: 62, 45)
         let thumb = h.contact(9, atMM: 10, 10)
         let frames = [
-            h.frame(atMS: -10),
             h.frame(atMS: 0, [h.contact(1, .landing, atMM: 62, 45)], press: .click),
             h.frame(atMS: 50, [finger, h.contact(9, .landing, atMM: 10, 10)], press: .click),
             h.frame(atMS: 100, [finger, thumb], press: .click),
@@ -84,7 +91,6 @@ import LauncherCore
         let world = world()
         let thumb = h.contact(9, atMM: 10, 10)
         let frames = [
-            h.frame(atMS: -10),
             h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)]),
             h.frame(atMS: 50, [thumb], press: .click),
             h.frame(atMS: 100, [thumb], press: .click),
