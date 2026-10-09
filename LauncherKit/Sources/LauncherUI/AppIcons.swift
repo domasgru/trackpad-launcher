@@ -36,14 +36,14 @@ final class AppIcons {
     func cachedIcon(for url: URL) -> NSImage { cache[url]?.icon ?? generic }
 
     /// Draws a missing icon on the spot and caches it. Only for an app outside the picker's list.
-    func icon(for url: URL) -> NSImage {
+    func iconDrawingIfMissing(for url: URL) -> NSImage {
         if let cached = cache[url] { return cached.icon }
         merge(Self.renderChanged(urls: [url], cached: [:], appearance: Appearance(NSApp.effectiveAppearance)))
         return cachedIcon(for: url)
     }
 
     /// Draws every new or changed icon and waits, spreading the drawing across cores.
-    func renderNow(_ apps: [AppEntry]) {
+    func renderOnMainActor(_ apps: [AppEntry]) {
         merge(
             Self.renderChanged(
                 urls: apps.map(\.url), cached: stamps(), appearance: Appearance(NSApp.effectiveAppearance)))
@@ -51,7 +51,7 @@ final class AppIcons {
 
     /// The same pass away from the main actor; the results merge here. Overlapping passes are harmless: the last
     /// write wins.
-    func render(_ apps: [AppEntry]) {
+    func renderOffMainActor(_ apps: [AppEntry]) {
         let urls = apps.map(\.url)
         let cached = stamps()
         let appearance = Appearance(NSApp.effectiveAppearance)

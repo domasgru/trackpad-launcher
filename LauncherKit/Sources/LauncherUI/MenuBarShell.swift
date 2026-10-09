@@ -21,7 +21,7 @@ public final class MenuBarShell: NSObject {
     public init(launcher: Launcher) {
         self.launcher = launcher
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        icons.renderNow(Self.iconTargets(launcher))
+        icons.renderOnMainActor(Self.iconTargets(launcher))
         let actions = Self.makeActions(launcher: launcher, icons: icons)
         panel = LauncherPanel(content: LauncherView(launcher: launcher, actions: actions))
         super.init()
@@ -83,10 +83,10 @@ public final class MenuBarShell: NSObject {
         let rowApps = launcher.rows.compactMap { row -> AppEntry? in
             if case .present(let entry) = row.app { entry } else { nil }
         }
-        return launcher.installedApps.recent + launcher.installedApps.others + rowApps
+        return launcher.installedApps.all + rowApps
     }
 
-    private func renderIcons() { icons.render(Self.iconTargets(launcher)) }
+    private func renderIcons() { icons.renderOffMainActor(Self.iconTargets(launcher)) }
 
     private func show() {
         renderIcons()
@@ -126,7 +126,7 @@ public final class MenuBarShell: NSObject {
     private static func makeActions(launcher: Launcher, icons: AppIcons) -> LauncherActions {
         LauncherActions(
             cachedIcon: { icons.cachedIcon(for: $0) },
-            icon: { icons.icon(for: $0) },
+            icon: { icons.iconDrawingIfMissing(for: $0) },
             chooseOtherApp: { gesture in
                 launcher.closeWindow()
                 NSApp.activate()

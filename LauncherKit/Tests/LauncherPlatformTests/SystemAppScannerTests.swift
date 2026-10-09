@@ -59,7 +59,7 @@ import Testing
         private var waiterCount = 0
 
         init(_ scanner: SystemAppScanner) {
-            scanner.onScan = { [unowned self] in receive(($0.recent + $0.others).map(\.name)) }
+            scanner.onScan = { [unowned self] in receive($0.all.map(\.name)) }
         }
 
         private func receive(_ names: [String]) {
@@ -88,7 +88,10 @@ import Testing
 
         /// The first scan from now on that satisfies `predicate`, or nil after `seconds`.
         func next(within seconds: Double = 5, where predicate: ([String]) -> Bool = { _ in true }) async -> [String]? {
-            let deadline = ContinuousClock.now + .seconds(seconds)
+            await next(until: ContinuousClock.now + .seconds(seconds), where: predicate)
+        }
+
+        func next(until deadline: ContinuousClock.Instant, where predicate: ([String]) -> Bool = { _ in true }) async -> [String]? {
             while let names = await pop(until: deadline) {
                 if predicate(names) { return names }
             }
@@ -106,7 +109,9 @@ import Testing
         #expect(await feed.next() == ["Zed"], "a scan arrives within 5 s of the request")
 
         tree.makeContents("Slack", in: tree.applications)
-        #expect(await feed.next() != nil, "the new bundle folder causes a scan")
+        let bare = await feed.next()
+        #expect(bare != nil, "the new bundle folder causes a scan")
+        #expect(bare?.contains("Slack") == false, "a bundle without an Info.plist is not listed")
         tree.writeInfo("Slack", in: tree.applications)
         #expect(await feed.next(where: { $0.contains("Slack") }) != nil, "an install is listed within 5 s")
 
@@ -129,10 +134,11 @@ import Testing
         scanner.scan()
         tree.install("Slack", in: tree.applications)
         try? await Task.sleep(for: .seconds(2))
+        let deadline = ContinuousClock.now + .seconds(5)
         gate.open()
 
-        #expect(await feed.next() != nil, "the held scan delivers")
-        #expect(await feed.next(where: { $0.contains("Slack") }) != nil, "a scan listing Slack follows within 5 s")
+        #expect(await feed.next(until: deadline) != nil, "the held scan delivers")
+        #expect(await feed.next(until: deadline, where: { $0.contains("Slack") }) != nil, "a scan listing Slack follows within 5 s")
     }
 
     @Test func writesInsideAnInstalledBundleCauseNoScan() async {

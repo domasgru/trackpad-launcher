@@ -27,3 +27,12 @@
 - Cached bitmaps could freeze one appearance → the stamp includes the appearance, drawing uses it, and the smoke run toggles dark mode and the icon style (icon style recorded as a risk in Further Notes).
 - The new port bent the architecture's "temp-directory types stay concrete" rule silently → architecture.md now names the exception for asynchronous adapters, and the off-main rule for work that would delay a click.
 - QuickTime has no frame-rate setting, and Main Thread Checker cannot see `NSImage` drawing or races → the R1 run reads the recording's real frame rate; the slice adds a Thread Sanitizer run beside Main Thread Checker.
+
+## Implement
+- `AppIcons.icon(for:)` drew on the main actor, against architecture.md's off-main rule → kept, as the plan intends (closed button for a just-picked app outside the list only); architecture.md now names it as an exception, and the reads are renamed `iconDrawingIfMissing(for:)`, `renderOnMainActor`, `renderOffMainActor`.
+- architecture.md's Shape omitted CoreServices → added it (FSEvents, MDItem) to LauncherPlatform.
+- `recent + others` rebuilt in about 6 places → `InstalledApps.all`.
+- `recentLimit` was public with no outside user → private.
+- T10 did not check that Slack is absent from the scan caused by its bare `Contents` folder → asserted.
+- T12's 5 s bound started after the held scan, not at gate open → the deadline is taken just before the gate opens.
+- Not changed: T13's request count, multi-step T7/T9/T10, and T11 calling the Spotlight reader directly are prescribed by the plan; the scan in `start()` after `init`'s synchronous read is the plan's design.

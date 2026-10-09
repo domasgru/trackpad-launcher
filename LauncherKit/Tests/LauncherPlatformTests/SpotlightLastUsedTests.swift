@@ -27,7 +27,7 @@ import Testing
 
     private static let listed: [AppEntry] = {
         let installed = AppCatalog.system.installedApps()
-        return installed.recent + installed.others
+        return installed.all
     }()
 
     private static let hasSpotlightData = mdlsDates(for: listed.map(\.url)).contains { $0 != nil }

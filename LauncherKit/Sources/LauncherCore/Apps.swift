@@ -73,7 +73,10 @@ public struct InstalledApps: Equatable, Sendable {
     /// Every other listed app, in Finder order.
     public let others: [AppEntry]
 
-    public static let recentLimit = 10
+    private static let recentLimit = 10
+    /// `recent` then `others`: every listed app in menu order.
+    public var all: [AppEntry] { recent + others }
+
     public static let empty = InstalledApps(recent: [], others: [])
 
     init(recent: [AppEntry], others: [AppEntry]) {
@@ -96,7 +99,7 @@ public struct InstalledApps: Equatable, Sendable {
     public func pickerMenu(checking app: RowApp) -> [PickerItem] {
         var checkedID: BundleID?
         if case .present(let entry) = app { checkedID = entry.bundleID }
-        var items = (recent + others).map { PickerItem.app($0, checked: $0.bundleID == checkedID) }
+        var items = all.map { PickerItem.app($0, checked: $0.bundleID == checkedID) }
         if !recent.isEmpty && !others.isEmpty { items.insert(.divider, at: recent.count) }
         if !items.isEmpty { items.append(.divider) }
         return items + [.other, .unassigned]

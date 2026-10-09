@@ -69,7 +69,7 @@ import LauncherCore
 
         let installed = world.launcher.installedApps
         #expect(names(installed.recent) == ["Arc"])
-        #expect(!(installed.recent + installed.others).map(\.name).contains("Sketch"))
+        #expect(!installed.all.map(\.name).contains("Sketch"))
         #expect(world.launcher.app(for: .one) == .present(world.app("Sketch", in: world.downloads)))
         let row = world.launcher.app(for: .one)!
         #expect(!menu(world.launcher, checking: row).contains { $0.hasPrefix("✓ ") })
@@ -150,7 +150,7 @@ import LauncherCore
         world.scanner.foldersChanged()
         let installed = world.launcher.installedApps
         #expect(installed.recent.isEmpty)
-        #expect(!(installed.recent + installed.others).map(\.name).contains("Figma"))
+        #expect(!installed.all.map(\.name).contains("Figma"))
         #expect(!world.launcher.isWindowOpen)
     }
 
