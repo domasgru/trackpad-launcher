@@ -1392,6 +1392,7 @@ Both candidates converged on the whole shape: one `@MainActor @Observable` hub o
 ### Open questions and risks
 
 - **Frame layout (Q1).** The MTTouch layout, state values, coordinate origin and callback thread are sourced, not probed. The first slice prints real frames through the adapter before anything is built on it; a correction is confined to `TouchFrame.init(parsing:)`. Is that acceptable as the slice-one gate?
+  - **Status (S1): gate pending a real-touch run.** `mt-probe` is built and ready (`.build/mt-probe` at the repo root, from `swiftc -O -o .build/mt-probe plans/001-trackpad-launcher-app/.temp/architect/grounding/probes/mt-probe/main.swift` with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`). It needs a person touching the trackpad: run it, touch once with one finger near the top-left corner within 25 s, lift, and record the output beside the probe as `output-touch.txt`. Check against the gate list under Verified without a test (R11 frame layout gate). No frame has been observed yet; nothing here is measured. Until then `TouchFrame.init(parsing:)` (S5) rests on the sourced layout.
 - **Trackpad classification.** Does the IORegistry `Product` string reliably contain "Trackpad" for every Apple trackpad and never for a Magic Mouse or Touch Bar? Allowlist on "Trackpad" risks ignoring a future device; a denylist risks counting a mouse. Which risk do you prefer?
 - **Device readiness after wake or hot-plug.** Is a device startable the moment `didWake` or IOKit first-match fires, and does `MTDeviceCreateList` already include a just-paired Magic Trackpad when first-match fires? If not, should `screensDidWake` be a second signal, or is one bounded retry (the app's only timer) acceptable?
 - **Preference semantics.** `Clicking == 1` and `TrackpadThreeFingerTapGesture == 2` are sourced from community documentation; verify once by toggling System Settings in the activity slice. Does a USB-wired Magic Trackpad read the Bluetooth domain, or is Bluetooth-only acceptable for v1?
@@ -1532,10 +1533,10 @@ S1 keeps the design's named first step. It is the one slice that is not a vertic
 
 **Test scenarios:** T1–T22, T60.
 
-- [ ] `Scripts/test.sh` runs `swift test` on the Xcode 26 toolchain and every row above is green; the package builds in Swift 6 language mode with strict concurrency.
-- [ ] `GestureRecognizer.step` is the only public entry besides `init`; every fixed number lives in `GestureRules`.
+- [x] `Scripts/test.sh` runs `swift test` on the Xcode 26 toolchain and every row above is green; the package builds in Swift 6 language mode with strict concurrency.
+- [x] `GestureRecognizer.step` is the only public entry besides `init`; every fixed number lives in `GestureRules`.
 - [ ] The frame-layout gate (Verified without a test, "R11 (frame layout gate)") has been run with a real touch and its output recorded; any deviation from grounding Q1 is written into the plan's open questions before S5 starts.
-- [ ] T22's scanner finds the planted hit in a temp file and visits the real source tree.
+- [x] T22's scanner finds the planted hit in a temp file and visits the real source tree.
 
 ### S2: The launcher on in-memory adapters
 
