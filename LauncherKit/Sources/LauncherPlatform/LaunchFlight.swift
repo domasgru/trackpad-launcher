@@ -13,31 +13,51 @@ struct LaunchDisplay {
 struct LaunchFlights {
     private var lastSides: [Side] = []
 
-    private enum Side { case left, right }
+    private enum Side {
+        case left, right
+
+        var opposite: Side {
+            switch self {
+            case .left: .right
+            case .right: .left
+            }
+        }
+
+        var sign: CGFloat {
+            switch self {
+            case .left: -1
+            case .right: 1
+            }
+        }
+    }
 
     /// `draw` is a uniform random number in -1...1. Its sign picks the side (zero veers right) and its magnitude the
     /// size of the sway. A side that would be the third in a row is swapped for the other, with the same size.
     /// Reduce-motion flights neither sway nor count towards a streak.
     mutating func next(draw: Double, reduceMotion: Bool) -> LaunchFlight {
-        guard !reduceMotion else { return LaunchFlight(moves: false, sway: 0) }
+        guard !reduceMotion else { return LaunchFlight(motion: .fadeInPlace) }
         var side: Side = draw < 0 ? .left : .right
-        if lastSides.count == 2, lastSides.allSatisfy({ $0 == side }) { side = side == .left ? .right : .left }
+        if lastSides.count == 2, lastSides.allSatisfy({ $0 == side }) { side = side.opposite }
         lastSides = Array((lastSides + [side]).suffix(2))
         let size = LaunchFlight.minimumSway + (1 - LaunchFlight.minimumSway) * min(abs(draw), 1)
-        return LaunchFlight(moves: true, sway: (side == .left ? -1 : 1) * size * LaunchFlight.maximumSway)
+        return LaunchFlight(motion: .sway(side.sign * size * LaunchFlight.maximumSway))
     }
 }
 
 /// One launch animation's path, before it is placed on a display.
 struct LaunchFlight {
-    /// False under Reduce motion: the icon fades in place.
-    private let moves: Bool
-    /// Sideways drift per point of rise at the end, signed: negative veers left. Zero when the icon does not move.
-    private let sway: CGFloat
+    fileprivate enum Motion {
+        /// Under Reduce motion: the icon neither moves, shrinks nor tilts.
+        case fadeInPlace
+        /// The icon rises, shrinks, sways and tilts. The sway is the sideways drift per point of rise at the end,
+        /// signed: negative veers left.
+        case sway(CGFloat)
+    }
 
-    fileprivate init(moves: Bool, sway: CGFloat) {
-        self.moves = moves
-        self.sway = sway
+    private let motion: Motion
+
+    fileprivate init(motion: Motion) {
+        self.motion = motion
     }
 
     static let iconSide: CGFloat = 46
@@ -52,8 +72,8 @@ struct LaunchFlight {
     static let maximumSway: CGFloat = 0.3
     /// The smallest sway, as a share of the maximum, so every moving flight visibly veers.
     static let minimumSway: CGFloat = 0.4
-    /// The end lean of the largest sway.
-    static let maximumLean: CGFloat = 4 * .pi / 180
+    /// The end tilt of the largest sway.
+    static let maximumTilt: CGFloat = 4 * .pi / 180
 
     fileprivate struct Pose {
         var offset: CGPoint
@@ -65,12 +85,16 @@ struct LaunchFlight {
     /// `u` is elapsed time over the duration, 0...1.
     fileprivate func pose(at u: CGFloat) -> Pose {
         let fade = Float(1 - u * u * u)
-        guard moves else { return Pose(offset: .zero, side: Self.iconSide, rotation: 0, opacity: fade) }
-        let rise = Self.rise * u * u
-        return Pose(
-            offset: CGPoint(x: sway * rise * u, y: rise), side: Self.iconSide * (1 - Self.shrink * u),
-            // Counter-clockwise is positive, so leaning toward a rightward (positive) sway is a negative rotation.
-            rotation: -sway / Self.maximumSway * Self.maximumLean * u, opacity: fade)
+        switch motion {
+        case .fadeInPlace:
+            return Pose(offset: .zero, side: Self.iconSide, rotation: 0, opacity: fade)
+        case .sway(let sway):
+            let rise = Self.rise * u * u
+            return Pose(
+                offset: CGPoint(x: sway * rise * u, y: rise), side: Self.iconSide * (1 - Self.shrink * u),
+                // Counter-clockwise is positive, so tilting toward a rightward (positive) sway is a negative rotation.
+                rotation: -sway / Self.maximumSway * Self.maximumTilt * u, opacity: fade)
+        }
     }
 
     fileprivate var poses: [Pose] {

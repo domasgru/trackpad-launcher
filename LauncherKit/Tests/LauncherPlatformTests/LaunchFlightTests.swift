@@ -64,15 +64,15 @@ extension LaunchDisplay {
     static let draws: [Double] = [-1, -0.5, -0.01, 0, 0.01, 0.5, 1]
     static let modes = [false, true]
     static let middleOfBuiltIn = CGPoint(x: 700, y: 400)
+    static let displays: [LaunchDisplay] = [.builtIn, .external]
 
     private func stage(
         draw: Double, reduceMotion: Bool, at pointer: CGPoint = middleOfBuiltIn,
-        sourceLocation: SourceLocation = #_sourceLocation
+        among displays: [LaunchDisplay] = displays, sourceLocation: SourceLocation = #_sourceLocation
     ) throws -> LaunchStage {
         var flights = LaunchFlights()
         let flight = flights.next(draw: draw, reduceMotion: reduceMotion)
-        return try #require(
-            flight.staged(at: pointer, among: [.builtIn, .external]), sourceLocation: sourceLocation)
+        return try #require(flight.staged(at: pointer, among: displays), sourceLocation: sourceLocation)
     }
 
     @Test(arguments: modes, draws)
@@ -170,7 +170,7 @@ extension LaunchDisplay {
         var flights = LaunchFlights()
         return try draws.map { draw in
             let staged = try #require(
-                flights.next(draw: draw, reduceMotion: false).staged(at: Self.middleOfBuiltIn, among: [.builtIn]))
+                flights.next(draw: draw, reduceMotion: false).staged(at: Self.middleOfBuiltIn, among: Self.displays))
             let keyframes = try staged.keyframes()
             let start = keyframes[0].screenPosition
             let end = try #require(keyframes.last).screenPosition
@@ -229,7 +229,7 @@ extension LaunchDisplay {
         for reduceMotion in [false, true, false, true, false] {
             let flight = flights.next(draw: 0.6, reduceMotion: reduceMotion)
             guard !reduceMotion else { continue }
-            let keyframes = try #require(flight.staged(at: Self.middleOfBuiltIn, among: [.builtIn])).keyframes()
+            let keyframes = try #require(flight.staged(at: Self.middleOfBuiltIn, among: Self.displays)).keyframes()
             sides.append(try #require(keyframes.last).screenPosition.x > Self.middleOfBuiltIn.x)
         }
 
@@ -260,14 +260,19 @@ extension LaunchDisplay {
         #expect(staged.screenIconCentre == pointer)
     }
 
-    /// AppKit counts a display's top edge as inside it and its bottom edge as outside.
+    /// AppKit counts a display's top edge as inside it and its bottom edge as outside, whichever display is listed
+    /// first.
     @Test(arguments: draws)
     func onTheEdgeTheDisplaysShareTheIconStaysOnTheDisplayBelow(draw: Double) throws {
-        let sharedEdge = try stage(draw: draw, reduceMotion: false, at: CGPoint(x: 700, y: 982))
+        let edge = CGPoint(x: 700, y: 982)
+        let sharedEdge = try stage(draw: draw, reduceMotion: false, at: edge)
+        let sharedEdgeExternalFirst = try stage(draw: draw, reduceMotion: false, at: edge, among: [.external, .builtIn])
         let bottomEdge = try stage(draw: draw, reduceMotion: false, at: CGPoint(x: 700, y: 0))
 
         #expect(LaunchDisplay.builtIn.frame.contains(sharedEdge.frame))
         #expect(sharedEdge.frame.maxY == 982)
+        #expect(LaunchDisplay.builtIn.frame.contains(sharedEdgeExternalFirst.frame), "external display listed first")
+        #expect(sharedEdgeExternalFirst.frame.maxY == 982, "external display listed first")
         #expect(LaunchDisplay.builtIn.frame.contains(bottomEdge.frame))
     }
 

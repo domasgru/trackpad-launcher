@@ -96,34 +96,75 @@ extension Launcher {
         #expect(world.system.launchAnimations.isEmpty)
     }
 
-    @Test func launchAnimationsArePreparedForEveryPresentAssignedAppBeforeAnyGesture() {
+    @Test func withNothingAssignedNoLaunchAnimationIsPrepared() {
+        let world = World(apps: ["Arc", "Figma"])
+
+        world.launcher.start()
+
+        #expect(world.system.preparedLaunchAnimations == [])
+    }
+
+    @Test func assigningPreparesTheLaunchAnimationsBeforeAnyGestureInGestureOrder() {
         let world = World(apps: ["Arc", "Figma"])
         world.launcher.start()
-        #expect(world.system.preparedLaunchAnimations == [])
 
+        world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+
+        #expect(world.system.preparedLaunchAnimations == [world.app("Arc"), world.app("Figma")])
+        #expect(world.system.launchAnimations.isEmpty, "preparing plays nothing")
+    }
+
+    @Test func anAppOnTwoGesturesIsPreparedOnce() {
+        let world = World(apps: ["Arc", "Figma"])
+        world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
         world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
-        #expect(world.system.preparedLaunchAnimations == [world.app("Arc"), world.app("Figma")])
 
         world.launcher.setAssignment(.app(world.app("Arc")), for: .four)
+
         #expect(
             world.system.preparedLaunchAnimations == [world.app("Arc"), world.app("Figma")],
             "one entry per bundle location, in gesture order")
+    }
+
+    @Test func unassigningAnAppStopsPreparingIt() {
+        let world = World(apps: ["Arc", "Figma"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
 
         world.launcher.setAssignment(.unassigned, for: .two)
-        world.launcher.setAssignment(.unassigned, for: .four)
+
         #expect(world.system.preparedLaunchAnimations == [world.app("Arc")])
+    }
 
+    @Test func anAppFoundMissingWhenTheWindowOpensIsNoLongerPrepared() {
+        let world = World(apps: ["Arc", "Figma"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
         world.registry[World.bundleID("Arc")] = [world.trash("Arc")]
-        world.launcher.openWindow()
-        #expect(world.system.preparedLaunchAnimations == [], "a missing app cannot fire, so it is not prepared")
 
-        world.install("Arc")
+        world.launcher.openWindow()
+
+        #expect(
+            world.system.preparedLaunchAnimations == [world.app("Figma")],
+            "a missing app cannot fire, so it is not prepared")
+    }
+
+    @Test func creatingTheLauncherPreparesNothingAndStartingItPreparesTheAssignedApps() {
+        let world = World(apps: ["Arc"])
+        var earlierRun = Settings()
+        earlierRun.assignments[.one] = AssignedApp(world.app("Arc"))
+        world.store.save(earlierRun)
+
         world.relaunch()
         #expect(world.system.preparedLaunchAnimations == [], "creating the launcher prepares nothing")
+
         world.launcher.start()
         #expect(world.system.preparedLaunchAnimations == [world.app("Arc")])
-        #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.launchAnimations.isEmpty, "preparing plays nothing")
     }
 
     @Test func handModeDefaultsToRightAndSwitchingMovesTheCorner() {

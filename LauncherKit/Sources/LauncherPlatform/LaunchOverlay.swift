@@ -10,23 +10,20 @@ import QuartzCore
     /// Rendered app icons, keyed by bundle location.
     private var icons: [URL: CGImage] = [:]
     /// Panels still playing. AppKit keeps closed panels in its window list, so the overlay tracks its own.
-    private var live: Set<NSPanel> = []
+    private var playingPanels: Set<NSPanel> = []
 
     init() {
         // A process's first window-server window costs about 27 ms to create, against 1 ms afterwards; pay it now
         // instead of at the first gesture.
-        Self.makePanel(frame: CGRect(x: 0, y: 0, width: 1, height: 1)).close()
+        Self.makePanel(frame: CGRect(x: 0, y: 0, width: 1, height: 1))?.panel.close()
     }
 
     /// Renders each app's icon now, replacing the previous set: a first render of an icon at this size can take over
     /// 100 ms, which must not land on a gesture.
     func prepare(for apps: [AppEntry]) {
+        icons = [:]
         let scale = Self.highestScale
-        var icons: [URL: CGImage] = [:]
-        for app in apps where icons[app.url] == nil {
-            icons[app.url] = Self.renderIcon(of: app, scale: scale)
-        }
-        self.icons = icons
+        for app in apps { bitmap(for: app, scale: scale) }
     }
 
     func play(for app: AppEntry) {
@@ -34,11 +31,10 @@ import QuartzCore
         let displays = NSScreen.screens.map { LaunchDisplay(frame: $0.frame, scale: $0.backingScaleFactor) }
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let flight = flights.next(draw: .random(in: -1...1), reduceMotion: reduceMotion)
-        guard let stage = flight.staged(at: pointer, among: displays) else { return }
-
-        let panel = Self.makePanel(frame: stage.frame)
-        guard let host = panel.contentView?.layer else { return }
-        live.insert(panel)
+        guard let stage = flight.staged(at: pointer, among: displays),
+              case let (panel, host)? = Self.makePanel(frame: stage.frame)
+        else { return }
+        playingPanels.insert(panel)
         panel.orderFrontRegardless()
 
         CATransaction.begin()
@@ -46,13 +42,13 @@ import QuartzCore
         CATransaction.setCompletionBlock { [weak self] in
             MainActor.assumeIsolated {
                 panel.close()
-                self?.live.remove(panel)
+                self?.playingPanels.remove(panel)
             }
         }
         let icon = CALayer()
         icon.bounds = CGRect(x: 0, y: 0, width: stage.iconSide, height: stage.iconSide)
         icon.position = stage.iconCentre
-        icon.contents = bitmap(for: app)
+        icon.contents = bitmap(for: app, scale: stage.scale)
         icon.contentsScale = stage.scale
         icon.minificationFilter = .trilinear
         icon.allowsEdgeAntialiasing = true
@@ -66,10 +62,12 @@ import QuartzCore
         CATransaction.commit()
     }
 
-    /// The prepared icon; an app that moved since the last prepare is rendered now.
-    private func bitmap(for app: AppEntry) -> CGImage? {
-        if let prepared = icons[app.url] { return prepared }
-        let rendered = Self.renderIcon(of: app, scale: Self.highestScale)
+    /// The app's icon with at least `scale` pixels per point, from the cache when it holds one that sharp. Otherwise,
+    /// because the app moved or a sharper display was connected since the last prepare, it is rendered and cached now.
+    @discardableResult
+    private func bitmap(for app: AppEntry, scale: CGFloat) -> CGImage? {
+        if let cached = icons[app.url], cached.width >= Self.pixels(at: scale) { return cached }
+        let rendered = Self.renderIcon(of: app, scale: scale)
         icons[app.url] = rendered
         return rendered
     }
@@ -78,10 +76,15 @@ import QuartzCore
         NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
     }
 
+    /// The icon's start side, in pixels at `scale`.
+    private static func pixels(at scale: CGFloat) -> Int {
+        Int((LaunchFlight.iconSide * scale).rounded())
+    }
+
     /// The icon Finder shows for the app, as a bitmap of exactly the icon's start size in pixels at `scale`, so the
     /// first, nearly still frames map one to one onto the display.
     private static func renderIcon(of app: AppEntry, scale: CGFloat) -> CGImage? {
-        let pixels = Int((LaunchFlight.iconSide * scale).rounded())
+        let pixels = Self.pixels(at: scale)
         guard let space = CGColorSpace(name: CGColorSpace.displayP3),
               let context = CGContext(
                 data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0, space: space,
@@ -98,8 +101,11 @@ import QuartzCore
     /// Borderless, non-activating, click-through and never key. Screen-saver level puts it above the menu bar, menus,
     /// the launcher window and full-screen apps; it shows on every Space and holds still while Spaces slide. Its
     /// content view is plain, non-flipped and layer-backed, so the staged y-up keyframes apply to its sublayers as
-    /// they are.
-    private static func makePanel(frame: CGRect) -> NSPanel {
+    /// they are. Nil when the content view gets no layer, which is known before any window exists.
+    private static func makePanel(frame: CGRect) -> (panel: NSPanel, host: CALayer)? {
+        let content = NSView(frame: CGRect(origin: .zero, size: frame.size))
+        content.wantsLayer = true
+        guard let host = content.layer else { return nil }
         let panel = NSPanel(
             contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isOpaque = false
@@ -113,9 +119,7 @@ import QuartzCore
         panel.hidesOnDeactivate = false
         panel.animationBehavior = .none
         panel.isReleasedWhenClosed = false
-        let content = NSView(frame: CGRect(origin: .zero, size: frame.size))
-        content.wantsLayer = true
         panel.contentView = content
-        return panel
+        return (panel, host)
     }
 }

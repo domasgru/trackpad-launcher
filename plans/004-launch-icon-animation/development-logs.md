@@ -29,3 +29,20 @@
 - The R13 click-through steps collided with plan 002's click blocking → the steps lift all fingers before pressing, and a recording confirms the icon covered the button.
 - Four public LauncherCore types plus two custom geometry values existed only for the overlay → the flight moved into LauncherPlatform as internal types using CG and Core Animation types directly, tested through `@testable import`. The precedent is the trackpad adapter's own `feedbackActuation`.
 - The warm-up might not warm what the probe timed → states `defer: false` and names the timed step (creating the window-server window). The icon's first-use cost is paid by the first prepare.
+
+## Implement
+- S1 deviations from the plan:
+  - T4's step order: the plan's "relaunch, then `start()` → [Arc]" could pass on the recorder's leftover value, since `World.relaunch()` keeps the same recorder → the row checks that creating the launcher prepares nothing before `start()` prepares.
+  - `start()` rebuilds and prepares rows on every call, not only the first. The rows it produces are unchanged.
+  - The icon bitmap is drawn at exactly 46 pt at the highest backing scale, in Display P3, instead of using the 128 px representation the probe got. The first, nearly still frames then map one to one onto the display.
+  - An icon rendered at gesture time (the app moved since the last prepare) stays cached until the next prepare.
+  - Extra rows: `missingTargetIsSilent` also checks that no animation plays. A new flight row checks that Reduce-motion flights do not count toward a sway streak.
+- Review fixes:
+  - Icons prepared while only a 1x display was connected stayed 46 px and were stretched on a 2x display (R3, "no blur") → the overlay re-renders a cached icon narrower than `46 × stage.scale` px. `prepare` and `play` share one render-and-cache path.
+  - `play` could return after making a panel without closing it → `makePanel` returns the panel together with its host layer, so the only failure comes before any window exists.
+  - T4 checked six behaviours in one test, against the "one logical assertion per test" rule → split into six tests. Gesture order now differs from assignment order, so the ordering check means something. The missing-app test keeps another app present, so an empty result cannot pass by accident.
+  - Code wording drifted from the glossary's *Sway* ("lean") → `maximumTilt` and "tilt". The R10 test keeps the scenario's "leans".
+  - `LaunchFlight` held `moves: Bool` plus `sway`, which allowed a non-moving flight with a sway → a `Motion` enum (`fadeInPlace`, `sway`). `Side` gained `opposite` and `sign`, replacing two switches.
+  - `LaunchOverlay.live` → `playingPanels`.
+  - T20 picked the built-in display only because it came first in the list → T20 also stages at (700, 982) among `[external, builtIn]`. The T14 and Reduce-motion streak rows now stage among both displays, per the plan's convention.
+- Not changed: `WorkspaceActions` forwarding to the overlay, and the streak rule living in LauncherPlatform. Both are plan decisions ("no new port"; motion is rendering).
