@@ -1,0 +1,15 @@
+main.swift:14:6: error: reference to var 'kAXTrustedCheckOptionPrompt' is not concurrency-safe because it involves shared mutable state
+12 | @MainActor func keyViaGlobal() -> CFDictionary {
+13 |     // Imports as `Unmanaged<CFString>` (non-const `extern CFStringRef`): take it unretained.
+14 |     [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
+   |      `- error: reference to var 'kAXTrustedCheckOptionPrompt' is not concurrency-safe because it involves shared mutable state
+15 | }
+16 | 
+
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk/System/Library/Frameworks/ApplicationServices.framework/Frameworks/HIServices.framework/Headers/AXUIElement.h:66:20: note: var declared here
+ 64 | extern Boolean AXIsProcessTrustedWithOptions (CFDictionaryRef __nullable options) CF_AVAILABLE_MAC(10_9);
+ 65 |     
+ 66 | extern CFStringRef kAXTrustedCheckOptionPrompt CF_AVAILABLE_MAC(10_9);
+    |                    `- note: var declared here
+ 67 | 
+ 68 | /*!

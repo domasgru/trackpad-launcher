@@ -1,0 +1,5 @@
+notify_register_dispatch status 0
+baseline hits: 0
+notify_post status 0 (0 = NOTIFY_STATUS_OK, 12 = NOTIFY_STATUS_NOT_AUTHORIZED)
+hits after post: 1
+  t+0.506s thread=main

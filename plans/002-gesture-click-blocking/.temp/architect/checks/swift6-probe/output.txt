@@ -1,0 +1,4 @@
+kAXTrustedCheckOptionPrompt value: "AXTrustedCheckOptionPrompt"
+CGEventType(rawValue: 34) -> Optional(__C.CGEventType) rawValue=34
+mask value 0x400000006
+settable type on a CGEvent: Optional(34)
