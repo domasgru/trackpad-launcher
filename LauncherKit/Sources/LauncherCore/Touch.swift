@@ -26,7 +26,7 @@ public struct Touch: Sendable {
 }
 
 /// Monotonic seconds on the multitouch driver's clock. The only time recognition ever reads.
-public struct FrameTime: Comparable, Sendable {
+public struct FrameTime: Sendable {
     public var seconds: Double
 
     public init(seconds: Double) {
@@ -35,10 +35,6 @@ public struct FrameTime: Comparable, Sendable {
 
     public static func - (lhs: FrameTime, rhs: FrameTime) -> Duration {
         .seconds(lhs.seconds - rhs.seconds)
-    }
-
-    public static func < (lhs: FrameTime, rhs: FrameTime) -> Bool {
-        lhs.seconds < rhs.seconds
     }
 }
 

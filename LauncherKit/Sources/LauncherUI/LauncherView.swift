@@ -114,10 +114,7 @@ struct HintText: View {
         Text(
             "\(mark("thumb-mark")) Hold thumb on \(handMode.cornerName) corner, \(mark("other-finger-mark")) tap with 1, 2, 3 or 4 fingers anywhere to launch selected app"
         )
-            .font(.system(size: 13))
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
+            .hintStyle()
     }
 
     private func mark(_ name: String) -> Image {
@@ -132,10 +129,7 @@ struct TrackpadSettingsNotice: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(message)
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
+                .hintStyle()
             Button("Trackpad settings…", action: openSettings)
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
@@ -150,5 +144,14 @@ struct TrackpadSettingsNotice: View {
             "Gestures are off while these trackpad settings are on: "
                 + conflicting.settings.map(\.noticeName).formatted(.list(type: .and)) + "."
         }
+    }
+}
+
+private extension View {
+    func hintStyle() -> some View {
+        font(.system(size: 13))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

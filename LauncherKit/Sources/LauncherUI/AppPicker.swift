@@ -44,31 +44,29 @@ struct AppPicker: NSViewRepresentable {
         func showCurrentOnly() {
             guard let button else { return }
             button.removeAllItems()
-            if let item = currentItem() { button.menu?.addItem(item) }
+            button.menu?.addItem(currentItem())
             button.selectItem(at: 0)
         }
 
         func menuWillOpen(_ menu: NSMenu) { isMenuOpen = true }
-        func menuDidClose(_ menu: NSMenu) { isMenuOpen = false }
+
+        /// Deferred so a chosen item's action still finds its item; the closed button goes back to holding
+        /// only the row's current app.
+        func menuDidClose(_ menu: NSMenu) {
+            isMenuOpen = false
+            Task { @MainActor [weak self] in
+                guard let self, !isMenuOpen else { return }
+                showCurrentOnly()
+            }
+        }
 
         /// Runs each time the menu is about to open: the one place the installed apps are enumerated.
+        /// The list is installed apps, then Other…, then None; the row's own app is checked when installed.
         func menuNeedsUpdate(_ menu: NSMenu) {
             guard let button else { return }
-            let apps = installedApps()
             menu.removeAllItems()
-
             var selected: NSMenuItem?
-            switch app {
-            case .present(let current) where apps.contains(where: { $0.bundleID == current.bundleID }):
-                break
-            default:
-                if let item = currentItem() {
-                    menu.addItem(item)
-                    menu.addItem(.separator())
-                    selected = item
-                }
-            }
-            for entry in apps {
+            for entry in installedApps() {
                 let item = appItem(entry)
                 menu.addItem(item)
                 if case .present(let current) = app, current.bundleID == entry.bundleID { selected = item }
@@ -78,31 +76,30 @@ struct AppPicker: NSViewRepresentable {
             let none = actionItem(title: "None", action: #selector(pick(_:)))
             none.representedObject = AppChoice.unassigned
             menu.addItem(none)
-            if let selected { button.select(selected) }
+            button.select(selected)
         }
 
-        private func currentItem() -> NSMenuItem? {
+        private func currentItem() -> NSMenuItem {
             switch app {
             case .unassigned:
-                return placeholder(title: "Choose app…")
+                return placeholder(title: "Choose app…", symbol: nil)
             case .present(let entry):
                 return appItem(entry)
             case .missing(let name):
-                let item = placeholder(title: "\(name)  not found")
-                item.attributedTitle = NSAttributedString(
-                    string: "\(name)  not found",
-                    attributes: [.foregroundColor: NSColor.tertiaryLabelColor, .font: NSFont.systemFont(ofSize: 13)])
-                item.image = NSImage(systemSymbolName: "questionmark.app.dashed", accessibilityDescription: nil)
-                return item
+                return placeholder(title: "\(name)  not found", symbol: "questionmark.app.dashed")
             }
         }
 
-        private func placeholder(title: String) -> NSMenuItem {
+        private func placeholder(title: String, symbol: String?) -> NSMenuItem {
             let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             item.isEnabled = false
             item.attributedTitle = NSAttributedString(
                 string: title,
-                attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: 13)])
+                attributes: [
+                    .foregroundColor: symbol == nil ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor,
+                    .font: NSFont.systemFont(ofSize: 13),
+                ])
+            if let symbol { item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) }
             return item
         }
 

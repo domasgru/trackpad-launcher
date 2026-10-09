@@ -76,6 +76,42 @@ import Testing
         for target in ["LauncherCore", "LauncherPlatform", "LauncherUI"] {
             #expect(visited.contains { $0.contains("/Sources/\(target)/") }, "no file scanned under \(target)")
         }
+        #expect(visited.contains { $0.contains("/TrackpadLauncher/") }, "no file scanned under the app target")
+    }
+
+    static let coreAllowedImports: Set<String> = ["Foundation", "Observation"]
+
+    @Test func coreImportsOnlyFoundationAndObservation() throws {
+        let core = Self.packageRoot.appending(path: "Sources/LauncherCore")
+        let hits = try Self.disallowedImports(in: core, allowed: Self.coreAllowedImports)
+        #expect(hits.isEmpty, "LauncherCore may import only \(Self.coreAllowedImports.sorted()): \(hits)")
+    }
+
+    @Test func importScannerFindsAPlantedImport() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-imports-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data("import Foundation\nimport AppKit\n".utf8).write(to: dir.appending(path: "Planted.swift"))
+        try Data("@preconcurrency import IOKit\nimport Observation\n".utf8).write(to: dir.appending(path: "Other.swift"))
+
+        let hits = try Self.disallowedImports(in: dir, allowed: Self.coreAllowedImports)
+
+        #expect(Set(hits) == ["Planted.swift:2: AppKit", "Other.swift:1: IOKit"])
+    }
+
+    /// One "<file>:<line>: <module>" string per import of a module outside `allowed`.
+    private static func disallowedImports(in root: URL, allowed: Set<String>) throws -> [String] {
+        try swiftFiles(under: root).flatMap { file -> [String] in
+            let text = try String(contentsOf: file, encoding: .utf8)
+            return text.split(separator: "\n", omittingEmptySubsequences: false).enumerated().compactMap { line in
+                let words = line.element.split(separator: " ")
+                guard let at = words.firstIndex(of: "import"), at + 1 < words.count,
+                    words[..<at].allSatisfy({ $0.hasPrefix("@") || $0 == "public" || $0 == "internal" })
+                else { return nil }
+                let module = String(words[at + 1].split(separator: ".")[0])
+                return allowed.contains(module) ? nil : "\(file.lastPathComponent):\(line.offset + 1): \(module)"
+            }
+        }
     }
 
     private static func swiftFiles(under root: URL) throws -> [URL] {

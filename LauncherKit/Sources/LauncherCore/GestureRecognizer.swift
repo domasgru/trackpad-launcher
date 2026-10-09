@@ -31,9 +31,7 @@ public struct GestureRecognizer: Sendable {
         case .armed(let anchor):
             let fingers = landed.filter { $0.id != anchor.id }
             if !fingers.isEmpty {
-                state = frame.buttonDown
-                    ? .spoiled(anchor)
-                    : .tapping(anchor, fingers: Self.landingPoints(fingers), peak: fingers.count, start: frame.time)
+                state = frame.buttonDown ? .spoiled(anchor) : Self.tapping(anchor, landed: fingers, at: frame.time)
             }
         case .tapping(let anchor, var fingers, var peak, let start):
             fingers = fingers.filter { !lifted.contains($0.key) }
@@ -46,9 +44,7 @@ public struct GestureRecognizer: Sendable {
             } else if fingers.isEmpty {
                 fired = Gesture(fingerCount: peak)
                 let new = landed.filter { $0.id != anchor.id }
-                state = new.isEmpty
-                    ? .armed(anchor)
-                    : .tapping(anchor, fingers: Self.landingPoints(new), peak: new.count, start: frame.time)
+                state = new.isEmpty ? .armed(anchor) : Self.tapping(anchor, landed: new, at: frame.time)
             } else {
                 for touch in landed where touch.id != anchor.id {
                     fingers[touch.id] = touch.position
@@ -62,6 +58,10 @@ public struct GestureRecognizer: Sendable {
             }
         }
         return fired
+    }
+
+    private static func tapping(_ anchor: Anchor, landed: [Touch], at time: FrameTime) -> State {
+        .tapping(anchor, fingers: landingPoints(landed), peak: landed.count, start: time)
     }
 
     private struct Anchor: Sendable {

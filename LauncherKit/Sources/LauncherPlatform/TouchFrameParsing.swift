@@ -35,21 +35,28 @@ struct MTTouchMirror {
 }
 
 extension TouchFrame {
-    /// MTTouch[] to TouchFrame. Keeps states 3 (MakeTouch, a landing) and 4 (Touching) only, and maps the
+    /// MTTouch[] to TouchFrame. Keeps MakeTouch (a landing) and Touching only, and maps the
     /// framework's bottom-left normalised origin to SurfacePoint's top-left one.
     init(parsing touches: UnsafeMutableRawPointer?, count: Int32, timestamp: Double, buttonDown: Bool) {
         var parsed: [Touch] = []
         if let touches, count > 0 {
             let records = UnsafeBufferPointer(
                 start: touches.assumingMemoryBound(to: MTTouchMirror.self), count: Int(count))
-            for record in records where record.state == 3 || record.state == 4 {
+            for record in records {
+                guard let state = DriverState(rawValue: record.state) else { continue }
                 parsed.append(
                     Touch(
                         id: TouchID(rawValue: record.identifier),
-                        phase: record.state == 3 ? .landing : .down,
+                        phase: state == .makeTouch ? .landing : .down,
                         position: SurfacePoint(x: Double(record.normalizedX), y: 1 - Double(record.normalizedY))))
             }
         }
         self.init(time: FrameTime(seconds: timestamp), touches: parsed, buttonDown: buttonDown)
     }
+}
+
+/// The driver's touch states this app reads; every other state is dropped.
+private enum DriverState: Int32 {
+    case makeTouch = 3
+    case touching = 4
 }

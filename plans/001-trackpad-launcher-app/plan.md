@@ -1548,9 +1548,9 @@ S1 keeps the design's named first step. It is the one slice that is not a vertic
 
 **Test scenarios:** T23–T44.
 
-- [ ] Every row is synchronous: no `Task.sleep`, no polling, no `confirmation` with a timeout anywhere in LauncherCoreTests.
-- [ ] `activity` is a computed derivation; `fire` is the only path that pulses, fronts or closes the window from a gesture; the `World` tears down its suite and temp directory.
-- [ ] `LauncherCore` imports Foundation and Observation only (build fails otherwise).
+- [x] Every row is synchronous: no `Task.sleep`, no polling, no `confirmation` with a timeout anywhere in LauncherCoreTests.
+- [x] `activity` is a computed derivation; `fire` is the only path that pulses, fronts or closes the window from a gesture; the `World` tears down its suite and temp directory.
+- [x] `LauncherCore` imports Foundation and Observation only (build fails otherwise).
 
 ### S3: App catalog, picker list and resolution on disk
 
@@ -1563,7 +1563,7 @@ S1 keeps the design's named first step. It is the one slice that is not a vertic
 **Test scenarios:** T45–T55.
 
 - [ ] `world.catalog.installedApps()` matches Finder's order for the fixture names (T45 checked once by hand against a Finder list view of those names), and `Launcher` holds no list of installed apps (its public surface stays 4 properties and 5 intents, per the design's Depth table).
-- [ ] The stored record's `lastKnownURL` is never rewritten by a fire or an open (inspect the suite after T52).
+- [x] The stored record's `lastKnownURL` is never rewritten by a fire or an open (inspect the suite after T52).
 
 ### S4: Menu bar app and launcher window on the real Mac
 
@@ -1577,7 +1577,7 @@ S1 keeps the design's named first step. It is the one slice that is not a vertic
 
 - [ ] The manual sequences under Verified without a test for R1, R2, R3, R4, R5 (*Other…* and the picker refresh), R8, R9/R10, R15, R17, R18 and R19 pass on this Mac and are ticked in the plan.
 - [ ] `plutil -p` on the built Info.plist shows `LSUIElement => 1` and `LSMinimumSystemVersion => 26.0`; `xcodebuild -showBuildSettings` shows the macOS 26 deployment target.
-- [ ] T22 still passes with `LauncherPlatform`, `LauncherUI` and the app target included in the scan.
+- [x] T22 still passes with `LauncherPlatform`, `LauncherUI` and the app target included in the scan.
 - [ ] The built-in's `Product` string from `ioreg` is recorded in T59.
 
 ### S5: Gestures for real

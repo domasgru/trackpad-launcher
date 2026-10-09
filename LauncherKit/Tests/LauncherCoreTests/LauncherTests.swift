@@ -96,6 +96,7 @@ extension Launcher {
         world.hardware.sleep()
         world.tap(1)
         #expect(world.system.broughtToFront.isEmpty)
+        #expect(world.hardware.feedback.isEmpty)
 
         world.hardware.wake()
         world.tap(1)

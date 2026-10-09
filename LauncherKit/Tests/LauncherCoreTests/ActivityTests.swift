@@ -17,6 +17,7 @@ import LauncherCore
         #expect(world.hardware.running.isEmpty)
         world.tap(1)
         #expect(world.system.broughtToFront.isEmpty)
+        #expect(world.hardware.feedback.isEmpty)
     }
 
     @Test func settingOnlyOnTheConnectedExternalTrackpadDeactivates() {
@@ -30,6 +31,7 @@ import LauncherCore
         #expect(world.launcher.activity == inactive(.tapToClick))
         world.tap(1)
         #expect(world.system.broughtToFront.isEmpty)
+        #expect(world.hardware.feedback.isEmpty)
     }
 
     @Test func settingOnAnExternalTrackpadThatIsNotConnectedIsIgnored() {

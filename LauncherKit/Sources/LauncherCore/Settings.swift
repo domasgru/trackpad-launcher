@@ -12,11 +12,10 @@ public struct Settings: Codable, Equatable, Sendable {
 /// One plist-encoded record under one key. Local-substitutable: tests use a throwaway `UserDefaults` suite.
 @MainActor public struct SettingsStore {
     private let defaults: UserDefaults
-    private let key: String
+    private let key = "settings"
 
-    public init(defaults: UserDefaults, key: String = "settings") {
+    public init(defaults: UserDefaults) {
         self.defaults = defaults
-        self.key = key
     }
 
     /// nil means nothing was ever saved, which is a first launch. Undecodable data loads as `Settings()`,
