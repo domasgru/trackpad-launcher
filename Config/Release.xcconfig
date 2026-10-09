@@ -1,2 +1,4 @@
 #include "Base.xcconfig"
 CODE_SIGN_IDENTITY = Developer ID Application
+DEVELOPMENT_TEAM = CQK27876UL
+OTHER_CODE_SIGN_FLAGS = --timestamp
