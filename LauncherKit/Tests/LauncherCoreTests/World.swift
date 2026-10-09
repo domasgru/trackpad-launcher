@@ -16,7 +16,9 @@ final class Registry: Sendable {
 @MainActor final class World {
     let root: URL
     let applications: URL
+    let systemApplications: URL
     let userApplications: URL
+    let coreServices: URL
     let downloads: URL
     let trashFolder: URL
     let suiteName = "tl-test-\(UUID().uuidString)"
@@ -33,22 +35,26 @@ final class Registry: Sendable {
         let root = FileManager.default.temporaryDirectory.appending(path: "tl-world-\(UUID().uuidString)")
         self.root = root
         applications = root.appending(path: "Applications")
+        systemApplications = root.appending(path: "SystemApplications")
         userApplications = root.appending(path: "UserApplications")
+        coreServices = root.appending(path: "CoreServices")
         downloads = root.appending(path: "Downloads")
         trashFolder = root.appending(path: ".Trash")
-        for dir in [applications, userApplications, downloads, trashFolder] {
+        for dir in [applications, systemApplications, userApplications, coreServices, downloads, trashFolder] {
             try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         hardware = InMemoryTrackpads(attached: attached)
         let registry = registry
         let catalog = AppCatalog(
-            roots: [applications, userApplications], extras: [],
+            roots: [applications, systemApplications, userApplications],
+            extras: [coreServices.appending(path: "Finder.app")],
             registeredCopies: { registry[$0] })
         self.catalog = catalog
         let store = SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
         self.store = store
         launcher = Launcher(
             hardware: hardware, preferences: preferences, system: system, catalog: catalog, store: store)
+        install("Finder", in: coreServices)
         for name in apps { install(name) }
     }
 
@@ -79,6 +85,13 @@ final class Registry: Sendable {
 
     func remove(_ name: String, in directory: URL? = nil) {
         try! FileManager.default.removeItem(at: (directory ?? applications).appending(path: "\(name).app"))
+    }
+
+    @discardableResult
+    func move(_ name: String, to directory: URL) -> URL {
+        let destination = directory.appending(path: "\(name).app")
+        try! FileManager.default.moveItem(at: applications.appending(path: "\(name).app"), to: destination)
+        return destination
     }
 
     @discardableResult

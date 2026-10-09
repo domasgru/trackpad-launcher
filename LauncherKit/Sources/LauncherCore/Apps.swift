@@ -79,6 +79,31 @@ public struct AppCatalog: Sendable {
         self.registeredCopies = registeredCopies
     }
 
+    /// Picker list: every .app under `roots` (recursing into folders, never into bundles, skipping hidden files)
+    /// plus `extras`. One entry per bundle ID, first root wins; sorted like Finder. Enumerates on every call.
+    public func installedApps() -> [AppEntry] {
+        var seen = Set<BundleID>()
+        var found: [AppEntry] = []
+        for url in roots.flatMap(Self.appBundles(under:)) + extras {
+            guard let entry = entry(at: url), seen.insert(entry.bundleID).inserted else { continue }
+            found.append(entry)
+        }
+        return found.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    private static func appBundles(under directory: URL) -> [URL] {
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey]
+        let children = (try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])) ?? []
+        return children.sorted { $0.path < $1.path }.flatMap { child -> [URL] in
+            if child.pathExtension == "app" { return [child] }
+            let values = try? child.resourceValues(forKeys: Set(keys))
+            // Symlinked folders are not followed: they can loop back into the tree.
+            guard values?.isDirectory == true, values?.isSymbolicLink != true else { return [] }
+            return appBundles(under: child)
+        }
+    }
+
     /// Boundary parse for Other…: the app bundle at `url`, if it has a bundle identifier.
     /// Reads Info.plist directly: `Bundle(url:)` caches by path and would hide a bundle replaced in place.
     public func entry(at url: URL) -> AppEntry? {
