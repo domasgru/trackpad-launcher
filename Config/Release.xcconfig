@@ -1,0 +1,2 @@
+#include "Base.xcconfig"
+CODE_SIGN_IDENTITY = Developer ID Application

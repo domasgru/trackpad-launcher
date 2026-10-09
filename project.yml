@@ -1,0 +1,45 @@
+name: TrackpadLauncher
+options:
+  bundleIdPrefix: com.domasgru
+  deploymentTarget:
+    macOS: "26.0"
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+packages:
+  LauncherKit:
+    path: LauncherKit
+targets:
+  TrackpadLauncher:
+    type: application
+    platform: macOS
+    sources:
+      - path: TrackpadLauncher
+        excludes: ["Info.plist"]
+      - path: assets
+        includes: ["*.svg"]
+        buildPhase: resources
+    dependencies:
+      - package: LauncherKit
+        product: LauncherCore
+      - package: LauncherKit
+        product: LauncherPlatform
+      - package: LauncherKit
+        product: LauncherUI
+    info:
+      path: TrackpadLauncher/Info.plist
+      properties:
+        CFBundleName: Trackpad Launcher
+        CFBundleDisplayName: Trackpad Launcher
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        LSUIElement: true
+        LSMinimumSystemVersion: "26.0"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.domasgru.TrackpadLauncherApp
+        GENERATE_INFOPLIST_FILE: NO
+        ONLY_ACTIVE_ARCH: NO
