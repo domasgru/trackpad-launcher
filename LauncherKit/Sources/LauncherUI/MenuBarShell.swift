@@ -6,9 +6,9 @@ import UniformTypeIdentifiers
 /// The thin AppKit shell: maps AppKit signals to `Launcher` intents and renders `Launcher` state.
 /// Create it before `Launcher.start()`: a first-launch window needs the status item as its anchor.
 ///
-/// Dismissal: an icon click toggles; the panel resigning key closes it, except for a mouse-down on the status
+/// Dismissal: an icon click toggles; the panel resigning key dismisses it, except for a mouse-down on the status
 /// item's own button (that click is the toggle, and closing here would reopen it); a mouse-down monitor
-/// exists only while the window is open; Escape closes; a fired gesture closes it through the model.
+/// exists only while the window is open and dismisses; Escape closes; a fired gesture closes it through the model.
 public final class MenuBarShell: NSObject {
     private let launcher: Launcher
     private let statusItem: NSStatusItem
@@ -39,6 +39,11 @@ public final class MenuBarShell: NSObject {
             Task { [weak self] in
                 for await active in Observations({ launcher.activity.isActive }) {
                     self?.statusItem.button?.image = StatusIcon.image(active: active)
+                }
+            })
+        observations.append(
+            Task { [weak self] in
+                for await _ in Observations({ (launcher.activity, launcher.isAccessibilityGranted) }) {
                     self?.refit()
                 }
             })
@@ -62,7 +67,7 @@ public final class MenuBarShell: NSObject {
     private func resignedKey() {
         let event = NSApp.currentEvent
         let isStatusButtonClick = event?.type == .leftMouseDown && event?.window === statusItem.button?.window
-        if !isStatusButtonClick { launcher.closeWindow() }
+        if !isStatusButtonClick { launcher.dismissWindow() }
     }
 
     private func show() {
@@ -72,7 +77,7 @@ public final class MenuBarShell: NSObject {
         mouseDownMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         ) { [launcher] _ in
-            MainActor.assumeIsolated { launcher.closeWindow() }
+            MainActor.assumeIsolated { launcher.dismissWindow() }
         }
     }
 
@@ -117,10 +122,9 @@ public final class MenuBarShell: NSObject {
                     launcher.openWindow()
                 }
             },
-            openTrackpadSettings: {
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.trackpad") {
-                    NSWorkspace.shared.open(url)
-                }
+            openSettings: { pane in
+                launcher.closeWindow()
+                NSWorkspace.shared.open(pane.url)
             },
             quit: { NSApp.terminate(nil) })
     }

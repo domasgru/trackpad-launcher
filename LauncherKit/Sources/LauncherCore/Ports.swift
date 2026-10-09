@@ -34,3 +34,13 @@ public enum TrackpadEvent: Sendable {
     /// Open at Login. Idempotent. Called only on first launch.
     func registerLoginItem()
 }
+
+/// The Accessibility permission. Real: SystemAccessibilityPermission. Test: InMemoryAccessibilityPermission.
+@MainActor public protocol AccessibilityPermission: AnyObject {
+    /// On the main actor after trust changed, and only then. Carries no data; re-read with `isGranted()`.
+    var onChange: (@MainActor () -> Void)? { get set }
+    /// Read fresh. Never prompts.
+    func isGranted() -> Bool
+    /// Shows the system's Accessibility prompt. Returns at once; the prompt belongs to another process.
+    func prompt()
+}

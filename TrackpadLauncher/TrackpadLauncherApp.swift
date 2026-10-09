@@ -11,6 +11,7 @@ enum TrackpadLauncherApp {
         let launcher = Launcher(
             hardware: MultitouchTrackpads(),
             preferences: SystemTrackpadPreferences(),
+            access: SystemAccessibilityPermission(),
             system: WorkspaceActions(),
             catalog: catalog,
             store: SettingsStore(defaults: .standard))

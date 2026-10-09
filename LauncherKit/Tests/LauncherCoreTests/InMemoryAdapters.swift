@@ -78,3 +78,27 @@ import LauncherCore
         onRegisterLoginItem?()
     }
 }
+
+@MainActor final class InMemoryAccessibilityPermission: AccessibilityPermission {
+    var onChange: (@MainActor () -> Void)?
+    private(set) var granted: Bool
+    private(set) var prompts = 0
+    /// Runs inside `prompt()` so a test can observe what is stored at that moment.
+    var onPrompt: (() -> Void)?
+
+    init(granted: Bool = false) { self.granted = granted }
+
+    func isGranted() -> Bool { granted }
+
+    func prompt() {
+        prompts += 1
+        onPrompt?()
+    }
+
+    /// The user flips the switch in System Settings. Pushed synchronously on a real change only, as the real adapter does.
+    func set(granted: Bool) {
+        guard granted != self.granted else { return }
+        self.granted = granted
+        onChange?()
+    }
+}

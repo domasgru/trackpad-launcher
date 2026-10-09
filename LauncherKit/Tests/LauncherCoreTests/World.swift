@@ -26,12 +26,13 @@ final class Registry: Sendable {
     let hardware: InMemoryTrackpads
     let preferences = InMemoryTrackpadPreferences()
     let system = RecordingSystemActions()
+    let access: InMemoryAccessibilityPermission
     let registry = Registry()
     let catalog: AppCatalog
     private(set) var store: SettingsStore
     private(set) var launcher: Launcher
 
-    init(apps: [String] = [], attached: [Trackpad] = [.macBook14]) {
+    init(apps: [String] = [], attached: [Trackpad] = [.macBook14], accessGranted: Bool = false) {
         let root = FileManager.default.temporaryDirectory.appending(path: "tl-world-\(UUID().uuidString)")
         self.root = root
         applications = root.appending(path: "Applications")
@@ -44,6 +45,7 @@ final class Registry: Sendable {
             try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         hardware = InMemoryTrackpads(attached: attached)
+        access = InMemoryAccessibilityPermission(granted: accessGranted)
         let registry = registry
         let catalog = AppCatalog(
             roots: [applications, systemApplications, userApplications],
@@ -52,10 +54,20 @@ final class Registry: Sendable {
         self.catalog = catalog
         let store = SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
         self.store = store
-        launcher = Launcher(
-            hardware: hardware, preferences: preferences, system: system, catalog: catalog, store: store)
+        launcher = Self.makeLauncher(
+            hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
+            store: store)
         install("Finder", in: coreServices)
         for name in apps { install(name) }
+    }
+
+    private static func makeLauncher(
+        hardware: InMemoryTrackpads, preferences: InMemoryTrackpadPreferences, access: InMemoryAccessibilityPermission,
+        system: RecordingSystemActions, catalog: AppCatalog, store: SettingsStore
+    ) -> Launcher {
+        Launcher(
+            hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
+            store: store)
     }
 
     deinit {
@@ -110,8 +122,9 @@ final class Registry: Sendable {
     func relaunch() -> Launcher {
         let store = SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
         self.store = store
-        launcher = Launcher(
-            hardware: hardware, preferences: preferences, system: system, catalog: catalog, store: store)
+        launcher = Self.makeLauncher(
+            hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
+            store: store)
         return launcher
     }
 }

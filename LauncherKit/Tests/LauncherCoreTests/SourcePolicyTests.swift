@@ -31,13 +31,40 @@ import Testing
         Entry(token: "asyncAfter", rule: "timer"),
         Entry(token: "Task.sleep", rule: "polling"),
         Entry(token: "makeTimerSource", rule: "timer"),
-        Entry(token: "AXIsProcessTrusted", rule: "permission"),
-        Entry(token: "tapCreate", rule: "permission"),
-        Entry(token: "CGEventTapCreate", rule: "permission"),
-        Entry(token: "IOHIDManager", rule: "permission"),
-        Entry(token: "CGRequestListenEventAccess", rule: "permission"),
-        Entry(token: "CGPreflightListenEventAccess", rule: "permission"),
+        Entry(token: "IOHIDManager", rule: "R9 only Accessibility"),
+        Entry(token: "CGRequestListenEventAccess", rule: "R9 only Accessibility"),
+        Entry(token: "CGPreflightListenEventAccess", rule: "R9 only Accessibility"),
+        Entry(token: "IOHIDRequestAccess", rule: "R9 only Accessibility"),
+        Entry(token: "IOHIDCheckAccess", rule: "R9 only Accessibility"),
+        Entry(token: "CGRequestPostEventAccess", rule: "R9 only Accessibility"),
+        Entry(token: "CGPreflightPostEventAccess", rule: "R9 only Accessibility"),
+        Entry(token: "keyDown", rule: "R9 no keyboard"),
+        Entry(token: "keyUp", rule: "R9 no keyboard"),
+        Entry(token: "KeyDown", rule: "R9 no keyboard"),
+        Entry(token: "KeyUp", rule: "R9 no keyboard"),
+        Entry(token: "flagsChanged", rule: "R9 no keyboard"),
+        Entry(token: "FlagsChanged", rule: "R9 no keyboard"),
+        Entry(token: "scrollWheel", rule: "R6 never scrolling"),
+        Entry(token: "ScrollWheel", rule: "R6 never scrolling"),
+        Entry(token: ".post(tap:", rule: "R9 never synthesise"),
+        Entry(token: "CGEventPost", rule: "R9 never synthesise"),
+        Entry(token: "postToPid", rule: "R9 never synthesise"),
         Entry(token: "nonisolated(unsafe)", rule: "one writer per field"),
+    ]
+
+    /// Each permission API lives in exactly one file, the adapter that owns it. Any other hit fails.
+    struct Confined: Sendable, CustomTestStringConvertible {
+        let token: String
+        let onlyIn: String
+        let rule: String
+        var testDescription: String { "\(token) only in \(onlyIn) (\(rule))" }
+    }
+
+    static let confined: [Confined] = [
+        Confined(token: "AXIsProcessTrusted", onlyIn: "SystemAccessibilityPermission.swift", rule: "R9 one permission, one adapter"),
+        Confined(token: "notify_register", onlyIn: "SystemAccessibilityPermission.swift", rule: "R7 the trust push"),
+        Confined(token: "tapCreate", onlyIn: "ClickTap.swift", rule: "R9 the one event tap"),
+        Confined(token: "CGEventTapCreate", onlyIn: "ClickTap.swift", rule: "R9 the one event tap"),
     ]
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.
@@ -56,6 +83,44 @@ import Testing
     func noSourceUses(_ entry: Entry) throws {
         let hits = try Self.scannedRoots.flatMap { try Self.scan($0, for: entry.token) }
         #expect(hits.isEmpty, "\(entry.token) is banned (\(entry.rule)): \(hits)")
+    }
+
+    @Test(arguments: confined)
+    func onlyItsAdapterUses(_ entry: Confined) throws {
+        let hits = try Self.scannedRoots.flatMap { try Self.scan($0, for: entry.token, outside: entry.onlyIn) }
+        #expect(hits.isEmpty, "\(entry.token) belongs only in \(entry.onlyIn) (\(entry.rule)): \(hits)")
+    }
+
+    @Test func confinedScanFindsAUseOutsideItsFile() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-confined-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = Data("func f() { _ = AXIsProcessTrusted() }\n".utf8)
+        try source.write(to: dir.appending(path: "SystemAccessibilityPermission.swift"))
+        try source.write(to: dir.appending(path: "Other.swift"))
+
+        let hits = try Self.scan(dir, for: "AXIsProcessTrusted", outside: "SystemAccessibilityPermission.swift")
+
+        #expect(hits == ["Other.swift:1: AXIsProcessTrusted"])
+    }
+
+    /// Pins both halves of the policy edit so neither drifts back: no confined token is also banned, and the kept
+    /// IOHID, Input Monitoring, timer and polling tokens are still banned.
+    @Test func policyListsMatchPlanTwo() {
+        let banned = Self.banned.map(\.token)
+        for entry in Self.confined {
+            for token in banned {
+                #expect(
+                    !entry.token.contains(token) && !token.contains(entry.token),
+                    "\(entry.token) is confined, so \(token) must not also be banned")
+            }
+        }
+        for kept in [
+            "IOHIDManager", "CGRequestListenEventAccess", "CGPreflightListenEventAccess", "Timer", "asyncAfter",
+            "makeTimerSource", "Task.sleep",
+        ] {
+            #expect(banned.contains(kept), "\(kept) must stay banned")
+        }
     }
 
     @Test func scannerFindsAPlantedHit() throws {
@@ -121,9 +186,9 @@ import Testing
         return enumerator.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 
-    /// One "<file>:<line>: <token>" string per line containing `token`.
-    private static func scan(_ root: URL, for token: String) throws -> [String] {
-        try swiftFiles(under: root).flatMap { file -> [String] in
+    /// One "<file>:<line>: <token>" string per line containing `token`, skipping the file named `allowedFile`.
+    private static func scan(_ root: URL, for token: String, outside allowedFile: String? = nil) throws -> [String] {
+        try swiftFiles(under: root).filter { $0.lastPathComponent != allowedFile }.flatMap { file -> [String] in
             let text = try String(contentsOf: file, encoding: .utf8)
             return text.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
                 .filter { $0.element.contains(token) }

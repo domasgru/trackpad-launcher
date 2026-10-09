@@ -21,7 +21,14 @@ struct LauncherView: View {
                 case .active:
                     HintText(handMode: launcher.handMode)
                 case .inactive(let cause):
-                    TrackpadSettingsNotice(cause: cause, openSettings: actions.openTrackpadSettings)
+                    SettingsNotice(
+                        message: cause.noticeMessage, button: "Trackpad settings…",
+                        open: { actions.openSettings(.trackpad) })
+                }
+                if !launcher.isAccessibilityGranted {
+                    SettingsNotice(
+                        message: "Clicks aren't blocked during gestures. Allow Accessibility access to block them.",
+                        button: "Grant access…", open: { actions.openSettings(.accessibility) })
                 }
             }
             .padding(16)
@@ -123,22 +130,26 @@ struct HintText: View {
     }
 }
 
-struct TrackpadSettingsNotice: View {
-    let cause: InactiveCause
-    let openSettings: () -> Void
+/// A hint plus a System Settings button. The trackpad settings notice and the Accessibility hint share it.
+struct SettingsNotice: View {
+    let message: String
+    let button: String
+    let open: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(message)
                 .hintStyle()
-            Button("Trackpad settings…", action: openSettings)
+            Button(button, action: open)
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
         }
     }
+}
 
-    private var message: String {
-        switch cause {
+private extension InactiveCause {
+    var noticeMessage: String {
+        switch self {
         case .noTrackpad:
             "No trackpad connected. Connect a trackpad to use gestures."
         case .settings(let conflicting):

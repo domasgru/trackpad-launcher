@@ -7,29 +7,40 @@ import Observation
 @MainActor @Observable
 public final class Launcher {
     public private(set) var rows: [GestureRow] = []
-    public private(set) var isWindowOpen = false
+    public var isWindowOpen: Bool { window != .closed }
     public var handMode: HandMode { settings.handMode }
     /// One derivation, read by the icon, the notice and the fire guard.
     public var activity: GestureActivity {
         GestureActivity(connected: Set(connected.map(\.kind)), values: preferenceValues)
     }
 
+    /// Drives the Accessibility hint. Deliberately not part of `activity`, so the icon never reads it.
+    public private(set) var isAccessibilityGranted = false
+
+    /// `.heldOpen` is the first-launch window under the system's Accessibility prompt. The prompt takes focus when it
+    /// appears and its buttons are outside clicks; both would close an ordinary window before the user saw the hint.
+    /// A held window closes only on an explicit close, a fired gesture, or a grant.
+    private enum Window: Equatable { case closed, open, heldOpen }
+
+    private var window: Window = .closed
     private var settings: Settings
     private var connected: [Trackpad] = []
     private var preferenceValues: [TrackpadKind: TrackpadPreferenceValues] = [:]
     @ObservationIgnored private let isFirstLaunch: Bool
     @ObservationIgnored private let hardware: any TrackpadHardware
     @ObservationIgnored private let preferences: any TrackpadPreferences
+    @ObservationIgnored private let access: any AccessibilityPermission
     @ObservationIgnored private let system: any SystemActions
     @ObservationIgnored private let catalog: AppCatalog
     @ObservationIgnored private let store: SettingsStore
 
     public init(
-        hardware: any TrackpadHardware, preferences: any TrackpadPreferences, system: any SystemActions,
-        catalog: AppCatalog, store: SettingsStore
+        hardware: any TrackpadHardware, preferences: any TrackpadPreferences, access: any AccessibilityPermission,
+        system: any SystemActions, catalog: AppCatalog, store: SettingsStore
     ) {
         self.hardware = hardware
         self.preferences = preferences
+        self.access = access
         self.system = system
         self.catalog = catalog
         self.store = store
@@ -48,12 +59,16 @@ public final class Launcher {
             }
         }
         preferences.onChange = { [unowned self] in reconcile() }
+        access.onChange = { [unowned self] in reconcile() }
         reconcile()
         guard isFirstLaunch else { return }
-        // Before the first save: a crash in between registers again next time instead of losing the item.
+        // Both effects come before the first save: a crash in between repeats them next time instead of losing them.
         system.registerLoginItem()
+        let prompting = !isAccessibilityGranted
+        if prompting { access.prompt() }
         store.save(settings)
-        openWindow()
+        window = prompting ? .heldOpen : .open
+        rows = makeRows()
     }
 
     /// App picker. The same app on two gestures is fine.
@@ -81,16 +96,24 @@ public final class Launcher {
 
     /// Show the launcher window and re-resolve the rows.
     public func openWindow() {
-        isWindowOpen = true
+        if window == .closed { window = .open }
         rows = makeRows()
     }
 
-    public func closeWindow() { isWindowOpen = false }
+    /// Icon click, Escape, the window's own System Settings buttons: always closes.
+    public func closeWindow() { window = .closed }
 
-    /// The one convergent operation behind launch, hot-plug, wake, preference and hand-mode changes.
+    /// An outside click, or the panel losing focus: closes unless the window is held open under the first-launch prompt.
+    public func dismissWindow() { if window == .open { window = .closed } }
+
+    /// The one convergent operation behind launch, hot-plug, wake, preference, hand-mode and trust changes.
     private func reconcile() {
         connected = hardware.connected()
         preferenceValues = preferences.current()
+        let granted = access.isGranted()
+        // A grant ends the hold: the hint has done its job and the user is in System Settings.
+        if granted && !isAccessibilityGranted && window == .heldOpen { window = .closed }
+        isAccessibilityGranted = granted
         hardware.run(activity.isActive ? connected : [], handMode: settings.handMode)
     }
 
@@ -102,7 +125,7 @@ public final class Launcher {
         else { return }
         hardware.playFeedback(on: event.trackpad)
         system.bringToFront(app)
-        isWindowOpen = false
+        window = .closed
     }
 
     private func makeRows() -> [GestureRow] {
