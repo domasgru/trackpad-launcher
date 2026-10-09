@@ -1,0 +1,15 @@
+[17/20] Emitting module ProbePkgPackageTests
+[18/20] Compiling ProbePkgPackageTests runner.swift
+[18/20] Write Objects.LinkFileList
+[19/20] Linking ProbePkgPackageTests
+Build complete! (43.31s)
+􀟈  Test run started.
+􀄵  Testing Library Version: 124
+􀄵  Target Platform: arm64e-apple-macos14.0
+􀟈  Test adds() started.
+􀟈  Test parameterised(n:) started.
+􁁛  Test adds() passed after 0.001 seconds.
+􀟈  Passing 1 argument n → 2 to parameterised(n:)
+􀟈  Passing 1 argument n → 1 to parameterised(n:)
+􁁛  Test parameterised(n:) passed after 0.001 seconds.
+􁁛  Test run with 2 tests passed after 0.001 seconds.
