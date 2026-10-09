@@ -35,8 +35,14 @@ The window that opens from the menu bar icon: four gesture rows, the hand-mode t
 ## Gesture row
 One line in the launcher window: a gesture illustration and the app picker for that gesture.
 
+## Installed apps
+The apps an app picker lists: every app in /Applications and /System/Applications (with their subfolders), in ~/Applications, and Finder. One entry per bundle identifier. An app anywhere else, such as ~/Downloads, is not an installed app in this sense, even when a gesture is assigned to it through *Other…*.
+
+## Recent apps
+The up to 10 installed apps the user opened most recently, newest first, as Spotlight records it (an app's last-used date). Opening means launching; switching to an app that is already running does not count. No age limit. All four app pickers show the same recent apps; they refresh each time the launcher window opens and may lag behind the very latest launches.
+
 ## App picker
-The popup in a gesture row that sets the assignment: the installed apps, *Other…* (choose any app on disk) and *None* (unassign).
+The popup in a gesture row that sets the assignment: the recent apps, a divider, the other installed apps alphabetically, then *Other…* (choose any app on disk) and *None* (unassign). With no recent apps there is no recent section and no extra divider. The picker opens from a list Trackpad Launcher already holds; installed and removed apps show up in it within 5 seconds.
 
 ## Trackpad
 A connected Apple trackpad. Its *kind* is *built-in* or *external* (a Magic Trackpad). macOS keeps trackpad settings per kind, so an external trackpad's settings can differ from the built-in one's. A Magic Mouse is not a trackpad.

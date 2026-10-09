@@ -1,0 +1,14 @@
+start: true
+1 Slack.app/Contents folder only at +0.5s
+  [1 Slack.app/Contents folder only] +522 ms: /private<base>/Applications/ [0x0], /private<base>/Applications/Slack.app/ [0x0], /private<base>/Applications/Slack.app/Contents/ [0x0]
+2 Slack Info.plist at +3.5s
+  [2 Slack Info.plist] +376 ms: /private<base>/Applications/Slack.app/Contents/ [0x0]
+3 deep write in Zed Resources at +6.5s
+  [3 deep write in Zed Resources] +231 ms: /private<base>/Applications/Zed.app/Contents/Resources/ [0x0]
+4 late root + Arc.app/Contents at +9.5s
+  [4 late root + Arc.app/Contents] +2 ms: <base>/UserApplications [0x20]
+5 Arc Info.plist in late root at +12.5s
+6 deep write in Arc Resources at +15.5s
+7 remove Slack.app at +18.5s
+  [7 remove Slack.app] +12 ms: /private<base>/Applications/Slack.app/Contents/ [0x0], /private<base>/Applications/Slack.app/Contents/ [0x0], /private<base>/Applications/Slack.app/ [0x0], /private<base>/Applications/ [0x0]
+done

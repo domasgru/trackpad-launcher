@@ -1,0 +1,18 @@
+1 late root + Arc.app/Contents at +0.5s
+  [1 late root + Arc.app/Contents] +1 ms: <base>/UserApplications [0x20]
+  (stream re-created, 1)
+  [1 late root + Arc.app/Contents] +1013 ms: /private<base>/UserApplications/ [0x0], /private<base>/UserApplications/Arc.app/ [0x0], /private<base>/UserApplications/Arc.app/Contents/ [0x0]
+2 Arc Info.plist in late root at +3.5s
+  [2 Arc Info.plist in late root] +914 ms: /private<base>/UserApplications/Arc.app/Contents/ [0x0]
+3 deep write in Arc Resources at +6.5s
+  [3 deep write in Arc Resources] +766 ms: /private<base>/UserApplications/Arc.app/Contents/Resources/ [0x0]
+4 delete late root at +9.5s
+  [4 delete late root] +3 ms: /private<base>/UserApplications [0x20]
+  (stream re-created, 2)
+5 re-create late root + Zed.app at +12.5s
+  [5 re-create late root + Zed.app] +0 ms: <base>/UserApplications [0x20]
+  (stream re-created, 3)
+  [5 re-create late root + Zed.app] +1013 ms: /private<base>/UserApplications/ [0x0], /private<base>/UserApplications/Zed.app/ [0x0]
+6 Zed Info.plist at +15.5s
+  [6 Zed Info.plist] +878 ms: /private<base>/UserApplications/Zed.app/Contents/ [0x0]
+done
