@@ -1,6 +1,8 @@
 import AppKit
+import Dispatch
 import LauncherCore
 import QuartzCore
+import Synchronization
 
 /// Plays launch animations. Each play gets its own borderless, click-through panel above everything on every Space,
 /// holding one icon layer that Core Animation drives through the keyframes `LaunchFlight` staged. The panel is closed
@@ -18,12 +20,15 @@ import QuartzCore
         Self.makePanel(frame: CGRect(x: 0, y: 0, width: 1, height: 1))?.panel.close()
     }
 
-    /// Renders each app's icon now, replacing the previous set: a first render of an icon at this size can take over
-    /// 100 ms, which must not land on a gesture.
+    /// Renders each app's icon away from the main actor, then replaces the previous set: a first render of an icon at
+    /// this size can take over 100 ms, which must land on neither a gesture nor a click. Until the new set arrives the
+    /// old one serves. Overlapping passes are harmless: the last to finish wins.
     func prepare(for apps: [AppEntry]) {
-        icons = [:]
-        let scale = Self.highestScale
-        for app in apps { bitmap(for: app, scale: scale) }
+        let urls = apps.map(\.url)
+        let pixels = Self.pixels(at: Self.highestScale)
+        Task {
+            icons = await Self.renderOffMain(urls, pixels: pixels)
+        }
     }
 
     func play(for app: AppEntry) {
@@ -65,12 +70,22 @@ import QuartzCore
 
     /// The app's icon with at least `scale` pixels per point, from the cache when it holds one that sharp. Otherwise,
     /// because the app moved or a sharper display was connected since the last prepare, it is rendered and cached now.
-    @discardableResult
     private func bitmap(for app: AppEntry, scale: CGFloat) -> CGImage? {
-        if let cached = icons[app.url], cached.width >= Self.pixels(at: scale) { return cached }
-        let rendered = Self.renderIcon(of: app, scale: scale)
+        let pixels = Self.pixels(at: scale)
+        if let cached = icons[app.url], cached.width >= pixels { return cached }
+        let rendered = Self.renderIcon(of: app.url, pixels: pixels)
         icons[app.url] = rendered
         return rendered
+    }
+
+    /// Renders on all cores away from the main actor, so a first render never delays a click.
+    @concurrent private static func renderOffMain(_ urls: [URL], pixels: Int) async -> [URL: CGImage] {
+        let results = Mutex<[URL: CGImage]>([:])
+        DispatchQueue.concurrentPerform(iterations: urls.count) { index in
+            guard let icon = renderIcon(of: urls[index], pixels: pixels) else { return }
+            results.withLock { $0[urls[index]] = icon }
+        }
+        return results.withLock { $0 }
     }
 
     private static var highestScale: CGFloat {
@@ -84,8 +99,7 @@ import QuartzCore
 
     /// The icon Finder shows for the app, as a bitmap of the icon's peak size in pixels at `scale`, so it never
     /// has to be scaled up.
-    private static func renderIcon(of app: AppEntry, scale: CGFloat) -> CGImage? {
-        let pixels = Self.pixels(at: scale)
+    private nonisolated static func renderIcon(of app: URL, pixels: Int) -> CGImage? {
         guard let space = CGColorSpace(name: CGColorSpace.displayP3),
               let context = CGContext(
                 data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0, space: space,
@@ -94,7 +108,7 @@ import QuartzCore
         context.interpolationQuality = .high
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
-        NSWorkspace.shared.icon(forFile: app.url.path).draw(in: CGRect(x: 0, y: 0, width: pixels, height: pixels))
+        NSWorkspace.shared.icon(forFile: app.path).draw(in: CGRect(x: 0, y: 0, width: pixels, height: pixels))
         NSGraphicsContext.restoreGraphicsState()
         return context.makeImage()
     }

@@ -66,29 +66,90 @@ public struct GestureRow: Identifiable, Equatable, Sendable {
     }
 }
 
+/// The apps an app picker lists: the most recently launched first, then the rest.
+public struct InstalledApps: Equatable, Sendable {
+    /// Most recently launched first, at most `recentLimit`.
+    public let recent: [AppEntry]
+    /// Every other listed app, in Finder order.
+    public let others: [AppEntry]
+
+    private static let recentLimit = 10
+    /// `recent` then `others`: every listed app in menu order.
+    public var all: [AppEntry] { recent + others }
+
+    public static let empty = InstalledApps(recent: [], others: [])
+
+    init(recent: [AppEntry], others: [AppEntry]) {
+        self.recent = recent
+        self.others = others
+    }
+
+    /// `entries` are in Finder order. An entry without a date is never recent; there is no age limit.
+    init(_ entries: [AppEntry], lastOpened: [BundleID: Date]) {
+        let dated = entries.enumerated().compactMap { index, entry in
+            lastOpened[entry.bundleID].map { (index: index, entry: entry, date: $0) }
+        }
+        let newestFirst = dated.sorted { $0.date != $1.date ? $0.date > $1.date : $0.index < $1.index }
+        let recent = newestFirst.prefix(Self.recentLimit)
+        let recentIDs = Set(recent.map(\.entry.bundleID))
+        self.init(recent: recent.map(\.entry), others: entries.filter { !recentIDs.contains($0.bundleID) })
+    }
+
+    /// An app picker's menu, top to bottom. The row's present app is checked wherever it sits.
+    public func pickerMenu(checking app: RowApp) -> [PickerItem] {
+        var checkedID: BundleID?
+        if case .present(let entry) = app { checkedID = entry.bundleID }
+        var items = all.map { PickerItem.app($0, checked: $0.bundleID == checkedID) }
+        if !recent.isEmpty && !others.isEmpty { items.insert(.divider, at: recent.count) }
+        if !items.isEmpty { items.append(.divider) }
+        return items + [.other, .unassigned]
+    }
+}
+
+/// One line of an app picker's menu.
+public enum PickerItem: Equatable, Sendable {
+    case app(AppEntry, checked: Bool)
+    case divider
+    /// Other…
+    case other
+    /// None.
+    case unassigned
+}
+
 /// Apps on disk. Local-substitutable: tests point it at a temp directory of fake bundles and inject
-/// `registeredCopies`.
+/// `registeredCopies` and `lastOpened`.
 public struct AppCatalog: Sendable {
-    private let roots: [URL]
+    /// The folders `installedApps()` enumerates.
+    public let roots: [URL]
     private let extras: [URL]
     private let registeredCopies: @Sendable (BundleID) -> [URL]
+    private let lastOpened: @Sendable (URL) -> Date?
 
-    public init(roots: [URL], extras: [URL], registeredCopies: @escaping @Sendable (BundleID) -> [URL]) {
+    /// `lastOpened`: when the app bundle at that URL was last launched, as Spotlight records it; nil when unknown.
+    public init(
+        roots: [URL], extras: [URL], registeredCopies: @escaping @Sendable (BundleID) -> [URL],
+        lastOpened: @escaping @Sendable (URL) -> Date?
+    ) {
         self.roots = roots
         self.extras = extras
         self.registeredCopies = registeredCopies
+        self.lastOpened = lastOpened
     }
 
     /// Picker list: every .app under `roots` (recursing into folders, never into bundles, skipping hidden files)
-    /// plus `extras`. One entry per bundle ID, first root wins; sorted like Finder. Enumerates on every call.
-    public func installedApps() -> [AppEntry] {
+    /// plus `extras`. One entry per bundle ID, first root wins; Finder order, the most recently launched split out
+    /// first. Dates are read only for listed apps. Enumerates on every call.
+    public func installedApps() -> InstalledApps {
         var seen = Set<BundleID>()
         var found: [AppEntry] = []
         for url in roots.flatMap(Self.appBundles(under:)) + extras {
             guard let entry = entry(at: url), seen.insert(entry.bundleID).inserted else { continue }
             found.append(entry)
         }
-        return found.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        found.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        var dates: [BundleID: Date] = [:]
+        for entry in found { dates[entry.bundleID] = lastOpened(entry.url) }
+        return InstalledApps(found, lastOpened: dates)
     }
 
     private static func appBundles(under directory: URL) -> [URL] {

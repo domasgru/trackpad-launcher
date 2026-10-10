@@ -1,0 +1,4 @@
+off-main render 79 icons: 136.1 ms
+main: build 79 items from rendered icons: 13.3 ms
+main: draw all rendered icons at 16 pt: 1.0 ms
+off-main MDItem lastUsed: 27/79 in 58.4 ms

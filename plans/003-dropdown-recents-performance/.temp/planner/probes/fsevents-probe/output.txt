@@ -1,0 +1,10 @@
+start: true
+install Slack.app at +0.5s
+  [install Slack.app] callback after 481 ms, 3 paths: /private<base>/Applications/, /private<base>/Applications/Slack.app/, /private<base>/Applications/Slack.app/Contents/ flags 0,0,0 main: true
+remove Slack.app at +3.0s
+  [remove Slack.app] callback after 923 ms, 3 paths: /private<base>/Applications/Slack.app/Contents/, /private<base>/Applications/Slack.app/, /private<base>/Applications/ flags 0,0,0 main: true
+create missing root + app at +5.5s
+  [create missing root + app] callback after 2 ms, 1 paths: <base>/UserApplications flags 20 main: true
+app inside the late root at +8.0s
+  [app inside the late root] callback after 1 ms, 1 paths: <base>/UserApplications flags 20 main: true
+done

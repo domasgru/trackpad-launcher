@@ -155,3 +155,41 @@ import LauncherCore
         onChange?()
     }
 }
+
+/// Runs the real `catalog.installedApps()` synchronously. `foldersChanged()` stands in for the FSEvents push.
+@MainActor final class InMemoryAppScanner: AppScanner {
+    var onScan: (@MainActor (InstalledApps) -> Void)?
+    private(set) var scanRequests = 0
+    private let catalog: AppCatalog
+    private var holding = false
+    private var held = false
+
+    init(catalog: AppCatalog) {
+        self.catalog = catalog
+    }
+
+    func scan() {
+        scanRequests += 1
+        deliver()
+    }
+
+    func foldersChanged() { deliver() }
+
+    /// Defers deliveries until `deliverHeldScan()`.
+    func holdScans() { holding = true }
+
+    func deliverHeldScan() {
+        holding = false
+        guard held else { return }
+        held = false
+        deliver()
+    }
+
+    private func deliver() {
+        if holding {
+            held = true
+        } else {
+            onScan?(catalog.installedApps())
+        }
+    }
+}

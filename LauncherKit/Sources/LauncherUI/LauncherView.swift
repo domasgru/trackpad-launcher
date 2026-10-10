@@ -61,7 +61,9 @@ struct GestureRowView: View {
             Spacer(minLength: 8)
             AppPicker(
                 app: row.app,
-                installedApps: actions.installedApps,
+                installedApps: launcher.installedApps,
+                cachedIcon: actions.cachedIcon,
+                icon: actions.icon,
                 choose: { launcher.setAssignment($0, for: row.gesture) },
                 chooseOther: { actions.chooseOtherApp(row.gesture) })
                 .fixedSize()

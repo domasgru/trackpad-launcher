@@ -21,7 +21,7 @@ import LauncherCore
         world.install("App 10", in: world.userApplications)
         world.install("App 2", in: world.userApplications)
 
-        let apps = world.catalog.installedApps()
+        let apps = world.catalog.installedApps().others
 
         #expect(apps.map(\.name) == ["App 2", "App 10", "arc", "Figma", "Finder", "Terminal", "Zed"])
         let arc = apps.first { $0.name == "arc" }?.url.resolvingSymlinksInPath().path
@@ -30,12 +30,12 @@ import LauncherCore
 
     @Test func everyCallEnumeratesAfresh() {
         let world = World(apps: ["Zed"])
-        #expect(!world.catalog.installedApps().map(\.name).contains("Slack"))
+        #expect(!world.catalog.installedApps().others.map(\.name).contains("Slack"))
 
         world.install("Slack")
-        #expect(world.catalog.installedApps().map(\.name).contains("Slack"))
+        #expect(world.catalog.installedApps().others.map(\.name).contains("Slack"))
 
         world.remove("Zed")
-        #expect(!world.catalog.installedApps().map(\.name).contains("Zed"))
+        #expect(!world.catalog.installedApps().others.map(\.name).contains("Zed"))
     }
 }

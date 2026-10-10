@@ -1,0 +1,54 @@
+enumerate+plist pass 1: 108 apps in 183.3 ms
+enumerate+plist pass 2: 108 apps in 66.5 ms
+NSMetadataItem lastUsed pass 1: 32/108 dated in 67.4 ms
+NSMetadataItem lastUsed pass 2: 32/108 dated in 44.6 ms
+MDItem lastUsed: 32/108 dated in 44.0 ms
+MDQuery sync: 35 dated app bundles under roots in 77.5 ms
+Top recent by Spotlight:
+  2026-10-09T15:47:10Z  Claude  [data]
+  2026-10-09T15:45:23Z  Comfy Desktop  [data]
+  2026-10-09T15:33:14Z  Things  [data]
+  2026-10-09T14:46:01Z  Notes  [system]
+  2026-10-09T14:29:28Z  ChatGPT  [data]
+  2026-10-09T14:20:17Z  Visual Studio Code  [data]
+  2026-10-09T14:18:34Z  Xcode  [data]
+  2026-10-09T14:16:29Z  Spotify  [data]
+  2026-10-09T13:52:05Z  Notion  [data]
+  2026-10-09T11:05:44Z  Google Chrome  [data]
+  2026-10-09T11:00:50Z  System Settings  [system]
+  2026-10-09T07:29:55Z  1Password  [data]
+  2026-10-09T06:12:01Z  Creative Cloud Content Manager  [data]
+  2026-10-08T20:48:51Z  Notion Calendar  [data]
+xattr lastuseddate#PS: data-volume 0/42, system-volume 0/66; dated-by-Spotlight on system volume: 15
+icon(forFile:) main pass 1: 108 in 45.7 ms
+icon(forFile:) main pass 2: 108 in 23.0 ms
+draw all icons at 16pt: 1125.6 ms
+NSMenuItem x108 with images: 22.7 ms
+off-main prime: 25.2 ms
+main after prime: 23.2 ms
+enumerate+plist pass 1: 108 apps in 73.2 ms
+enumerate+plist pass 2: 108 apps in 63.9 ms
+NSMetadataItem lastUsed pass 1: 32/108 dated in 60.4 ms
+NSMetadataItem lastUsed pass 2: 32/108 dated in 45.4 ms
+MDItem lastUsed: 32/108 dated in 46.5 ms
+MDQuery sync: 35 dated app bundles under roots in 6.2 ms
+Top recent by Spotlight:
+  2026-10-09T15:47:10Z  Claude  [data]
+  2026-10-09T15:45:23Z  Comfy Desktop  [data]
+  2026-10-09T15:33:14Z  Things  [data]
+  2026-10-09T14:46:01Z  Notes  [system]
+  2026-10-09T14:29:28Z  ChatGPT  [data]
+  2026-10-09T14:20:17Z  Visual Studio Code  [data]
+  2026-10-09T14:18:34Z  Xcode  [data]
+  2026-10-09T14:16:29Z  Spotify  [data]
+  2026-10-09T13:52:05Z  Notion  [data]
+  2026-10-09T11:05:44Z  Google Chrome  [data]
+  2026-10-09T11:00:50Z  System Settings  [system]
+  2026-10-09T07:29:55Z  1Password  [data]
+  2026-10-09T06:12:01Z  Creative Cloud Content Manager  [data]
+  2026-10-08T20:48:51Z  Notion Calendar  [data]
+xattr lastuseddate#PS: data-volume 0/42, system-volume 0/66; dated-by-Spotlight on system volume: 15
+icon(forFile:) main pass 1: 108 in 28.1 ms
+icon(forFile:) main pass 2: 108 in 23.3 ms
+draw all icons at 16pt: 28.6 ms
+NSMenuItem x108 with images: 15.2 ms

@@ -2,12 +2,14 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// The app picker: an `NSPopUpButton` whose delegate rebuilds the items from `installedApps()` every time the
-/// menu opens, so the list is never older than the click that opened it. Between openings the menu holds only
-/// the row's current app, which is what the button shows.
+/// The app picker: an `NSPopUpButton` whose delegate rebuilds the items from the launcher's list every time the
+/// menu opens. That is only building items from values already in memory: no disk, Spotlight or icon drawing runs
+/// on the click path. Between openings the menu holds only the row's current app, which is what the button shows.
 struct AppPicker: NSViewRepresentable {
     let app: RowApp
-    let installedApps: () -> [AppEntry]
+    let installedApps: InstalledApps
+    let cachedIcon: (URL) -> NSImage
+    let icon: (URL) -> NSImage
     let choose: (AppChoice) -> Void
     let chooseOther: () -> Void
 
@@ -27,6 +29,8 @@ struct AppPicker: NSViewRepresentable {
         let coordinator = context.coordinator
         coordinator.app = app
         coordinator.installedApps = installedApps
+        coordinator.cachedIcon = cachedIcon
+        coordinator.icon = icon
         coordinator.choose = choose
         coordinator.chooseOther = chooseOther
         guard !coordinator.isMenuOpen else { return }
@@ -36,7 +40,9 @@ struct AppPicker: NSViewRepresentable {
     @MainActor final class Coordinator: NSObject, NSMenuDelegate {
         weak var button: NSPopUpButton?
         var app: RowApp = .unassigned
-        var installedApps: () -> [AppEntry] = { [] }
+        var installedApps = InstalledApps.empty
+        var cachedIcon: (URL) -> NSImage = { _ in NSImage() }
+        var icon: (URL) -> NSImage = { _ in NSImage() }
         var choose: (AppChoice) -> Void = { _ in }
         var chooseOther: () -> Void = {}
         private(set) var isMenuOpen = false
@@ -60,22 +66,27 @@ struct AppPicker: NSViewRepresentable {
             }
         }
 
-        /// Runs each time the menu is about to open: the one place the installed apps are enumerated.
-        /// The list is installed apps, then Other…, then None; the row's own app is checked when installed.
+        /// Runs each time the menu is about to open. A list that arrived while a menu was open is applied here.
         func menuNeedsUpdate(_ menu: NSMenu) {
             guard let button else { return }
             menu.removeAllItems()
             var selected: NSMenuItem?
-            for entry in installedApps() {
-                let item = appItem(entry)
-                menu.addItem(item)
-                if case .present(let current) = app, current.bundleID == entry.bundleID { selected = item }
+            for pickerItem in installedApps.pickerMenu(checking: app) {
+                switch pickerItem {
+                case .app(let entry, let checked):
+                    let item = appItem(entry, icon: cachedIcon(entry.url))
+                    menu.addItem(item)
+                    if checked { selected = item }
+                case .divider:
+                    menu.addItem(.separator())
+                case .other:
+                    menu.addItem(actionItem(title: "Other…", action: #selector(pickOther)))
+                case .unassigned:
+                    let none = actionItem(title: "None", action: #selector(pick(_:)))
+                    none.representedObject = AppChoice.unassigned
+                    menu.addItem(none)
+                }
             }
-            menu.addItem(.separator())
-            menu.addItem(actionItem(title: "Other…", action: #selector(pickOther)))
-            let none = actionItem(title: "None", action: #selector(pick(_:)))
-            none.representedObject = AppChoice.unassigned
-            menu.addItem(none)
             button.select(selected)
         }
 
@@ -84,7 +95,7 @@ struct AppPicker: NSViewRepresentable {
             case .unassigned:
                 return placeholder(title: "Choose app…", symbol: nil)
             case .present(let entry):
-                return appItem(entry)
+                return appItem(entry, icon: icon(entry.url))
             case .missing(let name):
                 return placeholder(title: "\(name)  not found", symbol: "questionmark.app.dashed")
             }
@@ -103,14 +114,11 @@ struct AppPicker: NSViewRepresentable {
             return item
         }
 
-        private func appItem(_ entry: AppEntry) -> NSMenuItem {
+        private func appItem(_ entry: AppEntry, icon: NSImage) -> NSMenuItem {
             let item = NSMenuItem(title: entry.name, action: #selector(pick(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = AppChoice.app(entry)
-            if let icon = NSWorkspace.shared.icon(forFile: entry.url.path).copy() as? NSImage {
-                icon.size = NSSize(width: 16, height: 16)
-                item.image = icon
-            }
+            item.image = icon
             return item
         }
 

@@ -7,6 +7,8 @@ import Observation
 @MainActor @Observable
 public final class Launcher {
     public private(set) var rows: [GestureRow] = []
+    /// Every app picker's list. Replaced only by a scan; never emptied while one runs.
+    public private(set) var installedApps: InstalledApps
     public var isWindowOpen: Bool { window != .closed }
     public var handMode: HandMode { settings.handMode }
     /// One derivation, read by the icon, the notice and the fire guard.
@@ -32,18 +34,21 @@ public final class Launcher {
     @ObservationIgnored private let access: any AccessibilityPermission
     @ObservationIgnored private let system: any SystemActions
     @ObservationIgnored private let catalog: AppCatalog
+    @ObservationIgnored private let scanner: any AppScanner
     @ObservationIgnored private let store: SettingsStore
 
     public init(
         hardware: any TrackpadHardware, preferences: any TrackpadPreferences, access: any AccessibilityPermission,
-        system: any SystemActions, catalog: AppCatalog, store: SettingsStore
+        system: any SystemActions, catalog: AppCatalog, scanner: any AppScanner, store: SettingsStore
     ) {
         self.hardware = hardware
         self.preferences = preferences
         self.access = access
         self.system = system
         self.catalog = catalog
+        self.scanner = scanner
         self.store = store
+        installedApps = catalog.installedApps()
         let stored = store.load()
         isFirstLaunch = stored == nil
         settings = stored ?? Settings()
@@ -58,6 +63,8 @@ public final class Launcher {
             case .trackpadsChanged: reconcile()
             }
         }
+        scanner.onScan = { [unowned self] in installedApps = $0 }
+        scanner.scan()
         preferences.onChange = { [unowned self] in reconcile() }
         access.onChange = { [unowned self] in reconcile() }
         reconcile()
@@ -96,10 +103,11 @@ public final class Launcher {
         reconcile()
     }
 
-    /// Show the launcher window and re-resolve the rows.
+    /// Show the launcher window, re-resolve the rows and refresh the app list in the background.
     public func openWindow() {
         if window == .closed { window = .open }
         resolveRows()
+        scanner.scan()
     }
 
     /// Icon click, Escape, the window's own System Settings buttons: always closes.
