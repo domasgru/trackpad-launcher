@@ -38,9 +38,9 @@ public enum TrackpadEvent: Sendable {
     /// The apps the next launch animations may be for. Each call replaces the previous set. Readies whatever a later
     /// `playLaunchAnimation` for one of them needs now, so that play does no slow work.
     func prepareLaunchAnimations(for apps: [AppEntry])
-    /// Returns at once. Reads the pointer, the displays and Reduce motion at the moment of the call, plays for about
-    /// 500 ms and removes itself. Every call plays its own animation and never cancels, restarts or reuses one already
-    /// playing. Nothing it shows activates Trackpad Launcher, becomes key or receives a click.
+    /// Returns at once. Reads the pointer, the displays and Reduce motion at the moment of the call, plays for about a
+    /// third of a second and removes itself. Every call plays its own animation and never cancels, restarts or reuses
+    /// one already playing. Nothing it shows activates Trackpad Launcher, becomes key or receives a click.
     func playLaunchAnimation(for app: AppEntry)
 }
 

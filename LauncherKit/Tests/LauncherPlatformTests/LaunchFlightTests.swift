@@ -46,7 +46,7 @@ extension LaunchStage {
                 time: keyTimes[i] * position.duration,
                 screenPosition: CGPoint(x: frame.minX + positions[i].x, y: frame.minY + positions[i].y),
                 position: positions[i],
-                side: 60 * (m.m11 * m.m11 + m.m12 * m.m12).squareRoot(),
+                side: iconSide * (m.m11 * m.m11 + m.m12 * m.m12).squareRoot(),
                 rotationDegrees: atan2(m.m12, m.m11) * 180 / .pi,
                 opacity: opacities[i])
         }
@@ -84,16 +84,18 @@ extension LaunchDisplay {
     func iconAppearsAtThePointerAtFullSizeAndFullyOpaqueAndNeverFadesIn(
         reduceMotion: Bool, draw: Double
     ) throws {
-        let keyframes = try stage(draw: draw, reduceMotion: reduceMotion).keyframes()
+        let staged = try stage(draw: draw, reduceMotion: reduceMotion)
+        let keyframes = try staged.keyframes()
         let first = try #require(keyframes.first)
 
         #expect(first.time == 0)
         #expect(first.screenPosition == Self.middleOfBuiltIn)
-        #expect(first.side == 60)
+        #expect(staged.iconSide == 40)
+        #expect(first.side == 40)
         #expect(first.opacity == 1)
         #expect(first.rotationDegrees == 0)
         for (previous, next) in zip(keyframes, keyframes.dropFirst()) {
-            #expect(next.side >= 60 || next.time > 0.1, "shrank below its start size during the pop, at \(next.time) s")
+            #expect(next.side >= 40 || next.time > 0.1, "shrank below its start size during the pop, at \(next.time) s")
             #expect(next.opacity <= previous.opacity, "faded in at \(next.time) s")
         }
     }
@@ -103,7 +105,7 @@ extension LaunchDisplay {
         let keyframes = try stage(draw: draw, reduceMotion: false).keyframes()
         let peak = try peak(of: keyframes)
 
-        #expect((66...78).contains(keyframes[peak].side), "peak side \(keyframes[peak].side)")
+        #expect((44...52).contains(keyframes[peak].side), "peak side \(keyframes[peak].side)")
         #expect(keyframes[peak].time <= 0.1, "peak at \(keyframes[peak].time) s")
         for (previous, next) in zip(keyframes[...peak], keyframes[...peak].dropFirst()) {
             #expect(next.side > previous.side, "did not swell at \(next.time) s")
@@ -114,13 +116,13 @@ extension LaunchDisplay {
     }
 
     @Test(arguments: draws)
-    func iconRisesFasterAndFasterToBetween60And80PointsAboveItsStart(draw: Double) throws {
+    func iconRisesFasterAndFasterToBetween40And53PointsAboveItsStart(draw: Double) throws {
         let keyframes = try stage(draw: draw, reduceMotion: false).keyframes()
         let rises = keyframes.map { $0.screenPosition.y - keyframes[0].screenPosition.y }
         let halfway = try #require(keyframes.lastIndex { $0.time <= LaunchFlight.duration / 2 + 1e-9 })
         let last = try #require(rises.last)
 
-        #expect((60...80).contains(last))
+        #expect((40...53).contains(last))
         #expect(last - rises[halfway] > rises[halfway] - rises[0], "more height in the second half than in the first")
         let flight = try rises[peak(of: keyframes)...]
         let steps = zip(flight, flight.dropFirst()).map { $1 - $0 }
@@ -137,7 +139,7 @@ extension LaunchDisplay {
         for (previous, next) in zip(flight, flight.dropFirst()) {
             #expect(next.side < previous.side, "did not shrink at \(next.time) s")
         }
-        #expect(try #require(keyframes.last).side <= 36)
+        #expect(try #require(keyframes.last).side <= 24)
     }
 
     @Test(arguments: draws)
@@ -148,7 +150,7 @@ extension LaunchDisplay {
             #expect(keyframe.opacity >= 0.9, "already fading at \(keyframe.time) s")
         }
         let gone = try #require(keyframes.first { $0.opacity == 0 }, "never fully invisible")
-        #expect(gone.side >= 60 / 3)
+        #expect(gone.side >= 40 / 3)
     }
 
     @Test(arguments: modes, draws)
@@ -239,7 +241,7 @@ extension LaunchDisplay {
 
         for keyframe in keyframes {
             #expect(keyframe.screenPosition == Self.middleOfBuiltIn, "moved at \(keyframe.time) s")
-            #expect(keyframe.side == 60, "shrank at \(keyframe.time) s")
+            #expect(keyframe.side == 40, "shrank at \(keyframe.time) s")
             #expect(keyframe.rotationDegrees == 0, "tilted at \(keyframe.time) s")
         }
     }
