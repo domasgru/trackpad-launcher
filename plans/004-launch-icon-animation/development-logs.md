@@ -46,3 +46,8 @@
   - `LaunchOverlay.live` → `playingPanels`.
   - T20 picked the built-in display only because it came first in the list → T20 also stages at (700, 982) among `[external, builtIn]`. The T14 and Reduce-motion streak rows now stage among both displays, per the plan's convention.
 - Not changed: `WorkspaceActions` forwarding to the overlay, and the streak rule living in LauncherPlatform. Both are plan decisions ("no new port"; motion is rendering).
+
+## Tuning
+- The user polished the animation by feel in a Debug-only tuner window and picked their "Preset 2" → it is the shipped animation: 60 pt, 0.34 s, a 20 % pop over 75 ms, rise 70 pt, and new rise, shrink, fade and sway curves. New R16 (the puff). R3, R6, R7, R11 and R15 bounds follow the new numbers; R5 now rules out only growing in from a smaller size.
+- Every animation number moved into `LaunchTuning`, whose defaults are the shipped animation. The tuner (`AnimationTuner`, `#if DEBUG`) stays in the codebase for future polishing; Release builds contain none of it.
+- The icon bitmap is rendered at the pop's peak size, and keyframes are sampled at 240 per second so the short pop stays smooth.

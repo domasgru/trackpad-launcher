@@ -46,7 +46,7 @@ extension LaunchStage {
                 time: keyTimes[i] * position.duration,
                 screenPosition: CGPoint(x: frame.minX + positions[i].x, y: frame.minY + positions[i].y),
                 position: positions[i],
-                side: 46 * (m.m11 * m.m11 + m.m12 * m.m12).squareRoot(),
+                side: 60 * (m.m11 * m.m11 + m.m12 * m.m12).squareRoot(),
                 rotationDegrees: atan2(m.m12, m.m11) * 180 / .pi,
                 opacity: opacities[i])
         }
@@ -75,8 +75,13 @@ extension LaunchDisplay {
         return try #require(flight.staged(at: pointer, among: displays), sourceLocation: sourceLocation)
     }
 
+    /// The index of the pop's peak: the largest keyframe, where the deflating flight starts.
+    private func peak(of keyframes: [Keyframe]) throws -> Int {
+        try #require(keyframes.indices.max { keyframes[$0].side < keyframes[$1].side })
+    }
+
     @Test(arguments: modes, draws)
-    func iconAppearsAtThePointerAtFullSizeAndFullyOpaqueAndNeverGrowsOrFadesIn(
+    func iconAppearsAtThePointerAtFullSizeAndFullyOpaqueAndNeverFadesIn(
         reduceMotion: Bool, draw: Double
     ) throws {
         let keyframes = try stage(draw: draw, reduceMotion: reduceMotion).keyframes()
@@ -84,39 +89,55 @@ extension LaunchDisplay {
 
         #expect(first.time == 0)
         #expect(first.screenPosition == Self.middleOfBuiltIn)
-        #expect(first.side == 46)
+        #expect(first.side == 60)
         #expect(first.opacity == 1)
         #expect(first.rotationDegrees == 0)
         for (previous, next) in zip(keyframes, keyframes.dropFirst()) {
-            #expect(next.side <= 46, "grew at \(next.time) s")
+            #expect(next.side >= 60 || next.time > 0.1, "shrank below its start size during the pop, at \(next.time) s")
             #expect(next.opacity <= previous.opacity, "faded in at \(next.time) s")
         }
     }
 
     @Test(arguments: draws)
-    func iconRisesFasterAndFasterToBetween30And60PointsAboveItsStart(draw: Double) throws {
+    func iconPopsInPlaceTo110To130PercentWithinTheFirst100Milliseconds(draw: Double) throws {
         let keyframes = try stage(draw: draw, reduceMotion: false).keyframes()
-        let rises = keyframes.map { $0.screenPosition.y - keyframes[0].screenPosition.y }
-        let halfway = try #require(keyframes.firstIndex { $0.time >= 0.25 })
-        try #require(abs(keyframes[halfway].time - 0.25) < 1e-9)
-        let last = try #require(rises.last)
+        let peak = try peak(of: keyframes)
 
-        #expect((30...60).contains(last))
-        #expect(last - rises[halfway] > rises[halfway] - rises[0], "more height in the second half than in the first")
-        let steps = zip(rises, rises.dropFirst()).map { $1 - $0 }
-        for (i, (step, nextStep)) in zip(steps, steps.dropFirst()).enumerated() {
-            #expect(nextStep > step, "rise did not speed up at \(keyframes[i + 2].time) s")
+        #expect((66...78).contains(keyframes[peak].side), "peak side \(keyframes[peak].side)")
+        #expect(keyframes[peak].time <= 0.1, "peak at \(keyframes[peak].time) s")
+        for (previous, next) in zip(keyframes[...peak], keyframes[...peak].dropFirst()) {
+            #expect(next.side > previous.side, "did not swell at \(next.time) s")
+            #expect(next.screenPosition == Self.middleOfBuiltIn, "moved while swelling, at \(next.time) s")
+            #expect(next.rotationDegrees == 0, "tilted while swelling, at \(next.time) s")
+            #expect(next.opacity == 1, "faded while swelling, at \(next.time) s")
         }
     }
 
     @Test(arguments: draws)
-    func iconShrinksSteadilyToNoMoreThanHalfItsStartSize(draw: Double) throws {
+    func iconRisesFasterAndFasterToBetween60And80PointsAboveItsStart(draw: Double) throws {
         let keyframes = try stage(draw: draw, reduceMotion: false).keyframes()
+        let rises = keyframes.map { $0.screenPosition.y - keyframes[0].screenPosition.y }
+        let halfway = try #require(keyframes.lastIndex { $0.time <= LaunchFlight.duration / 2 + 1e-9 })
+        let last = try #require(rises.last)
 
-        for (previous, next) in zip(keyframes, keyframes.dropFirst()) {
+        #expect((60...80).contains(last))
+        #expect(last - rises[halfway] > rises[halfway] - rises[0], "more height in the second half than in the first")
+        let flight = try rises[peak(of: keyframes)...]
+        let steps = zip(flight, flight.dropFirst()).map { $1 - $0 }
+        for (step, nextStep) in zip(steps, steps.dropFirst()) {
+            #expect(nextStep > step, "rise did not speed up")
+        }
+    }
+
+    @Test(arguments: draws)
+    func afterThePopIconShrinksSteadilyToNoMoreThan60PercentOfItsStartSize(draw: Double) throws {
+        let keyframes = try stage(draw: draw, reduceMotion: false).keyframes()
+        let flight = try keyframes[peak(of: keyframes)...]
+
+        for (previous, next) in zip(flight, flight.dropFirst()) {
             #expect(next.side < previous.side, "did not shrink at \(next.time) s")
         }
-        #expect(try #require(keyframes.last).side <= 23)
+        #expect(try #require(keyframes.last).side <= 36)
     }
 
     @Test(arguments: draws)
@@ -127,23 +148,23 @@ extension LaunchDisplay {
             #expect(keyframe.opacity >= 0.9, "already fading at \(keyframe.time) s")
         }
         let gone = try #require(keyframes.first { $0.opacity == 0 }, "never fully invisible")
-        #expect(gone.side >= 46 / 3)
+        #expect(gone.side >= 60 / 3)
     }
 
     @Test(arguments: modes, draws)
-    func iconIsFullyInvisibleBetween400And600Milliseconds(reduceMotion: Bool, draw: Double) throws {
+    func iconIsFullyInvisibleBetween300And400Milliseconds(reduceMotion: Bool, draw: Double) throws {
         let staged = try stage(draw: draw, reduceMotion: reduceMotion)
         let keyframes = try staged.keyframes()
 
         for animation in staged.animations {
             #expect(
-                (0.4...0.6).contains(animation.duration), "\(animation.keyPath ?? "") lasts \(animation.duration) s")
+                (0.3...0.4).contains(animation.duration), "\(animation.keyPath ?? "") lasts \(animation.duration) s")
         }
-        for keyframe in keyframes where keyframe.time < 0.4 {
+        for keyframe in keyframes where keyframe.time < 0.3 {
             #expect(keyframe.opacity > 0, "invisible too early, at \(keyframe.time) s")
         }
         let gone = try #require(keyframes.first { $0.opacity == 0 }, "never fully invisible")
-        #expect(gone.time <= 0.6)
+        #expect(gone.time <= 0.4)
     }
 
     @Test(arguments: draws)
@@ -218,7 +239,7 @@ extension LaunchDisplay {
 
         for keyframe in keyframes {
             #expect(keyframe.screenPosition == Self.middleOfBuiltIn, "moved at \(keyframe.time) s")
-            #expect(keyframe.side == 46, "shrank at \(keyframe.time) s")
+            #expect(keyframe.side == 60, "shrank at \(keyframe.time) s")
             #expect(keyframe.rotationDegrees == 0, "tilted at \(keyframe.time) s")
         }
     }

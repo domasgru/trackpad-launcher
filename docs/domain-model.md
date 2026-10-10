@@ -54,7 +54,7 @@ The message in the launcher window, shown while gestures are inactive, that name
 The haptic pulse the trackpad gives when a gesture fires for an assigned, present target app.
 
 ## Launch animation
-The target app's icon floating up from the pointer when a gesture fires for an assigned, present target app, together with the feedback. It appears at once at full size, rises faster and faster as it shrinks, sways and tilts a little to one side, and fades out within about half a second, like a small balloon letting its air out. With the system's Reduce motion setting on, it fades out in place instead. It never takes focus or receives clicks, and every fired gesture plays its own. There is no setting to turn it off.
+The target app's icon floating up from the pointer when a gesture fires for an assigned, present target app, together with the feedback. It appears at once at full size, puffs up for a split second, then rises faster and faster as it shrinks, sways and tilts a little to one side, and fades out within about a third of a second, like a small balloon letting its air out. With the system's Reduce motion setting on, it fades out in place instead. It never takes focus or receives clicks, and every fired gesture plays its own. There is no setting to turn it off.
 
 ## Sway
 A launch animation's small sideways veer, to the left or to the right, never more than a third of its rise, with a slight tilt toward that side. The side is random, except that the same side never comes up three times in a row.

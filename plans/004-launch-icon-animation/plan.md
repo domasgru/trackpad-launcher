@@ -6,7 +6,7 @@ A gesture gives a haptic pulse, then the target app comes to the front. Nothing 
 
 ## Solution
 
-When a gesture fires, the target app's icon appears at the pointer. It then floats away like a small balloon letting its air out. Escaping air shoots the balloon upward, and the balloon shrinks as it empties. Its path wanders a little to the left and right, differently each time. The icon fades out before the balloon would be empty. The whole animation lasts about half a second. With Reduce motion on, the icon simply fades out in place.
+When a gesture fires, the target app's icon appears at the pointer. It puffs up for a split second, like a balloon taking a last breath. It then floats away like a small balloon letting its air out. Escaping air shoots the balloon upward, and the balloon shrinks as it empties. Its path wanders a little to the left and right, differently each time. The icon fades out before the balloon would be empty. The whole animation lasts about a third of a second. With Reduce motion on, the icon simply fades out in place.
 
 The animation confirms the gesture and names the app at a glance. The app's icon is the confirmation of which gesture fired; no separate finger-count indicator is shown. It stays out of the way: it never takes focus and never blocks a click.
 
@@ -44,12 +44,12 @@ The launch animation MUST NOT play when a gesture is unassigned, its assignment 
 - **THEN** no icon appears
 
 ### R3. The icon is the target app's icon
-The animated image MUST be the target app's own icon, the one Finder shows for it. It MUST start at 46 × 46 points.
+The animated image MUST be the target app's own icon, the one Finder shows for it. It MUST start at 60 × 60 points.
 
 #### Scenario: Icon matches the app
 - **GIVEN** the 1-finger gesture is assigned to Notion, and the pointer is on a Retina display
 - **WHEN** the user makes the 1-finger gesture
-- **THEN** the icon that appears is Notion's icon, 46 points square, and it shows no blur or pixelation at any point
+- **THEN** the icon that appears is Notion's icon, 60 points square, and it shows no blur or pixelation at any point
 
 ### R4. The icon starts at the pointer
 The icon's centre MUST start on the pointer's position at the moment the gesture fires, on the display the pointer is on. If an app has hidden the pointer, the icon MUST start at the pointer's current position anyway.
@@ -70,18 +70,18 @@ The icon's centre MUST start on the pointer's position at the moment the gesture
 - **THEN** the window closes, and the icon animates at the pointer
 
 ### R5. The icon appears at once at full size
-The icon MUST appear at full size and full opacity as soon as the gesture fires. It MUST NOT fade in or grow in.
+The icon MUST appear at full size and full opacity as soon as the gesture fires. It MUST NOT fade in or grow in from a smaller size.
 
 #### Scenario: First frame
 - **WHEN** the user makes an assigned gesture
 - **THEN** the icon is at full size and fully opaque the instant it becomes visible; there is no fade-in or grow-in
 
 ### R6. The icon rises faster and faster
-Unless Reduce motion is on (R15), the icon MUST end between 30 and 60 points above its start. Its upward speed MUST grow as it goes, as if pushed by escaping air.
+Unless Reduce motion is on (R15), the icon MUST end between 60 and 80 points above its start. Its upward speed MUST grow as it goes, as if pushed by escaping air.
 
 #### Scenario: Rise speeds up
 - **WHEN** the user makes an assigned gesture
-- **THEN** the icon ends 30 to 60 points above where it started, and it covers more height in the second half of the animation than in the first
+- **THEN** the icon ends 60 to 80 points above where it started, and it covers more height in the second half of the animation than in the first
 
 #### Scenario: Pointer near the top edge
 - **GIVEN** the pointer is within 20 points of the top of the display
@@ -89,11 +89,11 @@ Unless Reduce motion is on (R15), the icon MUST end between 30 and 60 points abo
 - **THEN** the icon rises over the menu bar and is cut off at the display's top edge; it never jumps to another display
 
 ### R7. The icon shrinks
-Unless Reduce motion is on (R15), the icon MUST shrink steadily. It MUST end no larger than half its start size.
+Unless Reduce motion is on (R15), the icon MUST shrink steadily from the end of its puff (R16). It MUST end no larger than 60 % of its start size.
 
 #### Scenario: Icon gets smaller
 - **WHEN** the user makes an assigned gesture
-- **THEN** the icon gets smaller throughout the animation, and ends no larger than 23 points square
+- **THEN** after the puff the icon gets smaller throughout the animation, and ends no larger than 36 points square
 
 ### R8. The icon fades out before it shrinks away
 Unless Reduce motion is on (R15), the icon MUST fade to invisible. Its opacity MUST stay high in the early part of the animation. It MUST become fully invisible while it is still clearly larger than a dot.
@@ -117,12 +117,12 @@ Unless Reduce motion is on (R15), the icon MUST tilt slightly with its sway. The
 - **WHEN** the user makes an assigned gesture
 - **THEN** the icon leans toward the side it drifts to, never more than 5 degrees
 
-### R11. The animation lasts about 500 ms
-The icon MUST be fully invisible between 400 and 600 ms after it appears.
+### R11. The animation lasts about a third of a second
+The icon MUST be fully invisible between 300 and 400 ms after it appears.
 
-#### Scenario: Gone after half a second
+#### Scenario: Gone after a third of a second
 - **WHEN** the user makes an assigned gesture
-- **THEN** the icon is fully invisible between 400 and 600 ms after it appeared
+- **THEN** the icon is fully invisible between 300 and 400 ms after it appeared
 
 ### R12. The animation floats above everything
 The icon MUST show above all other windows, including full-screen apps and the menu bar, on whichever Space is current. It MUST stay visible on top while macOS switches Spaces to bring the target app to front.
@@ -168,12 +168,19 @@ Every fired gesture MUST start its own animation. A new animation MUST NOT cance
 - **THEN** two Arc icons are visible at once, each completing its own animation
 
 ### R15. Reduce motion is respected
-While the macOS "Reduce motion" accessibility setting is on, the icon MUST NOT move, shrink or tilt. It MUST appear at the pointer at full size and fade out in place over about 500 ms.
+While the macOS "Reduce motion" accessibility setting is on, the icon MUST NOT move, puff up, shrink or tilt. It MUST appear at the pointer at full size and fade out in place over the same duration as the full animation (R11).
 
 #### Scenario: Reduce motion on
 - **GIVEN** Reduce motion is on
 - **WHEN** the user makes an assigned gesture
-- **THEN** the icon appears at the pointer and fades out where it is, without moving or shrinking
+- **THEN** the icon appears at the pointer and fades out where it is, without moving, puffing up or shrinking
+
+### R16. The icon puffs up before it deflates
+Unless Reduce motion is on (R15), the icon MUST swell in place to between 110 % and 130 % of its start size within the first 100 ms, then start deflating. While it swells it MUST NOT move, tilt or fade.
+
+#### Scenario: Quick puff
+- **WHEN** the user makes an assigned gesture
+- **THEN** the icon swells almost at once to about a fifth bigger, without moving, and only then starts to rise and shrink
 
 ## Non-goals
 
@@ -211,7 +218,7 @@ While the macOS "Reduce motion" accessibility setting is on, the icon MUST NOT m
 - **`playLaunchAnimation(for app: AppEntry)`**
   - Returns at once.
   - Reads the pointer, the connected displays and Reduce motion at the moment of the call.
-  - Plays for about 500 ms and removes itself.
+  - Plays for about a third of a second and removes itself.
   - Every call plays its own animation and never cancels, restarts or reuses one already playing.
   - Nothing it shows activates Trackpad Launcher, becomes key or receives a click.
 - No new port. The animation is one more effect the core decides and macOS performs, which is what `SystemActions` already describes. `Launcher`'s initialiser, `World` and the composition root keep their shape.
@@ -268,15 +275,24 @@ Why LauncherPlatform and not LauncherCore:
 - Rotation is counter-clockwise positive. That is what a Core Animation z-rotation does in a non-flipped layer tree.
 - The overlay must therefore host the icon layer as a direct sublayer of a plain, non-flipped, layer-backed content view. With that tree, the keyframes need no further conversion.
 
-**Curves.** u is elapsed time ÷ 0.5 s. The constants are a starting point to tune by feel; the tests check the requirement bounds, not these formulas.
+**Curves.** Retuned by feel with the Debug-only tuner (see "Tuning" below); the tests check the requirement bounds, not these formulas. Every number lives in `LaunchTuning`, whose defaults are the shipped animation. The duration is 0.34 s. The pop takes the first 75 ms; v is the time since the pop ended ÷ the remaining 265 ms.
 
 | | Motion | Reduce motion |
 |---|---|---|
-| rise y | 44 · u²: accelerates from rest, 11 pt in the first half, 33 in the second | 0 |
-| side | 46 · (1 − 0.55 u), ending at 20.7 pt | 46 |
-| opacity | 1 − u³: at least 0.93 through 200 ms; 0 at 500 ms, when the icon is 20.7 pt | 1 − u³ |
-| sway x | k · y · u, where k = ±(0.4…1.0) × 0.3. The end drift is 5.3–13.2 pt, and the drift is never more than 0.3 of the rise at any moment | 0 |
-| rotation | −(k ÷ 0.3) · 4° · u: leans toward the drift, at most 4° | 0 |
+| pop | side 60 · (1 + 0.2 · (1 − (1 − p)²)), p = time ÷ 75 ms: eases out to 72 pt, in place, fully opaque | none |
+| rise y | 70 · v^1.8: accelerates from rest | 0 |
+| side | 72 · (1 − 0.55 · v^1.4), ending at 32.4 pt | 60 |
+| opacity | 1 − v⁴: at least 0.95 through 200 ms; 0 at 340 ms, when the icon is 32.4 pt | 1 − u⁴ |
+| sway x | k · y · v^1.8, where k = ±(0.1…1.0) × 0.26. The end drift is 1.8–18.2 pt, never more than 0.26 of the rise | 0 |
+| rotation | −(k ÷ 0.26) · 4° · v: leans toward the drift, at most 4° | 0 |
+
+Keyframes are sampled every 1/240 s, so the 75 ms pop gets 18 of them. The icon bitmap is rendered at the pop's peak size (72 pt), so it is never scaled up.
+
+### Tuning (Debug builds only)
+- `LaunchTuning` holds every number above. Release builds read its defaults as constants. Debug builds read them through a `Mutex` the tuner writes.
+- `AnimationTuner` is a floating window that opens when a Debug build launches. It has a slider per number, live preview at the pointer, reset to shipped, and named presets saved in user defaults.
+- To ship a new tuning, copy its values into `LaunchTuning`'s defaults and adjust the requirement bounds and tests if they move.
+- Everything in the tuner sits inside `#if DEBUG`, so Release builds contain none of it.
 
 ### The overlay (LauncherPlatform)
 `LaunchOverlay` is internal, created and owned by `WorkspaceActions`, which forwards both port methods to it.

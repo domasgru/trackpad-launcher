@@ -18,6 +18,7 @@ The decisions that hold across the whole codebase. Feature-level decisions live 
 - Multitouch frames are recognised on the framework's own thread; only completed gestures hop to the main actor. State shared with that thread lives behind a `Mutex` with one writer.
 - No timers, no polling, no background loops: every input is a push (frames, cfprefs KVO, IOKit notifications, workspace notifications, the TCC Darwin notification, user events). This is what keeps idle CPU at zero. The one extra thread is the click tap's run loop, which exists only while click blocking is armed and sleeps until an event arrives.
 - Animation is Core Animation keyframes, which the render server plays. Whatever an animation leaves behind is cleaned up from its completion callback. No code of ours runs per frame, and display links are banned along with timers.
+- Developer tools live in `#if DEBUG` and never ship. Today that is the launch animation tuner in `LauncherPlatform`: a SwiftUI window over `LaunchTuning`, whose defaults are the shipped animation.
 
 ## Privacy and permissions
 - The app asks for one permission, Accessibility, and uses it only to block trackpad clicks during gestures. It never asks for Input Monitoring or any other permission, never reads keyboard events, and works fully without it except click blocking. The Accessibility APIs and the event tap are each confined to one adapter file by the source-scan test.

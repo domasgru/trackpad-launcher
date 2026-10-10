@@ -29,7 +29,8 @@ import QuartzCore
     func play(for app: AppEntry) {
         let pointer = NSEvent.mouseLocation
         let displays = NSScreen.screens.map { LaunchDisplay(frame: $0.frame, scale: $0.backingScaleFactor) }
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let reduceMotion =
+            NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || LaunchTuning.current.forceReduceMotion
         let flight = flights.next(draw: .random(in: -1...1), reduceMotion: reduceMotion)
         guard let stage = flight.staged(at: pointer, among: displays),
               case let (panel, host)? = Self.makePanel(frame: stage.frame)
@@ -76,13 +77,13 @@ import QuartzCore
         NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
     }
 
-    /// The icon's start side, in pixels at `scale`.
+    /// The icon's side at the pop's peak, in pixels at `scale`.
     private static func pixels(at scale: CGFloat) -> Int {
-        Int((LaunchFlight.iconSide * scale).rounded())
+        Int((LaunchFlight.peakSide * scale).rounded())
     }
 
-    /// The icon Finder shows for the app, as a bitmap of exactly the icon's start size in pixels at `scale`, so the
-    /// first, nearly still frames map one to one onto the display.
+    /// The icon Finder shows for the app, as a bitmap of the icon's peak size in pixels at `scale`, so it never
+    /// has to be scaled up.
     private static func renderIcon(of app: AppEntry, scale: CGFloat) -> CGImage? {
         let pixels = Self.pixels(at: scale)
         guard let space = CGColorSpace(name: CGColorSpace.displayP3),

@@ -60,20 +60,17 @@ struct LaunchFlight {
         self.motion = motion
     }
 
-    static let iconSide: CGFloat = 46
-    static let duration: CFTimeInterval = 0.5
-    /// 120 samples a second.
-    static let steps = 60
-    /// Accelerates from rest, like a balloon pushed by its escaping air.
-    static let rise: CGFloat = 44
-    /// The share of its side the icon loses by the end.
-    static let shrink: CGFloat = 0.55
-    /// Below a third of the rise, so the drift never outgrows it.
-    static let maximumSway: CGFloat = 0.3
-    /// The smallest sway, as a share of the maximum, so every moving flight visibly veers.
-    static let minimumSway: CGFloat = 0.4
-    /// The end tilt of the largest sway.
-    static let maximumTilt: CGFloat = 4 * .pi / 180
+    /// The numbers come from `LaunchTuning`, so the Debug-only tuner can change them live.
+    static var iconSide: CGFloat { LaunchTuning.current.iconSide }
+    static var duration: CFTimeInterval { LaunchTuning.current.duration }
+    /// 240 samples a second, so a pop of a few tens of milliseconds still gets several keyframes.
+    static var steps: Int { max(10, Int((duration * 240).rounded())) }
+    static var maximumSway: CGFloat { LaunchTuning.current.maximumSway }
+    static var minimumSway: CGFloat { LaunchTuning.current.minimumSway }
+    /// The end tilt of the largest sway, in radians.
+    static var maximumTilt: CGFloat { LaunchTuning.current.maximumTilt * .pi / 180 }
+    /// The side at the pop's peak, the largest the icon gets.
+    static var peakSide: CGFloat { iconSide * (1 + LaunchTuning.current.popSize) }
 
     fileprivate struct Pose {
         var offset: CGPoint
@@ -84,16 +81,29 @@ struct LaunchFlight {
 
     /// `u` is elapsed time over the duration, 0...1.
     fileprivate func pose(at u: CGFloat) -> Pose {
-        let fade = Float(1 - u * u * u)
+        let tuning = LaunchTuning.current
         switch motion {
         case .fadeInPlace:
-            return Pose(offset: .zero, side: Self.iconSide, rotation: 0, opacity: fade)
+            return Pose(offset: .zero, side: Self.iconSide, rotation: 0, opacity: Float(1 - pow(u, tuning.fadeCurve)))
         case .sway(let sway):
-            let rise = Self.rise * u * u
+            // The pop: the icon swells in place to its peak, easing out, like a balloon's last breath in. The
+            // deflating flight then starts from the peak and plays in the rest of the duration.
+            let popShare = tuning.popSize > 0 ? min(max(tuning.popTime / tuning.duration, 0), 0.9) : 0
+            if u < popShare {
+                let p = u / popShare
+                let swell = 1 + tuning.popSize * (1 - (1 - p) * (1 - p))
+                return Pose(offset: .zero, side: tuning.iconSide * swell, rotation: 0, opacity: 1)
+            }
+            let peak = Self.peakSide
+            let u = popShare > 0 ? (u - popShare) / (1 - popShare) : u
+            let fade = Float(1 - pow(u, tuning.fadeCurve))
+            let rise = tuning.rise * pow(u, tuning.riseCurve)
+            let lean = tuning.maximumSway > 0 ? sway / tuning.maximumSway : 0
             return Pose(
-                offset: CGPoint(x: sway * rise * u, y: rise), side: Self.iconSide * (1 - Self.shrink * u),
+                offset: CGPoint(x: sway * rise * pow(u, tuning.swayCurve), y: rise),
+                side: peak * (1 - tuning.shrink * pow(u, tuning.shrinkCurve)),
                 // Counter-clockwise is positive, so tilting toward a rightward (positive) sway is a negative rotation.
-                rotation: -sway / Self.maximumSway * Self.maximumTilt * u, opacity: fade)
+                rotation: -lean * Self.maximumTilt * pow(u, tuning.tiltCurve), opacity: fade)
         }
     }
 
