@@ -12,6 +12,23 @@ final class Registry: Sendable {
     }
 }
 
+/// What `lastOpened` answers; a test edits it to stand in for Spotlight. Keyed by canonical bundle path.
+final class LaunchRecord: Sendable {
+    private let storage = Mutex<[String: Date]>([:])
+
+    static func key(_ url: URL) -> String { url.resolvingSymlinksInPath().path }
+
+    subscript(url: URL) -> Date? {
+        get { storage.withLock { $0[Self.key(url)] } }
+        set { storage.withLock { $0[Self.key(url)] = newValue } }
+    }
+
+    /// Strictly increasing from the reference date, so no test depends on how recent a launch is.
+    func record(_ url: URL) {
+        storage.withLock { $0[Self.key(url)] = Date(timeIntervalSinceReferenceDate: Double($0.count + 1)) }
+    }
+}
+
 /// The real `Launcher` over in-memory adapters, a temp directory of fake app bundles and a throwaway suite.
 @MainActor final class World {
     let root: URL
@@ -28,6 +45,8 @@ final class Registry: Sendable {
     let system = RecordingSystemActions()
     let access: InMemoryAccessibilityPermission
     let registry = Registry()
+    let launches = LaunchRecord()
+    let scanner: InMemoryAppScanner
     let catalog: AppCatalog
     private(set) var store: SettingsStore
     private(set) var launcher: Launcher
@@ -47,27 +66,30 @@ final class Registry: Sendable {
         hardware = InMemoryTrackpads(attached: attached)
         access = InMemoryAccessibilityPermission(granted: accessGranted)
         let registry = registry
+        let launches = launches
         let catalog = AppCatalog(
             roots: [applications, systemApplications, userApplications],
             extras: [coreServices.appending(path: "Finder.app")],
-            registeredCopies: { registry[$0] })
+            registeredCopies: { registry[$0] },
+            lastOpened: { launches[$0] })
         self.catalog = catalog
+        scanner = InMemoryAppScanner(catalog: catalog)
         let store = SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
         self.store = store
         launcher = Self.makeLauncher(
             hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
-            store: store)
+            scanner: scanner, store: store)
         install("Finder", in: coreServices)
         for name in apps { install(name) }
     }
 
     private static func makeLauncher(
         hardware: InMemoryTrackpads, preferences: InMemoryTrackpadPreferences, access: InMemoryAccessibilityPermission,
-        system: RecordingSystemActions, catalog: AppCatalog, store: SettingsStore
+        system: RecordingSystemActions, catalog: AppCatalog, scanner: InMemoryAppScanner, store: SettingsStore
     ) -> Launcher {
         Launcher(
             hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
-            store: store)
+            scanner: scanner, store: store)
     }
 
     deinit {
@@ -88,6 +110,11 @@ final class Registry: Sendable {
         try! PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
             .write(to: contents.appending(path: "Info.plist"))
         return url
+    }
+
+    /// Spotlight records a launch of the installed app.
+    func recordLaunch(_ name: String, in directory: URL? = nil) {
+        launches.record((directory ?? applications).appending(path: "\(name).app"))
     }
 
     /// The entry for an installed app, as it is on disk right now.
@@ -124,7 +151,7 @@ final class Registry: Sendable {
         self.store = store
         launcher = Self.makeLauncher(
             hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
-            store: store)
+            scanner: scanner, store: store)
         return launcher
     }
 }

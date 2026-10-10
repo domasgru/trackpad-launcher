@@ -14,8 +14,9 @@ enum TrackpadLauncherApp {
             access: SystemAccessibilityPermission(),
             system: WorkspaceActions(),
             catalog: catalog,
+            scanner: SystemAppScanner(catalog: catalog),
             store: SettingsStore(defaults: .standard))
-        let shell = MenuBarShell(launcher: launcher, catalog: catalog)
+        let shell = MenuBarShell(launcher: launcher)
         launcher.start()
         withExtendedLifetime(shell) { application.run() }
     }
