@@ -2,8 +2,8 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// Four gesture rows, the hand toggle, the Launch animation switch, a divider, then the hint while gestures are active or the trackpad
-/// settings notice while they are not, and a bottom bar holding Quit.
+/// Four gesture rows, the hand toggle, the Launch animation switch, a divider, then the hint while gestures are active
+/// or the trackpad settings notice while they are not, and a bottom bar holding Quit.
 struct LauncherView: View {
     let launcher: Launcher
     let actions: LauncherActions

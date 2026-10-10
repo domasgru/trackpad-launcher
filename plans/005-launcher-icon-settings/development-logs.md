@@ -18,3 +18,12 @@
 - The R1 manual check expected "80 px square", which cannot be measured (artwork fills about 80 % of its canvas; the first 60 fps frame may be 16 ms into the puff) → measures the artwork's rounded square, uses Reduce motion for an un-puffed start frame, gives ranges at 2× and 1×, and corrects the low-resolution display steps.
 - Naming and comments: the field and plist key are named `isLaunchAnimationOn`; T3's test is renamed from "60And80" to "40And53" and its "faster and faster" clause cites plan 004's R6; the launcher view's doc comment gains the switch; the port's "about 500 ms" comment becomes a third of a second.
 - The R4 manual check repeated R6 and R7's gesture steps → trimmed to the switch's placement, label, state and accessibility.
+
+## Implement
+- Deviations in S1: the upgrade fixture is a hand-written dictionary serialised to an XML plist (same keys, World URLs) instead of pasted XML; T12 and T13 are one test, `theSwitchAppliesToTheNextGestureWithoutARestart`. The R1 and R4 manual hardware checks have not been run yet and stay unticked.
+- `SystemAppScannerTests` (untouched) failed on FSEvents timing in parallel runs; it passes alone and in `Scripts/test.sh --no-parallel`.
+- Review: the hand-written `Settings.init(from:)` would silently default a future field someone forgot to add → new `everySettingsFieldSurvivesTheStore` saves every field at a non-default value and loads it back equal; checked that it fails with a field removed from the decoder.
+- Review: the `"settings"` key was hard-coded in four test sites → `World.seedSettingsRecord(_:)`; the copied rows expectation became `threeAppsThenUnassigned`.
+- Review: `#expect(staged.iconSide == 40)` restated the tuning default → removed; the next line checks the visible size.
+- Review: `LauncherView` doc comment rewrapped to 120 columns.
+- Not applied: one named start side for the flight-test literals (literals keep expected values independent of the code); dropping the Toggle's hidden duplicate label (it keeps the accessibility title with the existing layout); splitting the merged switch test.

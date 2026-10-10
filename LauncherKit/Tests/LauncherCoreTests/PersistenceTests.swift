@@ -43,7 +43,7 @@ import LauncherCore
 
     @Test func undecodableRecordLoadsAsDefaultsNotAsFirstLaunch() {
         let world = World()
-        UserDefaults(suiteName: world.suiteName)!.set(Data("garbage".utf8), forKey: "settings")
+        world.seedSettingsRecord(Data("garbage".utf8))
         let relaunched = world.relaunch()
 
         relaunched.start()
@@ -93,19 +93,21 @@ import LauncherCore
         return try PropertyListSerialization.data(fromPropertyList: record, format: .xml, options: 0)
     }
 
+    private func threeAppsThenUnassigned(_ world: World) -> [RowApp] {
+        [.present(world.app("Arc")), .present(world.app("Figma")), .present(world.app("Notion")), .unassigned]
+    }
+
     @Test func upgradingFromARecordWithoutTheLaunchAnimationSettingKeepsEverythingElse() throws {
         let world = World(apps: ["Arc", "Figma", "Notion"])
         let old = try recordFromBeforeTheLaunchAnimationSetting(world)
-        UserDefaults(suiteName: world.suiteName)!.set(old, forKey: "settings")
+        world.seedSettingsRecord(old)
 
         let relaunched = world.relaunch()
         relaunched.start()
 
         #expect(relaunched.isLaunchAnimationOn)
         #expect(relaunched.handMode == .left)
-        #expect(
-            relaunched.rows.map(\.app)
-                == [.present(world.app("Arc")), .present(world.app("Figma")), .present(world.app("Notion")), .unassigned])
+        #expect(relaunched.rows.map(\.app) == threeAppsThenUnassigned(world))
         #expect(world.system.loginItemRegistrations == 0)
         #expect(!relaunched.isWindowOpen)
     }
@@ -113,7 +115,7 @@ import LauncherCore
     @Test func theFirstSaveAfterAnUpgradeCarriesTheOldSettingsWithIt() throws {
         let world = World(apps: ["Arc", "Figma", "Notion"])
         let old = try recordFromBeforeTheLaunchAnimationSetting(world)
-        UserDefaults(suiteName: world.suiteName)!.set(old, forKey: "settings")
+        world.seedSettingsRecord(old)
         world.relaunch().start()
 
         world.launcher.setLaunchAnimation(on: false)
@@ -121,15 +123,13 @@ import LauncherCore
 
         #expect(!relaunched.isLaunchAnimationOn)
         #expect(relaunched.handMode == .left)
-        #expect(
-            relaunched.rows.map(\.app)
-                == [.present(world.app("Arc")), .present(world.app("Figma")), .present(world.app("Notion")), .unassigned])
+        #expect(relaunched.rows.map(\.app) == threeAppsThenUnassigned(world))
     }
 
     @Test func anEmptyRecordDecodesAsDefaultsNotAsFirstLaunch() throws {
         let world = World()
         let empty = try PropertyListSerialization.data(fromPropertyList: [String: Any](), format: .xml, options: 0)
-        UserDefaults(suiteName: world.suiteName)!.set(empty, forKey: "settings")
+        world.seedSettingsRecord(empty)
 
         let relaunched = world.relaunch()
         relaunched.start()
@@ -154,5 +154,18 @@ import LauncherCore
         #expect(!relaunched.isLaunchAnimationOn)
         #expect(world.hardware.feedback.count == 1)
         #expect(world.system.launchAnimations.isEmpty)
+    }
+
+    @Test func everySettingsFieldSurvivesTheStore() {
+        let world = World(apps: ["Arc"])
+        var settings = Settings()
+        settings.handMode = .left
+        settings.assignments = [.three: AssignedApp(world.app("Arc"))]
+        settings.isLaunchAnimationOn = false
+        #expect(settings != Settings())
+
+        world.store.save(settings)
+
+        #expect(world.store.load() == settings)
     }
 }

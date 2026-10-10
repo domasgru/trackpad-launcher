@@ -90,7 +90,6 @@ extension LaunchDisplay {
 
         #expect(first.time == 0)
         #expect(first.screenPosition == Self.middleOfBuiltIn)
-        #expect(staged.iconSide == 40)
         #expect(first.side == 40)
         #expect(first.opacity == 1)
         #expect(first.rotationDegrees == 0)
