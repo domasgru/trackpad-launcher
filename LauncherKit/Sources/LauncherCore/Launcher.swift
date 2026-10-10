@@ -3,7 +3,7 @@ import Observation
 
 /// The running Trackpad Launcher. Owns every decision; adapters sense and act, the shell and views render.
 /// `activity` is derived, never stored; `rows` derive from settings plus the catalog; `fire` is the only path
-/// that pulses, launches or closes the window from a gesture.
+/// that pulses, launches, plays the launch animation or closes the window from a gesture.
 @MainActor @Observable
 public final class Launcher {
     public private(set) var rows: [GestureRow] = []
@@ -68,14 +68,16 @@ public final class Launcher {
         preferences.onChange = { [unowned self] in reconcile() }
         access.onChange = { [unowned self] in reconcile() }
         reconcile()
-        guard isFirstLaunch else { return }
-        // Both effects come before the first save: a crash in between repeats them next time instead of losing them.
-        system.registerLoginItem()
-        let prompting = !isAccessibilityGranted
-        if prompting { access.prompt() }
-        store.save(settings)
-        window = prompting ? .heldOpen : .open
-        rows = makeRows()
+        if isFirstLaunch {
+            // Both effects come before the first save: a crash in between repeats them next time instead of
+            // losing them.
+            system.registerLoginItem()
+            let prompting = !isAccessibilityGranted
+            if prompting { access.prompt() }
+            store.save(settings)
+            window = prompting ? .heldOpen : .open
+        }
+        resolveRows()
     }
 
     /// App picker. The same app on two gestures is fine.
@@ -90,7 +92,7 @@ public final class Launcher {
             settings.assignments[gesture] = nil
         }
         store.save(settings)
-        rows = makeRows()
+        resolveRows()
     }
 
     /// Hand mode toggle. Moves the anchor corner by re-running the devices with fresh recognizers.
@@ -104,7 +106,7 @@ public final class Launcher {
     /// Show the launcher window, re-resolve the rows and refresh the app list in the background.
     public func openWindow() {
         if window == .closed { window = .open }
-        rows = makeRows()
+        resolveRows()
         scanner.scan()
     }
 
@@ -135,7 +137,21 @@ public final class Launcher {
         else { return }
         hardware.playFeedback(on: event.trackpad)
         system.bringToFront(app)
+        // After bring to front, so whatever the animation costs lands on the icon, never on the app.
+        system.playLaunchAnimation(for: app)
         window = .closed
+    }
+
+    /// Rows and the prepared launch animations change together, so the icon of any app that can fire is ready before
+    /// its gesture: a first render of an app's icon can take over 100 ms.
+    private func resolveRows() {
+        rows = makeRows()
+        var seen = Set<URL>()
+        let present = rows.compactMap { row -> AppEntry? in
+            guard case .present(let app) = row.app, seen.insert(app.url).inserted else { return nil }
+            return app
+        }
+        system.prepareLaunchAnimations(for: present)
     }
 
     private func makeRows() -> [GestureRow] {

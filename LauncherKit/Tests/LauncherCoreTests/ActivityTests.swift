@@ -18,6 +18,7 @@ import LauncherCore
         world.tap(1)
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.hardware.feedback.isEmpty)
+        #expect(world.system.launchAnimations.isEmpty)
     }
 
     @Test func settingOnlyOnTheConnectedExternalTrackpadDeactivates() {
@@ -122,6 +123,7 @@ import LauncherCore
 
         #expect(world.hardware.feedback.isEmpty)
         #expect(world.system.broughtToFront.isEmpty)
+        #expect(world.system.launchAnimations.isEmpty)
         #expect(world.launcher.isWindowOpen)
     }
 }

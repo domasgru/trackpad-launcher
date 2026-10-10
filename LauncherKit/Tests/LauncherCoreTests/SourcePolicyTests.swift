@@ -31,6 +31,8 @@ import Testing
         Entry(token: "asyncAfter", rule: "timer"),
         Entry(token: "Task.sleep", rule: "polling"),
         Entry(token: "makeTimerSource", rule: "timer"),
+        Entry(token: "displayLink", rule: "timer"),
+        Entry(token: "DisplayLink", rule: "timer"),
         Entry(token: "IOHIDManager", rule: "R9 only Accessibility"),
         Entry(token: "CGRequestListenEventAccess", rule: "R9 only Accessibility"),
         Entry(token: "CGPreflightListenEventAccess", rule: "R9 only Accessibility"),
@@ -105,7 +107,7 @@ import Testing
     }
 
     /// Pins both halves of the policy edit so neither drifts back: no confined token is also banned, and the kept
-    /// IOHID, Input Monitoring, timer and polling tokens are still banned.
+    /// IOHID, Input Monitoring, timer, display-link and polling tokens are still banned.
     @Test func confinedAndBannedListsNeverOverlapAndKeepTheTimerAndInputMonitoringBans() {
         let banned = Self.banned.map(\.token)
         for entry in Self.confined {
@@ -117,7 +119,7 @@ import Testing
         }
         for kept in [
             "IOHIDManager", "CGRequestListenEventAccess", "CGPreflightListenEventAccess", "Timer", "asyncAfter",
-            "makeTimerSource", "Task.sleep",
+            "makeTimerSource", "Task.sleep", "displayLink", "DisplayLink",
         ] {
             #expect(banned.contains(kept), "\(kept) must stay banned")
         }

@@ -3,7 +3,11 @@ import LauncherCore
 import ServiceManagement
 
 @MainActor public final class WorkspaceActions: SystemActions {
-    public init() {}
+    private let overlay: LaunchOverlay
+
+    public init() {
+        overlay = LaunchOverlay()
+    }
 
     /// One call reproduces a Dock click: launches, unhides, restores, reopens and activates.
     /// The completion is ignored: its only reactions would be a log line or a dialog.
@@ -17,4 +21,28 @@ import ServiceManagement
     public func registerLoginItem() {
         try? SMAppService.mainApp.register()
     }
+
+    public func prepareLaunchAnimations(for apps: [AppEntry]) {
+        overlay.prepare(for: apps)
+    }
+
+    public func playLaunchAnimation(for app: AppEntry) {
+        overlay.play(for: app)
+    }
+
+    #if DEBUG
+    private var tuner: AnimationTuner?
+
+    /// Debug builds only. Opens the launch animation tuner; its previews play Finder's icon at the pointer.
+
+    public func showAnimationTuner() {
+        if tuner == nil {
+            let finder = AppEntry(
+                bundleID: BundleID(rawValue: "com.apple.finder"), name: "Finder",
+                url: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"))
+            tuner = AnimationTuner { [overlay] in overlay.play(for: finder) }
+        }
+        tuner?.show()
+    }
+    #endif
 }
