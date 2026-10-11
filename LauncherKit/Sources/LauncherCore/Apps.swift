@@ -39,19 +39,30 @@ public struct AssignedApp: Codable, Hashable, Sendable {
     }
 }
 
-/// The app picker's three kinds of item.
+/// An app the user chose: from a menu, or any bundle on disk through Other…. None is `nil` where one is taken.
 public enum AppChoice: Sendable {
     case app(AppEntry)
     /// From Other…; parsed by `AppCatalog.entry(at:)`, ignored if not an app with a bundle ID.
     case appBundle(at: URL)
-    /// None.
-    case unassigned
 }
 
 public enum RowApp: Equatable, Sendable {
     case unassigned
     case present(AppEntry)
     case missing(name: String)
+}
+
+/// A switcher list row as the launcher window shows it.
+public struct SwitcherRow: Identifiable, Equatable, Sendable {
+    public let assigned: AssignedApp
+    /// nil: missing, shown greyed as "<name>  not found"; recovers when a copy exists again.
+    public let present: AppEntry?
+    public var id: BundleID { assigned.bundleID }
+
+    public init(assigned: AssignedApp, present: AppEntry?) {
+        self.assigned = assigned
+        self.present = present
+    }
 }
 
 /// A gesture row as the launcher window shows it.
@@ -95,25 +106,42 @@ public struct InstalledApps: Equatable, Sendable {
         self.init(recent: recent.map(\.entry), others: entries.filter { !recentIDs.contains($0.bundleID) })
     }
 
-    /// An app picker's menu, top to bottom. The row's present app is checked wherever it sits.
+    /// An app picker's menu, top to bottom. The row's present app is `.current` wherever it sits.
     public func pickerMenu(checking app: RowApp) -> [PickerItem] {
-        var checkedID: BundleID?
-        if case .present(let entry) = app { checkedID = entry.bundleID }
-        var items = all.map { PickerItem.app($0, checked: $0.bundleID == checkedID) }
+        var currentID: BundleID?
+        if case .present(let entry) = app { currentID = entry.bundleID }
+        return menu { $0.bundleID == currentID ? .current : .plain } + [.unassigned]
+    }
+
+    /// The switcher's Add app… menu: like the picker's, without None. Listed apps are `.listed`.
+    public func addMenu(listing listed: Set<BundleID>) -> [PickerItem] {
+        menu { listed.contains($0.bundleID) ? .listed : .plain }
+    }
+
+    private func menu(state: (AppEntry) -> AppItemState) -> [PickerItem] {
+        var items = all.map { PickerItem.app($0, state: state($0)) }
         if !recent.isEmpty && !others.isEmpty { items.insert(.divider, at: recent.count) }
         if !items.isEmpty { items.append(.divider) }
-        return items + [.other, .unassigned]
+        return items + [.other]
     }
 }
 
-/// One line of an app picker's menu.
+/// One line of an app menu.
 public enum PickerItem: Equatable, Sendable {
-    case app(AppEntry, checked: Bool)
+    case app(AppEntry, state: AppItemState)
     case divider
     /// Other…
     case other
     /// None.
     case unassigned
+}
+
+public enum AppItemState: Equatable, Sendable {
+    case plain
+    /// Checked: the picker's current app.
+    case current
+    /// Checked and disabled: already in the switcher list.
+    case listed
 }
 
 /// Apps on disk. Local-substitutable: tests point it at a temp directory of fake bundles and inject
@@ -182,11 +210,12 @@ public struct AppCatalog: Sendable {
     /// 1. lastKnownURL, if it is outside the Trash and still holds that bundle ID.
     /// 2. else the first of registeredCopies(bundleID) outside the Trash that still holds that bundle ID.
     public func locate(_ app: AssignedApp) -> AppEntry? {
-        let candidates = [app.lastKnownURL] + registeredCopies(app.bundleID)
-        return candidates.lazy
-            .filter { !Self.isInTrash($0) }
-            .compactMap { entry(at: $0) }
-            .first { $0.bundleID == app.bundleID }
+        func holdsApp(_ url: URL) -> AppEntry? {
+            guard !Self.isInTrash(url), let found = entry(at: url), found.bundleID == app.bundleID else { return nil }
+            return found
+        }
+        if let found = holdsApp(app.lastKnownURL) { return found }
+        return registeredCopies(app.bundleID).lazy.compactMap(holdsApp).first
     }
 
     /// Any path component named ".Trash" or ".Trashes".

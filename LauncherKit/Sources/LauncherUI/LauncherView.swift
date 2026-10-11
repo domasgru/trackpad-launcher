@@ -2,7 +2,7 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// Five gesture rows, the hand toggle, a divider, then the hint while gestures are active or the trackpad
+/// Five gesture rows, the switcher section, the hand toggle, a divider, then the hint while gestures are active or the trackpad
 /// settings notice while they are not, and a bottom bar holding Quit.
 struct LauncherView: View {
     let launcher: Launcher
@@ -14,6 +14,7 @@ struct LauncherView: View {
                 ForEach(launcher.rows) { row in
                     GestureRowView(row: row, launcher: launcher, actions: actions)
                 }
+                SwitcherSection(launcher: launcher, actions: actions)
                 HandModeToggle(launcher: launcher)
                     .padding(.top, 16)
                 Divider()
@@ -45,7 +46,7 @@ struct LauncherView: View {
         }
         .padding(12)
         .frame(width: 266)
-        .fixedSize(horizontal: true, vertical: true)
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
@@ -59,13 +60,13 @@ struct GestureRowView: View {
         HStack {
             GestureIllustration(gesture: row.gesture, handMode: launcher.handMode)
             Spacer(minLength: 8)
-            AppPicker(
-                app: row.app,
+            AppMenuButton(
+                form: .popUp(current: row.app),
                 installedApps: launcher.installedApps,
                 cachedIcon: actions.cachedIcon,
                 icon: actions.icon,
                 choose: { launcher.setAssignment($0, for: row.gesture) },
-                chooseOther: { actions.chooseOtherApp(row.gesture) })
+                chooseOther: { actions.chooseOtherApp { launcher.setAssignment(.appBundle(at: $0), for: row.gesture) } })
                 .fixedSize()
         }
     }

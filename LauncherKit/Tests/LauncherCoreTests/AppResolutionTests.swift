@@ -35,7 +35,7 @@ import LauncherCore
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Notion")), for: .three)
 
-        world.launcher.setAssignment(.unassigned, for: .three)
+        world.launcher.setAssignment(nil, for: .three)
         #expect(world.launcher.app(for: .three) == .unassigned)
 
         let relaunched = world.relaunch()

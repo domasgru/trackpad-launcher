@@ -28,6 +28,7 @@ final class LauncherPanel: NSPanel {
     }
 
     private static let cornerRadius: CGFloat = 26
+    private static let screenMargin: CGFloat = 8
 
     /// The glass alone leaves faint full-rectangle content behind its rounded corners, and the window shadow
     /// traces that rectangle as a square outline. Clipping the content to the glass's shape makes everything
@@ -59,11 +60,14 @@ final class LauncherPanel: NSPanel {
         onResignKey()
     }
 
-    /// Sizes the panel to its content, keeping the top edge where it is, and clamps it into `screenFrame`.
+    /// Sizes the panel to its content, keeping the top edge where it is, and clamps it into `screenFrame`. The height
+    /// stops at the screen's height less a margin; the content's one scrolling region absorbs what does not fit.
     func fitToContent(centeredOn anchorX: CGFloat, topEdge: CGFloat, within screenFrame: NSRect) {
-        let size = hosting.fittingSize
+        var size = hosting.fittingSize
+        size.height = min(size.height, screenFrame.height - Self.screenMargin * 2)
         let x = min(max(anchorX - size.width / 2, screenFrame.minX + 8), screenFrame.maxX - size.width - 8)
-        setFrame(NSRect(x: x, y: topEdge - size.height, width: size.width, height: size.height), display: true)
+        let y = max(topEdge - size.height, screenFrame.minY + Self.screenMargin)
+        setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: true)
         invalidateShadow()
     }
 }

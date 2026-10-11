@@ -7,7 +7,23 @@ import LauncherCore
     private func menu(_ launcher: Launcher, checking app: RowApp) -> [String] {
         launcher.installedApps.pickerMenu(checking: app).map {
             switch $0 {
-            case .app(let entry, let checked): (checked ? "✓ " : "") + entry.name
+            case .app(let entry, let state):
+                switch state {
+                case .plain: entry.name
+                case .current: "✓ " + entry.name
+                case .listed: "✓ \(entry.name) (listed)"
+                }
+            case .divider: "—"
+            case .other: "Other…"
+            case .unassigned: "None"
+            }
+        }
+    }
+
+    private func addMenu(_ launcher: Launcher, listing listed: Set<BundleID>) -> [String] {
+        launcher.installedApps.addMenu(listing: listed).map {
+            switch $0 {
+            case .app(let entry, let state): (state == .listed ? "✓ " : "") + entry.name + (state == .listed ? " (listed)" : "")
             case .divider: "—"
             case .other: "Other…"
             case .unassigned: "None"
@@ -176,5 +192,24 @@ import LauncherCore
 
         world.launcher.openWindow()
         #expect(world.scanner.scanRequests == 2)
+    }
+
+    @Test func theAddMenuDisablesListedAppsAndHasNoNone() {
+        let world = World(apps: ["Mail", "Slack", "Notes"])
+        world.recordLaunch("Notes")
+        world.launcher.start()
+
+        #expect(
+            addMenu(world.launcher, listing: [World.bundleID("Mail"), World.bundleID("Slack")])
+                == ["Notes", "—", "Finder", "✓ Mail (listed)", "✓ Slack (listed)", "—", "Other…"])
+    }
+
+    @Test func theAddMenuWithoutLaunchDataAndTheRowMenuKeepTheirShapes() {
+        let world = World(apps: ["Mail", "Slack"])
+        world.launcher.start()
+        let slack = world.app("Slack")
+
+        #expect(addMenu(world.launcher, listing: []) == ["Finder", "Mail", "Slack", "—", "Other…"])
+        #expect(menu(world.launcher, checking: .present(slack)) == ["Finder", "Mail", "✓ Slack", "—", "Other…", "None"])
     }
 }

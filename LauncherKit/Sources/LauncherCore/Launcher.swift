@@ -7,6 +7,8 @@ import Observation
 @MainActor @Observable
 public final class Launcher {
     public private(set) var rows: [GestureRow] = []
+    /// The switcher list as the window shows it, in switcher order. Resolved with `rows`.
+    public private(set) var switcherRows: [SwitcherRow] = []
     /// Every app picker's list. Replaced only by a scan; never emptied while one runs.
     public private(set) var installedApps: InstalledApps
     public var isWindowOpen: Bool { window != .closed }
@@ -53,6 +55,7 @@ public final class Launcher {
         isFirstLaunch = stored == nil
         settings = stored ?? Settings()
         rows = makeRows()
+        switcherRows = makeSwitcherRows()
     }
 
     /// Launch. Call once, after the status item exists.
@@ -81,17 +84,41 @@ public final class Launcher {
         resolveRows()
     }
 
-    /// App picker. The same app on two gestures is fine.
-    public func setAssignment(_ choice: AppChoice, for gesture: Gesture) {
-        switch choice {
-        case .app(let entry):
+    /// App picker; nil = None. The same app on two gestures is fine.
+    public func setAssignment(_ choice: AppChoice?, for gesture: Gesture) {
+        if let choice {
+            guard let entry = entry(for: choice) else { return }
             settings.assignments[gesture] = AssignedApp(entry)
-        case .appBundle(let url):
-            guard let entry = catalog.entry(at: url) else { return }
-            settings.assignments[gesture] = AssignedApp(entry)
-        case .unassigned:
+        } else {
             settings.assignments[gesture] = nil
         }
+        store.save(settings)
+        resolveRows()
+    }
+
+    private func entry(for choice: AppChoice) -> AppEntry? {
+        switch choice {
+        case .app(let entry): entry
+        case .appBundle(let url): catalog.entry(at: url)
+        }
+    }
+
+    /// Add app… and its Other…: appends; an app already listed stays where it is. The list is the only thing it edits.
+    public func addToSwitcher(_ choice: AppChoice) {
+        guard let entry = entry(for: choice) else { return }
+        editSwitcherList { $0.append(AssignedApp(entry)) }
+    }
+
+    public func removeFromSwitcher(_ app: BundleID) { editSwitcherList { $0.remove(app) } }
+
+    /// Drag to reorder: `index` is where the row lands, clamped into the list.
+    public func moveInSwitcher(_ app: BundleID, to index: Int) { editSwitcherList { $0.move(app, to: index) } }
+
+    private func editSwitcherList(_ edit: (inout SwitcherList) -> Void) {
+        var list = settings.switcherList
+        edit(&list)
+        guard list != settings.switcherList else { return }
+        settings.switcherList = list
         store.save(settings)
         resolveRows()
     }
@@ -148,12 +175,17 @@ public final class Launcher {
     /// its gesture: a first render of an app's icon can take over 100 ms.
     private func resolveRows() {
         rows = makeRows()
+        switcherRows = makeSwitcherRows()
         var seen = Set<URL>()
         let present = rows.compactMap { row -> AppEntry? in
             guard case .present(let app) = row.app, seen.insert(app.url).inserted else { return nil }
             return app
         }
         system.prepareLaunchAnimations(for: present)
+    }
+
+    private func makeSwitcherRows() -> [SwitcherRow] {
+        settings.switcherList.apps.map { SwitcherRow(assigned: $0, present: catalog.locate($0)) }
     }
 
     private func makeRows() -> [GestureRow] {

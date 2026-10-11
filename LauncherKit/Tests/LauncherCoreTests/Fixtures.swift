@@ -79,3 +79,18 @@ struct HandFrames {
         TouchFrame(time: FrameTime(seconds: 1.0 + Double(ms) / 1000), touches: touches, press: press)
     }
 }
+
+enum Fixtures {
+    /// The record the build before the switcher saved: hand mode and gestures 1...4, no other keys.
+    static func recordSavedByPlan002(handMode: HandMode = .right, two: AppEntry? = nil) -> Data {
+        struct Saved: Codable {
+            var handMode: HandMode
+            var assignments: [Gesture: AssignedApp]
+        }
+        var saved = Saved(handMode: handMode, assignments: [:])
+        if let two { saved.assignments[.two] = AssignedApp(two) }
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        return try! encoder.encode(saved)
+    }
+}

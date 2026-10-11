@@ -134,7 +134,7 @@ extension Launcher {
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
         world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
 
-        world.launcher.setAssignment(.unassigned, for: .two)
+        world.launcher.setAssignment(nil, for: .two)
 
         #expect(world.system.preparedLaunchAnimations == [world.app("Arc")])
     }
