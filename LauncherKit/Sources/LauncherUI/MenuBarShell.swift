@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 public final class MenuBarShell: NSObject {
     private let launcher: Launcher
     private let icons = AppIcons()
+    private let switcherPresenter: SwitcherPresenter
     private let statusItem: NSStatusItem
     private let panel: LauncherPanel
     private var mouseDownMonitor: Any?
@@ -24,6 +25,7 @@ public final class MenuBarShell: NSObject {
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let actions = Self.makeActions(launcher: launcher, icons: icons)
         panel = LauncherPanel(content: LauncherView(launcher: launcher, actions: actions))
+        switcherPresenter = SwitcherPresenter(launcher: launcher)
         super.init()
 
         statusItem.button?.image = StatusIcon.image(active: launcher.activity.isActive)

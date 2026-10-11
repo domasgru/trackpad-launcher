@@ -122,10 +122,16 @@ struct HintText: View {
     let handMode: HandMode
 
     var body: some View {
-        Text(
-            "\(mark("thumb-mark")) Hold thumb on \(handMode.cornerName) corner, \(mark("other-finger-mark")) tap with 1, 2, 3 or 4 fingers anywhere to launch selected app"
-        )
-            .hintStyle()
+        // The copy lives in core with `●` and `◉` standing for the two marks, which are drawn as images here.
+        let parts = Copy.gestureHint(for: handMode).components(separatedBy: ["●", "◉"])
+        Group {
+            if parts.count == 3 {
+                Text("\(mark("thumb-mark"))\(parts[1])\(mark("other-finger-mark"))\(parts[2])")
+            } else {
+                Text(Copy.gestureHint(for: handMode))
+            }
+        }
+        .hintStyle()
     }
 
     private func mark(_ name: String) -> Image {

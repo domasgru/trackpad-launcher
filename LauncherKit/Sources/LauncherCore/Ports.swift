@@ -15,6 +15,9 @@ public enum TrackpadEvent: Sendable {
     }
 }
 
+/// The two haptics: the gesture haptic when an app comes to the front, and the lighter tick per selection change.
+public enum Haptic: Sendable { case gesture, lightTick }
+
 /// The multitouch hardware.
 @MainActor public protocol TrackpadHardware: AnyObject {
     /// Always called on the main actor, in the order each trackpad's frames produced the events, and never for a session
@@ -28,8 +31,8 @@ public enum TrackpadEvent: Sendable {
     /// and taps behave exactly as without access. [] = nothing runs. `swipes`: whether each fresh recognizer recognises
     /// swipes. Replacing the recognizers ends any swipe in progress.
     func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool)
-    /// One haptic pulse on that trackpad. No-op if it is gone.
-    func playFeedback(on trackpad: TrackpadID)
+    /// One pulse of that kind on that trackpad. No-op if it is gone.
+    func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID)
 }
 
 /// The two trackpad preference domains.
@@ -53,6 +56,9 @@ public enum TrackpadEvent: Sendable {
     /// 500 ms and removes itself. Every call plays its own animation and never cancels, restarts or reuses one already
     /// playing. Nothing it shows activates Trackpad Launcher, becomes key or receives a click.
     func playLaunchAnimation(for app: AppEntry)
+    /// The active app's bundle location, read now. nil when there is none, it has no bundle, or it is Trackpad
+    /// Launcher itself (which never activates except around the Other… chooser).
+    func frontmostApp() -> URL?
 }
 
 /// The Accessibility permission. Real: SystemAccessibilityPermission. Test: InMemoryAccessibilityPermission.

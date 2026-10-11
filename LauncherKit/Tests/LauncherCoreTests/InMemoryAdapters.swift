@@ -1,3 +1,4 @@
+import Foundation
 import LauncherCore
 
 /// Real recognizer, real click filter, scripted frames, synchronous main-actor delivery.
@@ -6,7 +7,8 @@ import LauncherCore
     private(set) var attached: [Trackpad]
     private(set) var running: [TrackpadID: GestureRecognizer] = [:]
     private(set) var deaf: Set<TrackpadID> = []
-    private(set) var feedback: [TrackpadID] = []
+    /// Every haptic pulse, in order.
+    private(set) var pulses: [Pulse] = []
     /// The fake click tap: armed iff the last `run` asked for it with trackpads.
     private var clickFilter: ClickFilter?
     var isBlockingClicks: Bool { clickFilter != nil }
@@ -17,6 +19,16 @@ import LauncherCore
     private var buttonWasDown = false
     private var pressInProgress: PressID?
     private var nextPressNumber: Int64 = 1
+
+    struct Pulse: Equatable {
+        let haptic: Haptic
+        let trackpad: TrackpadID
+    }
+
+    /// The trackpads that pulsed the gesture haptic, in order.
+    var feedback: [TrackpadID] { pulses.filter { $0.haptic == .gesture }.map(\.trackpad) }
+    /// The trackpads that pulsed the light tick, in order.
+    var lightTicks: [TrackpadID] { pulses.filter { $0.haptic == .lightTick }.map(\.trackpad) }
 
     init(attached: [Trackpad] = [.macBook14]) {
         self.attached = attached
@@ -36,7 +48,7 @@ import LauncherCore
         clickFilter = blockClicks && !trackpads.isEmpty ? ClickFilter() : nil
     }
 
-    func playFeedback(on trackpad: TrackpadID) { feedback.append(trackpad) }
+    func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID) { pulses.append(Pulse(haptic: haptic, trackpad: trackpad)) }
 
     func attach(_ trackpad: Trackpad) {
         attached.append(trackpad)
@@ -112,12 +124,16 @@ import LauncherCore
     private(set) var launchAnimations: [AppEntry] = []
     /// The latest set prepared; each prepare replaces the one before.
     private(set) var preparedLaunchAnimations: [AppEntry] = []
+    /// What the next `frontmostApp()` answers; nil models no active app, or Trackpad Launcher itself.
+    var frontmost: URL?
     /// Runs inside `registerLoginItem()` so a test can observe what is stored at that moment.
     var onRegisterLoginItem: (() -> Void)?
     /// Runs inside `playLaunchAnimation(for:)` so a test can observe the other effects at that moment.
     var onPlayLaunchAnimation: (() -> Void)?
 
     func bringToFront(_ app: AppEntry) { broughtToFront.append(app) }
+
+    func frontmostApp() -> URL? { frontmost }
 
     func registerLoginItem() {
         loginItemRegistrations += 1

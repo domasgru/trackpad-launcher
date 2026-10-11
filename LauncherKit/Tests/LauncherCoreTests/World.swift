@@ -165,3 +165,30 @@ final class LaunchRecord: Sendable {
         return launcher
     }
 }
+
+extension World {
+    /// What the next swipe reads as frontmost; nil models no active app, or Trackpad Launcher itself.
+    func makeFrontmost(_ name: String?) {
+        system.frontmost = name.map { app($0).url }
+    }
+
+    /// Safari, Mail, Slack and Notes installed, Mail, Slack and Notes listed in that order, Safari frontmost, started.
+    static func switcherWorld(accessGranted: Bool = false) -> World {
+        let world = World(apps: ["Safari", "Mail", "Slack", "Notes"], accessGranted: accessGranted)
+        world.launcher.start()
+        for name in ["Mail", "Slack", "Notes"] { world.launcher.addToSwitcher(.app(world.app(name))) }
+        world.makeFrontmost("Safari")
+        return world
+    }
+
+    /// Thumb at (10, 10), two fingers down, each slide in turn (millimetres, positive right), then the fingers lift
+    /// unless `lift` is false. Returns its script so a row can continue it with `play`.
+    @discardableResult
+    func swipe(_ slidesMM: Double..., lift: Bool = true, on trackpad: Trackpad = .macBook14) -> TouchScript {
+        var script = TouchScript(trackpad.surface).thumb(atMM: (10, 10)).land(fingers: 2)
+        for slide in slidesMM { script = script.slide(byMM: (slide, 0)) }
+        if lift { script = script.lift() }
+        play(script, on: trackpad)
+        return script
+    }
+}

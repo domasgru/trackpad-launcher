@@ -17,6 +17,15 @@ import ServiceManagement
         NSWorkspace.shared.openApplication(at: app.url, configuration: configuration)
     }
 
+    /// The active app's bundle location; nil when there is none, it has no bundle, or it is this app, which never
+    /// activates except around the Other… chooser.
+    public func frontmostApp() -> URL? {
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              app.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        else { return nil }
+        return app.bundleURL
+    }
+
     /// Registration failing (unsigned build, user-disabled item) leaves the app running without a login item.
     public func registerLoginItem() {
         try? SMAppService.mainApp.register()

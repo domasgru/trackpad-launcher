@@ -112,13 +112,18 @@ import LauncherCore
     }
 
     /// No-op for a trackpad that is not running or whose actuator would not open.
-    public func playFeedback(on trackpad: TrackpadID) {
+    public func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID) {
         guard let framework, let actuator = actuators[trackpad] else { return }
-        _ = framework.actuatorActuate(actuator, Self.feedbackActuation, 0, 0, 0)
+        _ = framework.actuatorActuate(actuator, Self.actuation(for: haptic), 0, 0, 0)
     }
 
-    /// Chosen by feel: 3 weak, 4 medium, 6 strong.
-    static let feedbackActuation: Int32 = 6
+    /// Chosen by feel: 3 weak, 4 medium, 6 strong. The tick starts at 3; if it is too faint next to 6, move it to 4.
+    static func actuation(for haptic: Haptic) -> Int32 {
+        switch haptic {
+        case .gesture: 6
+        case .lightTick: 3
+        }
+    }
 
     /// Devices stay retained here for as long as their callbacks are registered, so the refs used as
     /// registry keys remain valid.
