@@ -1,0 +1,5 @@
+# Run 2026-10-11 on the development machine (macOS 26, Xcode 26 toolchain, `xcrun swiftc -O -swift-version 6`).
+old record bytes: 202
+SYNTHESIZED throws: DecodingError.keyNotFound: Key 'switcherList' not found in keyed decoding container. Debug description: No value associated with key CodingKeys(stringValue: "switcherList", intValue: nil) ("switcherList").
+TOLERANT decodes: handMode=right two=Arc switcherList=0
+NEW round trip: five=Arc switcherList=["Arc", "Arc"]

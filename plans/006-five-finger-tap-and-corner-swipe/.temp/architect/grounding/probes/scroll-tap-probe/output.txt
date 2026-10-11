@@ -1,0 +1,55 @@
+# Run 2026-10-11 on the development machine (14" MacBook Pro, built-in trackpad, no mouse connected). The probe process
+# was AX-trusted (the terminal host holds Accessibility), so both taps were created. Someone scrolled on the trackpad
+# during the 15 s window: 356 scroll events were captured; the full list is abridged below to the sequences that
+# matter (every omitted line is a `phase=2 momentum=0` or `phase=0 momentum=2` continuation). No `cont=0` (wheel
+# mouse) event occurred because no wheel mouse was connected.
+CGEventType.scrollWheel.rawValue = 22
+CGEventField.scrollWheelEventDeltaAxis1.rawValue = 11
+CGEventField.scrollWheelEventDeltaAxis2.rawValue = 12
+CGEventField.scrollWheelEventPointDeltaAxis1.rawValue = 96
+CGEventField.scrollWheelEventPointDeltaAxis2.rawValue = 97
+CGEventField.scrollWheelEventIsContinuous.rawValue = 88
+CGEventField.scrollWheelEventScrollPhase.rawValue = 99
+CGEventField.scrollWheelEventMomentumPhase.rawValue = 123
+CGScrollPhase: began=1 changed=2 ended=4 cancelled=8 mayBegin=128
+CGMomentumScrollPhase: none=0 begin=1 continuous=2 end=3
+local scroll event type=22 isContinuous=1 axis1=-1 axis2=1 pointAxis1=-7
+after set: isContinuous=1 scrollPhase=1 momentumPhase=1
+after zero+ended: axis1=0 pointAxis1=0 fixed1=0.0 scrollPhase=4
+local line-unit event isContinuous=0 (a wheel mouse scrolls in lines)
+AXIsProcessTrusted: true
+tapCreate(session, headInsert, listenOnly, scrollWheel): created
+tapCreate(session, headInsert, default(active), scrollWheel): created
+Listening 15 s; scroll on the trackpad (and flick for momentum), and turn a mouse wheel if one is connected...
+scroll events seen: 356, disabled notices: 0
+# --- Sequence 1: a vertical two-finger scroll with a flick. began (1) -> changed (2)... -> ended (4, zero deltas),
+#     then momentum begin (1) 7 ms later -> continuous (2)... -> end (3, zero deltas). Momentum events have phase=0.
+  t=271542966384416 cont=1 phase=1 momentum=0 d1=0 d2=0 p1=-1 p2=0 thread=main
+  t=271542974728333 cont=1 phase=2 momentum=0 d1=-1 d2=0 p1=-5 p2=1 thread=main
+  ...
+  t=271543024713000 cont=1 phase=2 momentum=0 d1=-1 d2=0 p1=-4 p2=1 thread=main
+  t=271543033048708 cont=1 phase=4 momentum=0 d1=0 d2=0 p1=0 p2=0 thread=main
+  t=271543040253500 cont=1 phase=0 momentum=1 d1=-1 d2=0 p1=-11 p2=0 thread=main
+  t=271543048093333 cont=1 phase=0 momentum=2 d1=-1 d2=0 p1=-13 p2=0 thread=main
+  ...
+  t=271543930710541 cont=1 phase=0 momentum=2 d1=0 d2=0 p1=-1 p2=0 thread=main
+  t=271543930728458 cont=1 phase=0 momentum=3 d1=0 d2=0 p1=0 p2=0 thread=main
+# --- Sequence 2: another scroll with momentum (same shape), omitted.
+# --- Sequence 3: fingers rest, then scroll: mayBegin (128) precedes began (1) by 17 ms.
+  t=271546662252875 cont=1 phase=128 momentum=0 d1=0 d2=0 p1=0 p2=0 thread=main
+  t=271546678888041 cont=1 phase=1 momentum=0 d1=0 d2=0 p1=1 p2=0 thread=main
+  t=271546690987375 cont=1 phase=2 momentum=0 d1=0 d2=0 p1=2 p2=0 thread=main
+  ...
+  t=271546783327500 cont=1 phase=4 momentum=0 d1=0 d2=0 p1=0 p2=0 thread=main
+  t=271546791041416 cont=1 phase=0 momentum=1 d1=0 d2=0 p1=3 p2=0 thread=main
+  t=271546796991625 cont=1 phase=0 momentum=2 d1=0 d2=0 p1=3 p2=0 thread=main
+  t=271546805381250 cont=1 phase=0 momentum=2 d1=0 d2=0 p1=4 p2=0 thread=main
+  t=271546811150291 cont=1 phase=0 momentum=3 d1=0 d2=0 p1=0 p2=0 thread=main
+# --- Sequence 4: fingers rest and lift without scrolling: mayBegin (128) then cancelled (8), 0.49 s apart, no began.
+  t=271546878912375 cont=1 phase=128 momentum=0 d1=0 d2=0 p1=0 p2=0 thread=main
+  t=271547366417291 cont=1 phase=8 momentum=0 d1=0 d2=0 p1=0 p2=0 thread=main
+# --- Sequence 5: mayBegin -> began -> ... -> ended -> momentum begin..end, then a mayBegin/cancelled pair (omitted,
+#     same shapes as 3 and 4). Event spacing within a gesture: 4-12 ms; momentum events: 8-17 ms apart, ~0.9 s total.
+# --- Sequence 6: a fast flick: began -> changed with p1 down to -31 -> ended -> momentum begin at p1=-53, ~1.0 s of
+#     continuous events decaying to -1, then end (3). Then a mayBegin/cancelled pair.
+done

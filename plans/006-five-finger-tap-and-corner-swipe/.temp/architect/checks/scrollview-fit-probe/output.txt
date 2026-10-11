@@ -1,0 +1,7 @@
+rows=30 expected natural height=856.0 fittingSize=(266.0, 856.0)
+(a) fittingSize reports the full content height: true
+cap=400.0 measured=[(key: "footer", value: 40.0), (key: "header", value: 40.0), (key: "list", value: 264.0)] expected list=264.0
+(b) at cap 400.0 the list alone absorbs the deficit: true
+cap=300.0 measured=[(key: "footer", value: 40.0), (key: "header", value: 40.0), (key: "list", value: 164.0)] expected list=164.0
+(b) at cap 300.0 the list alone absorbs the deficit: true
+done
