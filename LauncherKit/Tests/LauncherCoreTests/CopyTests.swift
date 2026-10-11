@@ -12,4 +12,10 @@ import LauncherCore
                 == "● Hold thumb on top-right corner, ◉ tap with 1, 2, 3, 4 or 5 fingers anywhere to launch selected app, or swipe left or right with 2 fingers to switch apps"
         )
     }
+
+    @Test func theAccessibilityHintNamesScrolling() {
+        #expect(
+            Copy.accessibilityHint
+                == "Clicks and scrolling aren't blocked during gestures. Allow Accessibility access to block them.")
+    }
 }

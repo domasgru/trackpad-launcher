@@ -12,6 +12,8 @@ import LauncherCore
     /// The fake click tap: armed iff the last `run` asked for it with trackpads.
     private var clickFilter: ClickFilter?
     var isBlockingClicks: Bool { clickFilter != nil }
+    /// Armed and disarmed with `clickFilter`: one tap decides both.
+    private var scrollFilter: ScrollFilter?
     /// What the fake tap did with each scripted press and release, in order.
     private(set) var pressVerdicts: [PointerVerdict] = []
     /// Each running trackpad's latest `Recognition.blocksClicks`.
@@ -46,6 +48,7 @@ import LauncherCore
         buttonWasDown = false
         pressInProgress = nil
         clickFilter = blockClicks && !trackpads.isEmpty ? ClickFilter() : nil
+        scrollFilter = clickFilter == nil ? nil : ScrollFilter()
     }
 
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID) { pulses.append(Pulse(haptic: haptic, trackpad: trackpad)) }
@@ -99,6 +102,12 @@ import LauncherCore
             let verdict = clickFilter!.decide(.release(press), trackpadBlocking: blocking.values.contains(true))
             pressVerdicts.append(verdict)
         }
+    }
+
+    /// A scroll event reaching the fake tap on the flags the frames so far left, merged across trackpads.
+    /// nil when no tap is armed, so the event reaches apps untouched.
+    func scroll(_ event: ScrollEvent) -> ScrollVerdict? {
+        scrollFilter?.decide(event, trackpadBlocking: blocking.values.contains(true))
     }
 
     /// An event the frame thread recognised just before activity flipped, delivered regardless of `running`.

@@ -28,7 +28,7 @@ struct LauncherView: View {
                 }
                 if !launcher.isAccessibilityGranted {
                     SettingsNotice(
-                        message: "Clicks aren't blocked during gestures. Allow Accessibility access to block them.",
+                        message: Copy.accessibilityHint,
                         button: "Grant access…", open: { actions.openSettings(.accessibility) })
                 }
             }
