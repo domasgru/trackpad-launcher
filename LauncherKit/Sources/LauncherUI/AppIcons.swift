@@ -44,14 +44,19 @@ final class AppIcons {
         return cachedIcon(for: url)
     }
 
-    /// The switcher's icon for `app`: cached, else the running app's already-loaded icon (about 0.1 ms), else drawn on
+    /// The switcher's icon for `app`: cached in the current appearance, else the running app's already-loaded icon (about 0.1 ms), else drawn on
     /// the spot. The frontmost app is running by definition, so it takes the second path at the swipe's first frame.
     func icon(forSwitcher app: AppEntry) -> NSImage {
-        if let cached = cache[app.url] { return cached.icon }
+        let appearance = NSApp.effectiveAppearance
+        if let cached = cache[app.url], cached.stamp.appearance == appearance.name { return cached.icon }
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID.rawValue)
             .first { $0.bundleURL == app.url }
-        guard let source = running?.icon else { return iconDrawingIfMissing(for: app.url) }
-        let appearance = NSApp.effectiveAppearance
+        guard let source = running?.icon else {
+            merge(
+                Self.renderChanged(
+                    urls: [app.url], cached: stamps(), side: side, appearance: Appearance(appearance)))
+            return cachedIcon(for: app.url)
+        }
         let icon = Self.bitmap(of: source, side: side, appearance: appearance)
         cache[app.url] = Rendered(icon: icon, stamp: Stamp(modified: Self.infoModified(app.url), appearance: appearance.name))
         return icon

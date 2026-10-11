@@ -317,7 +317,10 @@ import LauncherCore
         #expect(world.hardware.pressVerdicts == [.pass, .pass])
 
         world.launcher.addToSwitcher(.app(world.app("Mail")))
-        world.hardware.touch(late.frames, on: trackpad.id)
+        let swiping = late.frames.prefix { $0.press != .click }
+        world.hardware.touch(Array(swiping), on: trackpad.id)
+        #expect(world.launcher.switcher != nil)
+        world.hardware.touch(Array(late.frames.dropFirst(swiping.count)), on: trackpad.id)
         #expect(world.hardware.pressVerdicts == [.pass, .pass, .drop, .drop])
         #expect(world.system.broughtToFront == [world.app("Mail")])
     }
@@ -337,6 +340,7 @@ import LauncherCore
         let begin = thumb.wait(rest).land(fingers: 2).slide(byMM: (3.5, 0))
         world.play(begin)
         #expect(world.launcher.switcher == nil)
+        #expect(world.hardware.scroll(.fingers(.began)) == .pass)
 
         world.play(begin.press().slide(byMM: (12, 0)).lift())
         #expect(world.hardware.pressVerdicts == [.pass, .pass])
@@ -358,6 +362,7 @@ import LauncherCore
         let begin = thumb.land(fingers: 2).slide(byMM: (3.5, 0))
         world.play(begin)
         #expect(world.launcher.switcher == nil)
+        #expect(world.hardware.scroll(.fingers(.began)) == .pass)
 
         let rest = begin.press().slide(byMM: (12, 0)).lift()
         world.play(rest)

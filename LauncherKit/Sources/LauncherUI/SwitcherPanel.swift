@@ -19,6 +19,8 @@ final class SwitcherPanel: NSPanel {
     private static let nameHeight: CGFloat = 18
     private static let nameGap: CGFloat = 10
 
+    private static let fadeKey = "fade"
+
     private let content = NSView()
     private let highlight = NSGlassEffectView()
     private let iconsHost = NSView()
@@ -55,28 +57,35 @@ final class SwitcherPanel: NSPanel {
         glass.style = .regular
         glass.cornerRadius = Self.cornerRadius
         glass.contentView = content
-        contentView = Self.roundedClip(glass)
+        contentView = roundedClip(glass, cornerRadius: Self.cornerRadius)
     }
 
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    /// The glass alone leaves faint full-rectangle content behind its rounded corners, which the shadow would trace.
-    private static func roundedClip(_ glass: NSGlassEffectView) -> NSView {
-        let clip = NSView()
-        clip.wantsLayer = true
-        clip.layer?.cornerRadius = cornerRadius
-        clip.layer?.cornerCurve = .continuous
-        clip.layer?.masksToBounds = true
-        glass.translatesAutoresizingMaskIntoConstraints = false
-        clip.addSubview(glass)
-        NSLayoutConstraint.activate([
-            glass.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
-            glass.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
-            glass.topAnchor.constraint(equalTo: clip.topAnchor),
-            glass.bottomAnchor.constraint(equalTo: clip.bottomAnchor),
-        ])
-        return clip
+    /// Opacity to 0 over `duration` on the render server; `completion` runs when the animation ends or is removed.
+    func fadeOut(duration: CFTimeInterval, completion: @escaping () -> Void) {
+        guard let layer = contentView?.layer else { return completion() }
+        CATransaction.begin()
+        CATransaction.setCompletionBlock(completion)
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = layer.presentation()?.opacity ?? layer.opacity
+        fade.toValue = 0
+        fade.duration = duration
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        layer.opacity = 0
+        layer.add(fade, forKey: Self.fadeKey)
+        CATransaction.commit()
+    }
+
+    /// Fully opaque again, dropping any fade still running.
+    func restoreOpacity() {
+        guard let layer = contentView?.layer else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.removeAnimation(forKey: Self.fadeKey)
+        layer.opacity = 1
+        CATransaction.commit()
     }
 
     /// The panel's size for `count` icons, from the icon count alone.

@@ -21,9 +21,10 @@ extension Trackpad {
 func fired(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
-    surface: SurfaceSize = .macBook14
+    surface: SurfaceSize = .macBook14,
+    swipes: Bool = true
 ) -> [Gesture] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes)
     return frames.compactMap { recognizer.step($0).fired }
 }
 
@@ -44,7 +45,7 @@ func perFrame(
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14
 ) -> [(swipe: SwipePhase?, blocks: Bool)] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: true)
     return frames.map {
         let recognition = recognizer.step($0)
         return (recognition.swipe, recognition.blocksClicks)

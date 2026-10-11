@@ -15,6 +15,8 @@ final class SwitcherPresenter {
     private var laidOutRow: [AppEntry] = []
     private var lastStretch = 0.0
     private var isShown = false
+    /// Bumped by every open and close, so a fade's completion that a later open or close outlived does nothing.
+    private var fadeGeneration = 0
 
     init(launcher: Launcher) {
         self.launcher = launcher
@@ -66,10 +68,8 @@ final class SwitcherPresenter {
         laidOutRow = row
         lastStretch = 0
         isShown = true
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0
-            panel.animator().alphaValue = 1
-        }
+        fadeGeneration += 1
+        panel.restoreOpacity()
         panel.orderFrontRegardless()
     }
 
@@ -80,12 +80,11 @@ final class SwitcherPresenter {
             panel.orderOut(nil)
             return
         }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.15
-            panel.animator().alphaValue = 0
-        } completionHandler: { [weak self] in
+        fadeGeneration += 1
+        let generation = fadeGeneration
+        panel.fadeOut(duration: 0.15) { [weak self] in
             MainActor.assumeIsolated {
-                guard let self, !self.isShown else { return }
+                guard let self, self.fadeGeneration == generation else { return }
                 self.panel.orderOut(nil)
             }
         }

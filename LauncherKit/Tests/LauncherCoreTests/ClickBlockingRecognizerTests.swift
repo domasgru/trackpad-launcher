@@ -5,7 +5,7 @@ import LauncherCore
     private let h = HandFrames()
 
     private func blocking(_ frames: [TouchFrame]) -> [Bool] {
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true)
         return frames.map { recognizer.step($0).blocksClicks }
     }
 

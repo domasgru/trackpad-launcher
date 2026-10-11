@@ -132,8 +132,12 @@ import LauncherCore
     @Test func withSwipesOffASidewaysPairSpoilsLikeAnyDragAndARestingPairNeverBegins() {
         let slid = thumb.land(fingers: 2).slide(byMM: (20, 0)).lift().tap(fingers: 2).frames
         let rested = thumb.land(fingers: 2).wait(.seconds(1)).slide(byMM: (20, 0)).lift().frames
+        #expect(phases(slid, swipes: true).first == .began)
         #expect(phases(slid, swipes: false).isEmpty)
-        #expect(fired(slid) == [.two])
+        #expect(fired(slid, swipes: false) == [.two])
+        #expect(fired(slid, swipes: true) == [.two])
+        #expect(phases(rested, swipes: true).first == .began)
         #expect(phases(rested, swipes: false).isEmpty)
+        #expect(fired(rested, swipes: false).isEmpty)
     }
 }

@@ -28,7 +28,7 @@ public struct Recognition: Equatable, Sendable {
 /// Owned by exactly one frame thread (real adapter) or by the test (in-memory adapter); never shared.
 public struct GestureRecognizer: Sendable {
     /// `swipes`: false while the switcher list is empty; a pair's drag then spoils like any drag.
-    public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool = true) {
+    public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool) {
         self.corner = AnchorCorner(handMode, surface: surface)
         self.surface = surface
         self.swipes = swipes
@@ -70,11 +70,7 @@ public struct GestureRecognizer: Sendable {
             if frame.press == .click {
                 state = .spoiled(anchor)
             } else if let move = Self.drag(of: tap.fingers, in: down, on: surface) {
-                if let pair, move.isSideways {
-                    (state, event) = begin(pair, anchor, down)
-                } else {
-                    state = .spoiled(anchor)
-                }
+                (state, event) = beginOrSpoil(pair, move, anchor, down)
             } else if frame.time - tap.start > GestureRules.maxTapDuration {
                 state = pair.map { .resting(anchor, $0) } ?? .spoiled(anchor)
             } else if tap.down.isEmpty {
@@ -92,11 +88,7 @@ public struct GestureRecognizer: Sendable {
                 || landed.contains(where: { $0.id != anchor.id }) {
                 state = .spoiled(anchor)
             } else if let move = Self.drag(of: pair.fingers, in: down, on: surface) {
-                if move.isSideways {
-                    (state, event) = begin(pair, anchor, down)
-                } else {
-                    state = .spoiled(anchor)
-                }
+                (state, event) = beginOrSpoil(pair, move, anchor, down)
             }
         case .spoiled(let anchor):
             if down.keys.allSatisfy({ $0 == anchor.id }) {
@@ -145,8 +137,12 @@ public struct GestureRecognizer: Sendable {
         return Recognition(event: event, blocksClicks: blocksClicks)
     }
 
-    private func begin(_ pair: Pair, _ anchor: Anchor, _ down: [TouchID: Touch]) -> (State, Recognition.Event) {
-        (.swiping(Swipe(pair: pair, startMidX: pair.midX(in: down), thumb: anchor)), .swipe(.began))
+    /// A sideways drag of a pair begins the swipe; any other drag spoils the gesture like every drag does.
+    private func beginOrSpoil(
+        _ pair: Pair?, _ move: Move, _ anchor: Anchor, _ down: [TouchID: Touch]
+    ) -> (State, Recognition.Event?) {
+        guard let pair, move.isSideways else { return (.spoiled(anchor), nil) }
+        return (.swiping(Swipe(pair: pair, startMidX: pair.midX(in: down), thumb: anchor)), .swipe(.began))
     }
 
     private struct Anchor: Sendable {
