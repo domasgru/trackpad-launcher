@@ -12,11 +12,11 @@ final class DeviceSession: Sendable {
     private let blocking = Mutex(false)
     /// Installed by the same `run`, if any.
     private let clickTap: ClickTap?
-    private let deliver: @Sendable (GestureEvent) -> Void
+    private let deliver: @Sendable (TrackpadEvent) -> Void
 
     init(
         trackpad: TrackpadID, recognizer: GestureRecognizer, clickTap: ClickTap?,
-        deliver: @escaping @Sendable (GestureEvent) -> Void
+        deliver: @escaping @Sendable (TrackpadEvent) -> Void
     ) {
         self.trackpad = trackpad
         self.recognizer = Mutex(recognizer)
@@ -28,8 +28,8 @@ final class DeviceSession: Sendable {
     func receive(_ frame: TouchFrame) {
         let recognition = recognizer.withLock { $0.step(frame) }
         blocking.withLock { $0 = recognition.blocksClicks }
-        if let gesture = recognition.fired {
-            deliver(GestureEvent(gesture: gesture, trackpad: trackpad))
+        if let event = recognition.event {
+            deliver(TrackpadEvent(event, on: trackpad))
         }
     }
 

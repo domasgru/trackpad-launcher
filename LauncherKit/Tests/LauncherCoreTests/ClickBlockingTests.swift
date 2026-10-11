@@ -14,9 +14,9 @@ import LauncherCore
         return world
     }
 
-    @Test(arguments: 1...4)
+    @Test(arguments: 1...5)
     func aFirmTapOpensItsAppAndTheWholePressNeverReachesApps(fingers: Int) {
-        let apps = ["Arc", "Figma", "Notion", "Spotify"]
+        let apps = ["Arc", "Figma", "Notion", "Spotify", "Slack"]
         let world = World(apps: apps, accessGranted: true)
         world.launcher.start()
         for (gesture, name) in zip(Gesture.allCases, apps) {

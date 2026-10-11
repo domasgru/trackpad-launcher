@@ -2,21 +2,32 @@ import Foundation
 
 public enum TrackpadEvent: Sendable {
     case gesture(GestureEvent)
+    case swipe(SwipeEvent)
     /// Attached, detached, or the Mac woke.
     case trackpadsChanged
+
+    /// The one mapping from what a recognizer said to what the port carries. Both hardware adapters use it.
+    public init(_ event: Recognition.Event, on trackpad: TrackpadID) {
+        switch event {
+        case .fired(let gesture): self = .gesture(GestureEvent(gesture: gesture, trackpad: trackpad))
+        case .swipe(let phase): self = .swipe(SwipeEvent(phase: phase, trackpad: trackpad))
+        }
+    }
 }
 
 /// The multitouch hardware.
 @MainActor public protocol TrackpadHardware: AnyObject {
-    /// Always called on the main actor.
+    /// Always called on the main actor, in the order each trackpad's frames produced the events, and never for a session
+    /// that a later `run` replaced.
     var onEvent: (@MainActor (TrackpadEvent) -> Void)? { get set }
     /// Trackpads connected now. Excludes multitouch devices that are not trackpads (Magic Mouse, Touch Bar).
     func connected() -> [Trackpad]
     /// Forgets every session, removes the click tap, stops every device, then starts exactly `trackpads` with a fresh
     /// recognizer each and, if `blockClicks` and `trackpads` is not empty, a fresh click tap. Idempotent.
     /// The tap needs Accessibility. If the system refuses it, nothing is filtered, presses are sampled as before,
-    /// and taps behave exactly as without access. [] = nothing runs.
-    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool)
+    /// and taps behave exactly as without access. [] = nothing runs. `swipes`: whether each fresh recognizer recognises
+    /// swipes. Replacing the recognizers ends any swipe in progress.
+    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool)
     /// One haptic pulse on that trackpad. No-op if it is gone.
     func playFeedback(on trackpad: TrackpadID)
 }

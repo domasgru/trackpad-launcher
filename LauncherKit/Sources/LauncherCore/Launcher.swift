@@ -60,6 +60,7 @@ public final class Launcher {
         hardware.onEvent = { [unowned self] event in
             switch event {
             case .gesture(let fired): fire(fired)
+            case .swipe: break
             case .trackpadsChanged: reconcile()
             }
         }
@@ -126,7 +127,8 @@ public final class Launcher {
         isAccessibilityGranted = granted
         let active = activity.isActive
         // Blocking needs gestures active and access granted; without either, presses are plain clicks.
-        hardware.run(active ? connected : [], handMode: settings.handMode, blockClicks: active && granted)
+        hardware.run(active ? connected : [], handMode: settings.handMode, blockClicks: active && granted,
+            swipes: false)
     }
 
     /// Every silent case decided here and only here: inactive, unassigned, missing.

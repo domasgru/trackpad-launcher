@@ -3,7 +3,7 @@ import Dispatch
 import LauncherCore
 import Synchronization
 
-/// 16-pt bitmap icons for the app pickers, drawn away from the click path. Shared by the four pickers.
+/// 16-pt bitmap icons for the app pickers, drawn away from the click path. Shared by the five pickers.
 ///
 /// An icon is keyed by app URL and stamped with its bundle's Info.plist modification date and the appearance it was
 /// drawn in, so an app updated in place and a light/dark switch are redrawn by the next pass.

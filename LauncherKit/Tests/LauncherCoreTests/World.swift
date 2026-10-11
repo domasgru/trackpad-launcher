@@ -50,6 +50,7 @@ final class LaunchRecord: Sendable {
     let catalog: AppCatalog
     private(set) var store: SettingsStore
     private(set) var launcher: Launcher
+    private var delivered: [TrackpadID: Double] = [:]
 
     init(apps: [String] = [], attached: [Trackpad] = [.macBook14], accessGranted: Bool = false) {
         let root = FileManager.default.temporaryDirectory.appending(path: "tl-world-\(UUID().uuidString)")
@@ -142,6 +143,15 @@ final class LaunchRecord: Sendable {
 
     func tap(_ fingers: Int, on trackpad: Trackpad = .macBook14, thumbAtMM thumb: (x: Double, y: Double) = (10, 10)) {
         hardware.touch(TouchScript(trackpad.surface).thumb(atMM: thumb).tap(fingers: fingers).frames, on: trackpad.id)
+    }
+
+    /// Delivers the frames of `script` newer than any already delivered on that trackpad, so one hand in progress can
+    /// be played in pieces with intents and reconciles in between.
+    func play(_ script: TouchScript, on trackpad: Trackpad = .macBook14) {
+        let newer = script.frames.filter { $0.time.seconds > (delivered[trackpad.id] ?? 0) }
+        guard let last = newer.last else { return }
+        delivered[trackpad.id] = last.time.seconds
+        hardware.touch(newer, on: trackpad.id)
     }
 
     /// A second `Launcher` over the same adapters and a fresh `UserDefaults` instance on the same suite.

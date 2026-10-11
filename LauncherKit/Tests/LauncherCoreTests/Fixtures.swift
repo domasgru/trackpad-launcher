@@ -27,6 +27,42 @@ func fired(
     return frames.compactMap { recognizer.step($0).fired }
 }
 
+/// Runs a fresh recognizer over `frames` and returns every swipe phase it reported, in order.
+func phases(
+    _ frames: [TouchFrame],
+    handMode: HandMode = .right,
+    surface: SurfaceSize = .macBook14,
+    swipes: Bool = true
+) -> [SwipePhase] {
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes)
+    return frames.compactMap { recognizer.step($0).swipe }
+}
+
+/// Per frame: what the recognizer said about a swipe, and whether it blocked clicks.
+func perFrame(
+    _ frames: [TouchFrame],
+    handMode: HandMode = .right,
+    surface: SurfaceSize = .macBook14
+) -> [(swipe: SwipePhase?, blocks: Bool)] {
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface)
+    return frames.map {
+        let recognition = recognizer.step($0)
+        return (recognition.swipe, recognition.blocksClicks)
+    }
+}
+
+extension SwipePhase {
+    /// Equality with travel compared within 1e-9 millimetres.
+    func isCloseTo(_ other: SwipePhase) -> Bool {
+        if case .moved(let a) = self, case .moved(let b) = other { return abs(a - b) < 1e-9 }
+        return self == other
+    }
+}
+
+func phasesMatch(_ actual: [SwipePhase], _ expected: [SwipePhase]) -> Bool {
+    actual.count == expected.count && zip(actual, expected).allSatisfy { $0.isCloseTo($1) }
+}
+
 /// Hand-built frames for the interleavings `TouchScript` cannot sequence.
 struct HandFrames {
     let surface: SurfaceSize

@@ -3,7 +3,7 @@ import IOKit
 import LauncherCore
 
 /// TrackpadHardware over MultitouchSupport and IOKit.
-/// Frames arrive on MultitouchSupport's thread and are recognised there; only fired gestures hop to main.
+/// Frames arrive on MultitouchSupport's thread and are recognised there; only recognised events hop to main.
 /// IOKit matched/terminated notifications are delivered on the main queue and drained there; the initial
 /// matches are drained at init so they do not count as a change. Waking the Mac is reported as a change too,
 /// because devices stop delivering frames across sleep and `run` restarts them.
@@ -17,6 +17,8 @@ import LauncherCore
     private var clickTap: ClickTap?
     private var actuators: [TrackpadID: CFTypeRef] = [:]
     private var wakeObserver: (any NSObjectProtocol)?
+    /// Counts `run` calls. A session delivers only while its own run is still the latest.
+    private var runs = 0
 
     /// On a failed `dlopen`, `connected()` is empty: the app shows "No trackpad connected".
     public init() {
@@ -61,7 +63,8 @@ import LauncherCore
 
     /// Forgets every session, stops every device, then starts exactly `trackpads` with a fresh recognizer each.
     /// A click tap exists afterwards iff `blockClicks`, the system allows it and a trackpad is running.
-    public func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool) {
+    public func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool) {
+        runs += 1
         guard let framework else { return }
         sessions.withLock { $0 = [:] }
         // A withheld press's release may now reach apps: a harmless stray mouse-up.
@@ -76,6 +79,7 @@ import LauncherCore
         actuators = [:]
         startedDevices = []
 
+        let generation = runs
         let wanted = Set(trackpads.map(\.id))
         let devices = listTrackpads().filter { wanted.contains($0.trackpad.id) }
         if blockClicks && !devices.isEmpty { clickTap = ClickTap.install() }
@@ -83,10 +87,17 @@ import LauncherCore
             let ref = Unmanaged.passUnretained(device).toOpaque()
             let session = DeviceSession(
                 trackpad: trackpad.id,
-                recognizer: GestureRecognizer(handMode: handMode, surface: trackpad.surface),
+                recognizer: GestureRecognizer(handMode: handMode, surface: trackpad.surface, swipes: swipes),
                 clickTap: clickTap,
                 deliver: { [weak self] event in
-                    Task { @MainActor in self?.onEvent?(.gesture(event)) }
+                    // The main queue is FIFO from one frame thread, so events keep their frame order. An event
+                    // from a replaced session is dropped: a stale swipe start could never be ended.
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            guard let self, self.runs == generation else { return }
+                            self.onEvent?(event)
+                        }
+                    }
                 })
             if let actuator = framework.actuatorCreateFromDeviceID(trackpad.id.rawValue)?.takeRetainedValue(),
                 framework.actuatorOpen(actuator) == 0

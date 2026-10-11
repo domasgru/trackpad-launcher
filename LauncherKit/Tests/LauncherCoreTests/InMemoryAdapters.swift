@@ -24,10 +24,10 @@ import LauncherCore
 
     func connected() -> [Trackpad] { attached }
 
-    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool) {
+    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool) {
         running = Dictionary(
             uniqueKeysWithValues: trackpads.map {
-                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface))
+                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, swipes: swipes))
             })
         deaf = []
         blocking = [:]
@@ -67,8 +67,8 @@ import LauncherCore
                 press: TouchFrame.Press(holding: clickFilter?.holding, buttonDown: buttonDown))
             guard let recognition = running[id]?.step(sampled) else { return }
             blocking[id] = recognition.blocksClicks
-            if let gesture = recognition.fired {
-                onEvent?(.gesture(GestureEvent(gesture: gesture, trackpad: id)))
+            if let event = recognition.event {
+                onEvent?(TrackpadEvent(event, on: id))
             }
         }
     }
@@ -89,8 +89,8 @@ import LauncherCore
         }
     }
 
-    /// A gesture the frame thread recognised just before activity flipped, delivered regardless of `running`.
-    func inject(_ event: GestureEvent) { onEvent?(.gesture(event)) }
+    /// An event the frame thread recognised just before activity flipped, delivered regardless of `running`.
+    func inject(_ event: TrackpadEvent) { onEvent?(event) }
 }
 
 @MainActor final class InMemoryTrackpadPreferences: TrackpadPreferences {

@@ -4,7 +4,7 @@ import LauncherCore
 
 @MainActor @Suite struct PersistenceTests {
     @Test func assignmentsAndHandModeSurviveARelaunch() {
-        let names = ["Arc", "Figma", "Notion", "Spotify"]
+        let names = ["Arc", "Figma", "Notion", "Spotify", "Slack"]
         let world = World(apps: names)
         world.launcher.start()
         for (gesture, name) in zip(Gesture.allCases, names) {
@@ -23,7 +23,7 @@ import LauncherCore
 
         world.launcher.start()
 
-        #expect(world.launcher.rows.map(\.app) == Array(repeating: .unassigned, count: 4))
+        #expect(world.launcher.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
         #expect(world.launcher.handMode == .right)
         #expect(world.launcher.isWindowOpen)
         #expect(world.system.loginItemRegistrations == 1)
@@ -49,7 +49,7 @@ import LauncherCore
 
         #expect(world.system.loginItemRegistrations == 0)
         #expect(!relaunched.isWindowOpen)
-        #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 4))
+        #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
         #expect(relaunched.handMode == .right)
     }
 
