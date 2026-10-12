@@ -14,8 +14,11 @@ The corner of the trackpad where the thumb rests to arm a gesture. Top-left in r
 ## Anchored thumb
 A finger resting inside the anchor corner. While a thumb is anchored, the trackpad is in *launcher mode*: taps with the other fingers are gestures.
 
+## Edge contact
+A contact that lands closer than 3 mm to any edge of the trackpad, outside the anchor corner: the side of a palm resting beside the pad, not a finger. It is ignored for as long as it stays down: it neither starts nor joins a tap or a swipe, and it is not another contact for arming, click blocking or Dock swipe blocking. A finger that lands farther in and slides to the edge stays a finger; a contact that lifts and lands again is judged by its new landing point.
+
 ## Tap
-Fingers that touch down and lift again within a short window, without dragging. A gesture fires once per tap, when the fingers lift. The *finger count* of a tap is the number of fingers that touched during the tap, not counting the anchored thumb. Two fingers that slide sideways more than 3 mm under the anchored thumb are a swipe, not a tap; two fingers that rest longer than the window fire nothing but may still become a swipe.
+Fingers that touch down and lift again within a short window, without dragging. A gesture fires once per tap, when the fingers lift. The *finger count* of a tap is the number of fingers that touched during the tap, not counting the anchored thumb or any edge contact. Two fingers that slide sideways more than 3 mm under the anchored thumb are a swipe, not a tap; two fingers that rest longer than the window fire nothing but may still become a swipe.
 
 ## Swipe
 Two fingers sliding left or right, started under an anchored thumb: the thumb anchored first, exactly two fingers landed, and one of them moved more than 3 mm, more sideways than up or down, with no time limit. The thumb only starts the swipe; afterwards it may stay, lift, leave the corner or land again, and nothing changes. A swipe ends when both fingers have lifted; a finger that briefly loses contact and lands again rejoins it. It is cancelled when a third finger lands outside the anchor corner while both are down, or a click reaches apps. Clicks and scrolling stay blocked for the whole of a swipe. Nothing further happens until every non-thumb finger has lifted.
