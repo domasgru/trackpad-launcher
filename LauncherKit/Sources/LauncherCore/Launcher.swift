@@ -8,6 +8,10 @@ import Observation
 @MainActor @Observable
 public final class Launcher {
     public private(set) var rows: [GestureRow] = []
+    /// The switcher list as the window shows it, in switcher order. Resolved with `rows`.
+    public private(set) var switcherRows: [SwitcherRow] = []
+    /// Non-nil exactly while a swipe shows the switcher. Written only by `swipe(_:)` and `reconcile()`.
+    public private(set) var switcher: Switcher?
     /// Every app picker's list. Replaced only by a scan; never emptied while one runs.
     public private(set) var installedApps: InstalledApps
     public var isWindowOpen: Bool { window != .closed }
@@ -55,6 +59,7 @@ public final class Launcher {
         isFirstLaunch = stored == nil
         settings = stored ?? Settings()
         rows = makeRows()
+        switcherRows = makeSwitcherRows()
     }
 
     /// Launch. Call once, after the status item exists.
@@ -62,7 +67,8 @@ public final class Launcher {
         hardware.onEvent = { [unowned self] event in
             switch event {
             case .gesture(let fired): fire(fired)
-            case .trackpadsChanged: reconcile()
+            case .swipe(let event): swipe(event)
+            case .trackpadsChanged: reconcile(restart: true)
             }
         }
         scanner.onScan = { [unowned self] in installedApps = $0 }
@@ -82,19 +88,46 @@ public final class Launcher {
         resolveRows()
     }
 
-    /// App picker. The same app on two gestures is fine.
-    public func setAssignment(_ choice: AppChoice, for gesture: Gesture) {
-        switch choice {
-        case .app(let entry):
+    /// App picker; nil = None. The same app on two gestures is fine.
+    public func setAssignment(_ choice: AppChoice?, for gesture: Gesture) {
+        if let choice {
+            guard let entry = entry(for: choice) else { return }
             settings.assignments[gesture] = AssignedApp(entry)
-        case .appBundle(let url):
-            guard let entry = catalog.entry(at: url) else { return }
-            settings.assignments[gesture] = AssignedApp(entry)
-        case .unassigned:
+        } else {
             settings.assignments[gesture] = nil
         }
         store.save(settings)
         resolveRows()
+    }
+
+    private func entry(for choice: AppChoice) -> AppEntry? {
+        switch choice {
+        case .app(let entry): entry
+        case .appBundle(let url): catalog.entry(at: url)
+        }
+    }
+
+    /// Add app… and its Other…: appends; an app already listed stays where it is. The list is the only thing it edits.
+    public func addToSwitcher(_ choice: AppChoice) {
+        guard let entry = entry(for: choice) else { return }
+        editSwitcherList { $0.append(AssignedApp(entry)) }
+    }
+
+    public func removeFromSwitcher(_ app: BundleID) { editSwitcherList { $0.remove(app) } }
+
+    /// Drag to reorder: `index` is where the row lands, clamped into the list.
+    public func moveInSwitcher(_ app: BundleID, to index: Int) { editSwitcherList { $0.move(app, to: index) } }
+
+    private func editSwitcherList(_ edit: (inout SwitcherList) -> Void) {
+        var list = settings.switcherList
+        edit(&list)
+        guard list != settings.switcherList else { return }
+        let emptinessFlipped = list.isEmpty != settings.switcherList.isEmpty
+        settings.switcherList = list
+        store.save(settings)
+        resolveRows()
+        // Swipes are recognised only while the list holds an app; the recognizers learn that only through a run.
+        if emptinessFlipped { reconcile() }
     }
 
     /// Hand mode toggle. Moves the anchor corner by re-running the devices with fresh recognizers.
@@ -125,8 +158,21 @@ public final class Launcher {
     /// An outside click, or the panel losing focus: closes unless the window is held open under the first-launch prompt.
     public func dismissWindow() { if window == .open { window = .closed } }
 
+    /// What the trackpads were last run with. A reconcile that would run them the same way leaves them, and any swipe
+    /// in progress, alone: preference and trust notifications also fire for writes that change nothing here.
+    private struct Run: Equatable {
+        let trackpads: [Trackpad]
+        let handMode: HandMode
+        let blockClicks: Bool
+        let swipes: Bool
+    }
+
+    @ObservationIgnored private var lastRun: Run?
+
     /// The one convergent operation behind launch, hot-plug, wake, preference, hand-mode and trust changes.
-    private func reconcile() {
+    /// `restart`: run the trackpads even if nothing changed. Hot-plug and wake need it (devices stop delivering frames
+    /// across sleep), and so does a swipe with nothing to show, which only a fresh recognizer ends.
+    private func reconcile(restart: Bool = false) {
         connected = hardware.connected()
         preferenceValues = preferences.current()
         let granted = access.isGranted()
@@ -135,7 +181,14 @@ public final class Launcher {
         isAccessibilityGranted = granted
         let active = activity.isActive
         // Blocking needs gestures active and access granted; without either, presses are plain clicks.
-        hardware.run(active ? connected : [], handMode: settings.handMode, blockClicks: active && granted)
+        let run = Run(
+            trackpads: active ? connected : [], handMode: settings.handMode, blockClicks: active && granted,
+            swipes: !settings.switcherList.isEmpty)
+        guard restart || run != lastRun else { return }
+        lastRun = run
+        // Running replaces every recognizer, which ends any swipe in progress.
+        switcher = nil
+        hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, swipes: run.swipes)
     }
 
     /// Every silent case decided here and only here: inactive, unassigned, missing.
@@ -144,23 +197,58 @@ public final class Launcher {
               let assigned = settings.assignments[event.gesture],
               let app = catalog.locate(assigned)
         else { return }
-        hardware.playFeedback(on: event.trackpad)
+        hardware.playFeedback(.gesture, on: event.trackpad)
         system.bringToFront(app)
         // After bring to front, so whatever the animation costs lands on the icon, never on the app.
         if settings.isLaunchAnimationOn { system.playLaunchAnimation(for: app) }
         window = .closed
     }
 
+    /// The one place a swipe becomes effects.
+    private func swipe(_ event: SwipeEvent) {
+        switch event.phase {
+        case .began:
+            guard switcher == nil, activity.isActive else { return }
+            let frontmost = system.frontmostApp().flatMap(catalog.entry(at:))
+            let listed = settings.switcherList.apps.compactMap(catalog.locate)
+            switcher = frontmost.flatMap { Switcher(listed: listed, frontmost: $0, trackpad: event.trackpad) }
+            // Nothing to show: the frame thread cannot know, so main ends the swipe by replacing the recognizers.
+            // Otherwise the fingers would stay blocked until they lift.
+            if switcher == nil { reconcile(restart: true) }
+        case .moved(let travel):
+            guard var open = switcher, open.trackpad == event.trackpad else { return }
+            let before = open.selected
+            open.follow(travel)
+            switcher = open
+            for _ in 0..<abs(open.selected - before) { hardware.playFeedback(.lightTick, on: event.trackpad) }
+        case .ended:
+            guard let open = switcher, open.trackpad == event.trackpad else { return }
+            switcher = nil
+            // Lifting on the frontmost app is silent and leaves the window as it was.
+            guard !open.selectsFrontmost else { return }
+            hardware.playFeedback(.gesture, on: event.trackpad)
+            system.bringToFront(open.selectedApp)
+            window = .closed
+        case .cancelled:
+            if switcher?.trackpad == event.trackpad { switcher = nil }
+        }
+    }
+
     /// Rows and the prepared launch animations change together, so the icon of any app that can fire is ready before
     /// its gesture: a first render of an app's icon can take over 100 ms.
     private func resolveRows() {
         rows = makeRows()
+        switcherRows = makeSwitcherRows()
         var seen = Set<URL>()
         let present = rows.compactMap { row -> AppEntry? in
             guard case .present(let app) = row.app, seen.insert(app.url).inserted else { return nil }
             return app
         }
         system.prepareLaunchAnimations(for: present)
+    }
+
+    private func makeSwitcherRows() -> [SwitcherRow] {
+        settings.switcherList.apps.map { SwitcherRow(assigned: $0, present: catalog.locate($0)) }
     }
 
     private func makeRows() -> [GestureRow] {

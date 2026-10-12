@@ -184,6 +184,17 @@ struct TunerView: View {
                 Section {
                     Toggle("Simulate Reduce motion", isOn: $model.tuning.forceReduceMotion)
                 }
+                Section {
+                    Toggle("Move like the cursor", isOn: $model.tuning.swipeFollowsCursor)
+                    knob("Points per icon", \.swipePointsPerIcon, 20...300, step: 1, unit: "pt",
+                         hint: "cursor travel per icon; 100 = the icon pitch, lower reaches farther")
+                    knob("Tracking speed", \.swipeTrackingSpeed, -1...3, step: 0.0625,
+                         hint: "−1 = your System Settings value; default notch is 0.6875")
+                } header: {
+                    Text("Switcher swipe")
+                } footer: {
+                    Text("Applies from the next swipe. Off: 12 mm of finger per icon, no acceleration.")
+                }
                 presetsSection
             }
             .formStyle(.grouped)
@@ -257,7 +268,7 @@ struct TunerView: View {
                 TextField("", value: value, format: .number.precision(.fractionLength(0...3)))
                     .multilineTextAlignment(.trailing)
                     .frame(width: 60)
-                Text(unit).foregroundStyle(.secondary).frame(width: 18, alignment: .leading)
+                Text(unit).foregroundStyle(.secondary).frame(width: 34, alignment: .leading)
                 Button {
                     model.tuning[keyPath: keyPath] = LaunchTuning.shipped[keyPath: keyPath]
                 } label: {

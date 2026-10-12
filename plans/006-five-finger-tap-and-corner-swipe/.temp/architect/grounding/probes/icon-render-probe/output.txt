@@ -1,0 +1,34 @@
+# --- run 1 (fresh process) ---
+frontmost: com.mitchellh.ghostty at /Applications/Ghostty.app
+(a) NSWorkspace.icon(forFile:) frontmost: first draw 220.9 ms, second 0.6 ms, 160px
+(b) NSRunningApplication.icon frontmost: first draw 0.1 ms, second 0.1 ms, reps=32
+(c) 1Password.app: first draw 136.0 ms
+(c) BetterDisplay.app: first draw 17.3 ms
+(c) Cloudflare WARP.app: first draw 20.9 ms
+(c) Docker.app: first draw 21.9 ms
+(c) Google Chrome.app: first draw 4.1 ms
+(c) Notion Calendar.app: first draw 26.0 ms
+(c) Obsidian.app: first draw 30.7 ms
+(c) SF Symbols Beta.app: first draw 32.2 ms
+(c) Spotify.app: first draw 9.8 ms
+(c) TestFlight.app: first draw 15.4 ms
+(c) 10 apps: max 136.0 ms, median 21.9 ms
+(d) running com.microsoft.VSCode via NSRunningApplication.icon: first draw 25.1 ms
+done
+# --- run 2 (a second fresh process; the system icon cache is now warm for these apps) ---
+frontmost: com.mitchellh.ghostty at /Applications/Ghostty.app
+(a) NSWorkspace.icon(forFile:) frontmost: first draw 21.0 ms, second 0.4 ms, 160px
+(b) NSRunningApplication.icon frontmost: first draw 0.1 ms, second 0.1 ms, reps=32
+(c) 1Password.app: first draw 0.7 ms
+(c) BetterDisplay.app: first draw 0.6 ms
+(c) Cloudflare WARP.app: first draw 0.8 ms
+(c) Docker.app: first draw 0.7 ms
+(c) Google Chrome.app: first draw 0.6 ms
+(c) Notion Calendar.app: first draw 0.7 ms
+(c) Obsidian.app: first draw 0.6 ms
+(c) SF Symbols Beta.app: first draw 0.6 ms
+(c) Spotify.app: first draw 8.1 ms
+(c) TestFlight.app: first draw 0.6 ms
+(c) 10 apps: max 8.1 ms, median 0.7 ms
+(d) running com.microsoft.VSCode via NSRunningApplication.icon: first draw 0.7 ms
+done

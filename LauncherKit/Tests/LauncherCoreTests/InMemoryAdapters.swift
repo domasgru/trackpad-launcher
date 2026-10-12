@@ -1,3 +1,4 @@
+import Foundation
 import LauncherCore
 
 /// Real recognizer, real click filter, scripted frames, synchronous main-actor delivery.
@@ -6,10 +7,13 @@ import LauncherCore
     private(set) var attached: [Trackpad]
     private(set) var running: [TrackpadID: GestureRecognizer] = [:]
     private(set) var deaf: Set<TrackpadID> = []
-    private(set) var feedback: [TrackpadID] = []
+    /// Every haptic pulse, in order.
+    private(set) var pulses: [Pulse] = []
     /// The fake click tap: armed iff the last `run` asked for it with trackpads.
     private var clickFilter: ClickFilter?
     var isBlockingClicks: Bool { clickFilter != nil }
+    /// Armed and disarmed with `clickFilter`: one tap decides both.
+    private var scrollFilter: ScrollFilter?
     /// What the fake tap did with each scripted press and release, in order.
     private(set) var pressVerdicts: [PointerVerdict] = []
     /// Each running trackpad's latest `Recognition.blocksClicks`.
@@ -18,25 +22,40 @@ import LauncherCore
     private var pressInProgress: PressID?
     private var nextPressNumber: Int64 = 1
 
+    struct Pulse: Equatable {
+        let haptic: Haptic
+        let trackpad: TrackpadID
+    }
+
+    /// The trackpads that pulsed the gesture haptic, in order.
+    var feedback: [TrackpadID] { pulses.filter { $0.haptic == .gesture }.map(\.trackpad) }
+    /// The trackpads that pulsed the light tick, in order.
+    var lightTicks: [TrackpadID] { pulses.filter { $0.haptic == .lightTick }.map(\.trackpad) }
+
     init(attached: [Trackpad] = [.macBook14]) {
         self.attached = attached
     }
 
     func connected() -> [Trackpad] { attached }
 
-    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool) {
+    /// How many times `run` was called.
+    private(set) var runCount = 0
+
+    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool) {
+        runCount += 1
         running = Dictionary(
             uniqueKeysWithValues: trackpads.map {
-                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface))
+                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, swipes: swipes, travel: .linear))
             })
         deaf = []
         blocking = [:]
         buttonWasDown = false
         pressInProgress = nil
         clickFilter = blockClicks && !trackpads.isEmpty ? ClickFilter() : nil
+        scrollFilter = clickFilter == nil ? nil : ScrollFilter()
     }
 
-    func playFeedback(on trackpad: TrackpadID) { feedback.append(trackpad) }
+    func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID) { pulses.append(Pulse(haptic: haptic, trackpad: trackpad)) }
 
     func attach(_ trackpad: Trackpad) {
         attached.append(trackpad)
@@ -67,8 +86,8 @@ import LauncherCore
                 press: TouchFrame.Press(holding: clickFilter?.holding, buttonDown: buttonDown))
             guard let recognition = running[id]?.step(sampled) else { return }
             blocking[id] = recognition.blocksClicks
-            if let gesture = recognition.fired {
-                onEvent?(.gesture(GestureEvent(gesture: gesture, trackpad: id)))
+            if let event = recognition.event {
+                onEvent?(TrackpadEvent(event, on: id))
             }
         }
     }
@@ -89,8 +108,14 @@ import LauncherCore
         }
     }
 
-    /// A gesture the frame thread recognised just before activity flipped, delivered regardless of `running`.
-    func inject(_ event: GestureEvent) { onEvent?(.gesture(event)) }
+    /// A scroll event reaching the fake tap on the flags the frames so far left, merged across trackpads.
+    /// nil when no tap is armed, so the event reaches apps untouched.
+    func scroll(_ event: ScrollEvent) -> ScrollVerdict? {
+        scrollFilter?.decide(event, trackpadBlocking: blocking.values.contains(true))
+    }
+
+    /// An event the frame thread recognised just before activity flipped, delivered regardless of `running`.
+    func inject(_ event: TrackpadEvent) { onEvent?(event) }
 }
 
 @MainActor final class InMemoryTrackpadPreferences: TrackpadPreferences {
@@ -98,6 +123,9 @@ import LauncherCore
     private var values: [TrackpadKind: TrackpadPreferenceValues] = [:]
 
     func current() -> [TrackpadKind: TrackpadPreferenceValues] { values }
+
+    /// A notification for a write that changed nothing this app reads.
+    func touch() { onChange?() }
 
     func set(_ setting: ConflictingSetting, rawValue: Int?, for kind: TrackpadKind) {
         values[kind, default: [:]][setting] = rawValue
@@ -112,12 +140,16 @@ import LauncherCore
     private(set) var launchAnimations: [AppEntry] = []
     /// The latest set prepared; each prepare replaces the one before.
     private(set) var preparedLaunchAnimations: [AppEntry] = []
+    /// What the next `frontmostApp()` answers; nil models no active app, or Trackpad Launcher itself.
+    var frontmost: URL?
     /// Runs inside `registerLoginItem()` so a test can observe what is stored at that moment.
     var onRegisterLoginItem: (() -> Void)?
     /// Runs inside `playLaunchAnimation(for:)` so a test can observe the other effects at that moment.
     var onPlayLaunchAnimation: (() -> Void)?
 
     func bringToFront(_ app: AppEntry) { broughtToFront.append(app) }
+
+    func frontmostApp() -> URL? { frontmost }
 
     func registerLoginItem() {
         loginItemRegistrations += 1

@@ -2,15 +2,11 @@ import Testing
 import LauncherCore
 
 @Suite struct GestureRecognizerTests {
-    @Test(arguments: 1...4)
-    func thumbThenNFingerTapFiresThatGestureOnce(fingers: Int) {
-        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10)).tap(fingers: fingers).frames
-        #expect(fired(frames) == [Gesture(fingerCount: fingers)!])
-    }
-
-    @Test func fiveFingerTapFiresNothing() {
-        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10)).tap(fingers: 5).frames
-        #expect(fired(frames).isEmpty)
+    @Test(arguments: 1...6)
+    func thumbThenNFingerTapFiresThatGestureOnceAndSixFireNothing(fingers: Int) {
+        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10)).tap(fingers: fingers).tap(fingers: 1).frames
+        let expected = Gesture(fingerCount: fingers).map { [$0] } ?? []
+        #expect(fired(frames) == expected + [.one])
     }
 
     @Test(arguments: [(thumbXMM: 10.0, fires: true), (thumbXMM: 40.0, fires: false)])
@@ -178,7 +174,7 @@ extension GestureRecognizerTests {
             h.frame(atMS: 150, [h.contact(9, atMM: 10, 10), h.contact(7, atMM: 62, 45)]),
             h.frame(atMS: 160, [h.contact(9, atMM: 10, 10)]),
         ]
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, travel: .linear)
         let perFrame = frames.map { recognizer.step($0).fired }
         #expect(perFrame == [nil, nil, nil, nil, .one, nil, nil, .one])
     }
@@ -191,10 +187,11 @@ extension GestureRecognizerTests {
         #expect(fired(frames) == [.four])
     }
 
-    @Test func fiveFingersInARollingTapFireNothing() {
+    @Test(arguments: [(fingers: 5, expected: [Gesture.five]), (fingers: 6, expected: [])])
+    func fiveFingersInARollingTapFireFiveAndSixFireNothing(fingers: Int, expected: [Gesture]) {
         let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
-            .tap(fingers: 5, stagger: .milliseconds(40), hold: .milliseconds(100)).frames
-        #expect(fired(frames).isEmpty)
+            .tap(fingers: fingers, stagger: .milliseconds(40), hold: .milliseconds(100)).frames
+        #expect(fired(frames) == expected)
     }
 
     @Test func tapsTwoHundredMillisecondsApartBothFire() {
@@ -250,7 +247,7 @@ extension GestureRecognizerTests {
             h.frame(atMS: 140, [h.contact(9, atMM: 10, 10)]),
             h.frame(atMS: 150, []),
         ]
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, travel: .linear)
         #expect(frames.map { recognizer.step($0).fired } == [nil, nil, nil, nil, .one, nil, nil])
     }
 }

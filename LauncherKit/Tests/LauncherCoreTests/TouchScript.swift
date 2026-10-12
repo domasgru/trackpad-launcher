@@ -35,6 +35,12 @@ struct TouchScript {
         func isDown(atMS ms: Int) -> Bool {
             ms >= landMS && ms < (liftMS ?? .max)
         }
+
+        mutating func moveFromHere(atMS ms: Int, byMM d: (x: Double, y: Double), overMS: Int) {
+            guard let here = path.last else { return }
+            if here.ms < ms { path.append(Waypoint(ms: ms, x: here.x, y: here.y)) }
+            path.append(Waypoint(ms: ms + overMS, x: here.x + d.x, y: here.y + d.y))
+        }
     }
 
     private static let frameIntervalMS = 10
@@ -43,6 +49,7 @@ struct TouchScript {
     private let surface: SurfaceSize
     private var contacts: [Contact] = []
     private var presses: [ClosedRange<Int>] = []
+    private var pressStartMS: Int?
     private var cursorMS = 0
     private var nextFingerID: Int32 = 1
 
@@ -94,20 +101,66 @@ struct TouchScript {
         return s
     }
 
+    enum Lift { case all, first }
+
+    /// Lands `n` fingers 8 mm apart from `p`; they stay down until `lift`.
+    func land(fingers n: Int = 2, atMM p: (x: Double, y: Double) = (62, 45)) -> TouchScript {
+        var s = self
+        for i in 0..<n {
+            s.contacts.append(Contact(
+                id: s.nextFingerID, landMS: cursorMS, liftMS: nil,
+                path: [Waypoint(ms: cursorMS, x: p.x + 8 * Double(i), y: p.y)]))
+            s.nextFingerID += 1
+        }
+        return s
+    }
+
+    /// Moves every non-thumb finger that is down by `d` over `over`.
+    func slide(byMM d: (x: Double, y: Double), over: Duration = .milliseconds(100)) -> TouchScript {
+        var s = self
+        let overMS = Self.milliseconds(over)
+        for i in s.contacts.indices where s.contacts[i].id != Self.thumbID && s.contacts[i].isDown(atMS: cursorMS) {
+            s.contacts[i].moveFromHere(atMS: cursorMS, byMM: d, overMS: overMS)
+        }
+        s.cursorMS += overMS
+        return s
+    }
+
+    /// Lifts the fingers that are down, one frame after the last slide's final frame: all of them, or only the first
+    /// landed. Ends a press in progress.
+    func lift(_ which: Lift = .all) -> TouchScript {
+        var s = self
+        let liftMS = cursorMS + Self.frameIntervalMS
+        let down = s.contacts.indices.filter { s.contacts[$0].id != Self.thumbID && s.contacts[$0].isDown(atMS: cursorMS) }
+        for i in (which == .all ? down : Array(down.prefix(1))) { s.contacts[i].liftMS = liftMS }
+        if let start = s.pressStartMS {
+            s.presses.append(start...liftMS)
+            s.pressStartMS = nil
+        }
+        s.cursorMS += 50
+        return s
+    }
+
+    /// A press held from now until the next lift.
+    func press() -> TouchScript {
+        var s = self
+        s.pressStartMS = s.pressStartMS ?? cursorMS
+        return s
+    }
+
     /// Moves the anchored thumb to `p` over the next 50 ms.
     func rollThumb(toMM p: (x: Double, y: Double)) -> TouchScript {
         var s = self
-        guard let i = s.contacts.firstIndex(where: { $0.id == Self.thumbID }),
+        guard let i = s.contacts.lastIndex(where: { $0.id == Self.thumbID }),
               let here = s.contacts[i].path.last else { return s }
-        s.contacts[i].path.append(Waypoint(ms: cursorMS, x: here.x, y: here.y))
-        s.contacts[i].path.append(Waypoint(ms: cursorMS + 50, x: p.x, y: p.y))
+        s.contacts[i].moveFromHere(atMS: cursorMS, byMM: (p.x - here.x, p.y - here.y), overMS: 50)
         s.cursorMS += 50
         return s
     }
 
     func liftThumb() -> TouchScript {
         var s = self
-        if let i = s.contacts.firstIndex(where: { $0.id == Self.thumbID }) {
+        if let i = s.contacts.lastIndex(where: { $0.id == Self.thumbID }) {
             s.contacts[i].liftMS = cursorMS
         }
         s.cursorMS += 50
@@ -133,7 +186,7 @@ struct TouchScript {
             return TouchFrame(
                 time: FrameTime(seconds: 1.0 + Double(ms) / 1000),
                 touches: touches,
-                press: presses.contains { $0.contains(ms) } ? .click : nil)
+                press: presses.contains { $0.contains(ms) } || (pressStartMS.map { ms >= $0 } ?? false) ? .click : nil)
         }
     }
 

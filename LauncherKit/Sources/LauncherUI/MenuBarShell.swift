@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 public final class MenuBarShell: NSObject {
     private let launcher: Launcher
     private let icons = AppIcons()
+    private let switcherPresenter: SwitcherPresenter
     private let statusItem: NSStatusItem
     private let panel: LauncherPanel
     private var mouseDownMonitor: Any?
@@ -24,6 +25,7 @@ public final class MenuBarShell: NSObject {
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let actions = Self.makeActions(launcher: launcher, icons: icons)
         panel = LauncherPanel(content: LauncherView(launcher: launcher, actions: actions))
+        switcherPresenter = SwitcherPresenter(launcher: launcher)
         super.init()
 
         statusItem.button?.image = StatusIcon.image(active: launcher.activity.isActive)
@@ -45,7 +47,9 @@ public final class MenuBarShell: NSObject {
             })
         observations.append(
             Task { [weak self] in
-                for await _ in Observations({ (launcher.activity, launcher.isAccessibilityGranted) }) {
+                for await _ in Observations({
+                    (launcher.activity, launcher.isAccessibilityGranted, launcher.switcherRows.count)
+                }) {
                     self?.refit()
                 }
             })
@@ -78,12 +82,13 @@ public final class MenuBarShell: NSObject {
         if !isStatusButtonClick { launcher.dismissWindow() }
     }
 
-    /// The listed apps plus the rows' present apps, which may sit outside the list.
+    /// The picker's apps plus the present apps of the gesture rows and the switcher list, which may sit outside it.
     private static func iconTargets(_ launcher: Launcher) -> [AppEntry] {
         let rowApps = launcher.rows.compactMap { row -> AppEntry? in
             if case .present(let entry) = row.app { entry } else { nil }
         }
-        return launcher.installedApps.all + rowApps
+        let listedApps = launcher.switcherRows.compactMap(\.present)
+        return launcher.installedApps.all + rowApps + listedApps
     }
 
     private func renderIcons() { icons.renderOffMainActor(Self.iconTargets(launcher)) }
@@ -127,7 +132,7 @@ public final class MenuBarShell: NSObject {
         LauncherActions(
             cachedIcon: { icons.cachedIcon(for: $0) },
             icon: { icons.iconDrawingIfMissing(for: $0) },
-            chooseOtherApp: { gesture in
+            chooseOtherApp: { completion in
                 launcher.closeWindow()
                 NSApp.activate()
                 let chooser = NSOpenPanel()
@@ -137,7 +142,7 @@ public final class MenuBarShell: NSObject {
                 chooser.directoryURL = URL(filePath: "/Applications")
                 chooser.begin { response in
                     if response == .OK, let url = chooser.url {
-                        launcher.setAssignment(.appBundle(at: url), for: gesture)
+                        completion(url)
                     }
                     launcher.openWindow()
                 }

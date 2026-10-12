@@ -46,8 +46,7 @@ import Testing
         Entry(token: "KeyUp", rule: "R9 no keyboard"),
         Entry(token: "flagsChanged", rule: "R9 no keyboard"),
         Entry(token: "FlagsChanged", rule: "R9 no keyboard"),
-        Entry(token: "scrollWheel", rule: "R6 never scrolling"),
-        Entry(token: "ScrollWheel", rule: "R6 never scrolling"),
+        Entry(token: "ScrollWheel", rule: "scrolling is read only by the click tap"),
         Entry(token: ".post(tap:", rule: "R9 never synthesise"),
         Entry(token: "CGEventPost", rule: "R9 never synthesise"),
         Entry(token: "postToPid", rule: "R9 never synthesise"),
@@ -67,6 +66,7 @@ import Testing
         Confined(token: "notify_register", onlyIn: "SystemAccessibilityPermission.swift", rule: "R7 the trust push"),
         Confined(token: "tapCreate", onlyIn: "ClickTap.swift", rule: "R9 the one event tap"),
         Confined(token: "CGEventTapCreate", onlyIn: "ClickTap.swift", rule: "R9 the one event tap"),
+        Confined(token: "scrollWheel", onlyIn: "ClickTap.swift", rule: "scrolling is read only by the one event tap"),
     ]
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.

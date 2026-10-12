@@ -4,7 +4,7 @@ import LauncherCore
 
 @MainActor @Suite struct PersistenceTests {
     @Test func assignmentsAndHandModeSurviveARelaunch() {
-        let names = ["Arc", "Figma", "Notion", "Spotify"]
+        let names = ["Arc", "Figma", "Notion", "Spotify", "Slack"]
         let world = World(apps: names)
         world.launcher.start()
         for (gesture, name) in zip(Gesture.allCases, names) {
@@ -23,7 +23,7 @@ import LauncherCore
 
         world.launcher.start()
 
-        #expect(world.launcher.rows.map(\.app) == Array(repeating: .unassigned, count: 4))
+        #expect(world.launcher.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
         #expect(world.launcher.handMode == .right)
         #expect(world.launcher.isLaunchAnimationOn)
         #expect(world.launcher.isWindowOpen)
@@ -50,7 +50,7 @@ import LauncherCore
 
         #expect(world.system.loginItemRegistrations == 0)
         #expect(!relaunched.isWindowOpen)
-        #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 4))
+        #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
         #expect(relaunched.handMode == .right)
         #expect(relaunched.isLaunchAnimationOn)
     }
@@ -94,7 +94,7 @@ import LauncherCore
     }
 
     private func threeAppsThenUnassigned(_ world: World) -> [RowApp] {
-        [.present(world.app("Arc")), .present(world.app("Figma")), .present(world.app("Notion")), .unassigned]
+        [.present(world.app("Arc")), .present(world.app("Figma")), .present(world.app("Notion")), .unassigned, .unassigned]
     }
 
     @Test func upgradingFromARecordWithoutTheLaunchAnimationSettingKeepsEverythingElse() throws {
@@ -136,7 +136,7 @@ import LauncherCore
 
         #expect(relaunched.isLaunchAnimationOn)
         #expect(relaunched.handMode == .right)
-        #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 4))
+        #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: Gesture.allCases.count))
         #expect(world.system.loginItemRegistrations == 0)
         #expect(!relaunched.isWindowOpen)
     }

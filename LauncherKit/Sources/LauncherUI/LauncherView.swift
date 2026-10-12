@@ -2,8 +2,8 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// Four gesture rows, the hand toggle, the Launch animation switch, a divider, then the hint while gestures are active
-/// or the trackpad settings notice while they are not, and a bottom bar holding Quit.
+/// Five gesture rows, the switcher section, the hand toggle, the Launch animation switch, a divider, then the hint
+/// while gestures are active or the trackpad settings notice while they are not, and a bottom bar holding Quit.
 struct LauncherView: View {
     let launcher: Launcher
     let actions: LauncherActions
@@ -14,6 +14,7 @@ struct LauncherView: View {
                 ForEach(launcher.rows) { row in
                     GestureRowView(row: row, launcher: launcher, actions: actions)
                 }
+                SwitcherSection(launcher: launcher, actions: actions)
                 HandModeToggle(launcher: launcher)
                     .padding(.top, 16)
                 LaunchAnimationSwitch(launcher: launcher)
@@ -28,7 +29,7 @@ struct LauncherView: View {
                 }
                 if !launcher.isAccessibilityGranted {
                     SettingsNotice(
-                        message: "Clicks aren't blocked during gestures. Allow Accessibility access to block them.",
+                        message: Copy.accessibilityHint,
                         button: "Grant access…", open: { actions.openSettings(.accessibility) })
                 }
             }
@@ -46,7 +47,7 @@ struct LauncherView: View {
         }
         .padding(12)
         .frame(width: 266)
-        .fixedSize(horizontal: true, vertical: true)
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
@@ -60,13 +61,13 @@ struct GestureRowView: View {
         HStack {
             GestureIllustration(gesture: row.gesture, handMode: launcher.handMode)
             Spacer(minLength: 8)
-            AppPicker(
-                app: row.app,
+            AppMenuButton(
+                form: .popUp(current: row.app),
                 installedApps: launcher.installedApps,
                 cachedIcon: actions.cachedIcon,
                 icon: actions.icon,
                 choose: { launcher.setAssignment($0, for: row.gesture) },
-                chooseOther: { actions.chooseOtherApp(row.gesture) })
+                chooseOther: { actions.chooseOtherApp { launcher.setAssignment(.appBundle(at: $0), for: row.gesture) } })
                 .fixedSize()
         }
     }
@@ -139,10 +140,16 @@ struct HintText: View {
     let handMode: HandMode
 
     var body: some View {
-        Text(
-            "\(mark("thumb-mark")) Hold thumb on \(handMode.cornerName) corner, \(mark("other-finger-mark")) tap with 1, 2, 3 or 4 fingers anywhere to launch selected app"
-        )
-            .hintStyle()
+        // The copy lives in core with `●` and `◉` standing for the two marks, which are drawn as images here.
+        let parts = Copy.gestureHint(for: handMode).components(separatedBy: ["●", "◉"])
+        Group {
+            if parts.count == 3 {
+                Text("\(mark("thumb-mark"))\(parts[1])\(mark("other-finger-mark"))\(parts[2])")
+            } else {
+                Text(Copy.gestureHint(for: handMode))
+            }
+        }
+        .hintStyle()
     }
 
     private func mark(_ name: String) -> Image {

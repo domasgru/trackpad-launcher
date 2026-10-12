@@ -1,6 +1,7 @@
 import Foundation
+import LauncherCore
 
-/// Every number that shapes a launch flight. `shipped` is the animation release builds play; Debug builds can
+/// Every number that shapes a launch flight, plus the switcher's swipe acceleration, which the same tuner tweaks. `shipped` is the animation release builds play; Debug builds can
 /// override it live from the animation tuner (AnimationTuner.swift).
 struct LaunchTuning: Equatable, Sendable {
     /// The icon's start side, in points.
@@ -35,6 +36,12 @@ struct LaunchTuning: Equatable, Sendable {
     var tiltCurve: Double = 1
     /// Plays the Reduce motion flight whatever the system setting. Only the tuner sets it.
     var forceReduceMotion = false
+    /// Switcher swipes move like the cursor, with macOS's acceleration; off, one millimetre of finger is one of travel.
+    var swipeFollowsCursor = true
+    /// Cursor points of travel per icon. The icon pitch makes the highlight move exactly like the cursor over the row.
+    var swipePointsPerIcon = SwipeTravel.shippedPointsPerIcon
+    /// The tracking speed swipes use, 0...3; −1 uses System Settings' value.
+    var swipeTrackingSpeed = -1.0
 
     static let shipped = LaunchTuning()
 
@@ -71,6 +78,9 @@ extension LaunchTuning: Codable {
         maximumTilt = try value(.maximumTilt, s.maximumTilt)
         tiltCurve = try value(.tiltCurve, s.tiltCurve)
         forceReduceMotion = try value(.forceReduceMotion, s.forceReduceMotion)
+        swipeFollowsCursor = try value(.swipeFollowsCursor, s.swipeFollowsCursor)
+        swipePointsPerIcon = try value(.swipePointsPerIcon, s.swipePointsPerIcon)
+        swipeTrackingSpeed = try value(.swipeTrackingSpeed, s.swipeTrackingSpeed)
     }
 }
 #endif

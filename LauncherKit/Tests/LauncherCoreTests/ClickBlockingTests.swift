@@ -14,9 +14,9 @@ import LauncherCore
         return world
     }
 
-    @Test(arguments: 1...4)
+    @Test(arguments: 1...5)
     func aFirmTapOpensItsAppAndTheWholePressNeverReachesApps(fingers: Int) {
-        let apps = ["Arc", "Figma", "Notion", "Spotify"]
+        let apps = ["Arc", "Figma", "Notion", "Spotify", "Slack"]
         let world = World(apps: apps, accessGranted: true)
         world.launcher.start()
         for (gesture, name) in zip(Gesture.allCases, apps) {
@@ -148,7 +148,7 @@ import LauncherCore
     @Test func aReconcileUnderARestingThumbDoesNotRestartTheWindow() {
         let world = world()
         world.hardware.touch(script().wait(.milliseconds(3500)).frames, on: trackpad.id)
-        world.preferences.set(.tapToClick, rawValue: 0, for: .builtIn)
+        world.hardware.wake()
 
         let thumb = h.contact(9, atMM: 10, 10)
         let frames = [

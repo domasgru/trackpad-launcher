@@ -119,7 +119,7 @@ import LauncherCore
         world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
         world.launcher.openWindow()
 
-        world.hardware.inject(GestureEvent(gesture: .one, trackpad: Trackpad.macBook14.id))
+        world.hardware.inject(.gesture(GestureEvent(gesture: .one, trackpad: Trackpad.macBook14.id)))
 
         #expect(world.hardware.feedback.isEmpty)
         #expect(world.system.broughtToFront.isEmpty)

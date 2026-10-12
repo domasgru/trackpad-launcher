@@ -59,7 +59,7 @@ import Testing
         private var waiterCount = 0
 
         init(_ scanner: SystemAppScanner) {
-            scanner.onScan = { [unowned self] in receive($0.all.map(\.name)) }
+            scanner.onScan = { [weak self] in self?.receive($0.all.map(\.name)) }
         }
 
         private func receive(_ names: [String]) {

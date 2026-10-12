@@ -3,7 +3,8 @@ import Foundation
 import LauncherCore
 import Synchronization
 
-/// The app's one event tap: an active session tap over mouse buttons, drags and pressure only.
+/// The app's one event tap: an active session tap over mouse buttons, drags, pressure, scrolling and the system's
+/// gesture events, of which it acts only on Dock swipes.
 /// It exists from the `run` that armed click blocking until the next `run`.
 /// Threads: installed and removed on main. Its callback runs on the tap's own `userInteractive` thread, whose run loop
 /// holds only this tap's source and ends when the tap is removed. That thread retains the ClickTap, so no callback
@@ -11,6 +12,10 @@ import Synchronization
 final class ClickTap: Sendable {
     /// Writer: the tap thread. Reader: frame threads.
     private let filter = Mutex(ClickFilter())
+    /// Writer and reader: the tap thread.
+    private let scrollFilter = Mutex(ScrollFilter())
+    /// One filter per gesture event type, since a Dock swipe may arrive as both. Writer and reader: the tap thread.
+    private let dockSwipeFilters = Mutex<[UInt32: DockSwipeFilter]>([:])
     /// Writer: main (install, remove). The tap thread only re-enables.
     private let port = Mutex<Unchecked<CFMachPort>?>(nil)
     /// Set by the tap thread; main stops it on remove.
@@ -22,7 +27,7 @@ final class ClickTap: Sendable {
         guard
             let machPort = CGEvent.tapCreate(
                 tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
-                eventsOfInterest: PointerEvent.tapMask, callback: clickTapCallback,
+                eventsOfInterest: TapEvent.tapMask, callback: clickTapCallback,
                 userInfo: Unmanaged.passUnretained(tap).toOpaque())
         else { return nil }
         tap.port.withLock { $0 = Unchecked(machPort) }
@@ -58,15 +63,28 @@ final class ClickTap: Sendable {
     /// Tap thread.
     fileprivate func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            // Releases may have passed while the tap was disabled.
+            // Releases and scroll phases may have passed while the tap was disabled.
             filter.withLock { $0.forgetHeldPresses() }
+            scrollFilter.withLock { $0.forgetGesture() }
+            dockSwipeFilters.withLock { $0 = [:] }
             port.withLock { $0.map { CGEvent.tapEnable(tap: $0.value, enable: true) } }
             return .passUnretained(event)
         }
-        guard let pointer = PointerEvent(type, event) else { return .passUnretained(event) }
-        // Read before the filter lock so no two locks are held at once.
+        guard let parsed = TapEvent(type, event) else { return .passUnretained(event) }
+        // Read once, before either filter lock, so no two locks are held at once.
         let blocking = anyTrackpadBlocksClicks()
-        return filter.withLock { $0.decide(pointer, trackpadBlocking: blocking) }.apply(to: event)
+        switch parsed {
+        case .pointer(let pointer):
+            return filter.withLock { $0.decide(pointer, trackpadBlocking: blocking) }.apply(to: event)
+        case .scroll(let scroll):
+            return scrollFilter.withLock { $0.decide(scroll, trackpadBlocking: blocking) }.apply(to: event)
+        case .dockSwipe(let phase):
+            // Its own flag: Dock swipes are blocked for as long as a thumb is anchored, not only inside the window.
+            let blockingDockSwipes = anyTrackpadBlocksDockSwipes()
+            return dockSwipeFilters.withLock {
+                $0[type.rawValue, default: DockSwipeFilter()].decide(phase, trackpadBlocking: blockingDockSwipes)
+            }.apply(to: event)
+        }
     }
 }
 
@@ -81,17 +99,70 @@ private let clickTapCallback: CGEventTapCallBack = { _, type, event, userInfo in
     return Unmanaged<ClickTap>.fromOpaque(userInfo).takeUnretainedValue().handle(type, event)
 }
 
-extension PointerEvent {
+/// Everything the tap is told about, parsed. `PointerEvent` keeps its vocabulary: a press and what belongs to it.
+enum TapEvent: Equatable {
+    case pointer(PointerEvent)
+    case scroll(ScrollEvent)
+    /// The system's own trackpad swipe between desktops, or into Mission Control or App Exposé, on its way to the
+    /// Dock. Every other gesture event (pinch, rotate, an app's swipe) parses as nothing and passes untouched.
+    case dockSwipe(DockSwipePhase)
+
     /// The tap's whole vocabulary. The mask is built from this list, and a test parses one synthetic event of every
     /// listed type, so the tap is never sent a type the parser does not read. Type 34 is NSEventTypePressure, which
-    /// has no public CGEventType case but is usable in a mask and as a rewrite target.
-    /// There are no keyboard, scroll or plain-move types.
+    /// has no public CGEventType case but is usable in a mask and as a rewrite target. Types 29 and 30 are the
+    /// system's gesture and Dock control events, also without public cases; a Dock swipe may arrive as either.
+    /// There are no keyboard or plain-move types.
     static let tapTypes: [CGEventType] = [
         .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp,
-        .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, CGEventType(rawValue: 34)!,
+        .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, CGEventType(rawValue: 34)!, .scrollWheel,
+        CGEventType(rawValue: DockSwipeFields.gestureType)!, CGEventType(rawValue: DockSwipeFields.dockControlType)!,
     ]
     static var tapMask: CGEventMask { tapTypes.reduce(0) { $0 | (CGEventMask(1) << CGEventMask($1.rawValue)) } }
 
+    init?(_ type: CGEventType, _ event: CGEvent) {
+        if type == .scrollWheel {
+            self = .scroll(ScrollEvent(event))
+        } else if type.rawValue == DockSwipeFields.gestureType || type.rawValue == DockSwipeFields.dockControlType {
+            guard let phase = DockSwipePhase(event) else { return nil }
+            self = .dockSwipe(phase)
+        } else if let pointer = PointerEvent(type, event) {
+            self = .pointer(pointer)
+        } else {
+            return nil
+        }
+    }
+}
+
+/// The undocumented event-system numbers a Dock swipe is read by. None has a public CGEventField or CGEventType case.
+enum DockSwipeFields {
+    /// NSEventTypeGesture.
+    static let gestureType: UInt32 = 29
+    /// The Dock's own control event, which carries the swipe it acts on.
+    static let dockControlType: UInt32 = 30
+    /// The gesture's IOHIDEventType.
+    static let hidType = CGEventField(rawValue: 110)!
+    /// kIOHIDEventTypeDockSwipe.
+    static let dockSwipe: Int64 = 23
+    /// The gesture's phase, in IOHIDEventPhase bits.
+    static let phase = CGEventField(rawValue: 132)!
+}
+
+extension DockSwipePhase {
+    /// nil unless the event is a Dock swipe. Phase bits: began 1, changed 2, ended 4, cancelled 8, mayBegin 128.
+    /// A Dock swipe with an unknown phase reads as `.changed`, which the filter never starts a drop on.
+    init?(_ event: CGEvent) {
+        guard event.getIntegerValueField(DockSwipeFields.hidType) == DockSwipeFields.dockSwipe else { return nil }
+        switch event.getIntegerValueField(DockSwipeFields.phase) {
+        case 128: self = .mayBegin
+        case 1: self = .began
+        case 4: self = .ended
+        case 8: self = .cancelled
+        default: self = .changed
+        }
+    }
+}
+
+extension PointerEvent {
     /// The button comes from the type for left and right, and from `mouseEventButtonNumber` for other buttons.
     /// The number comes from `mouseEventNumber`.
     init?(_ type: CGEventType, _ event: CGEvent) {
@@ -113,6 +184,32 @@ extension PointerEvent {
     }
 }
 
+extension ScrollEvent {
+    /// A line-unit event is a wheel whatever its phases. A continuous one with a scroll phase is fingers on a surface;
+    /// with a momentum phase instead, the coasting after the lift; with neither, it stands alone.
+    /// Values: CGScrollPhase began 1, changed 2, ended 4, cancelled 8, mayBegin 128; CGMomentumScrollPhase begin 1,
+    /// continuous 2, end 3.
+    init(_ event: CGEvent) {
+        guard event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0 else {
+            self = .wheel
+            return
+        }
+        let phase = event.getIntegerValueField(.scrollWheelEventScrollPhase)
+        let momentum = event.getIntegerValueField(.scrollWheelEventMomentumPhase)
+        switch (phase, momentum) {
+        case (128, _): self = .fingers(.mayBegin)
+        case (1, _): self = .fingers(.began)
+        case (2, _): self = .fingers(.changed)
+        case (4, _): self = .fingers(.ended)
+        case (8, _): self = .fingers(.cancelled)
+        case (0, 1): self = .momentum(.began)
+        case (0, 2): self = .momentum(.changed)
+        case (0, 3): self = .momentum(.ended)
+        default: self = .unphased
+        }
+    }
+}
+
 extension PointerVerdict {
     /// `.passAsMove` rewrites the event's type to `.mouseMoved` and passes it on.
     func apply(to event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -121,6 +218,33 @@ extension PointerVerdict {
         case .drop: return nil
         case .passAsMove:
             event.type = .mouseMoved
+            return .passUnretained(event)
+        }
+    }
+}
+
+extension DockSwipeVerdict {
+    func apply(to event: CGEvent) -> Unmanaged<CGEvent>? { self == .drop ? nil : .passUnretained(event) }
+}
+
+extension ScrollVerdict {
+    /// `.passStill` zeroes every delta field in place and passes the event, so the app's gesture closes cleanly with
+    /// nothing moving. Nothing is ever posted.
+    func apply(to event: CGEvent) -> Unmanaged<CGEvent>? {
+        switch self {
+        case .pass: return .passUnretained(event)
+        case .drop: return nil
+        case .passStill:
+            for field in [CGEventField.scrollWheelEventDeltaAxis1, .scrollWheelEventDeltaAxis2, .scrollWheelEventDeltaAxis3] {
+                event.setIntegerValueField(field, value: 0)
+            }
+            for field in [
+                CGEventField.scrollWheelEventFixedPtDeltaAxis1, .scrollWheelEventFixedPtDeltaAxis2,
+                .scrollWheelEventFixedPtDeltaAxis3, .scrollWheelEventPointDeltaAxis1, .scrollWheelEventPointDeltaAxis2,
+                .scrollWheelEventPointDeltaAxis3,
+            ] {
+                event.setDoubleValueField(field, value: 0)
+            }
             return .passUnretained(event)
         }
     }

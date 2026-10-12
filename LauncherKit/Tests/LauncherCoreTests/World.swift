@@ -50,6 +50,7 @@ final class LaunchRecord: Sendable {
     let catalog: AppCatalog
     private(set) var store: SettingsStore
     private(set) var launcher: Launcher
+    private var delivered: [TrackpadID: Double] = [:]
 
     init(apps: [String] = [], attached: [Trackpad] = [.macBook14], accessGranted: Bool = false) {
         let root = FileManager.default.temporaryDirectory.appending(path: "tl-world-\(UUID().uuidString)")
@@ -149,6 +150,15 @@ final class LaunchRecord: Sendable {
         hardware.touch(TouchScript(trackpad.surface).thumb(atMM: thumb).tap(fingers: fingers).frames, on: trackpad.id)
     }
 
+    /// Delivers the frames of `script` newer than any already delivered on that trackpad, so one hand in progress can
+    /// be played in pieces with intents and reconciles in between.
+    func play(_ script: TouchScript, on trackpad: Trackpad = .macBook14) {
+        let newer = script.frames.filter { $0.time.seconds > (delivered[trackpad.id] ?? 0) }
+        guard let last = newer.last else { return }
+        delivered[trackpad.id] = last.time.seconds
+        hardware.touch(newer, on: trackpad.id)
+    }
+
     /// A second `Launcher` over the same adapters and a fresh `UserDefaults` instance on the same suite.
     @discardableResult
     func relaunch() -> Launcher {
@@ -158,5 +168,32 @@ final class LaunchRecord: Sendable {
             hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
             scanner: scanner, store: store)
         return launcher
+    }
+}
+
+extension World {
+    /// What the next swipe reads as frontmost; nil models no active app, or Trackpad Launcher itself.
+    func makeFrontmost(_ name: String?) {
+        system.frontmost = name.map { app($0).url }
+    }
+
+    /// Safari, Mail, Slack and Notes installed, Mail, Slack and Notes listed in that order, Safari frontmost, started.
+    static func switcherWorld(accessGranted: Bool = false) -> World {
+        let world = World(apps: ["Safari", "Mail", "Slack", "Notes"], accessGranted: accessGranted)
+        world.launcher.start()
+        for name in ["Mail", "Slack", "Notes"] { world.launcher.addToSwitcher(.app(world.app(name))) }
+        world.makeFrontmost("Safari")
+        return world
+    }
+
+    /// Thumb at (10, 10), two fingers down, each slide in turn (millimetres, positive right), then the fingers lift
+    /// unless `lift` is false. Returns its script so a row can continue it with `play`.
+    @discardableResult
+    func swipe(_ slidesMM: Double..., lift: Bool = true, on trackpad: Trackpad = .macBook14) -> TouchScript {
+        var script = TouchScript(trackpad.surface).thumb(atMM: (10, 10)).land(fingers: 2)
+        for slide in slidesMM { script = script.slide(byMM: (slide, 0)) }
+        if lift { script = script.lift() }
+        play(script, on: trackpad)
+        return script
     }
 }

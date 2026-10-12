@@ -1,0 +1,8 @@
+# Run 2026-10-11 on the development machine from a plain CLI process (not an app, not active). Nobody switched apps
+# during the 6 s listen window, so the activation notification was not exercised (0 is "not observed", not "never fires").
+frontmostApplication: bundleIdentifier=com.google.Chrome bundleURL=/Applications/Google Chrome.app name=Google Chrome pid=14085 activationPolicy=0 isActive=true
+menuBarOwningApplication: com.google.Chrome
+Info.plist under bundleURL exists: true
+Listening 6 s for didActivateApplicationNotification (switch apps with Cmd-Tab if you are there)...
+activations seen: 0
+done

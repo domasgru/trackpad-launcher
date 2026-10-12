@@ -1,0 +1,11 @@
+trial 1 Task{@MainActor}: received=5000/5000 inOrder=true
+trial 2 Task{@MainActor}: received=5000/5000 inOrder=true
+trial 3 Task{@MainActor}: received=5000/5000 inOrder=true
+trial 4 Task{@MainActor}: received=5000/5000 inOrder=true
+trial 5 Task{@MainActor}: received=5000/5000 inOrder=true
+trial 1 DispatchQueue.main.async: received=5000/5000 inOrder=true
+trial 2 DispatchQueue.main.async: received=5000/5000 inOrder=true
+trial 3 DispatchQueue.main.async: received=5000/5000 inOrder=true
+trial 4 DispatchQueue.main.async: received=5000/5000 inOrder=true
+trial 5 DispatchQueue.main.async: received=5000/5000 inOrder=true
+done

@@ -8,28 +8,40 @@ import Synchronization
 final class DeviceSession: Sendable {
     let trackpad: TrackpadID
     private let recognizer: Mutex<GestureRecognizer>
+    /// This device's cursor acceleration curves, read once when the session starts.
+    private let pointerCurves: [PointerCurve.Point]
     /// Writer: this device's frame callback. Reader: the click tap's thread.
     private let blocking = Mutex(false)
+    /// Writer: this device's frame callback. Reader: the click tap's thread.
+    private let blockingDockSwipes = Mutex(false)
     /// Installed by the same `run`, if any.
     private let clickTap: ClickTap?
-    private let deliver: @Sendable (GestureEvent) -> Void
+    private let deliver: @Sendable (TrackpadEvent) -> Void
 
     init(
-        trackpad: TrackpadID, recognizer: GestureRecognizer, clickTap: ClickTap?,
-        deliver: @escaping @Sendable (GestureEvent) -> Void
+        trackpad: TrackpadID, recognizer: GestureRecognizer, pointerCurves: [PointerCurve.Point], clickTap: ClickTap?,
+        deliver: @escaping @Sendable (TrackpadEvent) -> Void
     ) {
         self.trackpad = trackpad
         self.recognizer = Mutex(recognizer)
+        self.pointerCurves = pointerCurves
         self.clickTap = clickTap
         self.deliver = deliver
     }
 
     /// Frame thread.
     func receive(_ frame: TouchFrame) {
-        let recognition = recognizer.withLock { $0.step(frame) }
+        let recognition = recognizer.withLock {
+            let recognition = $0.step(frame)
+            // Each swipe follows the cursor's acceleration at the tracking speed set when it starts. Travel is 0 on
+            // the frame a swipe begins, so the next frame is the first to use it.
+            if recognition.swipe == .began { $0.travel = CursorTravel.travel(curves: pointerCurves) }
+            return recognition
+        }
         blocking.withLock { $0 = recognition.blocksClicks }
-        if let gesture = recognition.fired {
-            deliver(GestureEvent(gesture: gesture, trackpad: trackpad))
+        blockingDockSwipes.withLock { $0 = recognition.blocksDockSwipes }
+        if let event = recognition.event {
+            deliver(TrackpadEvent(event, on: trackpad))
         }
     }
 
@@ -38,6 +50,9 @@ final class DeviceSession: Sendable {
 
     /// Click tap thread.
     var blocksClicks: Bool { blocking.withLock { $0 } }
+
+    /// Click tap thread.
+    var blocksDockSwipes: Bool { blockingDockSwipes.withLock { $0 } }
 }
 
 /// The only state shared with the frame thread: written by `run` (main), read by the callback and the click tap.
@@ -61,4 +76,10 @@ func anyMouseButtonDown() -> Bool {
 /// Copies the sessions out first, so no lock is held while another is taken.
 func anyTrackpadBlocksClicks() -> Bool {
     Array(sessions.withLock { $0.values }).contains { $0.blocksClicks }
+}
+
+/// Whether some running trackpad has a thumb anchored with another contact down, or a swipe on. Merged like
+/// `anyTrackpadBlocksClicks()`.
+func anyTrackpadBlocksDockSwipes() -> Bool {
+    Array(sessions.withLock { $0.values }).contains { $0.blocksDockSwipes }
 }
