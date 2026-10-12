@@ -10,11 +10,11 @@ public struct Recognition: Equatable, Sendable {
 
     public let event: Event?
     /// This trackpad's half of click blocking: true for the whole of a swipe; otherwise a thumb this recognizer saw
-    /// land less than 3 s ago is still anchored and another contact is down. Whether a press is really blocked also
+    /// land less than 3 s ago is still anchored and another finger is down. Whether a press is really blocked also
     /// needs the click filter armed (access granted, gestures active), which the recognizer never knows.
     public let blocksClicks: Bool
     /// This trackpad's half of Dock swipe blocking: true for the whole of a swipe, and while any thumb is anchored and
-    /// another contact is down, with no time limit. macOS may count the anchored thumb as a finger, so thumb plus two
+    /// another finger is down, with no time limit. macOS may count the anchored thumb as a finger, so thumb plus two
     /// sliding fingers can read as its three-finger swipe between desktops. Like `blocksClicks`, it only matters
     /// while the tap is armed.
     public let blocksDockSwipes: Bool
@@ -37,6 +37,7 @@ public struct GestureRecognizer: Sendable {
     /// `travel`: how finger movement becomes switcher travel. A var, so a Debug tuner can change it between frames.
     public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool, travel: SwipeTravel) {
         self.corner = AnchorCorner(handMode, surface: surface)
+        self.edgeContacts = EdgeContacts(corner: corner, surface: surface)
         self.surface = surface
         self.swipes = swipes
         self.travel = travel
@@ -45,6 +46,7 @@ public struct GestureRecognizer: Sendable {
     public var travel: SwipeTravel
 
     public mutating func step(_ frame: TouchFrame) -> Recognition {
+        let frame = edgeContacts.fingers(in: frame)
         let isFirstFrame = previouslyDown == nil
         let before = previouslyDown ?? []
         let down = Dictionary(frame.touches.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -282,6 +284,7 @@ public struct GestureRecognizer: Sendable {
     private let corner: AnchorCorner
     private let surface: SurfaceSize
     private let swipes: Bool
+    private var edgeContacts: EdgeContacts
     private var state: State = .idle
     /// Contacts down on the previous frame. nil until the first frame.
     private var previouslyDown: Set<TouchID>?

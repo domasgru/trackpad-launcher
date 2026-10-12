@@ -54,3 +54,38 @@ package struct AnchorCorner: Sendable {
         handMode == .right ? p.x : 1 - p.x
     }
 }
+
+/// Remembers which contacts landed at the edge of the surface, outside the anchor corner, so the recognizer never
+/// sees them. An edge contact is a resting hand, not a finger, for as long as it stays down. Call once per frame, in
+/// frame order.
+package struct EdgeContacts: Sendable {
+    private let corner: AnchorCorner
+    private let surface: SurfaceSize
+    private var edge: Set<TouchID> = []
+    private var previouslyDown: Set<TouchID> = []
+
+    package init(corner: AnchorCorner, surface: SurfaceSize) {
+        self.corner = corner
+        self.surface = surface
+    }
+
+    /// The same frame with its edge contacts removed from `touches`, the rest in their original order.
+    package mutating func fingers(in frame: TouchFrame) -> TouchFrame {
+        let down = Set(frame.touches.map(\.id))
+        for touch in frame.touches where touch.phase == .landing || !previouslyDown.contains(touch.id) {
+            if isAtEdge(touch.position) {
+                edge.insert(touch.id)
+            } else {
+                edge.remove(touch.id)
+            }
+        }
+        edge.formIntersection(down)
+        previouslyDown = down
+        return TouchFrame(time: frame.time, touches: frame.touches.filter { !edge.contains($0.id) }, press: frame.press)
+    }
+
+    private func isAtEdge(_ p: SurfacePoint) -> Bool {
+        let nearest = min(p.x * surface.widthMM, (1 - p.x) * surface.widthMM, p.y * surface.heightMM, (1 - p.y) * surface.heightMM)
+        return nearest < GestureRules.edgeBandMM && !corner.admits(p)
+    }
+}
