@@ -25,6 +25,7 @@ import LauncherCore
 
         #expect(world.launcher.rows.map(\.app) == Array(repeating: .unassigned, count: 4))
         #expect(world.launcher.handMode == .right)
+        #expect(world.launcher.isLaunchAnimationOn)
         #expect(world.launcher.isWindowOpen)
         #expect(world.system.loginItemRegistrations == 1)
     }
@@ -42,7 +43,7 @@ import LauncherCore
 
     @Test func undecodableRecordLoadsAsDefaultsNotAsFirstLaunch() {
         let world = World()
-        UserDefaults(suiteName: world.suiteName)!.set(Data("garbage".utf8), forKey: "settings")
+        world.seedSettingsRecord(Data("garbage".utf8))
         let relaunched = world.relaunch()
 
         relaunched.start()
@@ -51,6 +52,7 @@ import LauncherCore
         #expect(!relaunched.isWindowOpen)
         #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 4))
         #expect(relaunched.handMode == .right)
+        #expect(relaunched.isLaunchAnimationOn)
     }
 
     @Test func loginItemIsRegisteredBeforeTheFirstSave() {
@@ -72,5 +74,98 @@ import LauncherCore
 
         let fresh = SettingsStore(defaults: UserDefaults(suiteName: world.suiteName)!)
         #expect(fresh.load()?.assignments[.one]?.bundleID == World.bundleID("Arc"))
+    }
+
+    /// The record a build without the launch animation setting wrote for Left hand with Arc, Figma and Notion on
+    /// gestures 1 to 3, with the World's own app URLs.
+    private func recordFromBeforeTheLaunchAnimationSetting(_ world: World) throws -> Data {
+        func assignment(_ name: String) -> [String: Any] {
+            [
+                "bundleID": ["rawValue": World.bundleID(name).rawValue],
+                "lastKnownURL": ["relative": world.app(name).url.absoluteString],
+                "name": name,
+            ]
+        }
+        let record: [String: Any] = [
+            "assignments": ["1": assignment("Arc"), "2": assignment("Figma"), "3": assignment("Notion")],
+            "handMode": "left",
+        ]
+        return try PropertyListSerialization.data(fromPropertyList: record, format: .xml, options: 0)
+    }
+
+    private func threeAppsThenUnassigned(_ world: World) -> [RowApp] {
+        [.present(world.app("Arc")), .present(world.app("Figma")), .present(world.app("Notion")), .unassigned]
+    }
+
+    @Test func upgradingFromARecordWithoutTheLaunchAnimationSettingKeepsEverythingElse() throws {
+        let world = World(apps: ["Arc", "Figma", "Notion"])
+        let old = try recordFromBeforeTheLaunchAnimationSetting(world)
+        world.seedSettingsRecord(old)
+
+        let relaunched = world.relaunch()
+        relaunched.start()
+
+        #expect(relaunched.isLaunchAnimationOn)
+        #expect(relaunched.handMode == .left)
+        #expect(relaunched.rows.map(\.app) == threeAppsThenUnassigned(world))
+        #expect(world.system.loginItemRegistrations == 0)
+        #expect(!relaunched.isWindowOpen)
+    }
+
+    @Test func theFirstSaveAfterAnUpgradeCarriesTheOldSettingsWithIt() throws {
+        let world = World(apps: ["Arc", "Figma", "Notion"])
+        let old = try recordFromBeforeTheLaunchAnimationSetting(world)
+        world.seedSettingsRecord(old)
+        world.relaunch().start()
+
+        world.launcher.setLaunchAnimation(on: false)
+        let relaunched = world.relaunch()
+
+        #expect(!relaunched.isLaunchAnimationOn)
+        #expect(relaunched.handMode == .left)
+        #expect(relaunched.rows.map(\.app) == threeAppsThenUnassigned(world))
+    }
+
+    @Test func anEmptyRecordDecodesAsDefaultsNotAsFirstLaunch() throws {
+        let world = World()
+        let empty = try PropertyListSerialization.data(fromPropertyList: [String: Any](), format: .xml, options: 0)
+        world.seedSettingsRecord(empty)
+
+        let relaunched = world.relaunch()
+        relaunched.start()
+
+        #expect(relaunched.isLaunchAnimationOn)
+        #expect(relaunched.handMode == .right)
+        #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 4))
+        #expect(world.system.loginItemRegistrations == 0)
+        #expect(!relaunched.isWindowOpen)
+    }
+
+    @Test func turningTheLaunchAnimationOffSurvivesARelaunchAndGesturesShowNoIcon() {
+        let world = World(apps: ["Arc"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.launcher.setLaunchAnimation(on: false)
+
+        let relaunched = world.relaunch()
+        relaunched.start()
+        world.tap(1)
+
+        #expect(!relaunched.isLaunchAnimationOn)
+        #expect(world.hardware.feedback.count == 1)
+        #expect(world.system.launchAnimations.isEmpty)
+    }
+
+    @Test func everySettingsFieldSurvivesTheStore() {
+        let world = World(apps: ["Arc"])
+        var settings = Settings()
+        settings.handMode = .left
+        settings.assignments = [.three: AssignedApp(world.app("Arc"))]
+        settings.isLaunchAnimationOn = false
+        #expect(settings != Settings())
+
+        world.store.save(settings)
+
+        #expect(world.store.load() == settings)
     }
 }

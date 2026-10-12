@@ -97,6 +97,11 @@ final class LaunchRecord: Sendable {
         try? FileManager.default.removeItem(at: root)
     }
 
+    /// Plants a raw record exactly where the store keeps its own, as an earlier build would have left it.
+    func seedSettingsRecord(_ data: Data) {
+        UserDefaults(suiteName: suiteName)!.set(data, forKey: "settings")
+    }
+
     static func bundleID(_ name: String) -> BundleID {
         BundleID(rawValue: "com.test." + name.lowercased().replacingOccurrences(of: " ", with: "-"))
     }

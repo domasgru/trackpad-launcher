@@ -4,7 +4,7 @@ import Foundation
 /// override it live from the animation tuner (AnimationTuner.swift).
 struct LaunchTuning: Equatable, Sendable {
     /// The icon's start side, in points.
-    var iconSide: Double = 60
+    var iconSide: Double = 40
     /// Seconds from appearing to fully invisible.
     var duration: Double = 0.34
     /// How much bigger the icon swells right after it appears, as a share of its start side. 0 = no pop.
@@ -13,7 +13,7 @@ struct LaunchTuning: Equatable, Sendable {
     /// from the peak and plays in what is left of the duration.
     var popTime: Double = 0.075
     /// Points the icon rises by the end.
-    var rise: Double = 70
+    var rise: Double = 47
     /// Rise = rise × t^riseCurve. 1 is constant speed, above 1 accelerates.
     var riseCurve: Double = 1.8
     /// The share of its peak side the icon loses by the end.

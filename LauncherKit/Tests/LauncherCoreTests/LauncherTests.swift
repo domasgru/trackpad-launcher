@@ -28,6 +28,51 @@ extension Launcher {
             "the app is brought to front before the animation is requested, so the animation cannot delay it")
     }
 
+    @Test func withTheLaunchAnimationOffAGesturePulsesBringsToFrontAndClosesTheWindowWithoutAnIcon() {
+        let world = World(apps: ["Arc"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.launcher.openWindow()
+        world.launcher.setLaunchAnimation(on: false)
+
+        world.tap(1)
+
+        #expect(world.hardware.feedback == [Trackpad.macBook14.id])
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+        #expect(!world.launcher.isWindowOpen)
+        #expect(world.system.launchAnimations.isEmpty)
+    }
+
+    @Test func theSwitchAppliesToTheNextGestureWithoutARestart() {
+        let world = World(apps: ["Arc"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+
+        world.tap(1)
+        #expect(world.system.launchAnimations == [world.app("Arc")])
+
+        world.launcher.setLaunchAnimation(on: false)
+        world.tap(1)
+        #expect(world.system.launchAnimations == [world.app("Arc")])
+        #expect(world.hardware.feedback.count == 2)
+        #expect(world.system.broughtToFront == [world.app("Arc"), world.app("Arc")])
+
+        world.launcher.setLaunchAnimation(on: true)
+        world.tap(1)
+        #expect(world.system.launchAnimations == [world.app("Arc"), world.app("Arc")])
+    }
+
+    @Test func iconsAreStillPreparedWhileTheLaunchAnimationIsOff() {
+        let world = World(apps: ["Arc"])
+        world.launcher.start()
+        world.launcher.setLaunchAnimation(on: false)
+
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+
+        #expect(world.system.preparedLaunchAnimations == [world.app("Arc")])
+        #expect(world.system.launchAnimations.isEmpty)
+    }
+
     @Test func repeatedTapsWhileTheThumbStaysAnchoredFireEachTime() {
         let world = World(apps: ["Arc", "Figma"])
         world.launcher.start()

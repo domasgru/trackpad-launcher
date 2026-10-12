@@ -3,7 +3,8 @@ import Observation
 
 /// The running Trackpad Launcher. Owns every decision; adapters sense and act, the shell and views render.
 /// `activity` is derived, never stored; `rows` derive from settings plus the catalog; `fire` is the only path
-/// that pulses, launches, plays the launch animation or closes the window from a gesture.
+/// that pulses, launches, plays the launch animation or closes the window from a gesture. `fire` plays the launch
+/// animation only while its setting is on.
 @MainActor @Observable
 public final class Launcher {
     public private(set) var rows: [GestureRow] = []
@@ -11,6 +12,7 @@ public final class Launcher {
     public private(set) var installedApps: InstalledApps
     public var isWindowOpen: Bool { window != .closed }
     public var handMode: HandMode { settings.handMode }
+    public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
     /// One derivation, read by the icon, the notice and the fire guard.
     public var activity: GestureActivity {
         GestureActivity(connected: Set(connected.map(\.kind)), values: preferenceValues)
@@ -103,6 +105,13 @@ public final class Launcher {
         reconcile()
     }
 
+    /// Launch animation switch. Saved at once; the next gesture obeys it.
+    public func setLaunchAnimation(on: Bool) {
+        guard on != settings.isLaunchAnimationOn else { return }
+        settings.isLaunchAnimationOn = on
+        store.save(settings)
+    }
+
     /// Show the launcher window, re-resolve the rows and refresh the app list in the background.
     public func openWindow() {
         if window == .closed { window = .open }
@@ -138,7 +147,7 @@ public final class Launcher {
         hardware.playFeedback(on: event.trackpad)
         system.bringToFront(app)
         // After bring to front, so whatever the animation costs lands on the icon, never on the app.
-        system.playLaunchAnimation(for: app)
+        if settings.isLaunchAnimationOn { system.playLaunchAnimation(for: app) }
         window = .closed
     }
 
