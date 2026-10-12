@@ -42,7 +42,7 @@ The app assigned to the gesture that just fired.
 What a gesture does to its target app: launch it if it is not running; otherwise unhide, restore minimised windows or open a new window as needed, and make it the active app.
 
 ## Launcher window
-The window that opens from the menu bar icon: five gesture rows, the switcher section (the swipe illustration and its title, the switcher list's rows, and Add app…), the hand-mode toggle, the hint, and Quit. It grows with the switcher list and, when it would not fit the screen, the list scrolls inside it while everything else stays reachable.
+The window that opens from the menu bar icon: five gesture rows, the switcher section (the swipe illustration and its title, the switcher list's rows, and Add app…), the hand-mode toggle, the launch animation switch, the hint, and Quit. It grows with the switcher list and, when it would not fit the screen, the list scrolls inside it while everything else stays reachable.
 
 ## Gesture row
 One line in the launcher window: a gesture illustration and the app picker for that gesture.
@@ -75,7 +75,10 @@ The haptic pulses the trackpad gives: the *gesture haptic* when a gesture fires 
 The lighter haptic pulse that marks each change of the switcher's selection: one per icon the highlight crosses, none while the selection stays put.
 
 ## Launch animation
-The target app's icon floating up from the pointer when a gesture fires for an assigned, present target app, together with the feedback. It appears at once at full size, puffs up for a split second, then rises faster and faster as it shrinks, sways and tilts a little to one side, and fades out within about a third of a second, like a small balloon letting its air out. With the system's Reduce motion setting on, it fades out in place instead. It never takes focus or receives clicks, and every fired gesture plays its own. There is no setting to turn it off.
+The target app's icon floating up from the pointer when a gesture fires for an assigned, present target app, together with the feedback. It appears at once at full size, puffs up for a split second, then rises faster and faster as it shrinks, sways and tilts a little to one side, and fades out within about a third of a second, like a small balloon letting its air out. With the system's Reduce motion setting on, it fades out in place instead. It never takes focus or receives clicks, and every fired gesture plays its own. The *launch animation setting* turns it off.
+
+## Launch animation setting
+One global setting, on by default, shown as the *Launch animation* switch in the launcher window below the hand-mode toggle. While it is off, a gesture shows nothing at the pointer, whatever the system's Reduce motion setting; the feedback, bring to front and closing the launcher window are unchanged. A change applies to the next gesture and is saved at once, so it survives a quit, a force-quit or a Mac restart. Upgrading from a version without the setting leaves it on and changes no other setting.
 
 ## Sway
 A launch animation's small sideways veer, to the left or to the right, never more than a third of its rise, with a slight tilt toward that side. The side is random, except that the same side never comes up three times in a row.

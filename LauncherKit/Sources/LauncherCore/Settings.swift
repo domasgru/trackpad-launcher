@@ -1,21 +1,27 @@
 import Foundation
 
 /// Everything persisted besides the implicit "launched before".
+///
+/// Decoding rule, for every field present and future: a key missing from the record decodes as that field's default;
+/// a key this build does not know is ignored; a key whose value does not decode fails the whole record.
 public struct Settings: Codable, Equatable, Sendable {
     public var handMode: HandMode = .right
     /// Absent = unassigned.
     public var assignments: [Gesture: AssignedApp] = [:]
     public var switcherList = SwitcherList()
+    /// Whether a gesture plays the launch animation. The key is this field's name, permanently.
+    public var isLaunchAnimationOn = true
 
     public init() {}
 
-    /// A key added after the first release decodes as absent -> default, so a record saved by an older build keeps
-    /// its assignments. Encoding stays synthesized.
     public init(from decoder: any Decoder) throws {
+        self.init()
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        handMode = try container.decode(HandMode.self, forKey: .handMode)
-        assignments = try container.decode([Gesture: AssignedApp].self, forKey: .assignments)
-        switcherList = try container.decodeIfPresent(SwitcherList.self, forKey: .switcherList) ?? SwitcherList()
+        handMode = try container.decodeIfPresent(HandMode.self, forKey: .handMode) ?? handMode
+        assignments = try container.decodeIfPresent([Gesture: AssignedApp].self, forKey: .assignments) ?? assignments
+        switcherList = try container.decodeIfPresent(SwitcherList.self, forKey: .switcherList) ?? switcherList
+        isLaunchAnimationOn =
+            try container.decodeIfPresent(Bool.self, forKey: .isLaunchAnimationOn) ?? isLaunchAnimationOn
     }
 }
 

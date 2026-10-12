@@ -2,8 +2,8 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// Five gesture rows, the switcher section, the hand toggle, a divider, then the hint while gestures are active or the trackpad
-/// settings notice while they are not, and a bottom bar holding Quit.
+/// Five gesture rows, the switcher section, the hand toggle, the Launch animation switch, a divider, then the hint
+/// while gestures are active or the trackpad settings notice while they are not, and a bottom bar holding Quit.
 struct LauncherView: View {
     let launcher: Launcher
     let actions: LauncherActions
@@ -17,6 +17,7 @@ struct LauncherView: View {
                 SwitcherSection(launcher: launcher, actions: actions)
                 HandModeToggle(launcher: launcher)
                     .padding(.top, 16)
+                LaunchAnimationSwitch(launcher: launcher)
                 Divider()
                 switch launcher.activity {
                 case .active:
@@ -115,6 +116,23 @@ struct HandModeToggle: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
+    }
+}
+
+struct LaunchAnimationSwitch: View {
+    let launcher: Launcher
+
+    var body: some View {
+        HStack {
+            Text("Launch animation")
+            Spacer(minLength: 8)
+            Toggle(
+                "Launch animation",
+                isOn: Binding(get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
+            )
+            .toggleStyle(.switch)
+            .labelsHidden()
+        }
     }
 }
 
