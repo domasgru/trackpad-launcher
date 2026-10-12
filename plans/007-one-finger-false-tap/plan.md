@@ -125,9 +125,9 @@ Surface `macBook14` (124.8 × 76.8 mm), right-hand mode, thumb ID 9 at (10, 10) 
 
 **Test scenarios:** T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13.
 
-- [ ] T1 is written first and fails on the unchanged recognizer by firing `.one` twice, then passes.
-- [ ] T2–T13 pass; the rows the table marks as failing before the fix were seen red first, and the guard rows (T6, T7's "fires" rows, T8) were not expected to be.
-- [ ] R2: `Scripts/test.sh` is green with no existing `@Test` edited or removed.
-- [ ] R3: `grep -rn edgeBandMM LauncherKit/Sources` returns exactly the declaration in `GestureRules.swift` and one read in `Surface.swift`; `EdgeContacts` sits beside `AnchorCorner` at the same visibility; `docs/domain-model.md` matches the code (the *Tap* entry and the *Edge contact* entry) and `git diff main -- docs/architecture.md` is empty.
-- [ ] The replay harness, rebuilt against the changed sources, prints nothing for `rec1.txt`.
-- [ ] `plans/007-one-finger-false-tap/.temp/` is not in the commit.
+- [x] T1 is written first and fails on the unchanged recognizer by firing `.one` twice, then passes.
+- [x] T2–T13 pass; the rows the table marks as failing before the fix were seen red first, and the guard rows (T6, T7's "fires" rows, T8) were not expected to be.
+- [x] R2: `Scripts/test.sh` is green with no existing `@Test` edited or removed.
+- [x] R3: `grep -rn edgeBandMM LauncherKit/Sources` returns exactly the declaration in `GestureRules.swift` and one read in `Surface.swift`; `EdgeContacts` sits beside `AnchorCorner` at the same visibility; `docs/domain-model.md` matches the code (the *Tap* entry and the *Edge contact* entry) and `git diff main -- docs/architecture.md` is empty.
+- [x] The replay harness, rebuilt against the changed sources, prints nothing for `rec1.txt`.
+- [x] `plans/007-one-finger-false-tap/.temp/` is not in the commit.

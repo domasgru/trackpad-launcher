@@ -52,7 +52,7 @@ public struct GestureRecognizer: Sendable {
         let down = Dictionary(frame.touches.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let reused = Set(frame.touches.filter { $0.phase == .landing && before.contains($0.id) }.map(\.id))
         let lifted = before.subtracting(down.keys).union(reused)
-        let landed = frame.touches.filter { $0.phase == .landing || !before.contains($0.id) }
+        let landed = frame.touches.filter { $0.isLanding(after: before) }
         defer { previouslyDown = Set(down.keys) }
 
         if let anchor = state.anchor,

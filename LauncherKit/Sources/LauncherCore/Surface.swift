@@ -26,6 +26,11 @@ public struct SurfaceSize: Hashable, Sendable {
     public func distanceMM(_ a: SurfacePoint, _ b: SurfacePoint) -> Double {
         hypot((a.x - b.x) * widthMM, (a.y - b.y) * heightMM)
     }
+
+    /// Distance in millimetres from a normalised point to the nearest edge of this surface.
+    public func distanceToNearestEdgeMM(_ p: SurfacePoint) -> Double {
+        min(p.x * widthMM, (1 - p.x) * widthMM, p.y * heightMM, (1 - p.y) * heightMM)
+    }
 }
 
 /// The fixed zone where a thumb arms gestures.
@@ -61,7 +66,7 @@ package struct AnchorCorner: Sendable {
 package struct EdgeContacts: Sendable {
     private let corner: AnchorCorner
     private let surface: SurfaceSize
-    private var edge: Set<TouchID> = []
+    private var edgeContactIDs: Set<TouchID> = []
     private var previouslyDown: Set<TouchID> = []
 
     package init(corner: AnchorCorner, surface: SurfaceSize) {
@@ -72,20 +77,19 @@ package struct EdgeContacts: Sendable {
     /// The same frame with its edge contacts removed from `touches`, the rest in their original order.
     package mutating func fingers(in frame: TouchFrame) -> TouchFrame {
         let down = Set(frame.touches.map(\.id))
-        for touch in frame.touches where touch.phase == .landing || !previouslyDown.contains(touch.id) {
+        for touch in frame.touches where touch.isLanding(after: previouslyDown) {
             if isAtEdge(touch.position) {
-                edge.insert(touch.id)
+                edgeContactIDs.insert(touch.id)
             } else {
-                edge.remove(touch.id)
+                edgeContactIDs.remove(touch.id)
             }
         }
-        edge.formIntersection(down)
+        edgeContactIDs.formIntersection(down)
         previouslyDown = down
-        return TouchFrame(time: frame.time, touches: frame.touches.filter { !edge.contains($0.id) }, press: frame.press)
+        return TouchFrame(time: frame.time, touches: frame.touches.filter { !edgeContactIDs.contains($0.id) }, press: frame.press)
     }
 
     private func isAtEdge(_ p: SurfacePoint) -> Bool {
-        let nearest = min(p.x * surface.widthMM, (1 - p.x) * surface.widthMM, p.y * surface.heightMM, (1 - p.y) * surface.heightMM)
-        return nearest < GestureRules.edgeBandMM && !corner.admits(p)
+        surface.distanceToNearestEdgeMM(p) < GestureRules.edgeBandMM && !corner.admits(p)
     }
 }

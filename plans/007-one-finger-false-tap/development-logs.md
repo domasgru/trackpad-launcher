@@ -18,3 +18,9 @@
 - The rows read `fired`, both blocking flags and swipe phases per frame but the existing `perFrame` returns only two of those → the new suite's one private helper returns the full `Recognition` per frame.
 
 ## Implement
+- S1 acceptance: T1 and every "fails before the fix" row seen red on the unchanged recognizer (T1 fired `.one` twice); the guard rows (T6, T7's "fires" rows, T8) passed before and after. The replay of `rec1.txt` printed two `fired(Gesture.one)` events before the fix and prints nothing after. `Scripts/test.sh` green (303 tests); the S1 run showed 3 `SystemAppScannerTests` filesystem-timing timeouts that passed in isolation and in the later full run.
+- Review: T9's three reused-ID scenarios were one test → split into three tests, one scenario each.
+- Review: T13's thumb lifted on the 160 ms frame and T1's sliding thumb overshot its start point, both departing from the plan's table → the frames now match the table.
+- Review: the landing rule (`.landing` or not down last frame) was written twice, in `step` and in `EdgeContacts` → one `package` helper, `Touch.isLanding(after:)`, used by both.
+- Review: the nearest-edge distance was computed in `EdgeContacts` from `SurfaceSize`'s fields → `SurfaceSize.distanceToNearestEdgeMM(_:)` beside `distanceMM`; `EdgeContacts`'s private `edge` set renamed `edgeContactIDs`; the test helper's unused `handMode` parameter removed.
+- Review, not fixed: `EdgeContacts(corner:surface:)` takes both though `AnchorCorner` holds the surface; kept, as decision 2 specifies that interface and `AnchorCorner` does not expose its surface. T4 checks `fired` and swipe phases in one test; kept, as it is one scenario whose claim is "the edge contact changes nothing".

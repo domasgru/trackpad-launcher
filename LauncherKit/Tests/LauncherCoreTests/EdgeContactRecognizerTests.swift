@@ -36,8 +36,8 @@ import LauncherCore
         }
     }
 
-    private func recognitions(_ frames: [TouchFrame], handMode: HandMode = .right) -> [Recognition] {
-        var recognizer = GestureRecognizer(handMode: handMode, surface: .macBook14, swipes: true, travel: .linear)
+    private func recognitions(_ frames: [TouchFrame]) -> [Recognition] {
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, travel: .linear)
         return frames.map { recognizer.step($0) }
     }
 
@@ -60,7 +60,7 @@ import LauncherCore
 
     @Test func aPalmBrushingTheEdgeDuringAOneFingerSlideFiresNothing() {
         let slidingAndBack = Track(id: 3, from: 0, until: 600) { ms in
-            let t = Double(ms < 250 ? ms : 500 - ms) / 250
+            let t = Double(ms < 250 ? ms : max(500 - ms, 0)) / 250
             return (11 + 10 * t, 10 + 10 * t)
         }
         let firstBrush = Track.still(2, from: 100, until: 130, atMM: 124.1, 52)
@@ -148,35 +148,39 @@ import LauncherCore
         }
     }
 
-    @Test func aReusedIDIsJudgedAfreshByItsNewLandingPoint() {
-        let edgeThenFinger = frames([
+    @Test func anIDReusedAtTheFingerSpotAfterAnEdgeContactLiftedIsAFinger() {
+        let all = frames([
             thumb,
             .still(2, from: 50, until: 170, atMM: 123.8, 45),
             .still(2, from: 180, until: 300, atMM: 62, 45),
         ], throughMS: 400)
-        #expect(firedAt(edgeThenFinger) == [300])
+        #expect(firedAt(all) == [300])
+    }
 
-        let fingerThenEdgeWithNoAbsentFrame = frames([
+    @Test func anIDReusedAtTheEdgeWithNoAbsentFrameAfterAFingerIsAnEdgeContact() {
+        let all = frames([
             thumb,
             .still(2, from: 50, until: 80, atMM: 62, 45),
             .still(2, from: 80, until: 100, atMM: 123.8, 45),
         ], throughMS: 400)
-        #expect(firedAt(fingerThenEdgeWithNoAbsentFrame) == [80])
+        #expect(firedAt(all) == [80])
+    }
 
-        let edgeThenFingerWithNoAbsentFrame = frames([
+    @Test func anIDReusedAtTheFingerSpotWithNoAbsentFrameAfterAnEdgeContactIsAFinger() {
+        let all = frames([
             thumb,
             .still(2, from: 50, until: 70, atMM: 123.8, 45),
             .still(2, from: 70, until: 100, atMM: 62, 45),
         ], throughMS: 400)
-        #expect(firedAt(edgeThenFingerWithNoAbsentFrame) == [100])
+        #expect(firedAt(all) == [100])
     }
 
     @Test func aThirdContactAtTheEdgeDoesNotCancelASwipe() {
         let all = frames([
-            Track.still(9, from: 0, until: 160, atMM: 10, 10),
+            Track.still(9, from: 0, until: 170, atMM: 10, 10),
             Track(id: 1, from: 100, until: 140) { ms in (62 + 0.4 * Double(ms - 100), 45) },
             Track(id: 2, from: 100, until: 140) { ms in (70 + 0.4 * Double(ms - 100), 45) },
-            Track(id: 3, from: 120, until: 150) { ms in (123.8, 60 + Double(ms - 120)) },
+            Track(id: 3, from: 120, until: 160) { ms in (123.8, 60 + Double(ms - 120)) },
         ], throughMS: 200)
         #expect(phasesMatch(swipeEvents(all).phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .ended]))
         #expect(fired(all) == [])
