@@ -26,6 +26,11 @@ public struct SurfaceSize: Hashable, Sendable {
     public func distanceMM(_ a: SurfacePoint, _ b: SurfacePoint) -> Double {
         hypot((a.x - b.x) * widthMM, (a.y - b.y) * heightMM)
     }
+
+    /// Distance in millimetres from a normalised point to the nearest edge of this surface.
+    public func distanceToNearestEdgeMM(_ p: SurfacePoint) -> Double {
+        min(p.x * widthMM, (1 - p.x) * widthMM, p.y * heightMM, (1 - p.y) * heightMM)
+    }
 }
 
 /// The fixed zone where a thumb arms gestures.
@@ -52,5 +57,39 @@ package struct AnchorCorner: Sendable {
     /// Distance from the anchor-side edge as a fraction of the width.
     private func fromEdge(_ p: SurfacePoint) -> Double {
         handMode == .right ? p.x : 1 - p.x
+    }
+}
+
+/// Remembers which contacts landed at the edge of the surface, outside the anchor corner, so the recognizer never
+/// sees them. An edge contact is a resting hand, not a finger, for as long as it stays down. Call once per frame, in
+/// frame order.
+package struct EdgeContacts: Sendable {
+    private let corner: AnchorCorner
+    private let surface: SurfaceSize
+    private var edgeContactIDs: Set<TouchID> = []
+    private var previouslyDown: Set<TouchID> = []
+
+    package init(corner: AnchorCorner, surface: SurfaceSize) {
+        self.corner = corner
+        self.surface = surface
+    }
+
+    /// The same frame with its edge contacts removed from `touches`, the rest in their original order.
+    package mutating func fingers(in frame: TouchFrame) -> TouchFrame {
+        let down = Set(frame.touches.map(\.id))
+        for touch in frame.touches where touch.isLanding(after: previouslyDown) {
+            if isAtEdge(touch.position) {
+                edgeContactIDs.insert(touch.id)
+            } else {
+                edgeContactIDs.remove(touch.id)
+            }
+        }
+        edgeContactIDs.formIntersection(down)
+        previouslyDown = down
+        return TouchFrame(time: frame.time, touches: frame.touches.filter { !edgeContactIDs.contains($0.id) }, press: frame.press)
+    }
+
+    private func isAtEdge(_ p: SurfacePoint) -> Bool {
+        surface.distanceToNearestEdgeMM(p) < GestureRules.edgeBandMM && !corner.admits(p)
     }
 }

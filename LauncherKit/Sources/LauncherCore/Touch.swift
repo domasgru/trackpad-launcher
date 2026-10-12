@@ -23,6 +23,11 @@ public struct Touch: Sendable {
         self.phase = phase
         self.position = position
     }
+
+    /// Whether this contact landed in its frame, given the IDs down in the frame before.
+    package func isLanding(after previouslyDown: Set<TouchID>) -> Bool {
+        phase == .landing || !previouslyDown.contains(id)
+    }
 }
 
 /// Monotonic seconds on the multitouch driver's clock. The only time recognition ever reads.
