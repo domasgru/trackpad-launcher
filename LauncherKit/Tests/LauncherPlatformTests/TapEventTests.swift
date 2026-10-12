@@ -5,8 +5,8 @@ import Testing
 @testable import LauncherPlatform
 
 @Suite struct TapEventTests {
-    @Test func maskCoversPressesTheirReleasesDragsPressureAndScrollOnly() {
-        let bits: [UInt64] = [1, 2, 3, 4, 6, 7, 22, 25, 26, 27, 34]
+    @Test func maskCoversPressesTheirReleasesDragsPressureScrollAndGesturesOnly() {
+        let bits: [UInt64] = [1, 2, 3, 4, 6, 7, 22, 25, 26, 27, 29, 30, 34]
         #expect(TapEvent.tapMask == bits.reduce(0) { $0 | (1 << $1) })
     }
 
@@ -19,6 +19,7 @@ import Testing
     private func event(_ type: CGEventType, number: Int64 = 0, button: Int64? = nil) throws -> CGEvent {
         let event = try #require(CGEvent(source: nil))
         event.type = type
+        event.setIntegerValueField(DockSwipeFields.hidType, value: DockSwipeFields.dockSwipe)
         event.setIntegerValueField(.mouseEventNumber, value: number)
         if let button { event.setIntegerValueField(.mouseEventButtonNumber, value: button) }
         return event
@@ -47,6 +48,36 @@ import Testing
     @Test(arguments: [CGEventType.mouseMoved, .keyDown])
     func ignoresEverythingElse(type: CGEventType) throws {
         #expect(TapEvent(type, try event(type)) == nil)
+    }
+
+    private func gesture(_ type: UInt32, hidType: Int64 = DockSwipeFields.dockSwipe, phase: Int64) throws -> CGEvent {
+        let event = try #require(CGEvent(source: nil))
+        event.type = try #require(CGEventType(rawValue: type))
+        event.setIntegerValueField(DockSwipeFields.hidType, value: hidType)
+        event.setIntegerValueField(DockSwipeFields.phase, value: phase)
+        return event
+    }
+
+    @Test(arguments: [
+        (Int64(128), DockSwipePhase.mayBegin), (1, .began), (2, .changed), (4, .ended), (8, .cancelled), (0, .changed),
+    ])
+    func parsesADockSwipeOnEitherGestureTypeWithItsPhase(phase: Int64, expected: DockSwipePhase) throws {
+        for type in [DockSwipeFields.gestureType, DockSwipeFields.dockControlType] {
+            let event = try gesture(type, phase: phase)
+            #expect(TapEvent(event.type, event) == .dockSwipe(expected))
+        }
+    }
+
+    @Test(arguments: [Int64(0), 8, 5, 6])
+    func ignoresEveryOtherGestureSoPinchRotateAndAppSwipesPass(hidType: Int64) throws {
+        let event = try gesture(DockSwipeFields.gestureType, hidType: hidType, phase: 1)
+        #expect(TapEvent(event.type, event) == nil)
+    }
+
+    @Test func aDroppedDockSwipeReturnsNothingAndAPassedOneComesBackAsIs() throws {
+        let event = try gesture(DockSwipeFields.dockControlType, phase: 1)
+        #expect(DockSwipeVerdict.drop.apply(to: event) == nil)
+        #expect(DockSwipeVerdict.pass.apply(to: event)?.takeUnretainedValue() === event)
     }
 
     @Test func parsesAScrollEventAsAScroll() throws {

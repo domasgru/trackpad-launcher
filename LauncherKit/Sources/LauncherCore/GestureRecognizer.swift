@@ -13,13 +13,19 @@ public struct Recognition: Equatable, Sendable {
     /// land less than 3 s ago is still anchored and another contact is down. Whether a press is really blocked also
     /// needs the click filter armed (access granted, gestures active), which the recognizer never knows.
     public let blocksClicks: Bool
+    /// This trackpad's half of Dock swipe blocking: true for the whole of a swipe, and while any thumb is anchored and
+    /// another contact is down, with no time limit. macOS may count the anchored thumb as a finger, so thumb plus two
+    /// sliding fingers can read as its three-finger swipe between desktops. Like `blocksClicks`, it only matters
+    /// while the tap is armed.
+    public let blocksDockSwipes: Bool
 
     public var fired: Gesture? { if case .fired(let gesture)? = event { gesture } else { nil } }
     public var swipe: SwipePhase? { if case .swipe(let phase)? = event { phase } else { nil } }
 
-    public init(event: Event?, blocksClicks: Bool) {
+    public init(event: Event?, blocksClicks: Bool, blocksDockSwipes: Bool) {
         self.event = event
         self.blocksClicks = blocksClicks
+        self.blocksDockSwipes = blocksDockSwipes
     }
 }
 
@@ -124,9 +130,12 @@ public struct GestureRecognizer: Sendable {
             }
         }
         let blocksClicks: Bool
+        let blocksDockSwipes: Bool
         if case .swiping = state {
             blocksClicks = true
+            blocksDockSwipes = true
         } else {
+            blocksDockSwipes = state.anchor.map { anchor in down.keys.contains { $0 != anchor.id } } ?? false
             blocksClicks = state.anchor.flatMap { anchor in
                 anchor.landedAt.map { landedAt in
                     frame.time - landedAt < GestureRules.clickBlockingWindow
@@ -134,7 +143,7 @@ public struct GestureRecognizer: Sendable {
                 }
             } ?? false
         }
-        return Recognition(event: event, blocksClicks: blocksClicks)
+        return Recognition(event: event, blocksClicks: blocksClicks, blocksDockSwipes: blocksDockSwipes)
     }
 
     /// A sideways drag of a pair begins the swipe; any other drag spoils the gesture like every drag does.

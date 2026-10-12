@@ -10,6 +10,8 @@ final class DeviceSession: Sendable {
     private let recognizer: Mutex<GestureRecognizer>
     /// Writer: this device's frame callback. Reader: the click tap's thread.
     private let blocking = Mutex(false)
+    /// Writer: this device's frame callback. Reader: the click tap's thread.
+    private let blockingDockSwipes = Mutex(false)
     /// Installed by the same `run`, if any.
     private let clickTap: ClickTap?
     private let deliver: @Sendable (TrackpadEvent) -> Void
@@ -28,6 +30,7 @@ final class DeviceSession: Sendable {
     func receive(_ frame: TouchFrame) {
         let recognition = recognizer.withLock { $0.step(frame) }
         blocking.withLock { $0 = recognition.blocksClicks }
+        blockingDockSwipes.withLock { $0 = recognition.blocksDockSwipes }
         if let event = recognition.event {
             deliver(TrackpadEvent(event, on: trackpad))
         }
@@ -38,6 +41,9 @@ final class DeviceSession: Sendable {
 
     /// Click tap thread.
     var blocksClicks: Bool { blocking.withLock { $0 } }
+
+    /// Click tap thread.
+    var blocksDockSwipes: Bool { blockingDockSwipes.withLock { $0 } }
 }
 
 /// The only state shared with the frame thread: written by `run` (main), read by the callback and the click tap.
@@ -61,4 +67,10 @@ func anyMouseButtonDown() -> Bool {
 /// Copies the sessions out first, so no lock is held while another is taken.
 func anyTrackpadBlocksClicks() -> Bool {
     Array(sessions.withLock { $0.values }).contains { $0.blocksClicks }
+}
+
+/// Whether some running trackpad has a thumb anchored with another contact down, or a swipe on. Merged like
+/// `anyTrackpadBlocksClicks()`.
+func anyTrackpadBlocksDockSwipes() -> Bool {
+    Array(sessions.withLock { $0.values }).contains { $0.blocksDockSwipes }
 }
