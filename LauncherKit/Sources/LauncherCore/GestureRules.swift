@@ -21,7 +21,4 @@ package enum GestureRules {
     /// Travel the switcher keeps past either end of its row, in icons; any more is dropped, so turning back moves the
     /// selection at once however far the fingers went past the end.
     static let switcherMaxOvershoot = 0.25
-    /// Seconds over which finger speed is smoothed for swipe acceleration: frames arrive at about 100 Hz and a single
-    /// frame's speed is noisy.
-    static let swipeSpeedSmoothing = 0.03
 }

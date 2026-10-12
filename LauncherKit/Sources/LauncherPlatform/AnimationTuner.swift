@@ -185,18 +185,15 @@ struct TunerView: View {
                     Toggle("Simulate Reduce motion", isOn: $model.tuning.forceReduceMotion)
                 }
                 Section {
-                    knob("Slow gain", \.swipeSlowGain, 0.25...3, step: 0.05, unit: "×",
-                         hint: "travel per mm when slow; 1 = 12 mm per icon")
-                    knob("Fast gain", \.swipeFastGain, 0.25...8, step: 0.05, unit: "×",
-                         hint: "travel per mm when fast; equal to slow gain = no acceleration")
-                    knob("Slow speed", \.swipeSlowSpeed, 0...400, step: 5, unit: "mm/s",
-                         hint: "slow gain up to this finger speed")
-                    knob("Fast speed", \.swipeFastSpeed, 10...800, step: 5, unit: "mm/s",
-                         hint: "fast gain from this finger speed; eased in between")
+                    Toggle("Move like the cursor", isOn: $model.tuning.swipeFollowsCursor)
+                    knob("Points per icon", \.swipePointsPerIcon, 20...300, step: 1, unit: "pt",
+                         hint: "cursor travel per icon; 100 = the icon pitch, lower reaches farther")
+                    knob("Tracking speed", \.swipeTrackingSpeed, -1...3, step: 0.0625,
+                         hint: "−1 = your System Settings value; default notch is 0.6875")
                 } header: {
                     Text("Switcher swipe")
                 } footer: {
-                    Text("Applies from the next frame. Preview plays only the launch animation; swipe to try these.")
+                    Text("Applies from the next swipe. Off: 12 mm of finger per icon, no acceleration.")
                 }
                 presetsSection
             }

@@ -189,17 +189,30 @@ import LauncherCore
         #expect(!world.launcher.isWindowOpen)
     }
 
-    @Test func theFirstFingerToLiftOpensTheSelectionAndTheOtherChangesNothing() {
+    @Test func theSwitcherStaysUntilBothFingersLiftAndTheLastOneKeepsSteering() {
         let world = World.switcherWorld()
         let hand = world.swipe(3.5, 24, lift: false)
 
         world.play(hand.lift(.first))
-        #expect(world.launcher.switcher == nil)
-        world.play(hand.lift(.first).slide(byMM: (24, 0)).lift())
+        #expect(world.launcher.switcher?.selectedApp == world.app("Slack"))
+        world.play(hand.lift(.first).slide(byMM: (12, 0)).lift())
 
-        #expect(world.system.broughtToFront == [world.app("Slack")])
-        #expect(world.hardware.lightTicks.count == 2)
+        #expect(world.system.broughtToFront == [world.app("Notes")])
+        #expect(world.hardware.lightTicks.count == 3)
         #expect(world.hardware.feedback.count == 1)
+    }
+
+    @Test func aPreferenceNotificationThatChangesNothingLeavesTheSwipeAlone() {
+        let world = World.switcherWorld()
+        let hand = world.swipe(3.5, 12, lift: false)
+        let runs = world.hardware.runCount
+
+        world.preferences.touch()
+
+        #expect(world.hardware.runCount == runs)
+        #expect(world.launcher.switcher?.selectedApp.name == "Mail")
+        world.play(hand.lift())
+        #expect(world.system.broughtToFront == [world.app("Mail")])
     }
 
     @Test func theWholeHandLiftingTogetherOpensTheSelection() {
@@ -439,7 +452,7 @@ import LauncherCore
         let hand = world.swipe(3.5, 12, lift: false)
         #expect(world.launcher.switcher?.selectedApp.name == "Mail")
 
-        world.preferences.set(.tapToClick, rawValue: 0, for: .builtIn)
+        world.hardware.wake()
         #expect(world.launcher.switcher == nil)
 
         let lifted = hand.slide(byMM: (24, 0)).lift()

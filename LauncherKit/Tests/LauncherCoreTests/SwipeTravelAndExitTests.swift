@@ -48,7 +48,7 @@ import LauncherCore
         #expect(fired(frames).isEmpty)
     }
 
-    @Test func theSecondLandedFingerLiftingFirstEndsTheSwipeToo() {
+    @Test func oneFingerLiftingLeavesTheSwipeOnAndTheOtherKeepsMovingItUntilItLifts() {
         let frames = [
             h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)]),
             h.frame(atMS: 50, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]),
@@ -57,7 +57,31 @@ import LauncherCore
             h.frame(atMS: 150, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45)]),
             h.frame(atMS: 200, [h.contact(9, atMM: 10, 10)]),
         ]
-        #expect(phases(frames) == [.began, .ended])
+        #expect(phasesMatch(phases(frames), [.began, .moved(travelMM: 14), .moved(travelMM: 24), .ended]))
+    }
+
+    @Test func aFingerThatDropsOutAndComesBackWithANewIDRejoinsWithoutAJump() {
+        let frames = [
+            h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)]),
+            h.frame(atMS: 50, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]),
+            h.frame(atMS: 60, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 66, 45), h.contact(2, atMM: 74, 45)]),
+            h.frame(atMS: 70, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 70, 45)]),
+            h.frame(atMS: 80, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 74, 45), h.contact(5, .landing, atMM: 90, 45)]),
+            h.frame(atMS: 90, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 78, 45), h.contact(5, atMM: 94, 45)]),
+            h.frame(atMS: 100, [h.contact(9, atMM: 10, 10)]),
+        ]
+        #expect(phasesMatch(
+            phases(frames), [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]))
+    }
+
+    @Test func aThirdFingerLandingWhileBothAreDownStillCancels() {
+        let frames = [
+            h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)]),
+            h.frame(atMS: 50, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]),
+            h.frame(atMS: 60, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 66, 45), h.contact(2, atMM: 74, 45)]),
+            h.frame(atMS: 70, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 66, 45), h.contact(2, atMM: 74, 45), h.contact(3, .landing, atMM: 90, 45)]),
+        ]
+        #expect(phases(frames) == [.began, .cancelled])
     }
 
     @Test func theWholeHandLiftingTogetherEndsTheSwipeAndTheThumbLiftDoesNotCancelIt() {
@@ -73,15 +97,14 @@ import LauncherCore
     }
 
     @Test(arguments: [Duration.zero, .seconds(4)])
-    func afterTheEndOnlyTheThreeSecondRuleBlocksAndNothingHappensUntilTheHandIsUp(rest: Duration) {
-        let script = began(thumb.wait(rest)).slide(byMM: (12, 0)).lift(.first).slide(byMM: (30, 0))
-            .land(fingers: 1, atMM: (86, 45)).lift().tap(fingers: 1)
+    func afterTheEndOnlyTheThreeSecondRuleBlocks(rest: Duration) {
+        let script = began(thumb.wait(rest)).slide(byMM: (12, 0)).lift().tap(fingers: 1)
         let frames = script.frames
         let seen = perFrame(frames)
         let ended = firstIndex(of: .ended, in: frames)!
         #expect(phases(frames).last == .ended)
         #expect(fired(frames) == [.one])
-        #expect(seen[ended + 1].blocks == (rest == .zero))
+        #expect(seen[(ended + 1)...].contains(where: \.blocks) == (rest == .zero))
     }
 
     private static let thumbLiftsAndLandsAgain: @Sendable (TouchScript) -> TouchScript = {
@@ -139,11 +162,12 @@ import LauncherCore
             h.frame(atMS: 150, [h.contact(2, atMM: 70, 45), h.contact(9, .landing, atMM: 10, 10)]),
             h.frame(atMS: 200, [h.contact(9, atMM: 10, 10), h.contact(2, atMM: 70, 45)]),
             h.frame(atMS: 250, [h.contact(9, atMM: 10, 10)]),
+            h.frame(atMS: 270, [h.contact(9, atMM: 10, 10)]),
             h.frame(atMS: 300, [h.contact(9, atMM: 10, 10), h.contact(3, .landing, atMM: 62, 45)]),
             h.frame(atMS: 330, [h.contact(9, atMM: 10, 10)]),
         ]
         let seen = perFrame(frames)
-        #expect(seen.map(\.swipe) == [nil, nil, .began, nil, .ended, nil, nil, nil, nil])
+        #expect(seen.map(\.swipe) == [nil, nil, .began, nil, nil, nil, .ended, nil, nil, nil])
         #expect(seen[5].blocks)
         #expect(fired(frames) == [.one])
     }

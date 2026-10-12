@@ -36,19 +36,12 @@ struct LaunchTuning: Equatable, Sendable {
     var tiltCurve: Double = 1
     /// Plays the Reduce motion flight whatever the system setting. Only the tuner sets it.
     var forceReduceMotion = false
-    /// Swipe acceleration: travel per mm of finger movement when slow.
-    var swipeSlowGain = SwipeAcceleration.shipped.slowGain
-    /// Swipe acceleration: travel per mm of finger movement when fast.
-    var swipeFastGain = SwipeAcceleration.shipped.fastGain
-    /// Swipe acceleration: mm/s up to which the slow gain holds.
-    var swipeSlowSpeed = SwipeAcceleration.shipped.slowSpeed
-    /// Swipe acceleration: mm/s from which the fast gain holds.
-    var swipeFastSpeed = SwipeAcceleration.shipped.fastSpeed
-
-    var swipeAcceleration: SwipeAcceleration {
-        SwipeAcceleration(
-            slowGain: swipeSlowGain, fastGain: swipeFastGain, slowSpeed: swipeSlowSpeed, fastSpeed: swipeFastSpeed)
-    }
+    /// Switcher swipes move like the cursor, with macOS's acceleration; off, one millimetre of finger is one of travel.
+    var swipeFollowsCursor = true
+    /// Cursor points of travel per icon. The icon pitch makes the highlight move exactly like the cursor over the row.
+    var swipePointsPerIcon = SwipeTravel.shippedPointsPerIcon
+    /// The tracking speed swipes use, 0...3; −1 uses System Settings' value.
+    var swipeTrackingSpeed = -1.0
 
     static let shipped = LaunchTuning()
 
@@ -85,10 +78,9 @@ extension LaunchTuning: Codable {
         maximumTilt = try value(.maximumTilt, s.maximumTilt)
         tiltCurve = try value(.tiltCurve, s.tiltCurve)
         forceReduceMotion = try value(.forceReduceMotion, s.forceReduceMotion)
-        swipeSlowGain = try value(.swipeSlowGain, s.swipeSlowGain)
-        swipeFastGain = try value(.swipeFastGain, s.swipeFastGain)
-        swipeSlowSpeed = try value(.swipeSlowSpeed, s.swipeSlowSpeed)
-        swipeFastSpeed = try value(.swipeFastSpeed, s.swipeFastSpeed)
+        swipeFollowsCursor = try value(.swipeFollowsCursor, s.swipeFollowsCursor)
+        swipePointsPerIcon = try value(.swipePointsPerIcon, s.swipePointsPerIcon)
+        swipeTrackingSpeed = try value(.swipeTrackingSpeed, s.swipeTrackingSpeed)
     }
 }
 #endif

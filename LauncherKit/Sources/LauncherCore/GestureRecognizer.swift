@@ -34,15 +34,15 @@ public struct Recognition: Equatable, Sendable {
 /// Owned by exactly one frame thread (real adapter) or by the test (in-memory adapter); never shared.
 public struct GestureRecognizer: Sendable {
     /// `swipes`: false while the switcher list is empty; a pair's drag then spoils like any drag.
-    /// `acceleration`: how finger speed scales swipe travel. A var, so a Debug tuner can change it between frames.
-    public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool, acceleration: SwipeAcceleration) {
+    /// `travel`: how finger movement becomes switcher travel. A var, so a Debug tuner can change it between frames.
+    public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool, travel: SwipeTravel) {
         self.corner = AnchorCorner(handMode, surface: surface)
         self.surface = surface
         self.swipes = swipes
-        self.acceleration = acceleration
+        self.travel = travel
     }
 
-    public var acceleration: SwipeAcceleration
+    public var travel: SwipeTravel
 
     public mutating func step(_ frame: TouchFrame) -> Recognition {
         let isFirstFrame = previouslyDown == nil
@@ -115,30 +115,36 @@ public struct GestureRecognizer: Sendable {
             }
             // Until every non-thumb finger has lifted, nothing further happens.
             let after = swipe.thumb.map(State.spoiled) ?? .idle
-            if frame.press == .click {
+            // A finger that loses contact for a moment (a light, fast slide) comes back as a new contact, often with
+            // a new ID: it rejoins while the other swipe finger is still down. Only a third finger cancels.
+            for id in lifted { swipe.fingers[id] = nil }
+            let joining = landed.filter { $0.id != swipe.thumb?.id && !corner.admits($0.position) }
+            if frame.press == .click || swipe.fingers.count + joining.count > 2 {
                 state = after
                 event = .swipe(.cancelled)
-            } else if swipe.pair.fingers.contains(where: { lifted.contains($0.id) }) {
+            } else if swipe.fingers.isEmpty {
+                // The swipe lasts until both fingers have lifted. A finger landing on that frame starts nothing.
                 state = after
                 event = .swipe(.ended)
-            } else if landed.contains(where: { $0.id != swipe.thumb?.id && !corner.admits($0.position) }) {
-                state = after
-                event = .swipe(.cancelled)
             } else {
-                let midX = swipe.pair.midX(in: down)
-                let dxMM = (midX - swipe.lastMidX) * surface.widthMM
-                let dt = (frame.time - swipe.lastTime) / .seconds(1)
-                if dt > 0 {
-                    // Exponential smoothing with a fixed time constant, so the speed does not depend on frame rate.
-                    let weight = min(1, dt / GestureRules.swipeSpeedSmoothing)
-                    swipe.speed += (abs(dxMM) / dt - swipe.speed) * weight
-                    swipe.lastTime = frame.time
+                // Movement is what the fingers present on both frames did, so a finger dropping out or rejoining
+                // never makes the highlight jump.
+                let moves = swipe.fingers.compactMap { id, last in
+                    down[id].map { ($0.position.x - last.x, $0.position.y - last.y) }
                 }
-                swipe.lastMidX = midX
-                let travel = swipe.travelMM + dxMM * acceleration.gain(atSpeed: swipe.speed)
-                if travel != swipe.travelMM {
-                    swipe.travelMM = travel
-                    event = .swipe(.moved(travelMM: travel))
+                let interval = (frame.time - swipe.lastTime) / .seconds(1)
+                for id in swipe.fingers.keys { swipe.fingers[id] = down[id]?.position }
+                for touch in joining { swipe.fingers[touch.id] = touch.position }
+                swipe.lastTime = frame.time
+                if !moves.isEmpty {
+                    let count = Double(moves.count)
+                    let dxMM = moves.map(\.0).reduce(0, +) / count * surface.widthMM
+                    let dyMM = moves.map(\.1).reduce(0, +) / count * surface.heightMM
+                    let travel = swipe.travelMM + self.travel.travel(dxMM: dxMM, dyMM: dyMM, interval: interval)
+                    if travel != swipe.travelMM {
+                        swipe.travelMM = travel
+                        event = .swipe(.moved(travelMM: travel))
+                    }
                 }
                 state = .swiping(swipe)
             }
@@ -165,8 +171,8 @@ public struct GestureRecognizer: Sendable {
         _ pair: Pair?, _ move: Move, _ anchor: Anchor, _ down: [TouchID: Touch], _ time: FrameTime
     ) -> (State, Recognition.Event?) {
         guard let pair, move.isSideways else { return (.spoiled(anchor), nil) }
-        let midX = pair.midX(in: down)
-        return (.swiping(Swipe(pair: pair, lastMidX: midX, lastTime: time, thumb: anchor)), .swipe(.began))
+        let fingers = Dictionary(uniqueKeysWithValues: pair.fingers.compactMap { f in down[f.id].map { (f.id, $0.position) } })
+        return (.swiping(Swipe(fingers: fingers, lastTime: time, thumb: anchor)), .swipe(.began))
     }
 
     private struct Anchor: Sendable {
@@ -195,21 +201,13 @@ public struct GestureRecognizer: Sendable {
         }
 
         var fingers: [Finger] { [first, second] }
-
-        /// Normalised x of the midpoint of the two fingers' current positions.
-        func midX(in down: [TouchID: Touch]) -> Double {
-            fingers.map { down[$0.id]?.position.x ?? $0.origin.x }.reduce(0, +) / 2
-        }
     }
 
     private struct Swipe: Sendable {
-        let pair: Pair
-        /// The pair's midpoint and the frame time when travel last advanced.
-        var lastMidX: Double
+        /// The swipe fingers down now, at most two, with their positions on the last frame.
+        var fingers: [TouchID: SurfacePoint]
         var lastTime: FrameTime
-        /// Smoothed sideways speed of the midpoint, in millimetres per second.
-        var speed: Double = 0
-        /// Accelerated travel since the swipe began, in millimetres.
+        /// Travel since the swipe began, in step millimetres.
         var travelMM: Double = 0
         var thumb: Anchor?
     }

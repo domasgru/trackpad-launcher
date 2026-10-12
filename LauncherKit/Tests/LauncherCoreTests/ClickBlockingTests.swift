@@ -148,7 +148,7 @@ import LauncherCore
     @Test func aReconcileUnderARestingThumbDoesNotRestartTheWindow() {
         let world = world()
         world.hardware.touch(script().wait(.milliseconds(3500)).frames, on: trackpad.id)
-        world.preferences.set(.tapToClick, rawValue: 0, for: .builtIn)
+        world.hardware.wake()
 
         let thumb = h.contact(9, atMM: 10, 10)
         let frames = [

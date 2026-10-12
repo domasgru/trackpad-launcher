@@ -38,10 +38,14 @@ import LauncherCore
 
     func connected() -> [Trackpad] { attached }
 
+    /// How many times `run` was called.
+    private(set) var runCount = 0
+
     func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool) {
+        runCount += 1
         running = Dictionary(
             uniqueKeysWithValues: trackpads.map {
-                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, swipes: swipes, acceleration: .none))
+                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, swipes: swipes, travel: .linear))
             })
         deaf = []
         blocking = [:]
@@ -119,6 +123,9 @@ import LauncherCore
     private var values: [TrackpadKind: TrackpadPreferenceValues] = [:]
 
     func current() -> [TrackpadKind: TrackpadPreferenceValues] { values }
+
+    /// A notification for a write that changed nothing this app reads.
+    func touch() { onChange?() }
 
     func set(_ setting: ConflictingSetting, rawValue: Int?, for kind: TrackpadKind) {
         values[kind, default: [:]][setting] = rawValue

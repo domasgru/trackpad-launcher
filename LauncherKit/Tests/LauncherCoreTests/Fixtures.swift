@@ -24,7 +24,7 @@ func fired(
     surface: SurfaceSize = .macBook14,
     swipes: Bool = true
 ) -> [Gesture] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, acceleration: .none)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, travel: .linear)
     return frames.compactMap { recognizer.step($0).fired }
 }
 
@@ -35,7 +35,7 @@ func phases(
     surface: SurfaceSize = .macBook14,
     swipes: Bool = true
 ) -> [SwipePhase] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, acceleration: .none)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, travel: .linear)
     return frames.compactMap { recognizer.step($0).swipe }
 }
 
@@ -45,7 +45,7 @@ func perFrame(
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14
 ) -> [(swipe: SwipePhase?, blocks: Bool)] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: true, acceleration: .none)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: true, travel: .linear)
     return frames.map {
         let recognition = recognizer.step($0)
         return (recognition.swipe, recognition.blocksClicks)

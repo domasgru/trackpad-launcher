@@ -8,6 +8,8 @@ import Synchronization
 final class DeviceSession: Sendable {
     let trackpad: TrackpadID
     private let recognizer: Mutex<GestureRecognizer>
+    /// This device's cursor acceleration curves, read once when the session starts.
+    private let pointerCurves: [PointerCurve.Point]
     /// Writer: this device's frame callback. Reader: the click tap's thread.
     private let blocking = Mutex(false)
     /// Writer: this device's frame callback. Reader: the click tap's thread.
@@ -17,11 +19,12 @@ final class DeviceSession: Sendable {
     private let deliver: @Sendable (TrackpadEvent) -> Void
 
     init(
-        trackpad: TrackpadID, recognizer: GestureRecognizer, clickTap: ClickTap?,
+        trackpad: TrackpadID, recognizer: GestureRecognizer, pointerCurves: [PointerCurve.Point], clickTap: ClickTap?,
         deliver: @escaping @Sendable (TrackpadEvent) -> Void
     ) {
         self.trackpad = trackpad
         self.recognizer = Mutex(recognizer)
+        self.pointerCurves = pointerCurves
         self.clickTap = clickTap
         self.deliver = deliver
     }
@@ -29,11 +32,11 @@ final class DeviceSession: Sendable {
     /// Frame thread.
     func receive(_ frame: TouchFrame) {
         let recognition = recognizer.withLock {
-            #if DEBUG
-            // The tuner's value, live: a change applies from the next frame.
-            $0.acceleration = LaunchTuning.current.swipeAcceleration
-            #endif
-            return $0.step(frame)
+            let recognition = $0.step(frame)
+            // Each swipe follows the cursor's acceleration at the tracking speed set when it starts. Travel is 0 on
+            // the frame a swipe begins, so the next frame is the first to use it.
+            if recognition.swipe == .began { $0.travel = CursorTravel.travel(curves: pointerCurves) }
+            return recognition
         }
         blocking.withLock { $0 = recognition.blocksClicks }
         blockingDockSwipes.withLock { $0 = recognition.blocksDockSwipes }

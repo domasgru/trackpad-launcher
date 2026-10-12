@@ -66,7 +66,7 @@ public final class Launcher {
             switch event {
             case .gesture(let fired): fire(fired)
             case .swipe(let event): swipe(event)
-            case .trackpadsChanged: reconcile()
+            case .trackpadsChanged: reconcile(restart: true)
             }
         }
         scanner.onScan = { [unowned self] in installedApps = $0 }
@@ -149,10 +149,21 @@ public final class Launcher {
     /// An outside click, or the panel losing focus: closes unless the window is held open under the first-launch prompt.
     public func dismissWindow() { if window == .open { window = .closed } }
 
+    /// What the trackpads were last run with. A reconcile that would run them the same way leaves them, and any swipe
+    /// in progress, alone: preference and trust notifications also fire for writes that change nothing here.
+    private struct Run: Equatable {
+        let trackpads: [Trackpad]
+        let handMode: HandMode
+        let blockClicks: Bool
+        let swipes: Bool
+    }
+
+    @ObservationIgnored private var lastRun: Run?
+
     /// The one convergent operation behind launch, hot-plug, wake, preference, hand-mode and trust changes.
-    private func reconcile() {
-        // Running replaces every recognizer, which ends any swipe in progress.
-        switcher = nil
+    /// `restart`: run the trackpads even if nothing changed. Hot-plug and wake need it (devices stop delivering frames
+    /// across sleep), and so does a swipe with nothing to show, which only a fresh recognizer ends.
+    private func reconcile(restart: Bool = false) {
         connected = hardware.connected()
         preferenceValues = preferences.current()
         let granted = access.isGranted()
@@ -161,8 +172,14 @@ public final class Launcher {
         isAccessibilityGranted = granted
         let active = activity.isActive
         // Blocking needs gestures active and access granted; without either, presses are plain clicks.
-        hardware.run(active ? connected : [], handMode: settings.handMode, blockClicks: active && granted,
+        let run = Run(
+            trackpads: active ? connected : [], handMode: settings.handMode, blockClicks: active && granted,
             swipes: !settings.switcherList.isEmpty)
+        guard restart || run != lastRun else { return }
+        lastRun = run
+        // Running replaces every recognizer, which ends any swipe in progress.
+        switcher = nil
+        hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, swipes: run.swipes)
     }
 
     /// Every silent case decided here and only here: inactive, unassigned, missing.
@@ -188,7 +205,7 @@ public final class Launcher {
             switcher = frontmost.flatMap { Switcher(listed: listed, frontmost: $0, trackpad: event.trackpad) }
             // Nothing to show: the frame thread cannot know, so main ends the swipe by replacing the recognizers.
             // Otherwise the fingers would stay blocked until they lift.
-            if switcher == nil { reconcile() }
+            if switcher == nil { reconcile(restart: true) }
         case .moved(let travel):
             guard var open = switcher, open.trackpad == event.trackpad else { return }
             let before = open.selected

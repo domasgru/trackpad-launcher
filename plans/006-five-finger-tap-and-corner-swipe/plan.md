@@ -465,7 +465,7 @@ While gestures are active, the hint MUST read "● Hold thumb on top-left corner
 
 ## Non-goals
 
-- **Momentum in the switcher.** The selection follows the fingers only and stops when they stop. (Amended after review: speed-based acceleration was added at the user's request, so a fast swipe now travels farther than a slow one of the same length. R6's 12 mm is now 12 mm of accelerated travel.)
+- **Momentum in the switcher.** The selection follows the fingers only and stops when they stop. (Amended after review, at the user's request: switcher travel now follows the cursor, with macOS's pointer acceleration at the user's tracking speed and 100 cursor points per icon, so R6's fixed 12 mm per icon no longer holds and a fast swipe travels farther than a slow one. R8 and R9 are amended too: a swipe ends when both fingers have lifted, a finger that briefly loses contact rejoins, and only a third finger landing while both are down cancels.)
 - **Wrapping from the last icon to the first.** The ends are hard stops with a small rubber band, so a long swipe always parks on the end icon.
 - **Vertical swipes.** Up and down with two fingers is scrolling; the switcher is a sideways gesture only.
 - **Quitting or hiding apps from the switcher.** ⌘-Tab offers Q and H; the switcher only brings an app to the front.
