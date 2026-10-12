@@ -184,6 +184,20 @@ struct TunerView: View {
                 Section {
                     Toggle("Simulate Reduce motion", isOn: $model.tuning.forceReduceMotion)
                 }
+                Section {
+                    knob("Slow gain", \.swipeSlowGain, 0.25...3, step: 0.05, unit: "×",
+                         hint: "travel per mm when slow; 1 = 12 mm per icon")
+                    knob("Fast gain", \.swipeFastGain, 0.25...8, step: 0.05, unit: "×",
+                         hint: "travel per mm when fast; equal to slow gain = no acceleration")
+                    knob("Slow speed", \.swipeSlowSpeed, 0...400, step: 5, unit: "mm/s",
+                         hint: "slow gain up to this finger speed")
+                    knob("Fast speed", \.swipeFastSpeed, 10...800, step: 5, unit: "mm/s",
+                         hint: "fast gain from this finger speed; eased in between")
+                } header: {
+                    Text("Switcher swipe")
+                } footer: {
+                    Text("Applies from the next frame. Preview plays only the launch animation; swipe to try these.")
+                }
                 presetsSection
             }
             .formStyle(.grouped)
@@ -257,7 +271,7 @@ struct TunerView: View {
                 TextField("", value: value, format: .number.precision(.fractionLength(0...3)))
                     .multilineTextAlignment(.trailing)
                     .frame(width: 60)
-                Text(unit).foregroundStyle(.secondary).frame(width: 18, alignment: .leading)
+                Text(unit).foregroundStyle(.secondary).frame(width: 34, alignment: .leading)
                 Button {
                     model.tuning[keyPath: keyPath] = LaunchTuning.shipped[keyPath: keyPath]
                 } label: {

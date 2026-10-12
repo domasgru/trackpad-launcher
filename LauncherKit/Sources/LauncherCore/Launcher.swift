@@ -192,7 +192,7 @@ public final class Launcher {
         case .moved(let travel):
             guard var open = switcher, open.trackpad == event.trackpad else { return }
             let before = open.selected
-            open.travelMM = travel
+            open.follow(travel)
             switcher = open
             for _ in 0..<abs(open.selected - before) { hardware.playFeedback(.lightTick, on: event.trackpad) }
         case .ended:

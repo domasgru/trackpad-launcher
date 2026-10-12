@@ -34,11 +34,15 @@ public struct Recognition: Equatable, Sendable {
 /// Owned by exactly one frame thread (real adapter) or by the test (in-memory adapter); never shared.
 public struct GestureRecognizer: Sendable {
     /// `swipes`: false while the switcher list is empty; a pair's drag then spoils like any drag.
-    public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool) {
+    /// `acceleration`: how finger speed scales swipe travel. A var, so a Debug tuner can change it between frames.
+    public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool, acceleration: SwipeAcceleration) {
         self.corner = AnchorCorner(handMode, surface: surface)
         self.surface = surface
         self.swipes = swipes
+        self.acceleration = acceleration
     }
+
+    public var acceleration: SwipeAcceleration
 
     public mutating func step(_ frame: TouchFrame) -> Recognition {
         let isFirstFrame = previouslyDown == nil
@@ -76,7 +80,7 @@ public struct GestureRecognizer: Sendable {
             if frame.press == .click {
                 state = .spoiled(anchor)
             } else if let move = Self.drag(of: tap.fingers, in: down, on: surface) {
-                (state, event) = beginOrSpoil(pair, move, anchor, down)
+                (state, event) = beginOrSpoil(pair, move, anchor, down, frame.time)
             } else if frame.time - tap.start > GestureRules.maxTapDuration {
                 state = pair.map { .resting(anchor, $0) } ?? .spoiled(anchor)
             } else if tap.down.isEmpty {
@@ -94,7 +98,7 @@ public struct GestureRecognizer: Sendable {
                 || landed.contains(where: { $0.id != anchor.id }) {
                 state = .spoiled(anchor)
             } else if let move = Self.drag(of: pair.fingers, in: down, on: surface) {
-                (state, event) = beginOrSpoil(pair, move, anchor, down)
+                (state, event) = beginOrSpoil(pair, move, anchor, down, frame.time)
             }
         case .spoiled(let anchor):
             if down.keys.allSatisfy({ $0 == anchor.id }) {
@@ -121,7 +125,17 @@ public struct GestureRecognizer: Sendable {
                 state = after
                 event = .swipe(.cancelled)
             } else {
-                let travel = (swipe.pair.midX(in: down) - swipe.startMidX) * surface.widthMM
+                let midX = swipe.pair.midX(in: down)
+                let dxMM = (midX - swipe.lastMidX) * surface.widthMM
+                let dt = (frame.time - swipe.lastTime) / .seconds(1)
+                if dt > 0 {
+                    // Exponential smoothing with a fixed time constant, so the speed does not depend on frame rate.
+                    let weight = min(1, dt / GestureRules.swipeSpeedSmoothing)
+                    swipe.speed += (abs(dxMM) / dt - swipe.speed) * weight
+                    swipe.lastTime = frame.time
+                }
+                swipe.lastMidX = midX
+                let travel = swipe.travelMM + dxMM * acceleration.gain(atSpeed: swipe.speed)
                 if travel != swipe.travelMM {
                     swipe.travelMM = travel
                     event = .swipe(.moved(travelMM: travel))
@@ -148,10 +162,11 @@ public struct GestureRecognizer: Sendable {
 
     /// A sideways drag of a pair begins the swipe; any other drag spoils the gesture like every drag does.
     private func beginOrSpoil(
-        _ pair: Pair?, _ move: Move, _ anchor: Anchor, _ down: [TouchID: Touch]
+        _ pair: Pair?, _ move: Move, _ anchor: Anchor, _ down: [TouchID: Touch], _ time: FrameTime
     ) -> (State, Recognition.Event?) {
         guard let pair, move.isSideways else { return (.spoiled(anchor), nil) }
-        return (.swiping(Swipe(pair: pair, startMidX: pair.midX(in: down), thumb: anchor)), .swipe(.began))
+        let midX = pair.midX(in: down)
+        return (.swiping(Swipe(pair: pair, lastMidX: midX, lastTime: time, thumb: anchor)), .swipe(.began))
     }
 
     private struct Anchor: Sendable {
@@ -189,7 +204,12 @@ public struct GestureRecognizer: Sendable {
 
     private struct Swipe: Sendable {
         let pair: Pair
-        let startMidX: Double
+        /// The pair's midpoint and the frame time when travel last advanced.
+        var lastMidX: Double
+        var lastTime: FrameTime
+        /// Smoothed sideways speed of the midpoint, in millimetres per second.
+        var speed: Double = 0
+        /// Accelerated travel since the swipe began, in millimetres.
         var travelMM: Double = 0
         var thumb: Anchor?
     }

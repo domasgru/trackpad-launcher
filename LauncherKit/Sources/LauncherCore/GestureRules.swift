@@ -18,4 +18,10 @@ package enum GestureRules {
     static let switcherStepMM = 12.0
     /// The most the highlight's rubber band shows past an end, in icons.
     static let switcherMaxStretch = 0.2
+    /// Travel the switcher keeps past either end of its row, in icons; any more is dropped, so turning back moves the
+    /// selection at once however far the fingers went past the end.
+    static let switcherMaxOvershoot = 0.25
+    /// Seconds over which finger speed is smoothed for swipe acceleration: frames arrive at about 100 Hz and a single
+    /// frame's speed is noisy.
+    static let swipeSpeedSmoothing = 0.03
 }

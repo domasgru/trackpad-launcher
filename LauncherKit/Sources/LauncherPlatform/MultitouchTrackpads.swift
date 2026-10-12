@@ -87,7 +87,7 @@ import LauncherCore
             let ref = Unmanaged.passUnretained(device).toOpaque()
             let session = DeviceSession(
                 trackpad: trackpad.id,
-                recognizer: GestureRecognizer(handMode: handMode, surface: trackpad.surface, swipes: swipes),
+                recognizer: GestureRecognizer(handMode: handMode, surface: trackpad.surface, swipes: swipes, acceleration: LaunchTuning.current.swipeAcceleration),
                 clickTap: clickTap,
                 deliver: { [weak self] event in
                     // The main queue is FIFO from one frame thread, so events keep their frame order. An event

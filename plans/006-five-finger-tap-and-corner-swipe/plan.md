@@ -465,7 +465,7 @@ While gestures are active, the hint MUST read "● Hold thumb on top-left corner
 
 ## Non-goals
 
-- **Flick or momentum in the switcher.** The selection follows finger travel only; a fast swipe moves no further than a slow one of the same length.
+- **Momentum in the switcher.** The selection follows the fingers only and stops when they stop. (Amended after review: speed-based acceleration was added at the user's request, so a fast swipe now travels farther than a slow one of the same length. R6's 12 mm is now 12 mm of accelerated travel.)
 - **Wrapping from the last icon to the first.** The ends are hard stops with a small rubber band, so a long swipe always parks on the end icon.
 - **Vertical swipes.** Up and down with two fingers is scrolling; the switcher is a sideways gesture only.
 - **Quitting or hiding apps from the switcher.** ⌘-Tab offers Q and H; the switcher only brings an app to the front.

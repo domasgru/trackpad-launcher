@@ -21,6 +21,22 @@ import LauncherCore
         return switcher
     }
 
+    @Test func travelPastAnEndIsKeptOnlyUpToAQuarterIconSoTurningBackMovesAtOnce() {
+        var switcher = switcher(frontmost: slack)
+        switcher.follow(120)
+        #expect(switcher.selectedApp == notes)
+        #expect(switcher.travelMM == 15)
+        switcher.follow(114)
+        #expect(switcher.selectedApp == notes)
+        switcher.follow(110)
+        #expect(switcher.selectedApp == slack)
+        switcher.follow(-200)
+        #expect(switcher.selectedApp == mail)
+        #expect(switcher.travelMM == -15)
+        switcher.follow(-188)
+        #expect(switcher.selectedApp == slack)
+    }
+
     @Test func theFrontmostAppInTheListKeepsItsPlaceAndStartsSelected() {
         let switcher = switcher(frontmost: slack)
         #expect(switcher.row == [mail, slack, notes])

@@ -41,7 +41,7 @@ import LauncherCore
     func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool) {
         running = Dictionary(
             uniqueKeysWithValues: trackpads.map {
-                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, swipes: swipes))
+                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, swipes: swipes, acceleration: .none))
             })
         deaf = []
         blocking = [:]

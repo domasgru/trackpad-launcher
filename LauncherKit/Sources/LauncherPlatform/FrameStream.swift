@@ -28,7 +28,13 @@ final class DeviceSession: Sendable {
 
     /// Frame thread.
     func receive(_ frame: TouchFrame) {
-        let recognition = recognizer.withLock { $0.step(frame) }
+        let recognition = recognizer.withLock {
+            #if DEBUG
+            // The tuner's value, live: a change applies from the next frame.
+            $0.acceleration = LaunchTuning.current.swipeAcceleration
+            #endif
+            return $0.step(frame)
+        }
         blocking.withLock { $0 = recognition.blocksClicks }
         blockingDockSwipes.withLock { $0 = recognition.blocksDockSwipes }
         if let event = recognition.event {

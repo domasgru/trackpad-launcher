@@ -9,6 +9,8 @@ public struct Switcher: Equatable, Sendable {
     public let home: Int
     /// Sideways midpoint travel since the swipe began, in trackpad millimetres. Written only by `Launcher` (and tests).
     public package(set) var travelMM: Double = 0
+    /// Reported travel the switcher has dropped past its ends: `follow` keeps `travelMM` = reported − this.
+    private var droppedMM: Double = 0
     public let trackpad: TrackpadID
 
     /// nil when the row would hold nothing besides the frontmost app. `listed`: the list's present apps, in order.
@@ -31,6 +33,19 @@ public struct Switcher: Equatable, Sendable {
     }
 
     public var selectedApp: AppEntry { row[selected] }
+
+    /// Takes the swipe's reported travel, keeping at most `switcherMaxOvershoot` icons of it past either end and
+    /// dropping the rest, so turning back moves the selection at once however far the fingers went.
+    package mutating func follow(_ reportedMM: Double) {
+        let step = GestureRules.switcherStepMM
+        let overshoot = GestureRules.switcherMaxOvershoot * step
+        let lowest = -Double(home) * step - overshoot
+        let highest = Double(row.count - 1 - home) * step + overshoot
+        let travel = reportedMM - droppedMM
+        let kept = min(max(travel, lowest), highest)
+        droppedMM += travel - kept
+        travelMM = kept
+    }
 
     /// Lifting here is a silent no-op.
     public var selectsFrontmost: Bool { selected == home }

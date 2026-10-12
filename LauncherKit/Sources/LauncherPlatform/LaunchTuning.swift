@@ -1,6 +1,7 @@
 import Foundation
+import LauncherCore
 
-/// Every number that shapes a launch flight. `shipped` is the animation release builds play; Debug builds can
+/// Every number that shapes a launch flight, plus the switcher's swipe acceleration, which the same tuner tweaks. `shipped` is the animation release builds play; Debug builds can
 /// override it live from the animation tuner (AnimationTuner.swift).
 struct LaunchTuning: Equatable, Sendable {
     /// The icon's start side, in points.
@@ -35,6 +36,19 @@ struct LaunchTuning: Equatable, Sendable {
     var tiltCurve: Double = 1
     /// Plays the Reduce motion flight whatever the system setting. Only the tuner sets it.
     var forceReduceMotion = false
+    /// Swipe acceleration: travel per mm of finger movement when slow.
+    var swipeSlowGain = SwipeAcceleration.shipped.slowGain
+    /// Swipe acceleration: travel per mm of finger movement when fast.
+    var swipeFastGain = SwipeAcceleration.shipped.fastGain
+    /// Swipe acceleration: mm/s up to which the slow gain holds.
+    var swipeSlowSpeed = SwipeAcceleration.shipped.slowSpeed
+    /// Swipe acceleration: mm/s from which the fast gain holds.
+    var swipeFastSpeed = SwipeAcceleration.shipped.fastSpeed
+
+    var swipeAcceleration: SwipeAcceleration {
+        SwipeAcceleration(
+            slowGain: swipeSlowGain, fastGain: swipeFastGain, slowSpeed: swipeSlowSpeed, fastSpeed: swipeFastSpeed)
+    }
 
     static let shipped = LaunchTuning()
 
@@ -71,6 +85,10 @@ extension LaunchTuning: Codable {
         maximumTilt = try value(.maximumTilt, s.maximumTilt)
         tiltCurve = try value(.tiltCurve, s.tiltCurve)
         forceReduceMotion = try value(.forceReduceMotion, s.forceReduceMotion)
+        swipeSlowGain = try value(.swipeSlowGain, s.swipeSlowGain)
+        swipeFastGain = try value(.swipeFastGain, s.swipeFastGain)
+        swipeSlowSpeed = try value(.swipeSlowSpeed, s.swipeSlowSpeed)
+        swipeFastSpeed = try value(.swipeFastSpeed, s.swipeFastSpeed)
     }
 }
 #endif
