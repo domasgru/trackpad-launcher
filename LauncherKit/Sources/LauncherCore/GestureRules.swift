@@ -17,6 +17,8 @@ package enum GestureRules {
     static let dragThresholdMM = 3.0
     /// Clicks are blocked for this long after a thumb anchors. Strictly less blocks.
     static let clickBlockingWindow = Duration.seconds(3)
+    /// The most icons a switcher row holds: the frontmost app and the most recently used others.
+    static let switcherMaxApps = 10
     /// Icons are this far apart in finger travel; the selection is the nearest icon.
     static let switcherStepMM = 12.0
     /// The most the highlight's rubber band shows past an end, in icons.

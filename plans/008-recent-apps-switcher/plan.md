@@ -23,7 +23,12 @@ This plan amends plan 006. Its switcher list requirements (the list, its rows, A
 ## Requirements
 
 ### R1. The switcher shows the apps ⌘-Tab shows
-The switcher's row MUST hold the apps macOS's ⌘-Tab app switcher would show at the moment the swipe begins: every running app that appears in the Dock. The one exception is the frontmost app: when ⌘-Tab would not show it, such as a menu bar app with a window in front, it MUST still be in the row, as R2 says. The row MUST include apps that are hidden, apps whose windows are all minimised, apps with no windows, and apps whose windows are on another Space or in full screen. Apart from the frontmost app, it MUST NOT include apps that do not appear in the Dock, such as menu bar apps. Trackpad Launcher never comes to the front, so it is never frontmost and never in the row.
+The switcher's row MUST hold the apps macOS's ⌘-Tab app switcher would show at the moment the swipe begins: every running app that appears in the Dock. The one exception is the frontmost app: when ⌘-Tab would not show it, such as a menu bar app with a window in front, it MUST still be in the row, as R2 says. The row MUST include apps that are hidden, apps whose windows are all minimised, apps with no windows, and apps whose windows are on another Space or in full screen. Apart from the frontmost app, it MUST NOT include apps that do not appear in the Dock, such as menu bar apps. Trackpad Launcher never comes to the front, so it is never frontmost and never in the row. The row MUST hold at most 10 apps: the frontmost app and the 9 most recently used others; older apps are left out.
+
+#### Scenario: At most 10 apps
+- **GIVEN** 14 apps that ⌘-Tab shows are running
+- **WHEN** the user swipes
+- **THEN** the row holds the frontmost app and the next 9 in ⌘-Tab order, and the 4 used longest ago are not in it
 
 #### Scenario: Hidden and minimised apps are included
 - **GIVEN** Safari, Mail and Notes are running, Mail is hidden and Notes has its only window minimised

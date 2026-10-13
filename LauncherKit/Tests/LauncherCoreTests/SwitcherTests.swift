@@ -22,6 +22,12 @@ import LauncherCore
         return switcher
     }
 
+    @Test func theRowHoldsTheFrontmostAppAndTheNineMostRecentOthers() {
+        let running = (1...12).map { entry("App\($0)") }
+        let row = switcher(frontmost: running[11], running: running).row
+        #expect(row.map(\.name) == ["App12"] + (1...9).map { "App\($0)" })
+    }
+
     @Test func theBandPastTheLeftEndIsKeptUpToAQuarterIconAndForgivenOnTheTurn() {
         var switcher = switcher()
         switcher.follow(-30)

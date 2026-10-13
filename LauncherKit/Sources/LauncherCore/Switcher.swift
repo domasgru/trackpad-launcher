@@ -4,7 +4,7 @@ import Foundation
 /// The frontmost app is always the first icon and the selection starts on it.
 public struct Switcher: Equatable, Sendable {
     /// Left to right: the frontmost app, then the running apps in ⌘-Tab order without the copy at the frontmost app's
-    /// location. Always at least two icons.
+    /// location, at most `switcherMaxApps` in all. Always at least two icons.
     public let row: [AppEntry]
     /// Sideways midpoint travel since the swipe began, in trackpad millimetres. Written only by `Launcher` (and tests).
     public package(set) var travelMM: Double = 0
@@ -15,7 +15,7 @@ public struct Switcher: Equatable, Sendable {
     /// nil when the row would hold nothing besides the frontmost app. Identity is the running copy's location: two
     /// copies of one bundle at two locations are two icons.
     package init?(frontmost: AppEntry, running: [AppEntry], trackpad: TrackpadID) {
-        let row = [frontmost] + running.filter { $0.url != frontmost.url }
+        let row = Array(([frontmost] + running.filter { $0.url != frontmost.url }).prefix(GestureRules.switcherMaxApps))
         guard row.count >= 2 else { return nil }
         self.row = row
         self.trackpad = trackpad
