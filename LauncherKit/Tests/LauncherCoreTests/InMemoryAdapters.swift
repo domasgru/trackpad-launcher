@@ -41,11 +41,11 @@ import LauncherCore
     /// How many times `run` was called.
     private(set) var runCount = 0
 
-    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool) {
+    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool, swaps: Bool) {
         runCount += 1
         running = Dictionary(
             uniqueKeysWithValues: trackpads.map {
-                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, swipes: swipes, travel: .linear))
+                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, swipes: swipes, swaps: swaps, travel: .linear))
             })
         deaf = []
         blocking = [:]

@@ -6,6 +6,8 @@ public struct Recognition: Equatable, Sendable {
     public enum Event: Equatable, Sendable {
         case fired(Gesture)
         case swipe(SwipePhase)
+        /// A thumb tap under two resting fingers. `startsSeries`: the first swap under them.
+        case swap(startsSeries: Bool)
     }
 
     public let event: Event?
@@ -22,6 +24,8 @@ public struct Recognition: Equatable, Sendable {
     public var fired: Gesture? { if case .fired(let gesture)? = event { gesture } else { nil } }
     public var swipe: SwipePhase? { if case .swipe(let phase)? = event { phase } else { nil } }
 
+    public var swap: Bool? { if case .swap(let startsSeries)? = event { startsSeries } else { nil } }
+
     public init(event: Event?, blocksClicks: Bool, blocksDockSwipes: Bool) {
         self.event = event
         self.blocksClicks = blocksClicks
@@ -34,12 +38,14 @@ public struct Recognition: Equatable, Sendable {
 /// Owned by exactly one frame thread (real adapter) or by the test (in-memory adapter); never shared.
 public struct GestureRecognizer: Sendable {
     /// `swipes`: false (the swipe setting is off): a pair's drag spoils like any drag.
+    /// `swaps`: false: a thumb landing under resting fingers is only ever held, never a thumb tap.
     /// `travel`: how finger movement becomes switcher travel. A var, so a Debug tuner can change it between frames.
-    public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool, travel: SwipeTravel) {
+    public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool, swaps: Bool, travel: SwipeTravel) {
         self.corner = AnchorCorner(handMode, surface: surface)
         self.edgeContacts = EdgeContacts(corner: corner, surface: surface)
         self.surface = surface
         self.swipes = swipes
+        self.swaps = swaps
         self.travel = travel
     }
 
@@ -55,6 +61,7 @@ public struct GestureRecognizer: Sendable {
         let landed = frame.touches.filter { $0.isLanding(after: before) }
         defer { previouslyDown = Set(down.keys) }
 
+        let departed = book.contacts(of: lifted)
         for id in lifted { book[id] = nil }
         for touch in landed {
             // The pad sends no frames while nothing touches it, so a contact landing on the first frame really
@@ -65,7 +72,7 @@ public struct GestureRecognizer: Sendable {
 
         if let anchor = state.anchor,
            lifted.contains(anchor.id) || !(down[anchor.id].map { corner.holds($0.position) } ?? false) {
-            state = .idle
+            state = Self.restOrIdle(of: down.keys.filter { id in !landed.contains { $0.id == id } })
         }
 
         var event: Recognition.Event?
@@ -74,6 +81,8 @@ public struct GestureRecognizer: Sendable {
             if let thumb = landed.first(where: { corner.admits($0.position) }) {
                 let anchor = Anchor(id: thumb.id)
                 state = down.count == 1 ? .armed(anchor) : .spoiled(anchor)
+            } else if !landed.isEmpty {
+                state = .rest(Rest(fingers: Set(landed.map(\.id))))
             }
         case .armed(let anchor):
             let fingers = landed.filter { $0.id != anchor.id }
@@ -111,6 +120,8 @@ public struct GestureRecognizer: Sendable {
             if down.keys.allSatisfy({ $0 == anchor.id }) {
                 state = .armed(anchor)
             }
+        case .rest(let rest):
+            (state, event) = step(rest, frame, down: down, landed: landed, lifted: lifted, departed: departed)
         case .swiping(var swipe):
             // The thumb plays no part in a swipe: it is only remembered for what happens after it.
             if let thumb = swipe.thumb,
@@ -121,7 +132,7 @@ public struct GestureRecognizer: Sendable {
                 swipe.thumb = Anchor(id: thumb.id)
             }
             // Until every non-thumb finger has lifted, nothing further happens.
-            let after = swipe.thumb.map(State.spoiled) ?? .idle
+            let after = swipe.thumb.map(State.spoiled) ?? Self.restOrIdle(of: down.keys)
             // A finger that loses contact for a moment (a light, fast slide) comes back as a new contact, often with
             // a new ID: it rejoins while the other swipe finger is still down. Only a third finger cancels.
             for id in lifted { swipe.fingers[id] = nil }
@@ -162,15 +173,70 @@ public struct GestureRecognizer: Sendable {
             blocksClicks = true
             blocksDockSwipes = true
         } else {
-            blocksDockSwipes = state.anchor.map { anchor in down.keys.contains { $0 != anchor.id } } ?? false
-            blocksClicks = state.anchor.flatMap { anchor in
-                book.landingTime(of: anchor.id).map { landedAt in
+            let thumb = state.thumb
+            blocksDockSwipes = thumb.map { thumb in down.keys.contains { $0 != thumb } } ?? false
+            blocksClicks = thumb.flatMap { thumb in
+                book.landingTime(of: thumb).map { landedAt in
                     frame.time - landedAt < GestureRules.clickBlockingWindow
-                        && down.keys.contains { $0 != anchor.id }
+                        && down.keys.contains { $0 != thumb }
                 }
             } ?? false
         }
         return Recognition(event: event, blocksClicks: blocksClicks, blocksDockSwipes: blocksDockSwipes)
+    }
+
+    /// One frame of the fingers-first state. A thumb tap qualifies when its thumb lands and fires when that thumb lifts.
+    private func step(
+        _ rest: Rest, _ frame: TouchFrame, down: [TouchID: Touch], landed: [Touch], lifted: Set<TouchID>,
+        departed: [TouchID: Contact]
+    ) -> (State, Recognition.Event?) {
+        var rest = rest
+        var event: Recognition.Event?
+        // Anything that happens to the other contacts spoils a thumb tap in progress.
+        var changed = !lifted.isDisjoint(with: rest.fingers) || landed.contains { $0.id != rest.thumb?.id }
+        rest.fingers.subtract(lifted)
+        if !rest.isStopped, Self.drag(of: rest.fingers.sorted { $0.rawValue < $1.rawValue }, in: down, book: book, on: surface) != nil {
+            rest.isStopped = true
+            changed = true
+        }
+
+        if let thumb = rest.thumb {
+            if lifted.contains(thumb.id) {
+                if thumb.isTap, !changed, let landedAt = departed[thumb.id]?.firstSeen,
+                   frame.time - landedAt <= GestureRules.maxTapDuration {
+                    event = .swap(startsSeries: true)
+                }
+                rest.thumb = nil
+            } else if let position = down[thumb.id]?.position, !corner.holds(position) {
+                // A thumb that slid out is a finger until it lifts and lands again.
+                rest.fingers.insert(thumb.id)
+                rest.thumb = nil
+            } else if thumb.isTap,
+                      changed || Self.drag(of: [thumb.id], in: down, book: book, on: surface) != nil
+                        || book[thumb.id].map({ frame.time - $0.firstSeen > GestureRules.maxTapDuration }) ?? true {
+                rest.thumb?.isTap = false
+            }
+        }
+
+        let thumbLanding = rest.thumb == nil ? landed.first { corner.admits($0.position) } : nil
+        for touch in landed where touch.id != thumbLanding?.id { rest.fingers.insert(touch.id) }
+        if let thumbLanding {
+            let qualifies = swaps && !rest.isStopped && rest.fingers.count == 2
+                && rest.fingers.allSatisfy { id in
+                    book[id].map { frame.time - $0.firstSeen >= GestureRules.minRestBeforeThumbTap } ?? false
+                }
+            rest.thumb = RestThumb(id: thumbLanding.id, isTap: qualifies)
+        }
+
+        if rest.fingers.isEmpty {
+            return (rest.thumb.map { .armed(Anchor(id: $0.id)) } ?? .idle, event)
+        }
+        return (.rest(rest), event)
+    }
+
+    /// The contacts down with no thumb anchored: a rest, or idle when nothing is down.
+    private static func restOrIdle(of ids: some Collection<TouchID>) -> State {
+        ids.isEmpty ? .idle : .rest(Rest(fingers: Set(ids)))
     }
 
     /// A sideways drag of a pair begins the swipe; any other drag spoils the gesture like every drag does.
@@ -204,6 +270,11 @@ public struct GestureRecognizer: Sendable {
             set { contacts[id] = newValue }
         }
 
+        /// What was known about these contacts just before they left the book.
+        func contacts(of ids: Set<TouchID>) -> [TouchID: Contact] {
+            contacts.filter { ids.contains($0.key) }
+        }
+
         /// When this recognizer saw the contact land. nil: unknown or not down.
         func landingTime(of id: TouchID) -> FrameTime? {
             contacts[id].flatMap { $0.isRealLanding ? $0.firstSeen : nil }
@@ -225,6 +296,21 @@ public struct GestureRecognizer: Sendable {
         }
 
         var fingers: [TouchID] { [first, second] }
+    }
+
+    /// Contacts that landed with no thumb anchored, and the thumb that may land under them.
+    private struct Rest: Sendable {
+        /// Every contact down but the thumb.
+        var fingers: Set<TouchID>
+        var thumb: RestThumb?
+        /// Some finger moved more than `dragThresholdMM` from where it landed. Permanent for this rest.
+        var isStopped = false
+    }
+
+    private struct RestThumb: Sendable {
+        let id: TouchID
+        /// Still able to swap when it lifts. Otherwise it is only held: an anchored thumb once the fingers lift.
+        var isTap: Bool
     }
 
     private struct Swipe: Sendable {
@@ -293,20 +379,28 @@ public struct GestureRecognizer: Sendable {
         /// Two fingers still down past the tap limit: no longer a tap, still able to become a swipe.
         case resting(Anchor, Pair)
         case spoiled(Anchor)
+        /// Contacts landed with no thumb anchored; a thumb landing under them may swap.
+        case rest(Rest)
         case swiping(Swipe)
 
-        /// The anchor the top-of-step check maintains. A swipe keeps its own optional thumb instead.
+        /// The anchor the top-of-step check maintains. A rest and a swipe keep their own optional thumb instead.
         var anchor: Anchor? {
             switch self {
-            case .idle, .swiping: nil
+            case .idle, .rest, .swiping: nil
             case .armed(let a), .tapping(let a, _), .resting(let a, _), .spoiled(let a): a
             }
+        }
+
+        /// The thumb the blocking rules follow: the anchor, or the thumb under a rest.
+        var thumb: TouchID? {
+            if case .rest(let rest) = self { rest.thumb?.id } else { anchor?.id }
         }
     }
 
     private let corner: AnchorCorner
     private let surface: SurfaceSize
     private let swipes: Bool
+    private let swaps: Bool
     private var edgeContacts: EdgeContacts
     private var state: State = .idle
     private var book = ContactBook()

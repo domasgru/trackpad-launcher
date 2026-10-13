@@ -68,6 +68,7 @@ public final class Launcher {
             switch event {
             case .gesture(let fired): fire(fired)
             case .swipe(let event): swipe(event)
+            case .swap(let event): swap(event)
             case .trackpadsChanged: reconcile(restart: true)
             }
         }
@@ -150,9 +151,11 @@ public final class Launcher {
         let handMode: HandMode
         let blockClicks: Bool
         let swipes: Bool
+        let swaps: Bool
     }
 
     @ObservationIgnored private var lastRun: Run?
+    @ObservationIgnored private var swapSeries = SwapSeries()
 
     /// The one convergent operation behind launch, hot-plug, wake, preference, hand-mode and trust changes.
     /// `restart`: run the trackpads even if nothing changed. Hot-plug and wake need it: devices stop delivering frames
@@ -168,12 +171,12 @@ public final class Launcher {
         // Blocking needs gestures active and access granted; without either, presses are plain clicks.
         let run = Run(
             trackpads: active ? connected : [], handMode: settings.handMode, blockClicks: active && granted,
-            swipes: settings.isSwipeOn)
+            swipes: settings.isSwipeOn, swaps: true)
         guard restart || run != lastRun else { return }
         lastRun = run
         // Running replaces every recognizer, which ends any swipe in progress.
         switcher = nil
-        hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, swipes: run.swipes)
+        hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, swipes: run.swipes, swaps: run.swaps)
     }
 
     /// Every silent case decided here and only here: inactive, unassigned, missing.
@@ -218,6 +221,16 @@ public final class Launcher {
         case .cancelled:
             if switcher?.trackpad == event.trackpad { switcher = nil }
         }
+    }
+
+    /// The one place a swap becomes effects: never the launch animation, never the switcher.
+    private func swap(_ event: SwapEvent) {
+        if event.startsSeries { swapSeries = SwapSeries() }
+        guard activity.isActive else { return }
+        guard let target = swapSeries.next(in: system.runningApps()) else { return }
+        hardware.playFeedback(.gesture, on: event.trackpad)
+        system.bringToFront(target)
+        window = .closed
     }
 
     /// Rows and the prepared launch animations change together, so the icon of any app that can fire is ready before

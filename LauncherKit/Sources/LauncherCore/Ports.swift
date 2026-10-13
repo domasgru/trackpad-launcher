@@ -3,6 +3,7 @@ import Foundation
 public enum TrackpadEvent: Sendable {
     case gesture(GestureEvent)
     case swipe(SwipeEvent)
+    case swap(SwapEvent)
     /// Attached, detached, or the Mac woke.
     case trackpadsChanged
 
@@ -11,6 +12,7 @@ public enum TrackpadEvent: Sendable {
         switch event {
         case .fired(let gesture): self = .gesture(GestureEvent(gesture: gesture, trackpad: trackpad))
         case .swipe(let phase): self = .swipe(SwipeEvent(phase: phase, trackpad: trackpad))
+        case .swap(let startsSeries): self = .swap(SwapEvent(startsSeries: startsSeries, trackpad: trackpad))
         }
     }
 }
@@ -29,8 +31,8 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// recognizer each and, if `blockClicks` and `trackpads` is not empty, a fresh click tap. Idempotent.
     /// The tap needs Accessibility. If the system refuses it, nothing is filtered, presses are sampled as before,
     /// and taps behave exactly as without access. [] = nothing runs. `swipes`: whether each fresh recognizer recognises
-    /// swipes. Replacing the recognizers ends any swipe in progress.
-    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool)
+    /// swipes; `swaps`: whether it recognises swaps. Replacing the recognizers ends any swipe in progress.
+    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool, swaps: Bool)
     /// One pulse of that kind on that trackpad. No-op if it is gone.
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID)
 }

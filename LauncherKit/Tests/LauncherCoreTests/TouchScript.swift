@@ -101,6 +101,33 @@ struct TouchScript {
         return s
     }
 
+    /// A tap of the thumb in the anchor corner: it lands at the cursor and lifts after `hold`; the cursor moves on by
+    /// the hold plus 100 ms. Like `tap`, a drag arrives on the frame before the lift. `slide` and `lift` ignore it.
+    func thumbTap(
+        atMM p: (x: Double, y: Double) = (10, 10),
+        hold: Duration = .milliseconds(120),
+        dragMM: Double = 0,
+        click: ClickTiming = .none
+    ) -> TouchScript {
+        var s = self
+        let start = cursorMS
+        let holdMS = Self.milliseconds(hold)
+        let lift = start + holdMS
+        var path = [Waypoint(ms: start, x: p.x, y: p.y)]
+        if dragMM != 0 {
+            path.append(Waypoint(ms: lift - Self.frameIntervalMS, x: p.x + dragMM, y: p.y))
+        }
+        s.contacts.append(Contact(id: Self.thumbID, landMS: start, liftMS: lift, path: path))
+        switch click {
+        case .none: break
+        case .onLanding: s.presses.append(start...lift)
+        case .firm: s.presses.append((start + Self.frameIntervalMS)...lift)
+        case .midway: s.presses.append((start + holdMS / 2)...lift)
+        }
+        s.cursorMS = lift + 100
+        return s
+    }
+
     enum Lift { case all, first }
 
     /// Lands `n` fingers 8 mm apart from `p`; they stay down until `lift`.

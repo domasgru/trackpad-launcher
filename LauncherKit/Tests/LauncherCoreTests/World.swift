@@ -207,6 +207,24 @@ extension World {
         return world
     }
 
+    /// The previous swap's activation has landed: `name` is the frontmost app and the first of the running apps.
+    func activate(_ name: String) {
+        let entry = app(name)
+        system.frontmost = entry
+        system.running = [entry] + system.running.filter { $0.url != entry.url }
+    }
+
+    /// Two fingers rest 150 ms, then the thumb taps `taps` times in the anchor corner, then the fingers lift unless
+    /// `lift` is false. Returns its script so a row can continue it with `play`.
+    @discardableResult
+    func swap(taps: Int = 1, lift: Bool = true, on trackpad: Trackpad = .macBook14) -> TouchScript {
+        var script = TouchScript(trackpad.surface).land(fingers: 2).wait(.milliseconds(150))
+        for _ in 0..<taps { script = script.thumbTap() }
+        if lift { script = script.lift() }
+        play(script, on: trackpad)
+        return script
+    }
+
     /// Thumb at (10, 10), two fingers down, each slide in turn (millimetres, positive right), then the fingers lift
     /// unless `lift` is false. Returns its script so a row can continue it with `play`.
     @discardableResult

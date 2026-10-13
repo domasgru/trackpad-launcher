@@ -37,7 +37,7 @@ import LauncherCore
     }
 
     private func recognitions(_ frames: [TouchFrame]) -> [Recognition] {
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, travel: .linear)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: true, travel: .linear)
         return frames.map { recognizer.step($0) }
     }
 

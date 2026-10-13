@@ -44,3 +44,15 @@ public struct SwipeEvent: Equatable, Sendable {
         self.trackpad = trackpad
     }
 }
+
+/// A swap that fired on a specific trackpad (its haptic plays there).
+public struct SwapEvent: Equatable, Sendable {
+    /// True for the first swap under a pair of resting fingers.
+    public let startsSeries: Bool
+    public let trackpad: TrackpadID
+
+    public init(startsSeries: Bool, trackpad: TrackpadID) {
+        self.startsSeries = startsSeries
+        self.trackpad = trackpad
+    }
+}
