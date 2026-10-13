@@ -6,11 +6,17 @@ import Testing
 
 /// The real adapter against throwaway cfprefs domains written by a child process, the way System Settings writes.
 @MainActor @Suite struct SystemTrackpadPreferencesTests {
-    /// Deletes the domain in teardown even if an expectation fails.
+    /// A domain named by an absolute path, which cfprefs keeps at that path plus `.plist`, in a temp folder removed in
+    /// teardown even if an expectation fails. A named domain would leave an empty plist in ~/Library/Preferences even
+    /// after `defaults delete`.
     final class Domain: Sendable {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "tl-prefs-\(UUID().uuidString)")
         let name: String
-        init(_ kind: TrackpadKind) { name = "tl.test.\(UUID().uuidString).\(kind)" }
-        deinit { Self.defaults(["delete", name]) }
+        init(_ kind: TrackpadKind) {
+            try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            name = folder.appending(path: "\(kind)").path
+        }
+        deinit { try? FileManager.default.removeItem(at: folder) }
 
         func write(_ key: String, int value: Int) { Self.defaults(["write", name, key, "-int", "\(value)"]) }
         func delete() { Self.defaults(["delete", name]) }

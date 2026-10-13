@@ -58,7 +58,7 @@ import LauncherCore
     @Test func loginItemIsRegisteredBeforeTheFirstSave() {
         let world = World()
         var storedAtRegistration: [Settings?] = []
-        world.system.onRegisterLoginItem = { storedAtRegistration.append(world.store.load()) }
+        world.system.onRegisterLoginItem = { [unowned world] in storedAtRegistration.append(world.store.load()) }
 
         world.launcher.start()
 

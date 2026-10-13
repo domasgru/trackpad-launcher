@@ -114,8 +114,7 @@ import LauncherCore
     @Test(arguments: [HandMode.right, .left])
     func aRecordSavedBeforeTheSwitcherLoadsWithItsAssignmentsAndNoList(handMode: HandMode) {
         let world = World(apps: ["Arc"])
-        UserDefaults(suiteName: world.suiteName)!.set(
-            Fixtures.recordSavedByPlan002(handMode: handMode, two: world.app("Arc")), forKey: "settings")
+        world.seedSettingsRecord(Fixtures.recordSavedByPlan002(handMode: handMode, two: world.app("Arc")))
 
         let relaunched = world.relaunch()
         relaunched.start()
