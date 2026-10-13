@@ -127,6 +127,20 @@ import LauncherCore
         #expect(world.hardware.lightTicks.count == 3)
     }
 
+    @Test func thirtyRunningAppsStillTakeTwelveMillimetresPerIcon() {
+        let names = ["Safari"] + (1..<30).map { "App\($0)" }
+        let world = World(apps: names)
+        world.launcher.start()
+        world.makeRunning(names)
+        world.makeFrontmost("Safari")
+
+        world.swipe(3.5, 24, lift: false)
+
+        #expect(world.launcher.switcher?.selectedApp.name == "App2")
+        #expect(world.hardware.lightTicks.count == 2)
+        #expect(world.hardware.feedback.isEmpty)
+    }
+
     @Test func halfAStepShowsProgressWithoutChangingTheSelectionOrTicking() {
         let world = World.switcherWorld()
         world.swipe(3.5, 5, lift: false)

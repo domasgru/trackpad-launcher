@@ -10,11 +10,12 @@ import Observation
 final class SwitcherPresenter {
     private let launcher: Launcher
     private let panel = SwitcherPanel()
-    private let icons = AppIcons(side: SwitcherPanel.iconSide)
+    private let icons = AppIcons(side: SwitcherRowLayout.fullIconSide)
     private var observations: [Task<Void, Never>] = []
     private var workspaceObservers: [NSObjectProtocol] = []
     private var appearanceObservation: NSKeyValueObservation?
     private var laidOutRow: [AppEntry] = []
+    private var layout = SwitcherRowLayout(iconCount: 0, displayWidth: 0)
     private var lastStretch = 0.0
     private var isShown = false
     /// Bumped by every open and close, so a fade's completion that a later open or close outlived does nothing.
@@ -114,15 +115,16 @@ final class SwitcherPresenter {
             position: CGFloat(switcher.position), selected: switcher.selected, name: switcher.selectedApp.name,
             animatesSize: !reduceMotion)
         if switcher.stretch != lastStretch, switcher.stretch != 0, !reduceMotion {
-            panel.springHighlight(from: CGFloat(switcher.stretch) * SwitcherPanel.iconPitch)
+            panel.springHighlight(from: CGFloat(switcher.stretch) * layout.pitch)
         }
         lastStretch = switcher.stretch
     }
 
     private func open(_ row: [AppEntry]) {
         let screen = Self.screen(under: NSEvent.mouseLocation)
+        layout = SwitcherRowLayout(iconCount: row.count, displayWidth: Double(screen?.frame.width ?? 0))
         panel.layoutRow(
-            row.map { icons.icon(forSwitcher: $0) }, on: screen?.frame ?? .zero,
+            row.map { icons.icon(forSwitcher: $0) }, layout: layout, on: screen?.frame ?? .zero,
             scale: screen?.backingScaleFactor ?? 2)
         laidOutRow = row
         lastStretch = 0
