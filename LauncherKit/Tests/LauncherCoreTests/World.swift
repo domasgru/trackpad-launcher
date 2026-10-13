@@ -29,7 +29,10 @@ final class LaunchRecord: Sendable {
     }
 }
 
-/// The real `Launcher` over in-memory adapters, a temp directory of fake app bundles and a throwaway suite.
+/// The real `Launcher` over in-memory adapters and a temp directory holding fake app bundles and a throwaway suite.
+///
+/// Everything a World writes is under `root`, which `deinit` removes. A hook that reads the World must capture it
+/// `unowned`: a strong capture is a retain cycle, so `deinit` never runs and the folder outlives the test.
 @MainActor final class World {
     let root: URL
     let applications: URL
@@ -37,7 +40,9 @@ final class LaunchRecord: Sendable {
     let userApplications: URL
     let coreServices: URL
     let downloads: URL
-    let suiteName = "tl-test-\(UUID().uuidString)"
+    /// A cfprefs domain named by an absolute path is kept at that path plus `.plist`, so the suite lives in `root`
+    /// rather than in ~/Library/Preferences, where removing the domain would still leave an empty plist behind.
+    private let suiteName: String
 
     let hardware: InMemoryTrackpads
     let preferences = InMemoryTrackpadPreferences()
@@ -59,6 +64,7 @@ final class LaunchRecord: Sendable {
         userApplications = root.appending(path: "UserApplications")
         coreServices = root.appending(path: "CoreServices")
         downloads = root.appending(path: "Downloads")
+        suiteName = root.appending(path: "Preferences").path
         for dir in [applications, systemApplications, userApplications, coreServices, downloads] {
             try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
@@ -93,7 +99,6 @@ final class LaunchRecord: Sendable {
     }
 
     deinit {
-        UserDefaults().removePersistentDomain(forName: suiteName)
         try? FileManager.default.removeItem(at: root)
     }
 
