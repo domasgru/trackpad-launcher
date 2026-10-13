@@ -17,4 +17,15 @@ import LauncherCore
             Copy.accessibilityHint
                 == "Clicks and scrolling aren't blocked during gestures. Allow Accessibility access to block them.")
     }
+
+    @Test(arguments: [
+        (cause: InactiveCause.noTrackpad, notice: "No trackpad connected. Connect a trackpad to use gestures."),
+        (cause: .settings(ConflictingSettings([.tapToClick])!),
+         notice: "Gestures are off while these trackpad settings are on: Tap to click."),
+        (cause: .settings(ConflictingSettings([.tapToClick, .lookUpTapWithThreeFingers])!),
+         notice: "Gestures are off while these trackpad settings are on: Tap to click and Look up: Tap with three fingers."),
+    ])
+    func theInactiveNoticeNamesTheCauseInTheSettingsOwnWords(cause: InactiveCause, notice: String) {
+        #expect(Copy.inactiveNotice(for: cause) == notice)
+    }
 }

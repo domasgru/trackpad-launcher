@@ -81,9 +81,7 @@ import LauncherCore
         #expect(world.launcher.activity == want)
     }
 
-    @Test func noticeWordsAreTheSettingsOwnNames() {
-        #expect(ConflictingSetting.tapToClick.noticeName == "Tap to click")
-        #expect(ConflictingSetting.lookUpTapWithThreeFingers.noticeName == "Look up: Tap with three fingers")
+    @Test func noConflictingSettingsIsNotACause() {
         #expect(ConflictingSettings([]) == nil)
     }
 

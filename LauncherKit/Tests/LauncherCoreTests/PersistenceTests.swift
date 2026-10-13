@@ -60,7 +60,7 @@ import LauncherCore
     @Test func loginItemIsRegisteredBeforeTheFirstSave() {
         let world = World()
         var storedAtRegistration: [Settings?] = []
-        world.system.onRegisterLoginItem = { storedAtRegistration.append(world.store.load()) }
+        world.system.onRegisterLoginItem = { [unowned world] in storedAtRegistration.append(world.store.load()) }
 
         world.launcher.start()
 
@@ -68,14 +68,30 @@ import LauncherCore
         #expect(world.store.load() != nil)
     }
 
-    @Test func assignmentReachesTheSystemDefaultsNotAnInstanceCache() {
-        let world = World(apps: ["Arc"])
-        world.launcher.start()
+    /// A record this build has already written must keep loading in every later build: a renamed field, key or raw
+    /// value either fails the whole record, which loads as `Settings()` and silently wipes every assignment, or drops
+    /// that one field back to its default. Records from before a field existed are covered by
+    /// `upgradingFromARecordWithoutTheLaunchAnimationSettingKeepsEverythingElse`.
+    @Test func settingsSavedInTheCurrentFormatStillLoad() {
+        let world = World()
+        for (name, bundleID) in [
+            ("Arc", "company.thebrowser.Browser"), ("Figma", "com.figma.Desktop"), ("Spotify", "com.spotify.client"),
+        ] {
+            world.registry[BundleID(rawValue: bundleID)] = [world.install(name, bundleID: bundleID)]
+        }
+        world.seedSettingsRecord(Data(Self.savedSettings.utf8))
 
-        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        let relaunched = world.relaunch()
+        relaunched.start()
 
-        let fresh = SettingsStore(defaults: UserDefaults(suiteName: world.suiteName)!)
-        #expect(fresh.load()?.assignments[.one]?.bundleID == World.bundleID("Arc"))
+        #expect(
+            relaunched.rows.map(\.app) == [
+                .present(world.app("Arc")), .present(world.app("Figma")), .unassigned, .unassigned,
+                .present(world.app("Spotify")),
+            ])
+        #expect(relaunched.handMode == .left)
+        #expect(!relaunched.isLaunchAnimationOn)
+        #expect(!relaunched.isSwipeOn)
     }
 
     /// The record a build without the launch animation setting wrote for Left hand with Arc, Figma and Notion on
@@ -190,4 +206,71 @@ import LauncherCore
 
         #expect(world.store.load() == settings)
     }
+
+    /// Written by `SettingsStore.save` (binary plist) and converted with `plutil -convert xml1`: Left hand, Launch
+    /// animation off, apps on gestures 1, 2 and 5, and two apps in the switcher list. Never regenerate: this is the
+    /// format released builds write. The paths live under `/tl-fixture`, which no Mac has, so each app resolves
+    /// through the world's registry and never through whatever this machine has installed.
+    private static let savedSettings = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>assignments</key>
+            <dict>
+                <key>1</key>
+                <dict>
+                    <key>bundleID</key>
+                    <dict>
+                        <key>rawValue</key>
+                        <string>company.thebrowser.Browser</string>
+                    </dict>
+                    <key>lastKnownURL</key>
+                    <dict>
+                        <key>relative</key>
+                        <string>file:///tl-fixture/Applications/Arc.app</string>
+                    </dict>
+                    <key>name</key>
+                    <string>Arc</string>
+                </dict>
+                <key>2</key>
+                <dict>
+                    <key>bundleID</key>
+                    <dict>
+                        <key>rawValue</key>
+                        <string>com.figma.Desktop</string>
+                    </dict>
+                    <key>lastKnownURL</key>
+                    <dict>
+                        <key>relative</key>
+                        <string>file:///tl-fixture/Applications/Figma.app/</string>
+                    </dict>
+                    <key>name</key>
+                    <string>Figma</string>
+                </dict>
+                <key>5</key>
+                <dict>
+                    <key>bundleID</key>
+                    <dict>
+                        <key>rawValue</key>
+                        <string>com.spotify.client</string>
+                    </dict>
+                    <key>lastKnownURL</key>
+                    <dict>
+                        <key>relative</key>
+                        <string>file:///tl-fixture/Users/someone/Applications/Spotify.app</string>
+                    </dict>
+                    <key>name</key>
+                    <string>Spotify</string>
+                </dict>
+            </dict>
+            <key>handMode</key>
+            <string>left</string>
+            <key>isLaunchAnimationOn</key>
+            <false/>
+            <key>isSwipeOn</key>
+            <false/>
+        </dict>
+        </plist>
+        """
 }

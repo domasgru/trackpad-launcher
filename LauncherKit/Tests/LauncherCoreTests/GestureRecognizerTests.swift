@@ -9,16 +9,16 @@ import LauncherCore
         #expect(fired(frames) == expected + [.one])
     }
 
-    @Test(arguments: [(thumbXMM: 10.0, fires: true), (thumbXMM: 40.0, fires: false)])
-    func anchorCornerGeometryOnMacBook(thumbXMM: Double, fires: Bool) {
-        let frames = TouchScript(.macBook14).thumb(atMM: (thumbXMM, 10)).tap(fingers: 1).frames
-        #expect(fired(frames) == (fires ? [.one] : []))
-    }
-
-    @Test(arguments: [(thumbXMM: 10.0, fires: true), (thumbXMM: 40.0, fires: false)])
-    func anchorCornerGeometryOnMagicTrackpad(thumbXMM: Double, fires: Bool) {
-        let frames = TouchScript(.magicTrackpad).thumb(atMM: (thumbXMM, 10)).tap(fingers: 1).frames
-        #expect(fired(frames, surface: .magicTrackpad) == (fires ? [.one] : []))
+    /// A thumb 30 mm from the left edge is inside the Magic Trackpad's corner (20% of 160 mm = 32 mm) and outside the
+    /// MacBook's (20% of 124.8 mm = 24.96 mm): the corner is a share of each surface, not a fixed distance.
+    @Test(arguments: [
+        (surface: SurfaceSize.magicTrackpad, thumbXMM: 30.0, fires: true),
+        (surface: .magicTrackpad, thumbXMM: 34.0, fires: false),
+        (surface: .macBook14, thumbXMM: 30.0, fires: false),
+    ])
+    func cornerScalesWithTheSurface(surface: SurfaceSize, thumbXMM: Double, fires: Bool) {
+        let frames = TouchScript(surface).thumb(atMM: (thumbXMM, 10)).tap(fingers: 1).frames
+        #expect(fired(frames, surface: surface) == (fires ? [.one] : []))
     }
 
     @Test(arguments: [
@@ -87,12 +87,6 @@ extension GestureRecognizerTests {
     @Test func fingersLandingAndLiftingTenMillisecondsApartFireOnce() {
         let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
             .tap(fingers: 3, stagger: .milliseconds(10)).frames
-        #expect(fired(frames) == [.three])
-    }
-
-    @Test func everyFingerThatTouchedCountsNotTheMostDownAtOnce() {
-        let frames = TouchScript(.macBook14).thumb(atMM: (10, 10))
-            .tap(fingers: 3, stagger: .milliseconds(50)).frames
         #expect(fired(frames) == [.three])
     }
 

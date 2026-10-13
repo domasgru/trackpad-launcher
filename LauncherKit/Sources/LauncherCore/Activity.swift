@@ -25,7 +25,7 @@ public enum ConflictingSetting: CaseIterable, Hashable, Sendable {
     }
 
     /// Exactly the words the trackpad settings notice uses.
-    public var noticeName: String {
+    var noticeName: String {
         switch self {
         case .tapToClick: "Tap to click"
         case .lookUpTapWithThreeFingers: "Look up: Tap with three fingers"

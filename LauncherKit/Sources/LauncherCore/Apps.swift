@@ -150,24 +150,27 @@ public enum AppItemState: Equatable, Sendable {
     case current
 }
 
-/// Apps on disk. Local-substitutable: tests point it at a temp directory of fake bundles and inject
-/// `registeredCopies` and `lastOpened`.
+/// Apps on disk. Local-substitutable: tests point it at a temp directory of fake bundles and inject what
+/// LaunchServices and Spotlight know: `registeredCopies`, `lastOpened` and `displayName`.
 public struct AppCatalog: Sendable {
     /// The folders `installedApps()` enumerates.
     public let roots: [URL]
     private let extras: [URL]
     private let registeredCopies: @Sendable (BundleID) -> [URL]
     private let lastOpened: @Sendable (URL) -> Date?
+    private let displayName: @Sendable (URL) -> String
 
     /// `lastOpened`: when the app bundle at that URL was last launched, as Spotlight records it; nil when unknown.
+    /// `displayName`: the name Finder shows for the bundle at that URL, with or without ".app".
     public init(
         roots: [URL], extras: [URL], registeredCopies: @escaping @Sendable (BundleID) -> [URL],
-        lastOpened: @escaping @Sendable (URL) -> Date?
+        lastOpened: @escaping @Sendable (URL) -> Date?, displayName: @escaping @Sendable (URL) -> String
     ) {
         self.roots = roots
         self.extras = extras
         self.registeredCopies = registeredCopies
         self.lastOpened = lastOpened
+        self.displayName = displayName
     }
 
     /// Picker list: every .app under `roots` (recursing into folders, never into bundles, skipping hidden files)
@@ -207,7 +210,7 @@ public struct AppCatalog: Sendable {
               let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
               let identifier = plist["CFBundleIdentifier"] as? String, !identifier.isEmpty
         else { return nil }
-        var name = FileManager.default.displayName(atPath: url.path)
+        var name = displayName(url)
         if name.hasSuffix(".app") { name.removeLast(4) }
         return AppEntry(bundleID: BundleID(rawValue: identifier), name: name, url: url)
     }

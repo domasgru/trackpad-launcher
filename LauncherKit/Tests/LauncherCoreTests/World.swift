@@ -29,7 +29,10 @@ final class LaunchRecord: Sendable {
     }
 }
 
-/// The real `Launcher` over in-memory adapters, a temp directory of fake app bundles and a throwaway suite.
+/// The real `Launcher` over in-memory adapters and a temp directory holding fake app bundles and a throwaway suite.
+///
+/// Everything a World writes is under `root`, which `deinit` removes. A hook that reads the World must capture it
+/// `unowned`: a strong capture is a retain cycle, so `deinit` never runs and the folder outlives the test.
 @MainActor final class World {
     let root: URL
     let applications: URL
@@ -37,8 +40,9 @@ final class LaunchRecord: Sendable {
     let userApplications: URL
     let coreServices: URL
     let downloads: URL
-    let trashFolder: URL
-    let suiteName = "tl-test-\(UUID().uuidString)"
+    /// A cfprefs domain named by an absolute path is kept at that path plus `.plist`, so the suite lives in `root`
+    /// rather than in ~/Library/Preferences, where removing the domain would still leave an empty plist behind.
+    private let suiteName: String
 
     let hardware: InMemoryTrackpads
     let preferences = InMemoryTrackpadPreferences()
@@ -60,8 +64,8 @@ final class LaunchRecord: Sendable {
         userApplications = root.appending(path: "UserApplications")
         coreServices = root.appending(path: "CoreServices")
         downloads = root.appending(path: "Downloads")
-        trashFolder = root.appending(path: ".Trash")
-        for dir in [applications, systemApplications, userApplications, coreServices, downloads, trashFolder] {
+        suiteName = root.appending(path: "Preferences").path
+        for dir in [applications, systemApplications, userApplications, coreServices, downloads] {
             try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         hardware = InMemoryTrackpads(attached: attached)
@@ -72,7 +76,8 @@ final class LaunchRecord: Sendable {
             roots: [applications, systemApplications, userApplications],
             extras: [coreServices.appending(path: "Finder.app")],
             registeredCopies: { registry[$0] },
-            lastOpened: { launches[$0] })
+            lastOpened: { launches[$0] },
+            displayName: World.displayName)
         self.catalog = catalog
         scanner = InMemoryAppScanner(catalog: catalog)
         let store = SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
@@ -94,7 +99,6 @@ final class LaunchRecord: Sendable {
     }
 
     deinit {
-        UserDefaults().removePersistentDomain(forName: suiteName)
         try? FileManager.default.removeItem(at: root)
     }
 
@@ -102,6 +106,11 @@ final class LaunchRecord: Sendable {
     func seedSettingsRecord(_ data: Data) {
         UserDefaults(suiteName: suiteName)!.set(data, forKey: "settings")
     }
+
+    /// What `displayName` answers: the bundle's file name, as Finder shows it with extensions on. Asking LaunchServices
+    /// instead would register every fake bundle with it, about 0.2 s each on the main actor and a lasting entry in the
+    /// Mac's LaunchServices database; `AppCatalogSystemTests` covers the real names.
+    static let displayName: @Sendable (URL) -> String = { $0.lastPathComponent }
 
     static func bundleID(_ name: String) -> BundleID {
         BundleID(rawValue: "com.test." + name.lowercased().replacingOccurrences(of: " ", with: "-"))
@@ -139,9 +148,12 @@ final class LaunchRecord: Sendable {
         return destination
     }
 
+    /// `trash` is a path under the root: the home folder's `.Trash`, or a volume's `.Trashes/<uid>`.
     @discardableResult
-    func trash(_ name: String) -> URL {
-        let destination = trashFolder.appending(path: "\(name).app")
+    func trash(_ name: String, into trash: String = ".Trash") -> URL {
+        let folder = root.appending(path: trash)
+        try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let destination = folder.appending(path: "\(name).app")
         try! FileManager.default.moveItem(at: applications.appending(path: "\(name).app"), to: destination)
         return destination
     }

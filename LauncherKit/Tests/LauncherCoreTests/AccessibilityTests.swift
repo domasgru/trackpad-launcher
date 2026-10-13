@@ -75,7 +75,7 @@ import LauncherCore
     @Test func promptComesBeforeTheFirstSave() {
         let world = World()
         var snapshots: [Settings?] = []
-        world.access.onPrompt = { snapshots.append(world.store.load()) }
+        world.access.onPrompt = { [unowned world] in snapshots.append(world.store.load()) }
 
         world.launcher.start()
 

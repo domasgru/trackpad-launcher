@@ -57,11 +57,13 @@ import LauncherCore
         #expect(world.launcher.app(for: .four) == .present(world.app("Arc")))
     }
 
-    @Test func trashedAppIsMissingSilentAndStillReplaceable() {
+    /// The home folder's Trash, and the per-user Trash of another volume.
+    @Test(arguments: [".Trash", ".Trashes/501"])
+    func trashedAppIsMissingSilentAndStillReplaceable(trash: String) {
         let world = World(apps: ["Figma", "Arc"])
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
-        world.registry[World.bundleID("Figma")] = [world.trash("Figma")]
+        world.registry[World.bundleID("Figma")] = [world.trash("Figma", into: trash)]
 
         world.launcher.openWindow()
         #expect(world.launcher.app(for: .two) == .missing(name: "Figma"))
@@ -143,19 +145,19 @@ import LauncherCore
         let catalog = AppCatalog(
             roots: [world.applications], extras: [],
             registeredCopies: { calls.withLock { $0 += 1 }; return registry[$0] },
-            lastOpened: { _ in nil })
+            lastOpened: { _ in nil }, displayName: World.displayName)
         let figma = AssignedApp(world.app("Figma"))
 
         #expect(catalog.locate(figma) == world.app("Figma"))
         #expect(calls.withLock { $0 } == 0)
 
-        world.trash("Figma")
+        let trashed = world.trash("Figma")
         let live = world.install("Figma", in: world.userApplications)
         registry[World.bundleID("Figma")] = [live]
         #expect(catalog.locate(figma)?.url == live)
         #expect(calls.withLock { $0 } == 1)
 
-        registry[World.bundleID("Figma")] = [world.trashFolder.appending(path: "Figma.app")]
+        registry[World.bundleID("Figma")] = [trashed]
         #expect(catalog.locate(figma) == nil)
         #expect(calls.withLock { $0 } == 2)
     }

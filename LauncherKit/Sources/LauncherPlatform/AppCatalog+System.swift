@@ -13,7 +13,8 @@ extension AppCatalog {
             ],
             extras: [URL(filePath: "/System/Library/CoreServices/Finder.app")],
             registeredCopies: { NSWorkspace.shared.urlsForApplications(withBundleIdentifier: $0.rawValue) },
-            lastOpened: { spotlightLastUsed($0) })
+            lastOpened: { spotlightLastUsed($0) },
+            displayName: { FileManager.default.displayName(atPath: $0.path) })
     }
 
     /// `kMDItemLastUsedDate` of the bundle at `url`; nil when Spotlight has none. Safe off the main actor.
