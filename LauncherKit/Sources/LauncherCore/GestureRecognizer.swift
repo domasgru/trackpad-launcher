@@ -55,6 +55,14 @@ public struct GestureRecognizer: Sendable {
         let landed = frame.touches.filter { $0.isLanding(after: before) }
         defer { previouslyDown = Set(down.keys) }
 
+        for id in lifted { book[id] = nil }
+        for touch in landed {
+            // The pad sends no frames while nothing touches it, so a contact landing on the first frame really
+            // landed now. Only an already-resting contact (`.down`) has an unknown landing time.
+            book[touch.id] = Contact(
+                origin: touch.position, firstSeen: frame.time, isRealLanding: !isFirstFrame || touch.phase == .landing)
+        }
+
         if let anchor = state.anchor,
            lifted.contains(anchor.id) || !(down[anchor.id].map { corner.holds($0.position) } ?? false) {
             state = .idle
@@ -64,10 +72,7 @@ public struct GestureRecognizer: Sendable {
         switch state {
         case .idle:
             if let thumb = landed.first(where: { corner.admits($0.position) }) {
-                // The pad sends no frames while nothing touches it, so a thumb landing on the first frame really
-                // landed now. Only an already-resting contact (`.down`) has an unknown landing time: no window.
-                let landedNow = !isFirstFrame || thumb.phase == .landing
-                let anchor = Anchor(id: thumb.id, landedAt: landedNow ? frame.time : nil)
+                let anchor = Anchor(id: thumb.id)
                 state = down.count == 1 ? .armed(anchor) : .spoiled(anchor)
             }
         case .armed(let anchor):
@@ -76,12 +81,12 @@ public struct GestureRecognizer: Sendable {
                 state = frame.press == .click ? .spoiled(anchor) : .tapping(anchor, Tap(start: frame.time, landing: fingers))
             }
         case .tapping(let anchor, var tap):
-            for id in lifted { tap.down[id] = nil }
+            for id in lifted { tap.down.remove(id) }
             let joining = landed.filter { $0.id != anchor.id }
             let pair = swipes ? Pair(tap, joining: joining) : nil
             if frame.press == .click {
                 state = .spoiled(anchor)
-            } else if let move = Self.drag(of: tap.fingers, in: down, on: surface) {
+            } else if let move = Self.drag(of: tap.fingers, in: down, book: book, on: surface) {
                 (state, event) = beginOrSpoil(pair, move, anchor, down, frame.time)
             } else if frame.time - tap.start > GestureRules.maxTapDuration {
                 state = pair.map { .resting(anchor, $0) } ?? .spoiled(anchor)
@@ -90,16 +95,16 @@ public struct GestureRecognizer: Sendable {
                 state = joining.isEmpty ? .armed(anchor) : .tapping(anchor, Tap(start: frame.time, landing: joining))
             } else {
                 for touch in joining {
-                    tap.land(touch)
+                    tap.land(touch.id)
                 }
                 state = .tapping(anchor, tap)
             }
         case .resting(let anchor, let pair):
             if frame.press == .click
-                || pair.fingers.contains(where: { lifted.contains($0.id) })
+                || pair.fingers.contains(where: { lifted.contains($0) })
                 || landed.contains(where: { $0.id != anchor.id }) {
                 state = .spoiled(anchor)
-            } else if let move = Self.drag(of: pair.fingers, in: down, on: surface) {
+            } else if let move = Self.drag(of: pair.fingers, in: down, book: book, on: surface) {
                 (state, event) = beginOrSpoil(pair, move, anchor, down, frame.time)
             }
         case .spoiled(let anchor):
@@ -113,7 +118,7 @@ public struct GestureRecognizer: Sendable {
                 swipe.thumb = nil
             }
             if swipe.thumb == nil, let thumb = landed.first(where: { corner.admits($0.position) }) {
-                swipe.thumb = Anchor(id: thumb.id, landedAt: frame.time)
+                swipe.thumb = Anchor(id: thumb.id)
             }
             // Until every non-thumb finger has lifted, nothing further happens.
             let after = swipe.thumb.map(State.spoiled) ?? .idle
@@ -159,7 +164,7 @@ public struct GestureRecognizer: Sendable {
         } else {
             blocksDockSwipes = state.anchor.map { anchor in down.keys.contains { $0 != anchor.id } } ?? false
             blocksClicks = state.anchor.flatMap { anchor in
-                anchor.landedAt.map { landedAt in
+                book.landingTime(of: anchor.id).map { landedAt in
                     frame.time - landedAt < GestureRules.clickBlockingWindow
                         && down.keys.contains { $0 != anchor.id }
                 }
@@ -173,25 +178,42 @@ public struct GestureRecognizer: Sendable {
         _ pair: Pair?, _ move: Move, _ anchor: Anchor, _ down: [TouchID: Touch], _ time: FrameTime
     ) -> (State, Recognition.Event?) {
         guard let pair, move.isSideways else { return (.spoiled(anchor), nil) }
-        let fingers = Dictionary(uniqueKeysWithValues: pair.fingers.compactMap { f in down[f.id].map { (f.id, $0.position) } })
+        let fingers = Dictionary(uniqueKeysWithValues: pair.fingers.compactMap { id in down[id].map { (id, $0.position) } })
         return (.swiping(Swipe(fingers: fingers, lastTime: time, thumb: anchor)), .swipe(.began))
     }
 
     private struct Anchor: Sendable {
         let id: TouchID
-        /// When this recognizer saw the thumb land. nil: the thumb was already resting on the first frame.
-        let landedAt: FrameTime?
     }
 
-    private struct Finger: Sendable {
-        let id: TouchID
+    /// What the recognizer knows about one contact down, whoever is using it.
+    private struct Contact: Sendable {
+        /// Where it landed.
         let origin: SurfacePoint
+        let firstSeen: FrameTime
+        /// False for a contact already resting on the first frame: when it really landed is unknown.
+        let isRealLanding: Bool
+    }
+
+    /// Every contact down after the edge filter: the only source of landing points and times.
+    private struct ContactBook: Sendable {
+        private var contacts: [TouchID: Contact] = [:]
+
+        subscript(id: TouchID) -> Contact? {
+            get { contacts[id] }
+            set { contacts[id] = newValue }
+        }
+
+        /// When this recognizer saw the contact land. nil: unknown or not down.
+        func landingTime(of id: TouchID) -> FrameTime? {
+            contacts[id].flatMap { $0.isRealLanding ? $0.firstSeen : nil }
+        }
     }
 
     /// Exactly two fingers: the only shape a swipe has.
     private struct Pair: Sendable {
-        let first: Finger
-        let second: Finger
+        let first: TouchID
+        let second: TouchID
 
         /// The tap as a pair: exactly two fingers touched since the last moment none was down, both still down, and
         /// none joins on this frame.
@@ -202,7 +224,7 @@ public struct GestureRecognizer: Sendable {
             second = fingers[1]
         }
 
-        var fingers: [Finger] { [first, second] }
+        var fingers: [TouchID] { [first, second] }
     }
 
     private struct Swipe: Sendable {
@@ -224,13 +246,14 @@ public struct GestureRecognizer: Sendable {
     }
 
     /// The farthest-moved finger's displacement, when it is more than `dragThresholdMM`. Deterministic: the maximum.
-    private static func drag(of fingers: [Finger], in down: [TouchID: Touch], on surface: SurfaceSize) -> Move? {
-        let moves = fingers.compactMap { finger -> Move? in
-            down[finger.id].map {
-                Move(
-                    dxMM: ($0.position.x - finger.origin.x) * surface.widthMM,
-                    dyMM: ($0.position.y - finger.origin.y) * surface.heightMM)
-            }
+    private static func drag(
+        of fingers: [TouchID], in down: [TouchID: Touch], book: ContactBook, on surface: SurfaceSize
+    ) -> Move? {
+        let moves = fingers.compactMap { id -> Move? in
+            guard let touch = down[id], let origin = book[id]?.origin else { return nil }
+            return Move(
+                dxMM: (touch.position.x - origin.x) * surface.widthMM,
+                dyMM: (touch.position.y - origin.y) * surface.heightMM)
         }
         return moves
             .max { hypot($0.dxMM, $0.dyMM) < hypot($1.dxMM, $1.dyMM) }
@@ -239,27 +262,27 @@ public struct GestureRecognizer: Sendable {
 
     private struct Tap: Sendable {
         let start: FrameTime
-        /// Fingers down now, with their landing points (the drag check).
-        var down: [TouchID: SurfacePoint]
+        /// Fingers down now.
+        var down: Set<TouchID>
         /// Every finger that touched during this tap. Always a superset of `down.keys`.
         private(set) var touched: Set<TouchID>
 
         init(start: FrameTime, landing: [Touch]) {
             self.start = start
-            down = [:]
+            down = []
             touched = []
-            for touch in landing { land(touch) }
+            for touch in landing { land(touch.id) }
         }
 
-        /// The only way a finger joins: a re-landed id gets a new origin but still counts once.
-        mutating func land(_ touch: Touch) {
-            down[touch.id] = touch.position
-            touched.insert(touch.id)
+        /// The only way a finger joins: a re-landed id still counts once.
+        mutating func land(_ id: TouchID) {
+            down.insert(id)
+            touched.insert(id)
         }
 
         /// Ordered by id, so everything derived from it is deterministic.
-        var fingers: [Finger] {
-            down.map { Finger(id: $0.key, origin: $0.value) }.sorted { $0.id.rawValue < $1.id.rawValue }
+        var fingers: [TouchID] {
+            down.sorted { $0.rawValue < $1.rawValue }
         }
     }
 
@@ -286,6 +309,7 @@ public struct GestureRecognizer: Sendable {
     private let swipes: Bool
     private var edgeContacts: EdgeContacts
     private var state: State = .idle
+    private var book = ContactBook()
     /// Contacts down on the previous frame. nil until the first frame.
     private var previouslyDown: Set<TouchID>?
 }
