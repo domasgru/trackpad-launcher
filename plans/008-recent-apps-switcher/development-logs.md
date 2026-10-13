@@ -53,3 +53,7 @@
   - T4's early return when the running apps change mid-read. The plan prescribes it.
   - The two-scenario test rows, the committed exploration notes, and the `(pid, launched)` tuple, all judged not worth changing.
 - `SystemAppScannerTests` fails intermittently under machine load (FSEvents timing) and passes alone. This is unrelated to this change.
+
+## Fix: the first swipe after opening the app did nothing
+- Reported by the owner: after a rebuild the swipe did nothing until a tap gesture had fired. Reproduced by watching the active app across Xcode's Run: Trackpad Launcher stayed the active app afterwards. The switcher skipped itself as frontmost, so no row was built. A tap brought another app forward, which hid the problem. Opening the app from Finder does the same.
+- → R14: with no readable frontmost app the row is the running apps alone, starting on the most recent, and lifting on any app brings it forward. `Switcher` takes an optional frontmost app; three World tests, and the nothing-to-show test's no-active-app case now runs with no running apps.

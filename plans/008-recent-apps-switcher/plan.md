@@ -165,6 +165,19 @@ The switcher MUST NOT appear when the row would hold only the frontmost app. The
 - **WHEN** the user swipes
 - **THEN** no switcher appears and nothing happens on lift
 
+### R14. The switcher works while Trackpad Launcher itself is active
+macOS makes Trackpad Launcher the active app right after it is opened, from Finder or by Run in Xcode. While it is, the row MUST be the running apps alone, in ⌘-Tab order, with the selection on the most recently used one. Lifting on any app, that first one included, MUST bring it to the front with the gesture haptic. One running app is enough for the switcher to appear.
+
+#### Scenario: First swipe right after opening the app
+- **GIVEN** the user just opened Trackpad Launcher, so it is the active app, and Safari, Mail and Notes are running, Safari used last
+- **WHEN** the user swipes without first tapping a gesture or clicking another app
+- **THEN** the switcher shows Safari, Mail, Notes with Safari selected, and lifting brings Safari to the front with the gesture haptic
+
+#### Scenario: Only one app running
+- **GIVEN** Trackpad Launcher is the active app and Finder is the only running app ⌘-Tab shows
+- **WHEN** the user swipes and lifts
+- **THEN** the switcher shows Finder, and lifting brings Finder to the front
+
 ### R9. The launcher window has a swipe switch instead of the switcher list
 The launcher window's switcher section MUST show one row: the swipe illustration, the title "Swipe to switch apps", and a switch at the right end, laid out like the window's other setting rows. The switcher list rows and Add app… MUST NOT appear. The illustration MUST still mirror in left-hand mode.
 

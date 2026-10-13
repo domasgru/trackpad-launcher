@@ -1,11 +1,14 @@
 import Foundation
 
 /// The switcher during one swipe. The row is fixed when the swipe begins; everything else follows the travel.
-/// The frontmost app is always the first icon and the selection starts on it.
+/// The selection starts on the first icon: the frontmost app, or the most recently used running app when no frontmost
+/// app can be read, as while Trackpad Launcher itself is active.
 public struct Switcher: Equatable, Sendable {
-    /// Left to right: the frontmost app, then the running apps in ⌘-Tab order without the copy at the frontmost app's
-    /// location, at most `switcherMaxApps` in all. Always at least two icons.
+    /// Left to right: the frontmost app, if any, then the running apps in ⌘-Tab order without the copy at the frontmost
+    /// app's location, at most `switcherMaxApps` in all. Always holds an app besides the frontmost one.
     public let row: [AppEntry]
+    /// Whether the first icon is the frontmost app, so lifting on it changes nothing.
+    private let startsOnFrontmost: Bool
     /// Sideways midpoint travel since the swipe began, in trackpad millimetres. Written only by `Launcher` (and tests).
     public package(set) var travelMM: Double = 0
     /// The travel `follow` was last given, so the next call can tell which way a frame moved.
@@ -14,10 +17,11 @@ public struct Switcher: Equatable, Sendable {
 
     /// nil when the row would hold nothing besides the frontmost app. Identity is the running copy's location: two
     /// copies of one bundle at two locations are two icons.
-    package init?(frontmost: AppEntry, running: [AppEntry], trackpad: TrackpadID) {
-        let row = Array(([frontmost] + running.filter { $0.url != frontmost.url }).prefix(GestureRules.switcherMaxApps))
-        guard row.count >= 2 else { return nil }
-        self.row = row
+    package init?(frontmost: AppEntry?, running: [AppEntry], trackpad: TrackpadID) {
+        let others = running.filter { $0.url != frontmost?.url }
+        guard !others.isEmpty else { return nil }
+        row = Array(((frontmost.map { [$0] } ?? []) + others).prefix(GestureRules.switcherMaxApps))
+        startsOnFrontmost = frontmost != nil
         self.trackpad = trackpad
     }
 
@@ -47,7 +51,7 @@ public struct Switcher: Equatable, Sendable {
     }
 
     /// Lifting here is a silent no-op.
-    public var selectsFrontmost: Bool { selected == 0 }
+    public var selectsFrontmost: Bool { startsOnFrontmost && selected == 0 }
 
     /// Where the highlight rests, in icons: travel / 12 mm, clamped to the row. Between two icons it sits between
     /// them in proportion.

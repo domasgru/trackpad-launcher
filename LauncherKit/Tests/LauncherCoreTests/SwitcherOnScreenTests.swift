@@ -343,13 +343,8 @@ import LauncherCore
         let world = World(apps: ["Safari", "Mail"], accessGranted: true)
         world.launcher.start()
         let finder = world.app("Finder", in: world.coreServices)
-        if noActiveApp {
-            world.makeRunning(["Safari", "Mail"])
-            world.makeFrontmost(nil)
-        } else {
-            world.makeRunning([finder])
-            world.system.frontmost = finder
-        }
+        world.makeRunning(noActiveApp ? [] : [finder])
+        world.system.frontmost = noActiveApp ? nil : finder
         let runs = world.hardware.runCount
 
         let begin = thumb.wait(.seconds(4)).land(fingers: 2).slide(byMM: (3.5, 0))
@@ -362,6 +357,38 @@ import LauncherCore
         #expect(world.launcher.switcher == nil)
         #expect(nothingHappened(world))
         #expect(world.hardware.scroll(.fingers(.began)) == .pass)
+    }
+
+    // MARK: Trackpad Launcher in front
+
+    @Test func withNoReadableFrontmostAppTheRowIsTheRunningAppsStartingOnTheMostRecent() {
+        let world = World.switcherWorld()
+        world.makeFrontmost(nil)
+
+        world.swipe(3.5, lift: false)
+
+        #expect(world.launcher.switcher?.row.map(\.name) == ["Safari", "Mail", "Slack", "Notes"])
+        #expect(world.launcher.switcher?.selected == 0)
+    }
+
+    @Test func withNoReadableFrontmostAppLiftingOnTheFirstAppBringsItToFront() {
+        let world = World.switcherWorld()
+        world.makeFrontmost(nil)
+
+        world.swipe(3.5)
+
+        #expect(world.system.broughtToFront == [world.app("Safari")])
+        #expect(world.hardware.feedback == [trackpad.id])
+    }
+
+    @Test func withNoReadableFrontmostAppOneRunningAppIsEnoughToSwitchTo() {
+        let world = World.switcherWorld()
+        world.makeRunning(["Safari"])
+        world.makeFrontmost(nil)
+
+        world.swipe(3.5)
+
+        #expect(world.system.broughtToFront == [world.app("Safari")])
     }
 
     @Test func whileGesturesAreInactiveTheSwipeDoesNothingEvenIfOneWasInFlight() {
