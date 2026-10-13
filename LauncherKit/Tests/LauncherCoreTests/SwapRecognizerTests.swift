@@ -67,4 +67,42 @@ import LauncherCore
         #expect(recognitions.allSatisfy { $0.event == nil })
         #expect(recognitions.contains { $0.blocksClicks && $0.blocksDockSwipes })
     }
+
+    @Test func theSeriesBlocksClicksAndDockSwipesWhileAnyRestFingerIsDownWhateverTheClockDid() {
+        let first = [h.contact(1, atMM: 62, 45), h.contact(2, atMM: 70, 45)]
+        let thumb = h.contact(9, atMM: 10, 10)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: true, travel: .linear)
+        func step(_ ms: Int, _ touches: [Touch]) -> Recognition { recognizer.step(h.frame(atMS: ms, touches)) }
+
+        _ = step(0, [h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)])
+        _ = step(150, first + [h.contact(9, .landing, atMM: 10, 10)])
+        let swapped = step(250, first)
+        #expect(swapped.event == .swap(startsSeries: true))
+        #expect(swapped.blocksClicks && swapped.blocksDockSwipes)
+
+        for ms in [1000, 3500, 5000] {
+            let held = step(ms, first)
+            #expect(held.blocksClicks && held.blocksDockSwipes, "series at \(ms)")
+        }
+
+        _ = step(5200, first + [h.contact(9, .landing, atMM: 10, 10)])
+        let again = step(5300, first)
+        #expect(again.event == .swap(startsSeries: false))
+
+        let oneUp = step(6000, [first[1]])
+        #expect(oneUp.blocksClicks && oneUp.blocksDockSwipes)
+        let bothUp = step(7000, [])
+        #expect(!bothUp.blocksClicks && !bothUp.blocksDockSwipes)
+    }
+
+    @Test func onlyTheFirstSwapOfARestStartsASeries() {
+        let twoTaps = rest(for: 150).thumbTap().thumbTap().frames
+        #expect(swaps(twoTaps) == [true, false])
+
+        let fresh = rest(for: 150).thumbTap().lift().land(fingers: 2).wait(.milliseconds(150)).thumbTap().frames
+        #expect(swaps(fresh) == [true, true])
+
+        let rejoined = rest(for: 150).thumbTap().lift(.first).land(fingers: 1).wait(.milliseconds(150)).thumbTap().frames
+        #expect(swaps(rejoined) == [true, false])
+    }
 }

@@ -227,4 +227,102 @@ import LauncherCore
         world.hardware.inject(.swap(SwapEvent(startsSeries: true, trackpad: trackpad.id)))
         #expect(nothingHappened(world))
     }
+
+    @Test func rapidTapsAlternateWhetherOrNotTheFirstActivationLandedYet() {
+        let stale = World.switcherWorld()
+        stale.swap(taps: 4, lift: false)
+        #expect(stale.system.broughtToFront == ["Mail", "Safari", "Mail", "Safari"].map { stale.app($0) })
+
+        let landed = World.switcherWorld()
+        var script = landed.swap(lift: false)
+        landed.activate("Mail")
+        for _ in 0..<3 { script = script.thumbTap() }
+        landed.play(script)
+        #expect(landed.system.broughtToFront == ["Mail", "Safari", "Mail", "Safari"].map { landed.app($0) })
+    }
+
+    @Test func slightDriftBetweenTapsKeepsTheSeriesGoingFromWhereTheFingersWereAtTheLastSwap() {
+        let small = World.switcherWorld()
+        var script = small.swap(lift: false)
+        small.activate("Mail")
+        script = script.slide(byMM: (1, 0)).thumbTap()
+        small.play(script)
+        #expect(small.system.broughtToFront == [small.app("Mail"), small.app("Safari")])
+
+        let cumulative = World.switcherWorld()
+        script = cumulative.swap(lift: false)
+        cumulative.activate("Mail")
+        script = script.slide(byMM: (2, 0)).thumbTap()
+        cumulative.play(script)
+        cumulative.activate("Safari")
+        script = script.slide(byMM: (2, 0)).thumbTap()
+        cumulative.play(script)
+        #expect(cumulative.system.broughtToFront == ["Mail", "Safari", "Mail"].map { cumulative.app($0) })
+    }
+
+    @Test func slidingEndsTheSeriesUntilBothFingersLiftAndLandAgain() {
+        let world = World.switcherWorld()
+        var script = world.swap(lift: false)
+        world.activate("Mail")
+        script = script.slide(byMM: (10, 0)).thumbTap().thumbTap()
+        world.play(script)
+        #expect(world.system.broughtToFront == [world.app("Mail")])
+
+        script = script.lift().land(fingers: 2).wait(.milliseconds(150)).thumbTap()
+        world.play(script)
+        #expect(world.system.broughtToFront == [world.app("Mail"), world.app("Safari")])
+    }
+
+    @Test func aFingerThatLiftsAndLandsAgainRejoinsTheSeries() {
+        let one = World.switcherWorld()
+        var script = one.swap(lift: false)
+        one.activate("Mail")
+        script = script.lift(.first).land(fingers: 1).wait(.milliseconds(150)).thumbTap()
+        one.play(script)
+        #expect(one.system.broughtToFront == [one.app("Mail"), one.app("Safari")])
+
+        let both = World.switcherWorld()
+        script = both.swap(lift: false)
+        both.activate("Mail")
+        script = script.lift().land(fingers: 2).wait(.milliseconds(150)).thumbTap()
+        both.play(script)
+        #expect(both.system.broughtToFront == [both.app("Mail"), both.app("Safari")])
+    }
+
+    @Test func aThirdFingerStopsTheSeriesUntilEveryFingerLifts() {
+        let world = World.switcherWorld()
+        var script = world.swap(lift: false)
+        world.activate("Mail")
+        script = script.land(fingers: 1, atMM: (86, 45)).wait(.milliseconds(150)).thumbTap()
+        world.play(script)
+        script = script.lift(.last).wait(.milliseconds(150)).thumbTap()
+        world.play(script)
+        #expect(world.system.broughtToFront == [world.app("Mail")])
+
+        script = script.lift().land(fingers: 2).wait(.milliseconds(150)).thumbTap()
+        world.play(script)
+        #expect(world.system.broughtToFront == [world.app("Mail"), world.app("Safari")])
+    }
+
+    @Test func fromTheFirstSwapUntilTheFingersLiftClicksAndScrollsAreBlocked() {
+        let pressed = World.switcherWorld(accessGranted: true)
+        var script = pressed.swap(lift: false)
+        pressed.play(script.wait(.seconds(5)).press().lift())
+        #expect(pressed.hardware.pressVerdicts == [.drop, .drop])
+
+        let slid = World.switcherWorld(accessGranted: true)
+        script = slid.swap(lift: false)
+        slid.play(script.slide(byMM: (10, 0)))
+        #expect(slid.hardware.scroll(.fingers(.began)) == .drop)
+
+        let oneUp = World.switcherWorld(accessGranted: true)
+        script = oneUp.swap(lift: false)
+        oneUp.play(script.lift(.first).press().lift())
+        #expect(oneUp.hardware.pressVerdicts == [.drop, .drop])
+
+        let lifted = World.switcherWorld(accessGranted: true)
+        script = lifted.swap(lift: false)
+        lifted.play(script.lift())
+        #expect(lifted.hardware.scroll(.fingers(.began)) == .pass)
+    }
 }

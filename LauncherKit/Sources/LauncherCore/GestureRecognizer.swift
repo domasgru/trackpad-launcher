@@ -172,6 +172,9 @@ public struct GestureRecognizer: Sendable {
         if case .swiping = state {
             blocksClicks = true
             blocksDockSwipes = true
+        } else if case .rest(let rest) = state, rest.isSeries {
+            blocksClicks = true
+            blocksDockSwipes = true
         } else {
             let thumb = state.thumb
             blocksDockSwipes = thumb.map { thumb in down.keys.contains { $0 != thumb } } ?? false
@@ -186,7 +189,7 @@ public struct GestureRecognizer: Sendable {
     }
 
     /// One frame of the fingers-first state. A thumb tap qualifies when its thumb lands and fires when that thumb lifts.
-    private func step(
+    private mutating func step(
         _ rest: Rest, _ frame: TouchFrame, down: [TouchID: Touch], landed: [Touch], lifted: Set<TouchID>,
         departed: [TouchID: Contact]
     ) -> (State, Recognition.Event?) {
@@ -204,7 +207,9 @@ public struct GestureRecognizer: Sendable {
             if lifted.contains(thumb.id) {
                 if thumb.isTap, !changed, let landedAt = departed[thumb.id]?.firstSeen,
                    frame.time - landedAt <= GestureRules.maxTapDuration {
-                    event = .swap(startsSeries: true)
+                    event = .swap(startsSeries: !rest.isSeries)
+                    rest.isSeries = true
+                    for id in rest.fingers { if let at = down[id]?.position { book[id]?.origin = at } }
                 }
                 rest.thumb = nil
             } else if let position = down[thumb.id]?.position, !corner.holds(position) {
@@ -220,6 +225,7 @@ public struct GestureRecognizer: Sendable {
 
         let thumbLanding = rest.thumb == nil ? landed.first { corner.admits($0.position) } : nil
         for touch in landed where touch.id != thumbLanding?.id { rest.fingers.insert(touch.id) }
+        if rest.isSeries && rest.fingers.count > 2 { rest.isStopped = true }
         if let thumbLanding {
             let qualifies = swaps && !rest.isStopped && rest.fingers.count == 2
                 && rest.fingers.allSatisfy { id in
@@ -254,8 +260,8 @@ public struct GestureRecognizer: Sendable {
 
     /// What the recognizer knows about one contact down, whoever is using it.
     private struct Contact: Sendable {
-        /// Where it landed.
-        let origin: SurfacePoint
+        /// Where it landed, until a swap moves it to where the contact was then.
+        var origin: SurfacePoint
         let firstSeen: FrameTime
         /// False for a contact already resting on the first frame: when it really landed is unknown.
         let isRealLanding: Bool
@@ -303,8 +309,11 @@ public struct GestureRecognizer: Sendable {
         /// Every contact down but the thumb.
         var fingers: Set<TouchID>
         var thumb: RestThumb?
-        /// Some finger moved more than `dragThresholdMM` from where it landed. Permanent for this rest.
+        /// Some finger moved more than `dragThresholdMM` from its reference, or a third finger joined a series.
+        /// Permanent for this rest.
         var isStopped = false
+        /// A swap has fired under this rest: it blocks until the rest empties.
+        var isSeries = false
     }
 
     private struct RestThumb: Sendable {
