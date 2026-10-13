@@ -56,11 +56,13 @@ import LauncherCore
         #expect(world.launcher.app(for: .four) == .present(world.app("Arc")))
     }
 
-    @Test func trashedAppIsMissingSilentAndStillReplaceable() {
+    /// The home folder's Trash, and the per-user Trash of another volume.
+    @Test(arguments: [".Trash", ".Trashes/501"])
+    func trashedAppIsMissingSilentAndStillReplaceable(trash: String) {
         let world = World(apps: ["Figma", "Arc"])
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
-        world.registry[World.bundleID("Figma")] = [world.trash("Figma")]
+        world.registry[World.bundleID("Figma")] = [world.trash("Figma", into: trash)]
 
         world.launcher.openWindow()
         #expect(world.launcher.app(for: .two) == .missing(name: "Figma"))

@@ -6,8 +6,8 @@ import notify
 /// the main queue). The notification names no app and no service, so trust is re-read on every broadcast and
 /// `onChange` runs only when the value changed. No polling.
 @MainActor public final class SystemAccessibilityPermission: AccessibilityPermission {
-    /// Public so the adapter's test can `notify_post` the same name.
-    public static let changeNotification = "com.apple.tcc.access.changed"
+    /// tccd's broadcast name. Internal: the adapter's test posts it through `@testable` access.
+    static let changeNotification = "com.apple.tcc.access.changed"
     public var onChange: (@MainActor () -> Void)?
 
     /// `trusted` is injectable for the adapter's own test, which flips it and posts the notification itself.

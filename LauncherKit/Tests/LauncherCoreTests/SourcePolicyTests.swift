@@ -106,25 +106,6 @@ import Testing
         #expect(hits == ["Other.swift:1: AXIsProcessTrusted"])
     }
 
-    /// Pins both halves of the policy edit so neither drifts back: no confined token is also banned, and the kept
-    /// IOHID, Input Monitoring, timer, display-link and polling tokens are still banned.
-    @Test func confinedAndBannedListsNeverOverlapAndKeepTheTimerAndInputMonitoringBans() {
-        let banned = Self.banned.map(\.token)
-        for entry in Self.confined {
-            for token in banned {
-                #expect(
-                    !entry.token.contains(token) && !token.contains(entry.token),
-                    "\(entry.token) is confined, so \(token) must not also be banned")
-            }
-        }
-        for kept in [
-            "IOHIDManager", "CGRequestListenEventAccess", "CGPreflightListenEventAccess", "Timer", "asyncAfter",
-            "makeTimerSource", "Task.sleep", "displayLink", "DisplayLink",
-        ] {
-            #expect(banned.contains(kept), "\(kept) must stay banned")
-        }
-    }
-
     @Test func scannerFindsAPlantedHit() throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "tl-policy-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

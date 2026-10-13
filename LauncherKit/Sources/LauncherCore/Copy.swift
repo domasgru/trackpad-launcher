@@ -9,4 +9,17 @@ public enum Copy {
 
     public static let accessibilityHint =
         "Clicks and scrolling aren't blocked during gestures. Allow Accessibility access to block them."
+
+    /// The sentence shown in place of the hint while gestures are inactive. The list is joined in English whatever the
+    /// user's locale, because the sentence around it is English.
+    public static func inactiveNotice(for cause: InactiveCause) -> String {
+        switch cause {
+        case .noTrackpad:
+            "No trackpad connected. Connect a trackpad to use gestures."
+        case .settings(let conflicting):
+            "Gestures are off while these trackpad settings are on: "
+                + conflicting.settings.map(\.noticeName).formatted(.list(type: .and).locale(Locale(identifier: "en")))
+                + "."
+        }
+    }
 }
