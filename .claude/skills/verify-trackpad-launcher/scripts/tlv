@@ -1,0 +1,252 @@
+#!/bin/bash
+# tlv: build, launch, drive and tear down an isolated Trackpad Launcher for verification.
+# Run `tlv help` for commands. See ../SKILL.md for the workflow.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="${TLV_REPO:-$(cd "$HERE/../../../.." && pwd)}"
+STATE="${TLV_STATE:-/tmp/tlv}"
+EVIDENCE_ROOT="${TLV_EVIDENCE_ROOT:-/tmp/tlv-evidence}"
+BUNDLE_ID="com.domasgru.TrackpadLauncherApp.verify"
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+mkdir -p "$STATE"
+STATE="$(cd "$STATE" && pwd -P)"  # /tmp is /private/tmp; process paths use the real one
+# Its own product name too, so its process is told apart from the user's copy and Xcode runs at a glance.
+PRODUCT_NAME="TrackpadLauncherVerify"
+SRC="$STATE/src"
+APP="$STATE/dd/Build/Products/Debug/$PRODUCT_NAME.app"
+EXE="$APP/Contents/MacOS/$PRODUCT_NAME"
+AX="$STATE/tlv-ax"
+
+die() { echo "tlv: $*" >&2; exit 1; }
+ax() { [ -x "$AX" ] || die "no AX helper; run \`tlv build\`"; "$AX" "$@"; }
+
+# PIDs of processes running exactly our verification executable: the only ones tlv ever kills.
+our_pids() { pgrep -f -x "$EXE" || true; }
+
+# Any verification build at all, whatever its TLV_STATE: they share the bundle ID and defaults domain.
+verify_pids() { pgrep -f "$PRODUCT_NAME.app/Contents/MacOS/$PRODUCT_NAME" || true; }
+
+# Any other Trackpad Launcher (the user's installed copy, an Xcode run, another worktree's build).
+other_pids() { pgrep -f "TrackpadLauncher.app/Contents/MacOS/TrackpadLauncher( |$)" || true; }
+
+pid() {
+  [ -f "$STATE/pid" ] || die "no instance recorded; run \`tlv launch\`"
+  local p; p="$(cat "$STATE/pid")"
+  kill -0 "$p" 2>/dev/null || die "recorded pid $p is not running; run \`tlv cleanup\` then \`tlv launch\`"
+  [ "$(ps -o command= -p "$p")" = "$EXE" ] || die "pid $p is not our verification build; refusing to drive it"
+  echo "$p"
+}
+
+run_id() { cat "$STATE/run-id" 2>/dev/null || die "no run id; run \`tlv launch\`"; }
+evidence_dir() { local d; d="$EVIDENCE_ROOT/$(run_id)"; mkdir -p "$d"; echo "$d"; }
+
+# The build compiles a mirror of the sources in $SRC, never the repo itself, so the user's
+# TrackpadLauncher.xcodeproj (possibly open in Xcode) is never regenerated under them.
+SOURCES=(LauncherKit TrackpadLauncher Config assets project.yml)
+EXCLUDES=(--exclude .build --exclude .swiftpm --exclude .DS_Store --exclude TrackpadLauncher/Info.plist)
+mirror() { (cd "$REPO" && rsync -a --delete "${EXCLUDES[@]}" "$@" "${SOURCES[@]}" "$SRC/"); }
+
+# Read-only: prints what differs between the repo's working tree (committed or not) and the last build.
+stale_changes() {
+  [ -f "$STATE/built" ] || { echo "(never built)"; return; }
+  mirror -n -i --out-format='%n' | grep -v '/$' || true
+}
+
+settings_json() {
+  defaults export "$BUNDLE_ID" - 2>/dev/null | python3 -I -c '
+import json, plistlib, sys
+raw = sys.stdin.buffer.read()
+if not raw.strip():
+    print("null"); sys.exit()
+d = plistlib.loads(raw)
+print(json.dumps(plistlib.loads(d["settings"]) if "settings" in d else None, indent=2, sort_keys=True))'
+}
+
+has_settings() { defaults read "$BUNDLE_ID" settings >/dev/null 2>&1; }
+
+# Writes the settings record the app reads from UserDefaults under our own bundle ID, so the user's real
+# settings (com.domasgru.TrackpadLauncherApp) are never read or written. A present record also means
+# "not a first launch": no login item registration and no Accessibility prompt.
+seed() {
+  python3 -I - "$1" "$BUNDLE_ID" <<'PY'
+import plistlib, subprocess, sys
+fixture, domain = sys.argv[1], sys.argv[2]
+def app(bundle, name, url):
+    return {"bundleID": {"rawValue": bundle}, "name": name, "lastKnownURL": {"relative": url}}
+fixtures = {
+    "default": {"handMode": "right", "assignments": {
+        "1": app("com.apple.TextEdit", "TextEdit", "file:///System/Applications/TextEdit.app/"),
+        "2": app("com.example.verify.Ghost", "Ghost App", "file:///Applications/Ghost%20App.app/"),
+    }},
+    "empty": {"handMode": "right", "assignments": {}},
+}
+if fixture not in fixtures:
+    sys.exit("unknown seed " + fixture + " (default | empty | keep)")
+data = plistlib.dumps(fixtures[fixture], fmt=plistlib.FMT_BINARY)
+subprocess.run(["defaults", "write", domain, "settings", "-data", data.hex()], check=True)
+PY
+}
+
+cmd_build() {
+  command -v xcodegen >/dev/null || die "xcodegen not found (brew install xcodegen)"
+  mkdir -p "$SRC"
+  rm -f "$STATE/built"
+  mirror
+  (cd "$SRC" && xcodegen generate --quiet)
+  xcodebuild build -quiet \
+    -project "$SRC/TrackpadLauncher.xcodeproj" -scheme TrackpadLauncher -configuration Debug \
+    -destination 'platform=macOS,arch=arm64' -derivedDataPath "$STATE/dd" \
+    PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" PRODUCT_NAME="$PRODUCT_NAME" ONLY_ACTIVE_ARCH=YES
+  [ -x "$EXE" ] || die "build did not produce $EXE"
+  swiftc -O "$HERE/ax.swift" -o "$AX"
+  local rev; rev="$(git -C "$REPO" rev-parse --short HEAD)"
+  git -C "$REPO" diff --quiet HEAD -- "${SOURCES[@]}" && [ -z "$(git -C "$REPO" ls-files -o --exclude-standard -- "${SOURCES[@]}")" ] || rev="$rev+uncommitted"
+  echo "$rev" > "$STATE/built"
+  echo "built $APP from $REPO ($rev)"
+}
+
+cmd_launch() {
+  local fixture="default"
+  [ "${1:-}" = "--seed" ] && fixture="${2:?--seed takes default | empty | keep}"
+  [ -x "$EXE" ] || die "no build at $APP; run \`tlv build\`"
+  local stale; stale="$(stale_changes)"
+  [ -z "$stale" ] || die "build is stale against $REPO (changed: $(echo "$stale" | head -5 | tr '\n' ' ')); run \`tlv build\`"
+  [ -z "$(verify_pids)" ] || die "a verification instance is already running (pid $(verify_pids | tr '\n' ' ')); another agent may be driving it. Do not double-drive; \`tlv cleanup\` only if it is yours."
+  local others; others="$(other_pids)"
+  [ -z "$others" ] || echo "tlv: warning: another Trackpad Launcher is running (pid $(echo $others)); a real gesture would fire in both." >&2
+  if [ "$fixture" = "keep" ]; then
+    # No record would make this a first launch: login item registration and the system Accessibility prompt.
+    has_settings || die "--seed keep needs stored settings, and there are none (cleanup deletes them); use --seed default or empty"
+    [ -f "$STATE/run-id" ] || date +%Y%m%d-%H%M%S > "$STATE/run-id"
+  else
+    seed "$fixture"
+    date +%Y%m%d-%H%M%S > "$STATE/run-id"
+  fi
+  open -n -g "$APP"
+  local p="" i
+  for i in $(seq 50); do p="$(our_pids)"; [ -n "$p" ] && break; sleep 0.2; done
+  [ -n "$p" ] || die "app process did not appear within 10s"
+  echo "$p" > "$STATE/pid"
+  for i in $(seq 50); do
+    ax status "$p" 2>/dev/null | grep -q '"statusItem":true' && { echo "ready: pid $p, run $(run_id), evidence $(evidence_dir)"; return; }
+    sleep 0.2
+  done
+  die "pid $p started but its menu bar icon never appeared"
+}
+
+cmd_doctor() {
+  local ok=1 p stale others
+  echo "repo:      $REPO ($(git -C "$REPO" rev-parse --short HEAD))"
+  if [ ! -x "$EXE" ] || [ ! -x "$AX" ]; then
+    echo "build:     MISSING; run \`tlv build\`"; ok=0
+  else
+    stale="$(stale_changes)"
+    if [ -n "$stale" ]; then
+      echo "build:     STALE, these differ from the build: $(echo "$stale" | head -5 | tr '\n' ' '); run \`tlv build\`"; ok=0
+    else
+      echo "build:     $APP ($(cat "$STATE/built"), matches working tree)"
+    fi
+  fi
+  if p="$(pid 2>/dev/null)"; then
+    echo "instance:  pid $p, $(ax status "$p")"
+  else
+    echo "instance:  NOT RUNNING$( [ -n "$(verify_pids)" ] && echo " (unrecorded verification pid $(echo $(verify_pids)))")"; ok=0
+  fi
+  others="$(other_pids)"
+  echo "others:    ${others:-none}$([ -n "$others" ] && echo '  (real gestures fire in both)')"
+  echo "settings:  $(settings_json | tr -d '\n ' | cut -c1-200)"
+  echo "evidence:  $EVIDENCE_ROOT/$(cat "$STATE/run-id" 2>/dev/null || echo '<no run>')"
+  [ "$ok" = 1 ] && echo "doctor: OK" || { echo "doctor: NOT READY"; return 1; }
+}
+
+cmd_screenshot() {
+  local name="${1:?screenshot takes a name}" p f
+  p="$(pid)"; f="$(evidence_dir)/$name.png"
+  screencapture -x -R"$(ax frame "$p")" "$f"
+  echo "$f"
+}
+
+# One proof bundle: the AX tree, the rows, the stored settings and a screenshot of the window.
+cmd_capture() {
+  local name="${1:?capture takes a name}" p d
+  p="$(pid)"; d="$(evidence_dir)"
+  ax tree "$p" > "$d/$name.ax.txt"
+  settings_json > "$d/$name.settings.json"
+  if ax status "$p" | grep -q '"windowOpen":true'; then
+    ax rows "$p" > "$d/$name.rows.json"
+    screencapture -x -R"$(ax frame "$p")" "$d/$name.png"
+  fi
+  ls "$d"/"$name".*
+}
+
+# Runs any tlv command and saves the command, its output and exit code as <name>.txt in the evidence dir.
+cmd_record() {
+  local name="${1:?record takes <name> <tlv command...>}" f code=0 out
+  shift
+  f="$(evidence_dir)/$name.txt"
+  out="$("$0" "$@" 2>&1)" || code=$?
+  printf '$ tlv %s\n%s\n[exit %s]\n' "$*" "$out" "$code" | tee "$f"
+  return "$code"
+}
+
+cmd_quit() {
+  local p i; p="$(pid)"
+  ax press "$p" quit >/dev/null
+  for i in $(seq 25); do kill -0 "$p" 2>/dev/null || { rm -f "$STATE/pid"; echo "quit: pid $p exited"; return; }; sleep 0.2; done
+  die "pid $p still running 5s after Quit"
+}
+
+cmd_cleanup() {
+  local p i
+  for p in $(our_pids); do kill "$p" 2>/dev/null && echo "killed verification instance $p"; done
+  for i in $(seq 25); do [ -z "$(our_pids)" ] && break; sleep 0.2; done
+  [ -z "$(our_pids)" ] || die "verification instance still running 5s after SIGTERM: $(our_pids)"
+  rm -f "$STATE/pid"
+  defaults delete "$BUNDLE_ID" >/dev/null 2>&1 && echo "deleted defaults domain $BUNDLE_ID" || true
+  [ -f "$STATE/run-id" ] && echo "evidence kept: $EVIDENCE_ROOT/$(cat "$STATE/run-id")"
+  rm -f "$STATE/run-id"
+}
+
+cmd_help() {
+  cat <<EOF
+tlv build                         mirror sources to $SRC, xcodegen + xcodebuild (bundle ID $BUNDLE_ID), compile the AX helper
+tlv launch [--seed default|empty|keep]
+                                  seed settings, open the app, wait for the menu bar icon (refuses a stale build)
+tlv doctor                        read-only: build matches working tree, our pid alive, icon present, other copies, settings
+tlv open | close | click-icon     open/close the window (click-icon toggles, exactly one click)
+tlv tree | rows | frame | status  read the window (AX tree with labels, picker titles, frame, state)
+tlv menu <n>                      list row n's picker menu (✓ marks the checked item), then cancel it
+tlv pick <n> <title>              choose an app or "None" in row n's picker ("Other…": ask the user first)
+tlv hand left|right               click the hand mode segment
+tlv press quit|grant-access|trackpad-settings
+tlv escape                        post Escape to our process only (refuses unless the window is key)
+tlv settings                      stored settings record as JSON
+tlv frontmost                     frontmost app name and bundle ID
+tlv screenshot <name>             PNG of the window into the evidence dir
+tlv capture <name>                AX tree + rows + settings + PNG into the evidence dir
+tlv record <name> <command...>    run a tlv command, save command + output + exit code as <name>.txt
+tlv evidence-dir                  print this run's evidence dir
+tlv quit                          quit through the window's Quit button
+tlv cleanup                       kill our instance, delete our defaults domain; evidence is kept
+EOF
+}
+
+case "${1:-help}" in
+  build) cmd_build ;;
+  launch) shift; cmd_launch "$@" ;;
+  doctor) cmd_doctor ;;
+  open|close|tree|rows|frame|status|escape|click-icon) ax "$1" "$(pid)" ;;
+  menu|pick|hand|press) c="$1"; shift; ax "$c" "$(pid)" "$@" ;;
+  settings) settings_json ;;
+  frontmost) ax frontmost ;;
+  screenshot) shift; cmd_screenshot "$@" ;;
+  capture) shift; cmd_capture "$@" ;;
+  record) shift; cmd_record "$@" ;;
+  evidence-dir) evidence_dir ;;
+  quit) cmd_quit ;;
+  cleanup) cmd_cleanup ;;
+  pid) pid ;;
+  help|-h|--help) cmd_help ;;
+  *) die "unknown command $1; see \`tlv help\`" ;;
+esac
