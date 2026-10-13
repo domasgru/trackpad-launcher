@@ -17,7 +17,7 @@ import LauncherCore
         world.launcher.openWindow()
         let base = rest()
 
-        world.play(base.thumb(atMM: (10, 10)))
+        world.play(base.thumb(atMM: (10, 10)).wait(.milliseconds(50)))
         #expect(nothingHappened(world))
         #expect(world.launcher.isWindowOpen)
 

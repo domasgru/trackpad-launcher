@@ -61,11 +61,23 @@ import LauncherCore
         #expect(recognitions.last { $0.recognition.event != nil }!.time > 1.6)
     }
 
+    @Test func aThumbThatRolledOutOfTheCornerAndLiftedDoesNotSpoilTheNextThumbTapUnderTheSameFingers() {
+        let rolled = { (script: TouchScript) in
+            script.thumb(atMM: (10, 10)).wait(.milliseconds(100)).rollThumb(toMM: (40, 10)).wait(.milliseconds(300))
+                .liftThumb().wait(.milliseconds(100))
+        }
+        #expect(swaps(rolled(rest(for: 150)).thumbTap().frames) == [true])
+        #expect(swaps(rolled(rest(for: 150).thumbTap()).thumbTap().frames) == [true, false])
+    }
+
     @Test func withSwapsOffAThumbUnderRestingFingersOnlyFollowsTheThumbRules() {
         var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: false, travel: .linear)
-        let recognitions = rest(for: 150).thumbTap().frames.map { recognizer.step($0) }
+        let frames = rest(for: 150).thumbTap().frames
+        let recognitions = frames.map { recognizer.step($0) }
+        let thumbDown = zip(frames, recognitions).filter { $0.0.touches.count == 3 }.map(\.1)
         #expect(recognitions.allSatisfy { $0.event == nil })
-        #expect(recognitions.contains { $0.blocksClicks && $0.blocksDockSwipes })
+        #expect(!thumbDown.isEmpty)
+        #expect(thumbDown.allSatisfy { $0.blocksClicks && $0.blocksDockSwipes })
     }
 
     @Test func theSeriesBlocksClicksAndDockSwipesWhileAnyRestFingerIsDownWhateverTheClockDid() {

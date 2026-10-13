@@ -49,7 +49,7 @@ func swaps(
     swaps: Bool = true
 ) -> [Bool] {
     var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: true, swaps: swaps, travel: .linear)
-    return frames.compactMap { recognizer.step($0).swap }
+    return frames.compactMap { recognizer.step($0).swapStartsSeries }
 }
 
 /// Per frame: what the recognizer said about a swipe, and whether it blocked clicks.

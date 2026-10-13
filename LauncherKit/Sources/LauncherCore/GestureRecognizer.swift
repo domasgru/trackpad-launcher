@@ -24,7 +24,7 @@ public struct Recognition: Equatable, Sendable {
     public var fired: Gesture? { if case .fired(let gesture)? = event { gesture } else { nil } }
     public var swipe: SwipePhase? { if case .swipe(let phase)? = event { phase } else { nil } }
 
-    public var swap: Bool? { if case .swap(let startsSeries)? = event { startsSeries } else { nil } }
+    public var swapStartsSeries: Bool? { if case .swap(let startsSeries)? = event { startsSeries } else { nil } }
 
     public init(event: Event?, blocksClicks: Bool, blocksDockSwipes: Bool) {
         self.event = event
@@ -198,14 +198,15 @@ public struct GestureRecognizer: Sendable {
         // Anything that happens to the other contacts spoils a thumb tap in progress.
         var changed = !lifted.isDisjoint(with: rest.fingers) || landed.contains { $0.id != rest.thumb?.id }
         rest.fingers.subtract(lifted)
-        if !rest.isStopped, Self.drag(of: rest.fingers.sorted { $0.rawValue < $1.rawValue }, in: down, book: book, on: surface) != nil {
+        rest.rolled.subtract(lifted)
+        if !rest.isStopped, Self.drag(of: rest.fingers.subtracting(rest.rolled).sorted { $0.rawValue < $1.rawValue }, in: down, book: book, on: surface) != nil {
             rest.isStopped = true
             changed = true
         }
 
         if let thumb = rest.thumb {
             if lifted.contains(thumb.id) {
-                if thumb.isTap, !changed, let landedAt = departed[thumb.id]?.firstSeen,
+                if thumb.canSwap, !changed, let landedAt = departed[thumb.id]?.firstSeen,
                    frame.time - landedAt <= GestureRules.maxTapDuration {
                     event = .swap(startsSeries: !rest.isSeries)
                     rest.isSeries = true
@@ -213,25 +214,27 @@ public struct GestureRecognizer: Sendable {
                 }
                 rest.thumb = nil
             } else if let position = down[thumb.id]?.position, !corner.holds(position) {
-                // A thumb that slid out is a finger until it lifts and lands again.
+                // A thumb that slid out is a finger until it lifts and lands again. It did not land outside the
+                // corner, so neither its path from the corner nor being a third finger stops the rest.
                 rest.fingers.insert(thumb.id)
+                rest.rolled.insert(thumb.id)
                 rest.thumb = nil
-            } else if thumb.isTap,
+            } else if thumb.canSwap,
                       changed || Self.drag(of: [thumb.id], in: down, book: book, on: surface) != nil
                         || book[thumb.id].map({ frame.time - $0.firstSeen > GestureRules.maxTapDuration }) ?? true {
-                rest.thumb?.isTap = false
+                rest.thumb?.canSwap = false
             }
         }
 
         let thumbLanding = rest.thumb == nil ? landed.first { corner.admits($0.position) } : nil
         for touch in landed where touch.id != thumbLanding?.id { rest.fingers.insert(touch.id) }
-        if rest.isSeries && rest.fingers.count > 2 { rest.isStopped = true }
+        if rest.isSeries && rest.fingers.subtracting(rest.rolled).count > 2 { rest.isStopped = true }
         if let thumbLanding {
             let qualifies = swaps && !rest.isStopped && rest.fingers.count == 2
                 && rest.fingers.allSatisfy { id in
                     book[id].map { frame.time - $0.firstSeen >= GestureRules.minRestBeforeThumbTap } ?? false
                 }
-            rest.thumb = RestThumb(id: thumbLanding.id, isTap: qualifies)
+            rest.thumb = RestThumb(id: thumbLanding.id, canSwap: qualifies)
         }
 
         if rest.fingers.isEmpty {
@@ -309,6 +312,8 @@ public struct GestureRecognizer: Sendable {
         /// Every contact down but the thumb.
         var fingers: Set<TouchID>
         var thumb: RestThumb?
+        /// Fingers that are a thumb which rolled out of the corner.
+        var rolled: Set<TouchID> = []
         /// Some finger moved more than `dragThresholdMM` from its reference, or a third finger joined a series.
         /// Permanent for this rest.
         var isStopped = false
@@ -319,7 +324,7 @@ public struct GestureRecognizer: Sendable {
     private struct RestThumb: Sendable {
         let id: TouchID
         /// Still able to swap when it lifts. Otherwise it is only held: an anchored thumb once the fingers lift.
-        var isTap: Bool
+        var canSwap: Bool
     }
 
     private struct Swipe: Sendable {

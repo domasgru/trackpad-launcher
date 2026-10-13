@@ -36,4 +36,9 @@
 - T28 and T23's recognizer half repeated the held-thumb-becomes-anchor proof T13 gives → their `.one` tails dropped.
 
 ## Implement
-- <what implementation-reviewer found> → <what changed>
+- A thumb that rolled out of the corner joined the rest and latched its stop (drift from its corner landing, or a third finger during a series), so its next landing under the same two fingers could not swap, against R6 → a rolled-out thumb is a rest finger that counts for neither the drift stop nor the third-finger stop; recognizer row added for both before and during a series.
+- `RestThumb.isTap` meant "can still swap", not the glossary's thumb tap → renamed `canSwap`; `Recognition.swap` renamed `swapStartsSeries`.
+- T1 asserted nothing only on the landing frame, not through 50 ms of hold → plays the hold too.
+- T23's recognizer half checked that some frame blocked → checks both flags on every thumb-down frame.
+- `docs/domain-model.md` said the model keeps nothing beyond the series in progress, while decision 7 replaces the memory only when the next series starts → the doc follows decision 7.
+- Not changed: the `swipes`/`swaps` flag pair (decision 6 folds them at a third option); `setSwap` and the switch row mirroring their neighbours; multi-clause tests, which follow the plan's lettered rows.
