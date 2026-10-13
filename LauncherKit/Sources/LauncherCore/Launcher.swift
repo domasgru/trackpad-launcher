@@ -16,6 +16,7 @@ public final class Launcher {
     public var handMode: HandMode { settings.handMode }
     public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
     public var isSwipeOn: Bool { settings.isSwipeOn }
+    public var isSwapOn: Bool { settings.isSwapOn }
     /// The window's hint, which mentions swiping only while the swipe is on.
     public var gestureHint: String { Copy.gestureHint(for: settings.handMode, swipe: settings.isSwipeOn) }
     /// One derivation, read by the icon, the notice and the fire guard.
@@ -131,6 +132,14 @@ public final class Launcher {
         reconcile()
     }
 
+    /// Swap switch. Saved at once; the recognizers are rebuilt, so the next thumb tap obeys it.
+    public func setSwap(on: Bool) {
+        guard on != settings.isSwapOn else { return }
+        settings.isSwapOn = on
+        store.save(settings)
+        reconcile()
+    }
+
     /// Show the launcher window, re-resolve the rows and refresh the app list in the background.
     public func openWindow() {
         if window == .closed { window = .open }
@@ -171,7 +180,7 @@ public final class Launcher {
         // Blocking needs gestures active and access granted; without either, presses are plain clicks.
         let run = Run(
             trackpads: active ? connected : [], handMode: settings.handMode, blockClicks: active && granted,
-            swipes: settings.isSwipeOn, swaps: true)
+            swipes: settings.isSwipeOn, swaps: settings.isSwapOn)
         guard restart || run != lastRun else { return }
         lastRun = run
         // Running replaces every recognizer, which ends any swipe in progress.
