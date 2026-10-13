@@ -4,16 +4,10 @@ import SwiftUI
 
 /// An `NSPopUpButton` whose delegate rebuilds the items from the launcher's list every time the menu opens. That is
 /// only building items from values already in memory: no disk, Spotlight or icon drawing runs on the click path.
-/// Between openings the menu holds only what the button shows. One coordinator serves both forms.
+/// Between openings the menu holds only what the button shows.
 struct AppMenuButton: NSViewRepresentable {
-    enum Form {
-        /// A gesture row's picker: shows the row's app and checks it in the menu; the menu ends in None.
-        case popUp(current: RowApp)
-        /// The switcher's Add app…: shows the title; listed apps are checked and disabled; no None.
-        case pullDown(title: String, listed: Set<BundleID>)
-    }
-
-    let form: Form
+    /// A gesture row's picker: shows the row's app and checks it in the menu; the menu ends in None.
+    let current: RowApp
     let installedApps: InstalledApps
     let cachedIcon: (URL) -> NSImage
     let icon: (URL) -> NSImage
@@ -24,14 +18,8 @@ struct AppMenuButton: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSPopUpButton {
-        let button = NSPopUpButton(frame: .zero, pullsDown: form.pullsDown)
-        switch form {
-        case .popUp:
-            button.isBordered = false
-        case .pullDown:
-            button.bezelStyle = .rounded
-            button.controlSize = .large
-        }
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        button.isBordered = false
         button.font = .systemFont(ofSize: 13)
         button.menu?.autoenablesItems = false
         button.menu?.delegate = context.coordinator
@@ -41,7 +29,7 @@ struct AppMenuButton: NSViewRepresentable {
 
     func updateNSView(_ button: NSPopUpButton, context: Context) {
         let coordinator = context.coordinator
-        coordinator.form = form
+        coordinator.current = current
         coordinator.installedApps = installedApps
         coordinator.cachedIcon = cachedIcon
         coordinator.icon = icon
@@ -53,7 +41,7 @@ struct AppMenuButton: NSViewRepresentable {
 
     @MainActor final class Coordinator: NSObject, NSMenuDelegate {
         weak var button: NSPopUpButton?
-        var form = Form.popUp(current: .unassigned)
+        var current = RowApp.unassigned
         var installedApps = InstalledApps.empty
         var cachedIcon: (URL) -> NSImage = { _ in NSImage() }
         var icon: (URL) -> NSImage = { _ in NSImage() }
@@ -64,7 +52,7 @@ struct AppMenuButton: NSViewRepresentable {
         func showCurrentOnly() {
             guard let button else { return }
             button.removeAllItems()
-            button.menu?.addItem(shownItem())
+            button.menu?.addItem(currentItem(current))
             button.selectItem(at: 0)
         }
 
@@ -85,25 +73,11 @@ struct AppMenuButton: NSViewRepresentable {
             guard let button else { return }
             menu.removeAllItems()
             var selected: NSMenuItem?
-            let pickerItems: [PickerItem]
-            switch form {
-            case .popUp(let current):
-                pickerItems = installedApps.pickerMenu(checking: current)
-            case .pullDown(let title, let listed):
-                menu.addItem(NSMenuItem(title: title, action: nil, keyEquivalent: ""))
-                pickerItems = installedApps.addMenu(listing: listed)
-            }
-            for pickerItem in pickerItems {
+            for pickerItem in installedApps.pickerMenu(checking: current) {
                 switch pickerItem {
                 case .app(let entry, let state):
                     let item = appItem(entry, icon: cachedIcon(entry.url))
-                    switch state {
-                    case .plain: break
-                    case .current: selected = item
-                    case .listed:
-                        item.state = .on
-                        item.isEnabled = false
-                    }
+                    if state == .current { selected = item }
                     menu.addItem(item)
                 case .divider:
                     menu.addItem(.separator())
@@ -115,13 +89,6 @@ struct AppMenuButton: NSViewRepresentable {
                 }
             }
             button.select(selected)
-        }
-
-        private func shownItem() -> NSMenuItem {
-            switch form {
-            case .popUp(let current): currentItem(current)
-            case .pullDown(let title, _): NSMenuItem(title: title, action: nil, keyEquivalent: "")
-            }
         }
 
         private func currentItem(_ app: RowApp) -> NSMenuItem {
@@ -172,11 +139,5 @@ struct AppMenuButton: NSViewRepresentable {
             chooseOther()
             showCurrentOnly()
         }
-    }
-}
-
-private extension AppMenuButton.Form {
-    var pullsDown: Bool {
-        if case .pullDown = self { true } else { false }
     }
 }

@@ -4,14 +4,12 @@ import Observation
 
 /// Renders `launcher.switcher` and holds nothing the model holds. Owned by `MenuBarShell`.
 ///
-/// The panel is created now so a swipe never pays the first window's cost, and the 80 pt icons of the switcher list are
-/// drawn before any swipe, again whenever the list or the appearance changes.
+/// The panel is created now so a swipe never pays the first window's cost.
 final class SwitcherPresenter {
     private let launcher: Launcher
     private let panel = SwitcherPanel()
     private let icons = AppIcons(side: SwitcherPanel.iconSide)
     private var observations: [Task<Void, Never>] = []
-    private var appearanceObservation: NSKeyValueObservation?
     private var laidOutRow: [AppEntry] = []
     private var lastStretch = 0.0
     private var isShown = false
@@ -20,27 +18,15 @@ final class SwitcherPresenter {
 
     init(launcher: Launcher) {
         self.launcher = launcher
-        icons.renderOnMainActor(Self.listedApps(launcher))
         observations.append(
             Task { [weak self] in
                 for await shown in Observations({ launcher.switcher }) { self?.render(shown) }
             })
-        observations.append(
-            Task { [weak self] in
-                for await _ in Observations({ launcher.switcherRows }) { self?.renderIcons() }
-            })
-        appearanceObservation = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
-            MainActor.assumeIsolated { self?.renderIcons() }
-        }
     }
 
     isolated deinit {
         observations.forEach { $0.cancel() }
     }
-
-    private static func listedApps(_ launcher: Launcher) -> [AppEntry] { launcher.switcherRows.compactMap(\.present) }
-
-    private func renderIcons() { icons.renderOffMainActor(Self.listedApps(launcher)) }
 
     /// nil hides: opacity to 0 over 150 ms, then out, unless a switcher opened meanwhile (Reduce motion: at once).
     /// A switcher that is not on screen yet, or whose row differs from the laid-out one, is laid out and shown first.

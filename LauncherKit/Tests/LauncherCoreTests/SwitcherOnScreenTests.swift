@@ -55,56 +55,62 @@ import LauncherCore
 
     // MARK: The row and where the selection starts
 
-    @Test func theRowIsTheSwitcherListInWindowOrderAndTheSelectionStartsOnTheFrontmostApp() {
-        let inList = World.switcherWorld()
-        inList.makeFrontmost("Slack")
-        inList.swipe(3.5, lift: false)
-        #expect(names(inList.launcher.switcher) == ["Mail", "Slack", "Notes"])
-        #expect(names(inList.launcher.switcher) == inList.launcher.switcherRows.map(\.assigned.name))
-        #expect(inList.launcher.switcher?.selectedApp.name == "Slack")
-
-        let outside = World.switcherWorld()
-        outside.swipe(3.5, lift: false)
-        #expect(names(outside.launcher.switcher) == ["Safari", "Mail", "Slack", "Notes"])
-        #expect(outside.launcher.switcher?.selectedApp.name == "Safari")
-
-        let elsewhere = World.switcherWorld()
-        elsewhere.install("Sketch", in: elsewhere.downloads)
-        elsewhere.system.frontmost = elsewhere.downloads.appending(path: "Sketch.app")
-        elsewhere.swipe(3.5, lift: false)
-        #expect(names(elsewhere.launcher.switcher)?.first == "Sketch")
-    }
-
-    @Test func aListedAppInTheTrashIsLeftOutWithoutOpeningTheWindowFirst() {
-        let world = World(apps: ["Safari", "Mail", "Figma", "Notes"])
+    @Test func theRowIsTheRunningAppsInOrderAndTheSelectionStartsOnTheFrontmostApp() {
+        let world = World(apps: ["Safari", "Mail", "Notes"])
         world.launcher.start()
-        for name in ["Mail", "Figma", "Notes"] { world.launcher.addToSwitcher(.app(world.app(name))) }
+        world.makeRunning(["Safari", "Mail", "Notes"])
         world.makeFrontmost("Safari")
-        world.registry[world.app("Figma").bundleID] = [world.trash("Figma")]
 
         world.swipe(3.5, lift: false)
 
         #expect(names(world.launcher.switcher) == ["Safari", "Mail", "Notes"])
+        #expect(world.launcher.switcher?.selectedApp.name == "Safari")
+        #expect(world.launcher.switcher?.selectsFrontmost == true)
     }
 
-    @Test func theNextSwitcherUsesTheNewOrderAlsoAfterARelaunch() {
-        let world = World.switcherWorld()
-        world.makeFrontmost("Slack")
-        world.launcher.moveInSwitcher(world.app("Notes").bundleID, to: 0)
-        world.swipe(3.5, lift: false)
-        #expect(names(world.launcher.switcher) == ["Notes", "Mail", "Slack"])
-        #expect(world.launcher.switcher?.selectedApp.name == "Slack")
+    @Test func aFrontmostAppMissingFromTheRunningAppsSitsAtTheLeftEndAndTheActiveAppLeadsADisagreeingList() {
+        let menuBar = World(apps: ["Bartender", "Safari", "Mail"])
+        menuBar.launcher.start()
+        menuBar.makeRunning(["Safari", "Mail"])
+        menuBar.makeFrontmost("Bartender")
+        menuBar.swipe(3.5, lift: false)
+        #expect(names(menuBar.launcher.switcher) == ["Bartender", "Safari", "Mail"])
+        #expect(menuBar.launcher.switcher?.selectedApp.name == "Bartender")
 
-        let relaunched = World(apps: ["Safari", "Slack", "Notes", "Mail"])
-        relaunched.launcher.start()
-        relaunched.launcher.addToSwitcher(.app(relaunched.app("Mail")))
-        relaunched.launcher.addToSwitcher(.app(relaunched.app("Notes")))
-        relaunched.launcher.moveInSwitcher(relaunched.app("Notes").bundleID, to: 0)
-        relaunched.relaunch()
-        relaunched.launcher.start()
-        relaunched.makeFrontmost("Safari")
-        relaunched.swipe(3.5, lift: false)
-        #expect(names(relaunched.launcher.switcher) == ["Safari", "Notes", "Mail"])
+        let race = World(apps: ["Safari", "Mail", "Notes"])
+        race.launcher.start()
+        race.makeRunning(["Safari", "Mail", "Notes"])
+        race.makeFrontmost("Mail")
+        race.swipe(3.5, lift: false)
+        #expect(names(race.launcher.switcher) == ["Mail", "Safari", "Notes"])
+    }
+
+    @Test func twoRunningCopiesOfOneBundleAreTwoIcons() {
+        let world = World(apps: ["Safari", "Slack"])
+        world.launcher.start()
+        world.install("Slack", in: world.downloads)
+        let applicationsCopy = world.app("Slack")
+        let downloadsCopy = world.app("Slack", in: world.downloads)
+        world.makeRunning([world.app("Safari"), applicationsCopy, downloadsCopy])
+        world.system.frontmost = downloadsCopy
+
+        world.swipe(3.5, lift: false)
+
+        #expect(names(world.launcher.switcher) == ["Slack", "Safari", "Slack"])
+        #expect(world.launcher.switcher?.row.map(\.url) == [downloadsCopy.url, world.app("Safari").url, applicationsCopy.url])
+        #expect(world.launcher.switcher?.selectedApp == downloadsCopy)
+    }
+
+    @Test func theNextSwitcherReadsTheOrderAfreshRatherThanKeepingTheLastRow() {
+        let world = World.switcherWorld()
+        let first = world.swipe(3.5, 12)
+        #expect(world.system.broughtToFront == [world.app("Mail")])
+
+        world.makeFrontmost("Mail")
+        world.makeRunning(["Mail", "Safari", "Slack", "Notes"])
+        world.play(first.land(fingers: 2).slide(byMM: (3.5, 0)))
+
+        #expect(names(world.launcher.switcher) == ["Mail", "Safari", "Slack", "Notes"])
     }
 
     // MARK: Following the fingers
@@ -318,73 +324,30 @@ import LauncherCore
 
     // MARK: Nothing to switch to
 
-    @Test func anEmptyListRecognisesNoSwipeAndBlocksNothingPastTheWindowUntilItHoldsAnApp() {
+    @Test(arguments: [false, true])
+    func aSwipeWithNothingToShowStaysBlockedUntilTheFingersLiftWithoutRestartingTheTrackpads(noActiveApp: Bool) {
         let world = World(apps: ["Safari", "Mail"], accessGranted: true)
         world.launcher.start()
-        world.makeFrontmost("Safari")
-        let late = thumb.wait(.seconds(4)).land(fingers: 2).slide(byMM: (20, 0)).press().lift()
-
-        world.play(late)
-        #expect(world.launcher.switcher == nil)
-        #expect(nothingHappened(world))
-        #expect(world.hardware.pressVerdicts == [.pass, .pass])
-
-        world.launcher.addToSwitcher(.app(world.app("Mail")))
-        let swiping = late.frames.prefix { $0.press != .click }
-        world.hardware.touch(Array(swiping), on: trackpad.id)
-        #expect(world.launcher.switcher != nil)
-        world.hardware.touch(Array(late.frames.dropFirst(swiping.count)), on: trackpad.id)
-        #expect(world.hardware.pressVerdicts == [.pass, .pass, .drop, .drop])
-        #expect(world.system.broughtToFront == [world.app("Mail")])
-    }
-
-    @Test(arguments: [Duration.zero, .seconds(4)], [false, true])
-    func aSwipeWithNothingToShowEndsFromMainSoNothingStaysBlocked(rest: Duration, missing: Bool) {
-        let world = World(apps: ["Safari", "Mail", "Figma"], accessGranted: true)
-        world.launcher.start()
-        world.makeFrontmost("Safari")
-        if missing {
-            world.launcher.addToSwitcher(.app(world.app("Figma")))
-            world.registry[world.app("Figma").bundleID] = [world.trash("Figma")]
+        let finder = world.app("Finder", in: world.coreServices)
+        if noActiveApp {
+            world.makeRunning(["Safari", "Mail"])
+            world.makeFrontmost(nil)
         } else {
-            world.launcher.addToSwitcher(.app(world.app("Safari")))
+            world.makeRunning([finder])
+            world.system.frontmost = finder
         }
+        let runs = world.hardware.runCount
 
-        let begin = thumb.wait(rest).land(fingers: 2).slide(byMM: (3.5, 0))
+        let begin = thumb.wait(.seconds(4)).land(fingers: 2).slide(byMM: (3.5, 0))
         world.play(begin)
         #expect(world.launcher.switcher == nil)
-        #expect(world.hardware.scroll(.fingers(.began)) == .pass)
+        #expect(world.hardware.runCount == runs)
 
         world.play(begin.press().slide(byMM: (12, 0)).lift())
-        #expect(world.hardware.pressVerdicts == [.pass, .pass])
+        #expect(world.hardware.pressVerdicts == [.drop, .drop])
         #expect(world.launcher.switcher == nil)
         #expect(nothingHappened(world))
-        #expect(world.scanner.scanRequests == 1)
-
-        world.launcher.addToSwitcher(.app(world.app("Mail")))
-        world.play(begin.press().slide(byMM: (12, 0)).lift().land(fingers: 2).slide(byMM: (3.5, 0)))
-        #expect(names(world.launcher.switcher) == ["Safari", "Mail"])
-    }
-
-    @Test(arguments: [nil, "Notes.txt"] as [String?])
-    func noReadableFrontmostAppShowsNothingAndNextTimeItWorks(frontmost: String?) {
-        let world = World.switcherWorld(accessGranted: true)
-        world.makeFrontmost(nil)
-        if let frontmost { world.system.frontmost = world.downloads.appending(path: frontmost) }
-
-        let begin = thumb.land(fingers: 2).slide(byMM: (3.5, 0))
-        world.play(begin)
-        #expect(world.launcher.switcher == nil)
         #expect(world.hardware.scroll(.fingers(.began)) == .pass)
-
-        let rest = begin.press().slide(byMM: (12, 0)).lift()
-        world.play(rest)
-        #expect(world.hardware.pressVerdicts == [.pass, .pass])
-        #expect(nothingHappened(world))
-
-        world.makeFrontmost("Safari")
-        world.play(rest.land(fingers: 2).slide(byMM: (3.5, 0)))
-        #expect(names(world.launcher.switcher) == ["Safari", "Mail", "Slack", "Notes"])
     }
 
     @Test func whileGesturesAreInactiveTheSwipeDoesNothingEvenIfOneWasInFlight() {
@@ -400,19 +363,114 @@ import LauncherCore
         #expect(world.launcher.switcher == nil)
     }
 
-    @Test(arguments: [true, false])
-    func anEditThatFlipsTheListsEmptinessRebuildsTheRecognizersAndOtherEditsDoNot(listed: Bool) {
-        let world = World(apps: ["Safari", "Mail", "Slack"], accessGranted: true)
+    // MARK: The lift and the left end
+
+    @Test func oneStepRightAndLiftBringsMailToTheFrontWithTheGestureHapticAndClosesTheWindow() {
+        let world = World.switcherWorld()
+        world.launcher.openWindow()
+
+        world.swipe(3.5, 12)
+
+        #expect(world.system.broughtToFront == [world.app("Mail")])
+        #expect(
+            world.hardware.pulses == [
+                .init(haptic: .lightTick, trackpad: trackpad.id), .init(haptic: .gesture, trackpad: trackpad.id),
+            ])
+        #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.launcher.switcher == nil)
+        #expect(!world.launcher.isWindowOpen)
+    }
+
+    @Test func liftingBeforeAnIconIsReachedDoesNothing() {
+        let world = World.switcherWorld()
+        world.launcher.openWindow()
+
+        world.swipe(3.5, 4)
+
+        #expect(nothingHappened(world))
+        #expect(world.launcher.isWindowOpen)
+    }
+
+    @Test func leftHandedTheSameSlideRightReachesTheSameNextApp() {
+        let world = World.switcherWorld()
+        world.launcher.setHandMode(.left)
+
+        world.play(
+            TouchScript(trackpad.surface).thumb(atMM: (114.8, 10)).land(fingers: 2).slide(byMM: (3.5, 0))
+                .slide(byMM: (12, 0)).lift())
+
+        #expect(world.system.broughtToFront == [world.app("Mail")])
+        #expect(world.hardware.pulses.map(\.haptic) == [.lightTick, .gesture])
+    }
+
+    @Test func pushingLeftPastTheFrontmostAppStretchesAndTheNextAppComesSevenMillimetresAfterTheTurn() {
+        let world = World.switcherWorld()
+        let pushed = world.swipe(3.5, -30, lift: false)
+        #expect(world.launcher.switcher?.selectedApp.name == "Safari")
+        #expect((world.launcher.switcher?.stretch ?? 0) < 0)
+        #expect(world.hardware.lightTicks.isEmpty)
+
+        let turned = pushed.slide(byMM: (5, 0))
+        world.play(turned)
+        #expect(world.launcher.switcher?.selectedApp.name == "Safari")
+        #expect(world.launcher.switcher?.stretch == 0)
+
+        world.play(turned.slide(byMM: (2, 0)))
+        #expect(world.launcher.switcher?.selectedApp.name == "Mail")
+        #expect(world.hardware.lightTicks.count == 1)
+
+        world.play(turned.slide(byMM: (2, 0)).lift())
+        #expect(world.system.broughtToFront == [world.app("Mail")])
+    }
+
+    // MARK: The row is fixed for the swipe
+
+    @Test func anAppThatQuitMidSwipeIsNotRelaunchedAndNothingPlaysAtTheLift() {
+        let world = World(apps: ["Safari", "Mail", "Notes"])
         world.launcher.start()
-        if listed { world.launcher.addToSwitcher(.app(world.app("Mail"))) }
+        world.makeRunning(["Safari", "Mail", "Notes"])
+        world.makeFrontmost("Safari")
+        let hand = world.swipe(3.5, 24, lift: false)
+        #expect(world.launcher.switcher?.selectedApp.name == "Notes")
 
-        let hand = thumb.land(fingers: 1)
-        world.play(hand)
-        world.launcher.addToSwitcher(.app(world.app("Slack")))
-        world.play(hand.press().lift())
+        world.makeRunning(["Safari", "Mail"])
+        world.play(hand.lift())
 
-        #expect(world.hardware.pressVerdicts == (listed ? [.drop, .drop] : [.pass, .pass]))
-        #expect(world.scanner.scanRequests == 1)
+        #expect(world.system.broughtToFront.isEmpty)
+        #expect(world.hardware.pulses.map(\.haptic) == [.lightTick, .lightTick])
+        #expect(world.launcher.switcher == nil)
+    }
+
+    @Test func anAppThatLaunchedMidSwipeNeverJoinsTheRow() {
+        let world = World(apps: ["Safari", "Mail", "Slack", "Notes", "Calendar"])
+        world.launcher.start()
+        world.makeRunning(["Safari", "Mail", "Slack", "Notes"])
+        world.makeFrontmost("Safari")
+        let hand = world.swipe(3.5, lift: false)
+
+        world.makeFrontmost("Calendar")
+        world.makeRunning(["Calendar", "Safari", "Mail", "Slack", "Notes"])
+        let slid = hand.slide(byMM: (36, 0))
+        world.play(slid)
+
+        #expect(names(world.launcher.switcher) == ["Safari", "Mail", "Slack", "Notes"])
+        #expect(world.launcher.switcher?.selectedApp.name == "Notes")
+        #expect(world.hardware.lightTicks.count == 3)
+
+        world.play(slid.lift())
+        #expect(world.system.broughtToFront == [world.app("Notes")])
+    }
+
+    @Test func liftingOnTheStartingAppAfterAnotherCameForwardIsSilent() {
+        let world = World.switcherWorld()
+        let hand = world.swipe(3.5, 12, -12, lift: false)
+
+        world.makeFrontmost("Mail")
+        world.makeRunning(["Mail", "Safari", "Slack", "Notes"])
+        world.play(hand.lift())
+
+        #expect(world.system.broughtToFront.isEmpty)
+        #expect(world.hardware.pulses.map(\.haptic) == [.lightTick, .lightTick])
     }
 
     // MARK: Two trackpads, and a reconcile mid-swipe
@@ -421,7 +479,7 @@ import LauncherCore
         let world = World(
             apps: ["Safari", "Mail", "Slack", "Notes"], attached: [.macBook14, .magicTrackpad])
         world.launcher.start()
-        for name in ["Mail", "Slack", "Notes"] { world.launcher.addToSwitcher(.app(world.app(name))) }
+        world.makeRunning(["Safari", "Mail", "Slack", "Notes"])
         world.makeFrontmost("Safari")
         let magic = Trackpad.magicTrackpad.id
 

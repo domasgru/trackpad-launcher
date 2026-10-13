@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 import LauncherCore
 
@@ -131,5 +132,31 @@ import LauncherCore
         world.tap(2)
 
         #expect(world.system.broughtToFront == [world.app("Figma", in: world.userApplications)])
+    }
+}
+
+@MainActor @Suite struct LocateTests {
+    @Test func registeredCopiesAreConsultedOnlyWhenTheLastKnownLocationMisses() {
+        let world = World(apps: ["Figma"])
+        let calls = Mutex(0)
+        let registry = world.registry
+        let catalog = AppCatalog(
+            roots: [world.applications], extras: [],
+            registeredCopies: { calls.withLock { $0 += 1 }; return registry[$0] },
+            lastOpened: { _ in nil })
+        let figma = AssignedApp(world.app("Figma"))
+
+        #expect(catalog.locate(figma) == world.app("Figma"))
+        #expect(calls.withLock { $0 } == 0)
+
+        world.trash("Figma")
+        let live = world.install("Figma", in: world.userApplications)
+        registry[World.bundleID("Figma")] = [live]
+        #expect(catalog.locate(figma)?.url == live)
+        #expect(calls.withLock { $0 } == 1)
+
+        registry[World.bundleID("Figma")] = [world.trashFolder.appending(path: "Figma.app")]
+        #expect(catalog.locate(figma) == nil)
+        #expect(calls.withLock { $0 } == 2)
     }
 }

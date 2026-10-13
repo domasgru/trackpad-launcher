@@ -140,8 +140,10 @@ import LauncherCore
     private(set) var launchAnimations: [AppEntry] = []
     /// The latest set prepared; each prepare replaces the one before.
     private(set) var preparedLaunchAnimations: [AppEntry] = []
-    /// What the next `frontmostApp()` answers; nil models no active app, or Trackpad Launcher itself.
-    var frontmost: URL?
+    /// The active app the next `runningApps()` answers; nil models no active app, or Trackpad Launcher itself.
+    var frontmost: AppEntry?
+    /// The ⌘-Tab apps the next `runningApps()` answers, most recently activated first.
+    var running: [AppEntry] = []
     /// Runs inside `registerLoginItem()` so a test can observe what is stored at that moment.
     var onRegisterLoginItem: (() -> Void)?
     /// Runs inside `playLaunchAnimation(for:)` so a test can observe the other effects at that moment.
@@ -149,7 +151,7 @@ import LauncherCore
 
     func bringToFront(_ app: AppEntry) { broughtToFront.append(app) }
 
-    func frontmostApp() -> URL? { frontmost }
+    func runningApps() -> RunningApps { RunningApps(frontmost: frontmost, apps: running) }
 
     func registerLoginItem() {
         loginItemRegistrations += 1

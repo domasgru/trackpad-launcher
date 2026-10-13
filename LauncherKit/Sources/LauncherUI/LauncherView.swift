@@ -14,7 +14,7 @@ struct LauncherView: View {
                 ForEach(launcher.rows) { row in
                     GestureRowView(row: row, launcher: launcher, actions: actions)
                 }
-                SwitcherSection(launcher: launcher, actions: actions)
+                SwitcherSection(launcher: launcher)
                 HandModeToggle(launcher: launcher)
                     .padding(.top, 16)
                 LaunchAnimationSwitch(launcher: launcher)
@@ -62,7 +62,7 @@ struct GestureRowView: View {
             GestureIllustration(gesture: row.gesture, handMode: launcher.handMode)
             Spacer(minLength: 8)
             AppMenuButton(
-                form: .popUp(current: row.app),
+                current: row.app,
                 installedApps: launcher.installedApps,
                 cachedIcon: actions.cachedIcon,
                 icon: actions.icon,

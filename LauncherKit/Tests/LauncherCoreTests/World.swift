@@ -174,14 +174,23 @@ final class LaunchRecord: Sendable {
 extension World {
     /// What the next swipe reads as frontmost; nil models no active app, or Trackpad Launcher itself.
     func makeFrontmost(_ name: String?) {
-        system.frontmost = name.map { app($0).url }
+        system.frontmost = name.map { app($0) }
     }
 
-    /// Safari, Mail, Slack and Notes installed, Mail, Slack and Notes listed in that order, Safari frontmost, started.
+    /// What the next swipe reads as the ⌘-Tab apps, in order. Entries need not be in the catalog's roots.
+    func makeRunning(_ entries: [AppEntry]) {
+        system.running = entries
+    }
+
+    func makeRunning(_ names: [String]) {
+        makeRunning(names.map { app($0) })
+    }
+
+    /// Safari, Mail, Slack and Notes installed and running in that order, Safari frontmost, started.
     static func switcherWorld(accessGranted: Bool = false) -> World {
         let world = World(apps: ["Safari", "Mail", "Slack", "Notes"], accessGranted: accessGranted)
         world.launcher.start()
-        for name in ["Mail", "Slack", "Notes"] { world.launcher.addToSwitcher(.app(world.app(name))) }
+        world.makeRunning(["Safari", "Mail", "Slack", "Notes"])
         world.makeFrontmost("Safari")
         return world
     }

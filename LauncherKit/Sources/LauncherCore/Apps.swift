@@ -23,6 +23,21 @@ public struct AppEntry: Hashable, Sendable, Identifiable {
     }
 }
 
+/// What the apps on screen are right now, as one read of the system.
+public struct RunningApps: Equatable, Sendable {
+    /// The active app; nil when there is none, it has no bundle identifier or location, or it is Trackpad Launcher
+    /// itself, which never activates except around the Other… chooser.
+    public let frontmost: AppEntry?
+    /// The apps ⌘-Tab shows, most recently activated first. May lack `frontmost` (a menu bar app with a window in
+    /// front). Named as macOS names a running app, which can differ from the Finder name the pickers show.
+    public let apps: [AppEntry]
+
+    public init(frontmost: AppEntry?, apps: [AppEntry]) {
+        self.frontmost = frontmost
+        self.apps = apps
+    }
+}
+
 /// What a gesture points at: identity, plus what is needed to show it while missing and to find it fast.
 public struct AssignedApp: Codable, Hashable, Sendable {
     /// Identity.
@@ -50,19 +65,6 @@ public enum RowApp: Equatable, Sendable {
     case unassigned
     case present(AppEntry)
     case missing(name: String)
-}
-
-/// A switcher list row as the launcher window shows it.
-public struct SwitcherRow: Identifiable, Equatable, Sendable {
-    public let assigned: AssignedApp
-    /// nil: missing, shown greyed as "<name>  not found"; recovers when a copy exists again.
-    public let present: AppEntry?
-    public var id: BundleID { assigned.bundleID }
-
-    public init(assigned: AssignedApp, present: AppEntry?) {
-        self.assigned = assigned
-        self.present = present
-    }
 }
 
 /// A gesture row as the launcher window shows it.
@@ -113,11 +115,6 @@ public struct InstalledApps: Equatable, Sendable {
         return menu { $0.bundleID == currentID ? .current : .plain } + [.unassigned]
     }
 
-    /// The switcher's Add app… menu: like the picker's, without None. Listed apps are `.listed`.
-    public func addMenu(listing listed: Set<BundleID>) -> [PickerItem] {
-        menu { listed.contains($0.bundleID) ? .listed : .plain }
-    }
-
     private func menu(state: (AppEntry) -> AppItemState) -> [PickerItem] {
         var items = all.map { PickerItem.app($0, state: state($0)) }
         if !recent.isEmpty && !others.isEmpty { items.insert(.divider, at: recent.count) }
@@ -140,8 +137,6 @@ public enum AppItemState: Equatable, Sendable {
     case plain
     /// Checked: the picker's current app.
     case current
-    /// Checked and disabled: already in the switcher list.
-    case listed
 }
 
 /// Apps on disk. Local-substitutable: tests point it at a temp directory of fake bundles and inject
