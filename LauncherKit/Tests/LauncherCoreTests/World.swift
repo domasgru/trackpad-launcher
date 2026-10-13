@@ -37,7 +37,6 @@ final class LaunchRecord: Sendable {
     let userApplications: URL
     let coreServices: URL
     let downloads: URL
-    let trashFolder: URL
     let suiteName = "tl-test-\(UUID().uuidString)"
 
     let hardware: InMemoryTrackpads
@@ -60,8 +59,7 @@ final class LaunchRecord: Sendable {
         userApplications = root.appending(path: "UserApplications")
         coreServices = root.appending(path: "CoreServices")
         downloads = root.appending(path: "Downloads")
-        trashFolder = root.appending(path: ".Trash")
-        for dir in [applications, systemApplications, userApplications, coreServices, downloads, trashFolder] {
+        for dir in [applications, systemApplications, userApplications, coreServices, downloads] {
             try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         hardware = InMemoryTrackpads(attached: attached)
@@ -145,9 +143,12 @@ final class LaunchRecord: Sendable {
         return destination
     }
 
+    /// `trash` is a path under the root: the home folder's `.Trash`, or a volume's `.Trashes/<uid>`.
     @discardableResult
-    func trash(_ name: String) -> URL {
-        let destination = trashFolder.appending(path: "\(name).app")
+    func trash(_ name: String, into trash: String = ".Trash") -> URL {
+        let folder = root.appending(path: trash)
+        try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let destination = folder.appending(path: "\(name).app")
         try! FileManager.default.moveItem(at: applications.appending(path: "\(name).app"), to: destination)
         return destination
     }

@@ -28,6 +28,16 @@ import LauncherCore
         #expect(arc?.hasPrefix(world.applications.resolvingSymlinksInPath().path) == true)
     }
 
+    /// A symlinked folder can loop back into the tree, so its apps are never listed.
+    @Test func appsBehindASymlinkedFolderAreNotListed() throws {
+        let world = World(apps: ["Zed"])
+        world.install("Linked", in: world.downloads)
+        try FileManager.default.createSymbolicLink(
+            at: world.applications.appending(path: "Downloads"), withDestinationURL: world.downloads)
+
+        #expect(world.catalog.installedApps().all.map(\.name) == ["Finder", "Zed"])
+    }
+
     @Test func everyCallEnumeratesAfresh() {
         let world = World(apps: ["Zed"])
         #expect(!world.catalog.installedApps().others.map(\.name).contains("Slack"))

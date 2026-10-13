@@ -201,13 +201,13 @@ private extension Settings {
         #expect(catalog.locate(figma) == world.app("Figma"))
         #expect(calls.withLock { $0 } == 0)
 
-        world.trash("Figma")
+        let trashed = world.trash("Figma")
         let live = world.install("Figma", in: world.userApplications)
         registry[World.bundleID("Figma")] = [live]
         #expect(catalog.locate(figma)?.url == live)
         #expect(calls.withLock { $0 } == 1)
 
-        registry[World.bundleID("Figma")] = [world.trashFolder.appending(path: "Figma.app")]
+        registry[World.bundleID("Figma")] = [trashed]
         #expect(catalog.locate(figma) == nil)
         #expect(calls.withLock { $0 } == 2)
     }

@@ -24,7 +24,7 @@ struct LauncherView: View {
                     HintText(handMode: launcher.handMode)
                 case .inactive(let cause):
                     SettingsNotice(
-                        message: cause.noticeMessage, button: "Trackpad settings…",
+                        message: Copy.inactiveNotice(for: cause), button: "Trackpad settings…",
                         open: { actions.openSettings(.trackpad) })
                 }
                 if !launcher.isAccessibilityGranted {
@@ -170,18 +170,6 @@ struct SettingsNotice: View {
             Button(button, action: open)
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
-        }
-    }
-}
-
-private extension InactiveCause {
-    var noticeMessage: String {
-        switch self {
-        case .noTrackpad:
-            "No trackpad connected. Connect a trackpad to use gestures."
-        case .settings(let conflicting):
-            "Gestures are off while these trackpad settings are on: "
-                + conflicting.settings.map(\.noticeName).formatted(.list(type: .and)) + "."
         }
     }
 }
