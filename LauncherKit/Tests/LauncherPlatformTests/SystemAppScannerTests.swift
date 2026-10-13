@@ -32,7 +32,7 @@ import Testing
         func catalog(lastOpened: @escaping @Sendable (URL) -> Date? = { _ in nil }) -> AppCatalog {
             AppCatalog(
                 roots: [applications, userApplications], extras: [], registeredCopies: { _ in [] },
-                lastOpened: lastOpened)
+                lastOpened: lastOpened, displayName: { $0.lastPathComponent })
         }
 
         func makeContents(_ name: String, in directory: URL) {

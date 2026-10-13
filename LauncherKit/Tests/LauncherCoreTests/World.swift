@@ -72,7 +72,8 @@ final class LaunchRecord: Sendable {
             roots: [applications, systemApplications, userApplications],
             extras: [coreServices.appending(path: "Finder.app")],
             registeredCopies: { registry[$0] },
-            lastOpened: { launches[$0] })
+            lastOpened: { launches[$0] },
+            displayName: World.displayName)
         self.catalog = catalog
         scanner = InMemoryAppScanner(catalog: catalog)
         let store = SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
@@ -102,6 +103,11 @@ final class LaunchRecord: Sendable {
     func seedSettingsRecord(_ data: Data) {
         UserDefaults(suiteName: suiteName)!.set(data, forKey: "settings")
     }
+
+    /// What `displayName` answers: the bundle's file name, as Finder shows it with extensions on. Asking LaunchServices
+    /// instead would register every fake bundle with it, about 0.2 s each on the main actor and a lasting entry in the
+    /// Mac's LaunchServices database; `AppCatalogSystemTests` covers the real names.
+    static let displayName: @Sendable (URL) -> String = { $0.lastPathComponent }
 
     static func bundleID(_ name: String) -> BundleID {
         BundleID(rawValue: "com.test." + name.lowercased().replacingOccurrences(of: " ", with: "-"))

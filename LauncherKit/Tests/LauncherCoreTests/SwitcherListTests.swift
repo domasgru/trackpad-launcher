@@ -195,7 +195,7 @@ private extension Settings {
         let catalog = AppCatalog(
             roots: [world.applications], extras: [],
             registeredCopies: { calls.withLock { $0 += 1 }; return registry[$0] },
-            lastOpened: { _ in nil })
+            lastOpened: { _ in nil }, displayName: World.displayName)
         let figma = AssignedApp(world.app("Figma"))
 
         #expect(catalog.locate(figma) == world.app("Figma"))
