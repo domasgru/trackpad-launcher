@@ -33,7 +33,7 @@ public struct Recognition: Equatable, Sendable {
 /// same thumb. Feed every frame in order.
 /// Owned by exactly one frame thread (real adapter) or by the test (in-memory adapter); never shared.
 public struct GestureRecognizer: Sendable {
-    /// `swipes`: false while the switcher list is empty; a pair's drag then spoils like any drag.
+    /// `swipes`: false (the swipe setting is off): a pair's drag spoils like any drag.
     /// `travel`: how finger movement becomes switcher travel. A var, so a Debug tuner can change it between frames.
     public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool, travel: SwipeTravel) {
         self.corner = AnchorCorner(handMode, surface: surface)

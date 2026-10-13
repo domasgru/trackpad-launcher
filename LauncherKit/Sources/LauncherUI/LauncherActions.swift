@@ -22,7 +22,7 @@ struct LauncherActions {
     /// Draws a missing icon on the spot. Only for the closed button's app.
     let icon: (URL) -> NSImage
     /// Other…: closes the window, activates, runs the file chooser for applications, hands the chosen app to the
-    /// completion, and reopens the window. One chooser serves the gesture rows and the switcher list.
+    /// completion, and reopens the window.
     let chooseOtherApp: (@escaping (URL) -> Void) -> Void
     /// Closes the window explicitly (System Settings takes focus; a held window must not sit over it), then opens the pane.
     let openSettings: (SettingsPane) -> Void

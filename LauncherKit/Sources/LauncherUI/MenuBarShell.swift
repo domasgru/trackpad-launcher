@@ -47,9 +47,7 @@ public final class MenuBarShell: NSObject {
             })
         observations.append(
             Task { [weak self] in
-                for await _ in Observations({
-                    (launcher.activity, launcher.isAccessibilityGranted, launcher.switcherRows.count)
-                }) {
+                for await _ in Observations({ (launcher.activity, launcher.isAccessibilityGranted, launcher.isSwipeOn) }) {
                     self?.refit()
                 }
             })
@@ -82,13 +80,12 @@ public final class MenuBarShell: NSObject {
         if !isStatusButtonClick { launcher.dismissWindow() }
     }
 
-    /// The picker's apps plus the present apps of the gesture rows and the switcher list, which may sit outside it.
+    /// The picker's apps plus the present apps of the gesture rows, which may sit outside it.
     private static func iconTargets(_ launcher: Launcher) -> [AppEntry] {
         let rowApps = launcher.rows.compactMap { row -> AppEntry? in
             if case .present(let entry) = row.app { entry } else { nil }
         }
-        let listedApps = launcher.switcherRows.compactMap(\.present)
-        return launcher.installedApps.all + rowApps + listedApps
+        return launcher.installedApps.all + rowApps
     }
 
     private func renderIcons() { icons.renderOffMainActor(Self.iconTargets(launcher)) }

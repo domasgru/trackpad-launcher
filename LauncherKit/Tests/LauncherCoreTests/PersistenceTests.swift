@@ -26,6 +26,7 @@ import LauncherCore
         #expect(world.launcher.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
         #expect(world.launcher.handMode == .right)
         #expect(world.launcher.isLaunchAnimationOn)
+        #expect(world.launcher.isSwipeOn)
         #expect(world.launcher.isWindowOpen)
         #expect(world.system.loginItemRegistrations == 1)
     }
@@ -53,6 +54,7 @@ import LauncherCore
         #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
         #expect(relaunched.handMode == .right)
         #expect(relaunched.isLaunchAnimationOn)
+        #expect(relaunched.isSwipeOn)
     }
 
     @Test func loginItemIsRegisteredBeforeTheFirstSave() {
@@ -87,9 +89,9 @@ import LauncherCore
                 .present(world.app("Arc")), .present(world.app("Figma")), .unassigned, .unassigned,
                 .present(world.app("Spotify")),
             ])
-        #expect(relaunched.switcherRows.map(\.present) == [world.app("Spotify"), world.app("Arc")])
         #expect(relaunched.handMode == .left)
         #expect(!relaunched.isLaunchAnimationOn)
+        #expect(!relaunched.isSwipeOn)
     }
 
     /// The record a build without the launch animation setting wrote for Left hand with Arc, Figma and Notion on
@@ -122,6 +124,7 @@ import LauncherCore
         relaunched.start()
 
         #expect(relaunched.isLaunchAnimationOn)
+        #expect(relaunched.isSwipeOn)
         #expect(relaunched.handMode == .left)
         #expect(relaunched.rows.map(\.app) == threeAppsThenUnassigned(world))
         #expect(world.system.loginItemRegistrations == 0)
@@ -151,6 +154,7 @@ import LauncherCore
         relaunched.start()
 
         #expect(relaunched.isLaunchAnimationOn)
+        #expect(relaunched.isSwipeOn)
         #expect(relaunched.handMode == .right)
         #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: Gesture.allCases.count))
         #expect(world.system.loginItemRegistrations == 0)
@@ -172,12 +176,30 @@ import LauncherCore
         #expect(world.system.launchAnimations.isEmpty)
     }
 
+    @Test func turningTheSwipeOffSurvivesARelaunchAndAnOlderRecordLoadsWithTheSwipeOn() {
+        let world = World()
+        world.launcher.start()
+        world.launcher.setSwipe(on: false)
+
+        #expect(!world.relaunch().isSwipeOn)
+
+        let older = World(apps: ["Arc"])
+        let arc = older.app("Arc")
+        older.seedSettingsRecord(Fixtures.recordSavedByPlan002(handMode: .left, two: arc))
+        let loaded = older.relaunch()
+
+        #expect(loaded.isSwipeOn)
+        #expect(loaded.handMode == .left)
+        #expect(loaded.rows.map(\.app)[1] == .present(arc))
+    }
+
     @Test func everySettingsFieldSurvivesTheStore() {
         let world = World(apps: ["Arc"])
         var settings = Settings()
         settings.handMode = .left
         settings.assignments = [.three: AssignedApp(world.app("Arc"))]
         settings.isLaunchAnimationOn = false
+        settings.isSwipeOn = false
         #expect(settings != Settings())
 
         world.store.save(settings)
@@ -246,37 +268,8 @@ import LauncherCore
             <string>left</string>
             <key>isLaunchAnimationOn</key>
             <false/>
-            <key>switcherList</key>
-            <array>
-                <dict>
-                    <key>bundleID</key>
-                    <dict>
-                        <key>rawValue</key>
-                        <string>com.spotify.client</string>
-                    </dict>
-                    <key>lastKnownURL</key>
-                    <dict>
-                        <key>relative</key>
-                        <string>file:///tl-fixture/Users/someone/Applications/Spotify.app</string>
-                    </dict>
-                    <key>name</key>
-                    <string>Spotify</string>
-                </dict>
-                <dict>
-                    <key>bundleID</key>
-                    <dict>
-                        <key>rawValue</key>
-                        <string>company.thebrowser.Browser</string>
-                    </dict>
-                    <key>lastKnownURL</key>
-                    <dict>
-                        <key>relative</key>
-                        <string>file:///tl-fixture/Applications/Arc.app</string>
-                    </dict>
-                    <key>name</key>
-                    <string>Arc</string>
-                </dict>
-            </array>
+            <key>isSwipeOn</key>
+            <false/>
         </dict>
         </plist>
         """

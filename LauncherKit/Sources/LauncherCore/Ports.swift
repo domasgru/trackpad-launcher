@@ -56,9 +56,8 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// third of a second and removes itself. Every call plays its own animation and never cancels, restarts or reuses
     /// one already playing. Nothing it shows activates Trackpad Launcher, becomes key or receives a click.
     func playLaunchAnimation(for app: AppEntry)
-    /// The active app's bundle location, read now. nil when there is none, it has no bundle, or it is Trackpad
-    /// Launcher itself (which never activates except around the Other… chooser).
-    func frontmostApp() -> URL?
+    /// The active app and the ⌘-Tab apps, read now from their one source of truth.
+    func runningApps() -> RunningApps
 }
 
 /// The Accessibility permission. Real: SystemAccessibilityPermission. Test: InMemoryAccessibilityPermission.

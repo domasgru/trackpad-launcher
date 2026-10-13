@@ -25,6 +25,7 @@ final class AppIcons {
     }
 
     private var cache: [URL: Rendered] = [:]
+    private var generation = 0
     private let generic: NSImage
     private let side: CGFloat
 
@@ -63,23 +64,39 @@ final class AppIcons {
     }
 
     /// Draws every new or changed icon and waits, spreading the drawing across cores.
-    func renderOnMainActor(_ apps: [AppEntry]) {
-        merge(
-            Self.renderChanged(
-                urls: apps.map(\.url), cached: stamps(), side: side, appearance: Appearance(NSApp.effectiveAppearance)))
+    func renderOnMainActor(_ apps: [AppEntry]) { renderOnMainActor(urls: apps.map(\.url)) }
+
+    func renderOnMainActor(urls: [URL]) {
+        merge(Self.renderChanged(urls: urls, cached: stamps(), side: side, appearance: Appearance(NSApp.effectiveAppearance)))
     }
 
     /// The same pass away from the main actor; the results merge here. Overlapping passes are harmless: the last
     /// write wins.
     func renderOffMainActor(_ apps: [AppEntry]) {
         let urls = apps.map(\.url)
+        Task { await renderOffMainActor(urls: urls) }
+    }
+
+    /// Returns once the results have merged. Results of a pass that `removeAll()` outlived are dropped.
+    func renderOffMainActor(urls: [URL]) async {
         let cached = stamps()
         let appearance = Appearance(NSApp.effectiveAppearance)
         let side = side
-        Task {
-            let rendered = await Self.renderChangedOffMain(urls: urls, cached: cached, side: side, appearance: appearance)
-            merge(rendered)
-        }
+        let generation = generation
+        let rendered = await Self.renderChangedOffMain(urls: urls, cached: cached, side: side, appearance: appearance)
+        guard generation == self.generation else { return }
+        merge(rendered)
+    }
+
+    /// Drops every icon whose app is not in `urls`.
+    func retainOnly(_ urls: Set<URL>) { cache = cache.filter { urls.contains($0.key) } }
+
+    func evict(_ url: URL) { cache[url] = nil }
+
+    /// Empties the cache; passes still in flight are discarded when they finish.
+    func removeAll() {
+        generation += 1
+        cache = [:]
     }
 
     private func stamps() -> [URL: Stamp] { cache.mapValues(\.stamp) }

@@ -1,19 +1,14 @@
 import AppKit
+import LauncherCore
 import QuartzCore
 
 /// The switcher's window: the launch overlay's configuration (borderless, non-activating, click-through, above
 /// everything on every Space, never key) around Liquid Glass. It holds the icon layers, the glass highlight under
 /// them and the selected app's name; `SwitcherPresenter` decides everything shown.
 final class SwitcherPanel: NSPanel {
-    static let iconSide: CGFloat = 80
-    static let iconGap: CGFloat = 20
-    /// Distance between icon centres, and so the highlight's travel per icon.
-    static let iconPitch = iconSide + iconGap
-    static let highlightSide: CGFloat = 92
     static let selectedScale: CGFloat = 1.12
 
     private static let cornerRadius: CGFloat = 34
-    private static let horizontalPadding: CGFloat = 28
     private static let topPadding: CGFloat = 22
     private static let bottomPadding: CGFloat = 18
     private static let nameHeight: CGFloat = 18
@@ -26,6 +21,7 @@ final class SwitcherPanel: NSPanel {
     private let iconsHost = NSView()
     private let name = NSTextField(labelWithString: "")
     private var iconLayers: [CALayer] = []
+    private var layout = SwitcherRowLayout(iconCount: 0, displayWidth: 0)
 
     init() {
         super.init(
@@ -88,17 +84,13 @@ final class SwitcherPanel: NSPanel {
         CATransaction.commit()
     }
 
-    /// The panel's size for `count` icons, from the icon count alone.
-    static func size(forIconCount count: Int) -> CGSize {
-        let row = CGFloat(count) * iconSide + CGFloat(max(count - 1, 0)) * iconGap
-        return CGSize(
-            width: row + 2 * horizontalPadding,
-            height: bottomPadding + nameHeight + nameGap + highlightSide + topPadding)
-    }
-
-    /// Replaces the icon layers with one 80 pt layer per image, left to right, and centres the panel on `screen`.
-    func layoutRow(_ images: [NSImage], on screen: NSRect, scale: CGFloat) {
-        let size = Self.size(forIconCount: images.count)
+    /// Replaces the icon layers with one layer per image, left to right, sized and spaced by `layout`, and centres
+    /// the panel on `screen`.
+    func layoutRow(_ images: [NSImage], layout: SwitcherRowLayout, on screen: NSRect, scale: CGFloat) {
+        self.layout = layout
+        let size = CGSize(
+            width: layout.panelWidth,
+            height: Self.bottomPadding + Self.nameHeight + Self.nameGap + layout.highlightSide + Self.topPadding)
         setFrame(
             NSRect(x: screen.midX - size.width / 2, y: screen.midY - size.height / 2, width: size.width, height: size.height),
             display: false)
@@ -106,9 +98,9 @@ final class SwitcherPanel: NSPanel {
         iconsHost.frame = content.bounds
         let rowY = Self.bottomPadding + Self.nameHeight + Self.nameGap
         name.frame = NSRect(
-            x: Self.horizontalPadding, y: Self.bottomPadding, width: size.width - 2 * Self.horizontalPadding,
+            x: SwitcherRowLayout.padding, y: Self.bottomPadding, width: size.width - 2 * SwitcherRowLayout.padding,
             height: Self.nameHeight)
-        highlight.frame.size = CGSize(width: Self.highlightSide, height: Self.highlightSide)
+        highlight.frame.size = CGSize(width: layout.highlightSide, height: layout.highlightSide)
         highlight.frame.origin.y = rowY
 
         CATransaction.begin()
@@ -116,10 +108,10 @@ final class SwitcherPanel: NSPanel {
         iconLayers.forEach { $0.removeFromSuperlayer() }
         iconLayers = images.enumerated().map { index, image in
             let layer = CALayer()
-            layer.bounds = CGRect(x: 0, y: 0, width: Self.iconSide, height: Self.iconSide)
-            layer.position = CGPoint(
-                x: iconCentreX(at: CGFloat(index)), y: rowY + Self.highlightSide / 2)
-            var proposed = CGRect(x: 0, y: 0, width: Self.iconSide * scale, height: Self.iconSide * scale)
+            layer.bounds = CGRect(x: 0, y: 0, width: layout.iconSide, height: layout.iconSide)
+            layer.position = CGPoint(x: layout.centreX(at: Double(index)), y: rowY + layout.highlightSide / 2)
+            let bitmapSide = SwitcherRowLayout.fullIconSide * scale
+            var proposed = CGRect(x: 0, y: 0, width: bitmapSide, height: bitmapSide)
             layer.contents = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil)
             layer.contentsScale = scale
             layer.minificationFilter = .trilinear
@@ -135,7 +127,7 @@ final class SwitcherPanel: NSPanel {
     func show(position: CGFloat, selected: Int, name selectedName: String, animatesSize: Bool) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        highlight.frame.origin.x = iconCentreX(at: position) - Self.highlightSide / 2
+        highlight.frame.origin.x = layout.centreX(at: Double(position)) - layout.highlightSide / 2
         CATransaction.commit()
 
         CATransaction.begin()
@@ -162,9 +154,5 @@ final class SwitcherPanel: NSPanel {
         spring.damping = 22
         spring.duration = spring.settlingDuration
         layer.add(spring, forKey: "stretch")
-    }
-
-    private func iconCentreX(at position: CGFloat) -> CGFloat {
-        Self.horizontalPadding + Self.iconSide / 2 + position * Self.iconPitch
     }
 }

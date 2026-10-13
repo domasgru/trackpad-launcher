@@ -67,6 +67,12 @@ import Testing
         Confined(token: "tapCreate", onlyIn: "ClickTap.swift", rule: "R9 the one event tap"),
         Confined(token: "CGEventTapCreate", onlyIn: "ClickTap.swift", rule: "R9 the one event tap"),
         Confined(token: "scrollWheel", onlyIn: "ClickTap.swift", rule: "scrolling is read only by the one event tap"),
+        Confined(
+            token: "_LSCopyApplicationArrayInFrontToBackOrder", onlyIn: "LaunchServicesOrder.swift",
+            rule: "the private ⌘-Tab order has one reader"),
+        Confined(
+            token: "_LSCopyApplicationInformation", onlyIn: "LaunchServicesOrder.swift",
+            rule: "the private ⌘-Tab order has one reader"),
     ]
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.
