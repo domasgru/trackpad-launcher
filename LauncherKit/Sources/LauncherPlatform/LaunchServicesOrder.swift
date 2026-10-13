@@ -43,11 +43,10 @@ struct LaunchServicesOrder: Sendable {
                 information["ApplicationType"] as? String == "Foreground",
                 let pid = (information["pid"] as? NSNumber)?.int32Value, pid != ownPID,
                 let path = information["LSBundlePath"] as? String,
-                let identifier = information["CFBundleIdentifier"] as? String, !identifier.isEmpty
+                let identifier = information["CFBundleIdentifier"] as? String
             else { return nil }
-            let url = RunningAppsReader.location(ofBundleAtPath: path)
-            let name = information["LSDisplayName"] as? String ?? url.deletingPathExtension().lastPathComponent
-            return AppEntry(bundleID: BundleID(rawValue: identifier), name: name, url: url)
+            return RunningApp.entry(
+                bundleIdentifier: identifier, name: information["LSDisplayName"] as? String, path: path)
         }
     }
 }

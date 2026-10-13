@@ -28,6 +28,7 @@ final class LauncherPanel: NSPanel {
     }
 
     private static let cornerRadius: CGFloat = 26
+    private static let screenEdgeInset: CGFloat = 8
 
     override var canBecomeKey: Bool { true }
 
@@ -42,8 +43,8 @@ final class LauncherPanel: NSPanel {
     /// Sizes the panel to its content, keeping the top edge where it is, and clamps it into `screenFrame`.
     func fitToContent(centeredOn anchorX: CGFloat, topEdge: CGFloat, within screenFrame: NSRect) {
         let size = hosting.fittingSize
-        let x = min(max(anchorX - size.width / 2, screenFrame.minX + 8), screenFrame.maxX - size.width - 8)
-        let y = max(topEdge - size.height, screenFrame.minY + 8)
+        let x = min(max(anchorX - size.width / 2, screenFrame.minX + Self.screenEdgeInset), screenFrame.maxX - size.width - Self.screenEdgeInset)
+        let y = max(topEdge - size.height, screenFrame.minY + Self.screenEdgeInset)
         setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: true)
         invalidateShadow()
     }

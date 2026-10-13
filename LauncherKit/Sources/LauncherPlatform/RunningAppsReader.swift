@@ -26,12 +26,8 @@ import LauncherCore
         var running: [(pid: Int32, launched: Date?)] = []
         for app in NSWorkspace.shared.runningApplications
         where app.activationPolicy == .regular && app.processIdentifier != own {
-            guard let identifier = app.bundleIdentifier, !identifier.isEmpty, let bundleURL = app.bundleURL
-            else { continue }
-            let url = Self.location(ofBundleAtPath: bundleURL.path)
-            entries[app.processIdentifier] = AppEntry(
-                bundleID: BundleID(rawValue: identifier),
-                name: app.localizedName ?? url.deletingPathExtension().lastPathComponent, url: url)
+            guard let entry = RunningApp.entry(for: app) else { continue }
+            entries[app.processIdentifier] = entry
             running.append((app.processIdentifier, app.launchDate))
         }
         return FallbackOrder.pids(running: running, recency: tracker?.recency ?? []).compactMap { entries[$0] }
@@ -41,18 +37,8 @@ import LauncherCore
     /// activates except around the Other… chooser.
     private func frontmost() -> AppEntry? {
         guard let app = NSWorkspace.shared.frontmostApplication,
-            app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
-            let identifier = app.bundleIdentifier, !identifier.isEmpty,
-            let bundleURL = app.bundleURL
+            app.processIdentifier != ProcessInfo.processInfo.processIdentifier
         else { return nil }
-        let url = Self.location(ofBundleAtPath: bundleURL.path)
-        return AppEntry(
-            bundleID: BundleID(rawValue: identifier),
-            name: app.localizedName ?? url.deletingPathExtension().lastPathComponent, url: url)
-    }
-
-    /// One spelling of a running copy's location, so the same bundle read two ways compares equal.
-    nonisolated static func location(ofBundleAtPath path: String) -> URL {
-        URL(fileURLWithPath: path, isDirectory: true)
+        return RunningApp.entry(for: app)
     }
 }

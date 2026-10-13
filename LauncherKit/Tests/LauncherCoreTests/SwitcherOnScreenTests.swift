@@ -477,6 +477,7 @@ import LauncherCore
 
     @Test func liftingOnTheStartingAppAfterAnotherCameForwardIsSilent() {
         let world = World.switcherWorld()
+        world.launcher.openWindow()
         let hand = world.swipe(3.5, 12, -12, lift: false)
 
         world.makeFrontmost("Mail")
@@ -485,6 +486,7 @@ import LauncherCore
 
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.hardware.pulses.map(\.haptic) == [.lightTick, .lightTick])
+        #expect(world.launcher.isWindowOpen)
     }
 
     // MARK: Two trackpads, and a reconcile mid-swipe

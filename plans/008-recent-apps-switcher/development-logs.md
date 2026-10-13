@@ -40,3 +40,16 @@
 - The switch to the running app's name was never requested → recorded in the Solution as a decided change, with the cost that motivates it.
 - Icon pre-drawing ran with the swipe off and the cache grew with every app ever run → passes and observers follow `isSwipeOn` (S5); icons are evicted when an app quits.
 - The probe's cost claim ("under 0.5 ms") did not survive a re-run → 1.4 ms warm, under 4 ms cold for 14 apps with five keys, recorded in the decisions, the notes and the architecture.
+
+## Implement
+- The frontmost app's location came from `NSRunningApplication.bundleURL` and the ⌘-Tab apps' from `LSBundlePath`, and the presenter spelled its icon cache keys a third way. A spelling difference would show the frontmost app twice and miss the icon cache → one spelling, `AppEntry.location(ofBundleAtPath:)` in the core, used by every path. Entry building is now in one platform helper, `RunningApp`. A platform test checks that the frontmost app's location equals its entry in `apps`. The fix pass first made `LauncherUI` import `LauncherPlatform` for this, which would have been a new module dependency, so the spelling moved to the core.
+- The lift check reached into `RunningApps` (feature envy) → `RunningApps.contains(_:)`.
+- T5(b) passed silently with fewer than three Dock apps, but the plan says "skipped, not red" → it now uses an `.enabled(if:)` trait.
+- T13 never checked "the window is as it was" → it opens the window and asserts it stays open.
+- Removing `screenMargin` left a bare `8` three times in `LauncherPanel` → named `screenEdgeInset`.
+- Not fixed:
+  - The `@testable` reads of `isTrackingActivations` and `FallbackOrder`, and the presenter's own workspace observation. The plan prescribes both.
+  - The call-count assertion in `LocateTests`, which predates this plan and was only moved.
+  - T4's early return when the running apps change mid-read. The plan prescribes it.
+  - The two-scenario test rows, the committed exploration notes, and the `(pid, launched)` tuple, all judged not worth changing.
+- `SystemAppScannerTests` fails intermittently under machine load (FSEvents timing) and passes alone. This is unrelated to this change.

@@ -8,6 +8,13 @@ import Testing
 @MainActor @Suite struct RunningAppsReaderTests {
     nonisolated private static let orderResolves = LaunchServicesOrder() != nil
 
+    nonisolated private static var dockAppCount: Int {
+        NSWorkspace.shared.runningApplications.filter {
+            $0.activationPolicy == .regular && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+                && $0.bundleIdentifier != nil && $0.bundleURL != nil
+        }.count
+    }
+
     private struct Identity: Hashable {
         let bundleID: String
         let location: String
@@ -52,6 +59,21 @@ import Testing
         }
     }
 
+    @Test(arguments: [true, false])
+    func theActiveAppIsSpelledLikeItsEntryInTheApps(withOrder: Bool) throws {
+        guard !withOrder || Self.orderResolves else { return }
+        let reader = RunningAppsReader(order: withOrder ? LaunchServicesOrder() : nil)
+        let read = reader.read()
+        guard let active = NSWorkspace.shared.frontmostApplication, active.activationPolicy == .regular,
+            active.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+            active.bundleIdentifier != nil, active.bundleURL != nil
+        else { return }
+        let frontmost = try #require(read.frontmost)
+        let entry = try #require(read.apps.first { $0.bundleID == frontmost.bundleID })
+        #expect(frontmost.url == entry.url)
+        #expect(read.contains(frontmost.url))
+    }
+
     @Test func withoutTheOrderTheActiveAppIsStillRead() {
         let read = RunningAppsReader(order: nil).read()
         if let active = NSWorkspace.shared.frontmostApplication, active.bundleURL != nil,
@@ -72,8 +94,8 @@ import Testing
         #expect(FallbackOrder.pids(running: running, recency: []) == [4, 1, 3, 2, 5])
     }
 
-    @Test func withoutTheOrderTheSeedAndThenEachActivationComeFirst() throws {
-        guard Self.dockApps().count >= 3 else { return }
+    @Test(.enabled(if: dockAppCount >= 3, "Fewer than three Dock apps are running"))
+    func withoutTheOrderTheSeedAndThenEachActivationComeFirst() throws {
         let reader = RunningAppsReader(order: nil)
         #expect(reader.isTrackingActivations)
         let first = reader.read()

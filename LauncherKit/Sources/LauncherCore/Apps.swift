@@ -21,6 +21,12 @@ public struct AppEntry: Hashable, Sendable, Identifiable {
         self.name = name
         self.url = url
     }
+
+    /// The one spelling of a running app's location, whichever API reported the path, so the frontmost app, the
+    /// ⌘-Tab apps and the switcher's icon cache keys compare equal when they name the same bundle.
+    public static func location(ofBundleAtPath path: String) -> URL {
+        URL(fileURLWithPath: path, isDirectory: true)
+    }
 }
 
 /// What the apps on screen are right now, as one read of the system.
@@ -35,6 +41,11 @@ public struct RunningApps: Equatable, Sendable {
     public init(frontmost: AppEntry?, apps: [AppEntry]) {
         self.frontmost = frontmost
         self.apps = apps
+    }
+
+    /// Whether an app at `location` is running, the active app included.
+    public func contains(_ location: URL) -> Bool {
+        frontmost?.url == location || apps.contains { $0.url == location }
     }
 }
 

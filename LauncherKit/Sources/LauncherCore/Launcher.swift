@@ -213,8 +213,7 @@ public final class Launcher {
             // An app that quit meanwhile is never relaunched.
             let running = system.runningApps()
             let target = open.selectedApp
-            guard running.frontmost?.url == target.url || running.apps.contains(where: { $0.url == target.url })
-            else { return }
+            guard running.contains(target.url) else { return }
             hardware.playFeedback(.gesture, on: event.trackpad)
             system.bringToFront(open.selectedApp)
             window = .closed

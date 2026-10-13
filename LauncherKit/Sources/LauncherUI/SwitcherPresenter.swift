@@ -84,7 +84,7 @@ final class SwitcherPresenter {
     }
 
     private func terminated(_ app: NSRunningApplication?) {
-        guard let location = app?.bundleURL.map(Self.location) else { return }
+        guard let location = app.flatMap(Self.dockLocation) else { return }
         // A second copy of the same bundle may still be running.
         guard !Self.runningDockApps().contains(where: { $0.location == location }) else { return }
         icons.evict(location)
@@ -102,12 +102,10 @@ final class SwitcherPresenter {
         }
     }
 
-    /// The same spelling of a bundle's location the running-apps read uses.
-    private static func location(_ bundleURL: URL) -> URL { URL(fileURLWithPath: bundleURL.path, isDirectory: true) }
-
+    /// A Dock app's location (regular activation policy and a bundle), spelled as the running-apps read spells it.
     private static func dockLocation(_ app: NSRunningApplication) -> URL? {
         guard app.activationPolicy == .regular, let bundleURL = app.bundleURL else { return nil }
-        return location(bundleURL)
+        return AppEntry.location(ofBundleAtPath: bundleURL.path)
     }
 
     private static func runningDockApps() -> [(app: NSRunningApplication, location: URL)] {
