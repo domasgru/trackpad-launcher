@@ -5,8 +5,9 @@ import Observation
 /// Renders `launcher.switcher` and holds nothing the model holds. Owned by `MenuBarShell`.
 ///
 /// The panel is created now so a swipe never pays the first window's cost, and the 80 pt icons of the running Dock apps
-/// are drawn before any swipe: at `startIconPasses()` (waited for), again off the main actor for each app the workspace
+/// are drawn before any swipe: at `startIconPasses(waiting:)`, again off the main actor for each app the workspace
 /// reports launched and for every running app on an appearance change, and dropped when it reports an app terminated.
+/// All of it runs only while the swipe setting is on; off, the observers are removed and the cache is empty.
 final class SwitcherPresenter {
     private let launcher: Launcher
     private let panel = SwitcherPanel()
@@ -23,10 +24,16 @@ final class SwitcherPresenter {
 
     init(launcher: Launcher) {
         self.launcher = launcher
-        startIconPasses()
+        if launcher.isSwipeOn { startIconPasses(waiting: true) }
         observations.append(
             Task { [weak self] in
                 for await shown in Observations({ launcher.switcher }) { self?.render(shown) }
+            })
+        observations.append(
+            Task { [weak self] in
+                for await on in Observations({ launcher.isSwipeOn }) {
+                    if on { self?.startIconPasses(waiting: false) } else { self?.stopIconPasses() }
+                }
             })
     }
 
@@ -35,10 +42,15 @@ final class SwitcherPresenter {
         stopIconPasses()
     }
 
-    /// Draws every running Dock app's icon now and waits, then keeps the cache current. A no-op while started.
-    func startIconPasses() {
+    /// Draws every running Dock app's icon, then keeps the cache current. `waiting` draws now and waits; otherwise the
+    /// pass runs away from the main actor. A no-op while started.
+    func startIconPasses(waiting: Bool) {
         guard workspaceObservers.isEmpty else { return }
-        icons.renderOnMainActor(urls: Self.runningDockApps().map(\.location))
+        if waiting {
+            icons.renderOnMainActor(urls: Self.runningDockApps().map(\.location))
+        } else {
+            redrawRunningApps()
+        }
         let center = NSWorkspace.shared.notificationCenter
         workspaceObservers = [
             center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) {

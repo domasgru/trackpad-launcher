@@ -47,7 +47,7 @@ public final class MenuBarShell: NSObject {
             })
         observations.append(
             Task { [weak self] in
-                for await _ in Observations({ (launcher.activity, launcher.isAccessibilityGranted) }) {
+                for await _ in Observations({ (launcher.activity, launcher.isAccessibilityGranted, launcher.isSwipeOn) }) {
                     self?.refit()
                 }
             })

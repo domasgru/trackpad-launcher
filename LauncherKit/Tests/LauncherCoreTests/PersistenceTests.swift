@@ -26,6 +26,7 @@ import LauncherCore
         #expect(world.launcher.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
         #expect(world.launcher.handMode == .right)
         #expect(world.launcher.isLaunchAnimationOn)
+        #expect(world.launcher.isSwipeOn)
         #expect(world.launcher.isWindowOpen)
         #expect(world.system.loginItemRegistrations == 1)
     }
@@ -53,6 +54,7 @@ import LauncherCore
         #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
         #expect(relaunched.handMode == .right)
         #expect(relaunched.isLaunchAnimationOn)
+        #expect(relaunched.isSwipeOn)
     }
 
     @Test func loginItemIsRegisteredBeforeTheFirstSave() {
@@ -106,6 +108,7 @@ import LauncherCore
         relaunched.start()
 
         #expect(relaunched.isLaunchAnimationOn)
+        #expect(relaunched.isSwipeOn)
         #expect(relaunched.handMode == .left)
         #expect(relaunched.rows.map(\.app) == threeAppsThenUnassigned(world))
         #expect(world.system.loginItemRegistrations == 0)
@@ -135,6 +138,7 @@ import LauncherCore
         relaunched.start()
 
         #expect(relaunched.isLaunchAnimationOn)
+        #expect(relaunched.isSwipeOn)
         #expect(relaunched.handMode == .right)
         #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: Gesture.allCases.count))
         #expect(world.system.loginItemRegistrations == 0)
@@ -156,12 +160,30 @@ import LauncherCore
         #expect(world.system.launchAnimations.isEmpty)
     }
 
+    @Test func turningTheSwipeOffSurvivesARelaunchAndAnOlderRecordLoadsWithTheSwipeOn() {
+        let world = World()
+        world.launcher.start()
+        world.launcher.setSwipe(on: false)
+
+        #expect(!world.relaunch().isSwipeOn)
+
+        let older = World(apps: ["Arc"])
+        let arc = older.app("Arc")
+        older.seedSettingsRecord(Fixtures.recordSavedByPlan002(handMode: .left, two: arc))
+        let loaded = older.relaunch()
+
+        #expect(loaded.isSwipeOn)
+        #expect(loaded.handMode == .left)
+        #expect(loaded.rows.map(\.app)[1] == .present(arc))
+    }
+
     @Test func everySettingsFieldSurvivesTheStore() {
         let world = World(apps: ["Arc"])
         var settings = Settings()
         settings.handMode = .left
         settings.assignments = [.three: AssignedApp(world.app("Arc"))]
         settings.isLaunchAnimationOn = false
+        settings.isSwipeOn = false
         #expect(settings != Settings())
 
         world.store.save(settings)

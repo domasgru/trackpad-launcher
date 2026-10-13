@@ -9,6 +9,25 @@ import LauncherCore
         return frames.map { recognizer.step($0).blocksClicks }
     }
 
+    @Test func withTheSwipeOffASlideIsNeverASwipeAndOnlyTheThumbRulesBlock() {
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: false, travel: .linear)
+        var frames = [h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)])]
+        frames.append(h.frame(atMS: 100, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]))
+        for ms in stride(from: 200, through: 5000, by: 100) {
+            let x = 62 + 40 * Double(ms - 100) / 4900
+            frames.append(h.frame(atMS: ms, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: x, 45), h.contact(2, atMM: x + 8, 45)]))
+        }
+        frames.append(h.frame(atMS: 5010, []))
+
+        let recognitions = frames.map { recognizer.step($0) }
+
+        #expect(recognitions.allSatisfy { $0.swipe == nil })
+        for (frame, recognition) in zip(frames, recognitions).dropFirst().dropLast() {
+            #expect(recognition.blocksDockSwipes)
+            #expect(recognition.blocksClicks == (frame.time.seconds - frames[0].time.seconds < 3))
+        }
+    }
+
     @Test(arguments: [1000, 2900, 3100, 4000])
     func clicksAreBlockedOnlyWithinThreeSecondsOfTheThumbLanding(landMS: Int) {
         let frames = [

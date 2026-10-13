@@ -15,6 +15,9 @@ public final class Launcher {
     public var isWindowOpen: Bool { window != .closed }
     public var handMode: HandMode { settings.handMode }
     public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
+    public var isSwipeOn: Bool { settings.isSwipeOn }
+    /// The window's hint, which mentions swiping only while the swipe is on.
+    public var gestureHint: String { Copy.gestureHint(for: settings.handMode, swipe: settings.isSwipeOn) }
     /// One derivation, read by the icon, the notice and the fire guard.
     public var activity: GestureActivity {
         GestureActivity(connected: Set(connected.map(\.kind)), values: preferenceValues)
@@ -119,6 +122,14 @@ public final class Launcher {
         store.save(settings)
     }
 
+    /// Swipe switch. Saved at once; the recognizers are rebuilt, so the next swipe obeys it and one in progress ends.
+    public func setSwipe(on: Bool) {
+        guard on != settings.isSwipeOn else { return }
+        settings.isSwipeOn = on
+        store.save(settings)
+        reconcile()
+    }
+
     /// Show the launcher window, re-resolve the rows and refresh the app list in the background.
     public func openWindow() {
         if window == .closed { window = .open }
@@ -157,7 +168,7 @@ public final class Launcher {
         // Blocking needs gestures active and access granted; without either, presses are plain clicks.
         let run = Run(
             trackpads: active ? connected : [], handMode: settings.handMode, blockClicks: active && granted,
-            swipes: true)
+            swipes: settings.isSwipeOn)
         guard restart || run != lastRun else { return }
         lastRun = run
         // Running replaces every recognizer, which ends any swipe in progress.

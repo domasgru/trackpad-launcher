@@ -10,6 +10,8 @@ public struct Settings: Codable, Equatable, Sendable {
     public var assignments: [Gesture: AssignedApp] = [:]
     /// Whether a gesture plays the launch animation. The key is this field's name, permanently.
     public var isLaunchAnimationOn = true
+    /// Whether two fingers sliding under the thumb switch apps. The key is this field's name, permanently.
+    public var isSwipeOn = true
 
     public init() {}
 
@@ -20,6 +22,7 @@ public struct Settings: Codable, Equatable, Sendable {
         assignments = try container.decodeIfPresent([Gesture: AssignedApp].self, forKey: .assignments) ?? assignments
         isLaunchAnimationOn =
             try container.decodeIfPresent(Bool.self, forKey: .isLaunchAnimationOn) ?? isLaunchAnimationOn
+        isSwipeOn = try container.decodeIfPresent(Bool.self, forKey: .isSwipeOn) ?? isSwipeOn
     }
 }
 

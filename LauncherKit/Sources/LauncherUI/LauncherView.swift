@@ -21,7 +21,7 @@ struct LauncherView: View {
                 Divider()
                 switch launcher.activity {
                 case .active:
-                    HintText(handMode: launcher.handMode)
+                    HintText(hint: launcher.gestureHint)
                 case .inactive(let cause):
                     SettingsNotice(
                         message: cause.noticeMessage, button: "Trackpad settings…",
@@ -137,16 +137,16 @@ struct LaunchAnimationSwitch: View {
 }
 
 struct HintText: View {
-    let handMode: HandMode
+    let hint: String
 
     var body: some View {
         // The copy lives in core with `●` and `◉` standing for the two marks, which are drawn as images here.
-        let parts = Copy.gestureHint(for: handMode).components(separatedBy: ["●", "◉"])
+        let parts = hint.components(separatedBy: ["●", "◉"])
         Group {
             if parts.count == 3 {
                 Text("\(mark("thumb-mark"))\(parts[1])\(mark("other-finger-mark"))\(parts[2])")
             } else {
-                Text(Copy.gestureHint(for: handMode))
+                Text(hint)
             }
         }
         .hintStyle()
