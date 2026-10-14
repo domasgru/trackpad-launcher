@@ -282,7 +282,6 @@ A swap that brings an app to front MUST close the launcher window if it is open,
 - **Walking further back with repeated taps (A → B → C).** The user chose a toggle between the two most recent apps. The swipe already reaches older apps.
 - **An on-screen indicator or launch animation for swaps.** Swaps are fast and repeated. Visuals would get noisy, and the app coming to the front is feedback enough.
 - **A thumb tap with one, three or more resting fingers.** Only two fingers make a swap. Other counts stay free for later.
-- **A new illustration for the swap in the launcher window.** The switch sits in the existing switcher section, so no new design asset is needed.
 - **A tunable corner zone or tap window for the thumb tap.** It uses the same fixed anchor corner and tap window as every gesture.
 - **Sound effect.** Sound is still deferred for every gesture.
 - **Swapping windows within one app (like ⌘-`).** The swap is app-level, like ⌘-Tab.
@@ -322,7 +321,7 @@ Two facts about the code shape the decisions. First, the recognizer already judg
 
 8. **The setting.** `Settings.isSwapOn`, default true, keyed by its field name permanently, decoded as true when the key is absent so any earlier record loads with it on and nothing else changed (R10). `Launcher.isSwapOn` exposes it; `setSwap(on:)` ignores a no-change call, saves at once and reconciles. It is independent of `isSwipeOn` (R13): the recognizer takes both. Until the setting exists (S2), `reconcile` passes `swaps: true`.
 
-9. **The window.** `SwitcherSection` becomes two setting rows: the swipe row as today, then "Thumb tap to swap apps" with a switch bound to `isSwapOn`, laid out like the Launch animation row and with no illustration (a non-goal). The section's height is fixed, so the shell's refit observation is untouched. The hint is unchanged: no requirement names it (Further Notes).
+9. **The window.** `SwitcherSection` becomes two setting rows: the swipe row as today, then "Thumb tap to swap apps" with a switch bound to `isSwapOn`, laid out like the swipe row, with its own illustration `assets/thumb-tap.svg` (the two resting fingers solid, the tapping thumb ringed, a ⇄ swap mark), mirrored in left-hand mode. The section's height is fixed, so the shell's refit observation is untouched. The hint is unchanged: no requirement names it (Further Notes).
 
 10. **The test fakes.** `InMemoryTrackpads.run` takes `swaps`. `RecordingSystemActions` is unchanged: it never updates `frontmost` or `running` on `bringToFront`, which is the in-flight read R3 needs; a test that wants an activation to land sets them through a new `World.activate(_:)`.
 
@@ -432,7 +431,7 @@ S1 is a prefactor with no behaviour change: the contact book the fingers-first s
 
 - [ ] Every row is green through `Scripts/test.sh`.
 - [ ] `Settings` has `isSwapOn` with its field-name key and absent-means-true decoding; `reconcile` is the only reader of it for `swaps`.
-- [ ] On hardware, the window: the switcher section shows the swipe row, then "Thumb tap to swap apps" with a switch at the right end aligned with the other switches and no illustration; off, a thumb landing under resting fingers does nothing, and once the fingers lift with the thumb still down a two-finger tap still fires its gesture; on again, the next thumb tap swaps; the switch survives a force-quit.
+- [ ] On hardware, the window: the switcher section shows the swipe row, then "Thumb tap to swap apps" with a switch at the right end aligned with the other switches and the thumb-tap illustration, mirrored in left-hand mode; off, a thumb landing under resting fingers does nothing, and once the fingers lift with the thumb still down a two-finger tap still fires its gesture; on again, the next thumb tap swaps; the switch survives a force-quit.
 
 ### S4: The swap series
 

@@ -46,3 +46,4 @@
 ## Change after hardware use
 - The 100 ms minimum rest before the thumb tap made quick swaps fail on the trackpad; the user asked to drop it and revisit only if accidental swaps appear → R6 now needs only the fingers to land in an earlier frame than the thumb; `minRestBeforeThumbTap` removed; T11 and T21 rewritten (a thumb 10 ms or 20 ms after the fingers swaps; the same frame does not).
 - Swaps failed during or after a scroll; the user asked that finger movement never matter, and to add restrictions only if problems appear → R7 rewritten (moving fingers still swap); the drift stop and per-swap reference reset removed from the recognizer; T15 and T16 rewritten; series blocking (R9) unchanged.
+- The user asked for an illustration on the thumb tap row like the swipe row's → `assets/thumb-tap.svg` added (resting fingers solid, tapping thumb ringed, ⇄ mark) and shown mirrored in left-hand mode; the non-goal removed.

@@ -2,7 +2,7 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// Two setting rows: the swipe row with its illustration (mirrored in left-hand mode), then the thumb tap row.
+/// Two setting rows, the swipe row then the thumb tap row, each with its illustration (mirrored in left-hand mode).
 struct SwitcherSection: View {
     let launcher: Launcher
 
@@ -23,7 +23,11 @@ struct SwitcherSection: View {
                 .labelsHidden()
             }
             HStack {
+                TemplateImage.view("thumb-tap")
+                    .scaleEffect(x: launcher.handMode == .left ? -1 : 1, y: 1)
+                    .accessibilityHidden(true)
                 Text("Thumb tap to swap apps")
+                    .font(.body)
                 Spacer(minLength: 8)
                 Toggle(
                     "Thumb tap to swap apps",
