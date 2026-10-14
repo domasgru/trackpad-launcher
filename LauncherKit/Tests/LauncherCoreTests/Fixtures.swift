@@ -22,9 +22,10 @@ func fired(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14,
-    swipes: Bool = true
+    swipes: Bool = true,
+    swaps: Bool = true
 ) -> [Gesture] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, travel: .linear)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, swaps: swaps, travel: .linear)
     return frames.compactMap { recognizer.step($0).fired }
 }
 
@@ -33,19 +34,32 @@ func phases(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14,
-    swipes: Bool = true
+    swipes: Bool = true,
+    swaps: Bool = true
 ) -> [SwipePhase] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, travel: .linear)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, swaps: swaps, travel: .linear)
     return frames.compactMap { recognizer.step($0).swipe }
+}
+
+/// Runs a fresh recognizer over `frames` and returns `startsSeries` of every swap it reported, in order.
+func swaps(
+    _ frames: [TouchFrame],
+    handMode: HandMode = .right,
+    surface: SurfaceSize = .macBook14,
+    swaps: Bool = true
+) -> [Bool] {
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: true, swaps: swaps, travel: .linear)
+    return frames.compactMap { recognizer.step($0).swapStartsSeries }
 }
 
 /// Per frame: what the recognizer said about a swipe, and whether it blocked clicks.
 func perFrame(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
-    surface: SurfaceSize = .macBook14
+    surface: SurfaceSize = .macBook14,
+    swaps: Bool = true
 ) -> [(swipe: SwipePhase?, blocks: Bool)] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: true, travel: .linear)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: true, swaps: swaps, travel: .linear)
     return frames.map {
         let recognition = recognizer.step($0)
         return (recognition.swipe, recognition.blocksClicks)

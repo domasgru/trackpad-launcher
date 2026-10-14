@@ -12,6 +12,8 @@ public struct Settings: Codable, Equatable, Sendable {
     public var isLaunchAnimationOn = true
     /// Whether two fingers sliding under the thumb switch apps. The key is this field's name, permanently.
     public var isSwipeOn = true
+    /// Whether a thumb tap under two resting fingers swaps apps. The key is this field's name, permanently.
+    public var isSwapOn = true
 
     public init() {}
 
@@ -23,6 +25,7 @@ public struct Settings: Codable, Equatable, Sendable {
         isLaunchAnimationOn =
             try container.decodeIfPresent(Bool.self, forKey: .isLaunchAnimationOn) ?? isLaunchAnimationOn
         isSwipeOn = try container.decodeIfPresent(Bool.self, forKey: .isSwipeOn) ?? isSwipeOn
+        isSwapOn = try container.decodeIfPresent(Bool.self, forKey: .isSwapOn) ?? isSwapOn
     }
 }
 

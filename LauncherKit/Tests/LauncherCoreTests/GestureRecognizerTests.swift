@@ -168,7 +168,7 @@ extension GestureRecognizerTests {
             h.frame(atMS: 150, [h.contact(9, atMM: 10, 10), h.contact(7, atMM: 62, 45)]),
             h.frame(atMS: 160, [h.contact(9, atMM: 10, 10)]),
         ]
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, travel: .linear)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: true, travel: .linear)
         let perFrame = frames.map { recognizer.step($0).fired }
         #expect(perFrame == [nil, nil, nil, nil, .one, nil, nil, .one])
     }
@@ -241,7 +241,7 @@ extension GestureRecognizerTests {
             h.frame(atMS: 140, [h.contact(9, atMM: 10, 10)]),
             h.frame(atMS: 150, []),
         ]
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, travel: .linear)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: true, travel: .linear)
         #expect(frames.map { recognizer.step($0).fired } == [nil, nil, nil, nil, .one, nil, nil])
     }
 }

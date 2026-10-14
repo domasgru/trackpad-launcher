@@ -101,7 +101,34 @@ struct TouchScript {
         return s
     }
 
-    enum Lift { case all, first }
+    /// A tap of the thumb in the anchor corner: it lands at the cursor and lifts after `hold`; the cursor moves on by
+    /// the hold plus 100 ms. Like `tap`, a drag arrives on the frame before the lift. `slide` and `lift` ignore it.
+    func thumbTap(
+        atMM p: (x: Double, y: Double) = (10, 10),
+        hold: Duration = .milliseconds(120),
+        dragMM: Double = 0,
+        click: ClickTiming = .none
+    ) -> TouchScript {
+        var s = self
+        let start = cursorMS
+        let holdMS = Self.milliseconds(hold)
+        let lift = start + holdMS
+        var path = [Waypoint(ms: start, x: p.x, y: p.y)]
+        if dragMM != 0 {
+            path.append(Waypoint(ms: lift - Self.frameIntervalMS, x: p.x + dragMM, y: p.y))
+        }
+        s.contacts.append(Contact(id: Self.thumbID, landMS: start, liftMS: lift, path: path))
+        switch click {
+        case .none: break
+        case .onLanding: s.presses.append(start...lift)
+        case .firm: s.presses.append((start + Self.frameIntervalMS)...lift)
+        case .midway: s.presses.append((start + holdMS / 2)...lift)
+        }
+        s.cursorMS = lift + 100
+        return s
+    }
+
+    enum Lift { case all, first, last }
 
     /// Lands `n` fingers 8 mm apart from `p`; they stay down until `lift`.
     func land(fingers n: Int = 2, atMM p: (x: Double, y: Double) = (62, 45)) -> TouchScript {
@@ -126,13 +153,19 @@ struct TouchScript {
         return s
     }
 
-    /// Lifts the fingers that are down, one frame after the last slide's final frame: all of them, or only the first
-    /// landed. Ends a press in progress.
+    /// Lifts the fingers that are down, one frame after the last slide's final frame: all of them, or only the first or
+    /// last landed. Ends a press in progress.
     func lift(_ which: Lift = .all) -> TouchScript {
         var s = self
         let liftMS = cursorMS + Self.frameIntervalMS
         let down = s.contacts.indices.filter { s.contacts[$0].id != Self.thumbID && s.contacts[$0].isDown(atMS: cursorMS) }
-        for i in (which == .all ? down : Array(down.prefix(1))) { s.contacts[i].liftMS = liftMS }
+        let lifting: [Int]
+        switch which {
+        case .all: lifting = down
+        case .first: lifting = Array(down.prefix(1))
+        case .last: lifting = Array(down.suffix(1))
+        }
+        for i in lifting { s.contacts[i].liftMS = liftMS }
         if let start = s.pressStartMS {
             s.presses.append(start...liftMS)
             s.pressStartMS = nil

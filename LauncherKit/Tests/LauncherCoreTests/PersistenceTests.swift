@@ -27,6 +27,7 @@ import LauncherCore
         #expect(world.launcher.handMode == .right)
         #expect(world.launcher.isLaunchAnimationOn)
         #expect(world.launcher.isSwipeOn)
+        #expect(world.launcher.isSwapOn)
         #expect(world.launcher.isWindowOpen)
         #expect(world.system.loginItemRegistrations == 1)
     }
@@ -55,6 +56,7 @@ import LauncherCore
         #expect(relaunched.handMode == .right)
         #expect(relaunched.isLaunchAnimationOn)
         #expect(relaunched.isSwipeOn)
+        #expect(relaunched.isSwapOn)
     }
 
     @Test func loginItemIsRegisteredBeforeTheFirstSave() {
@@ -92,6 +94,7 @@ import LauncherCore
         #expect(relaunched.handMode == .left)
         #expect(!relaunched.isLaunchAnimationOn)
         #expect(!relaunched.isSwipeOn)
+        #expect(relaunched.isSwapOn)
     }
 
     /// The record a build without the launch animation setting wrote for Left hand with Arc, Figma and Notion on
@@ -189,8 +192,39 @@ import LauncherCore
         let loaded = older.relaunch()
 
         #expect(loaded.isSwipeOn)
+        #expect(loaded.isSwapOn)
         #expect(loaded.handMode == .left)
         #expect(loaded.rows.map(\.app)[1] == .present(arc))
+    }
+
+    @Test func turningTheSwapOffSurvivesARelaunchAndAFreshWorldSwaps() {
+        let fresh = World.switcherWorld()
+        #expect(fresh.launcher.isSwapOn)
+        fresh.swap()
+        #expect(fresh.system.broughtToFront == [fresh.app("Mail")])
+
+        let world = World()
+        world.launcher.start()
+        world.launcher.setSwap(on: false)
+        #expect(!world.relaunch().isSwapOn)
+    }
+
+    @Test func aRecordHoldingOnlyTheSwapKeyLoadsWithTheSwapOffAndEveryOtherDefault() {
+        let world = World()
+        world.seedSettingsRecord(Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>isSwapOn</key>
+                <false/>
+            </dict>
+            </plist>
+            """.utf8))
+
+        var expected = Settings()
+        expected.isSwapOn = false
+        #expect(world.store.load() == expected)
     }
 
     @Test func everySettingsFieldSurvivesTheStore() {
@@ -200,6 +234,7 @@ import LauncherCore
         settings.assignments = [.three: AssignedApp(world.app("Arc"))]
         settings.isLaunchAnimationOn = false
         settings.isSwipeOn = false
+        settings.isSwapOn = false
         #expect(settings != Settings())
 
         world.store.save(settings)
@@ -209,8 +244,9 @@ import LauncherCore
 
     /// Written by `SettingsStore.save` (binary plist) and converted with `plutil -convert xml1`: Left hand, Launch
     /// animation off, apps on gestures 1, 2 and 5, and two apps in the switcher list. Never regenerate: this is the
-    /// format released builds write. The paths live under `/tl-fixture`, which no Mac has, so each app resolves
-    /// through the world's registry and never through whatever this machine has installed.
+    /// format released builds write. It predates the swap key, so it also proves an upgrade keeps the swap on. The
+    /// paths live under `/tl-fixture`, which no Mac has, so each app
+    /// resolves through the world's registry and never through whatever this machine has installed.
     private static let savedSettings = """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
