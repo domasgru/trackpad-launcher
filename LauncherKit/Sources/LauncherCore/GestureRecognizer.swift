@@ -196,13 +196,9 @@ public struct GestureRecognizer: Sendable {
         var rest = rest
         var event: Recognition.Event?
         // Anything that happens to the other contacts spoils a thumb tap in progress.
-        var changed = !lifted.isDisjoint(with: rest.fingers) || landed.contains { $0.id != rest.thumb?.id }
+        let changed = !lifted.isDisjoint(with: rest.fingers) || landed.contains { $0.id != rest.thumb?.id }
         rest.fingers.subtract(lifted)
         rest.rolled.subtract(lifted)
-        if !rest.isStopped, Self.drag(of: rest.fingers.subtracting(rest.rolled).sorted { $0.rawValue < $1.rawValue }, in: down, book: book, on: surface) != nil {
-            rest.isStopped = true
-            changed = true
-        }
 
         if let thumb = rest.thumb {
             if lifted.contains(thumb.id) {
@@ -210,12 +206,11 @@ public struct GestureRecognizer: Sendable {
                    frame.time - landedAt <= GestureRules.maxTapDuration {
                     event = .swap(startsSeries: !rest.isSeries)
                     rest.isSeries = true
-                    for id in rest.fingers { if let at = down[id]?.position { book[id]?.origin = at } }
                 }
                 rest.thumb = nil
             } else if let position = down[thumb.id]?.position, !corner.holds(position) {
                 // A thumb that slid out is a finger until it lifts and lands again. It did not land outside the
-                // corner, so neither its path from the corner nor being a third finger stops the rest.
+                // corner, so it is not a third finger that stops the rest.
                 rest.fingers.insert(thumb.id)
                 rest.rolled.insert(thumb.id)
                 rest.thumb = nil
@@ -259,8 +254,8 @@ public struct GestureRecognizer: Sendable {
 
     /// What the recognizer knows about one contact down, whoever is using it.
     private struct Contact: Sendable {
-        /// Where it landed, until a swap moves it to where the contact was then.
-        var origin: SurfacePoint
+        /// Where it landed.
+        let origin: SurfacePoint
         let firstSeen: FrameTime
         /// False for a contact already resting on the first frame: when it really landed is unknown.
         let isRealLanding: Bool
@@ -310,8 +305,7 @@ public struct GestureRecognizer: Sendable {
         var thumb: RestThumb?
         /// Fingers that are a thumb which rolled out of the corner.
         var rolled: Set<TouchID> = []
-        /// Some finger moved more than `dragThresholdMM` from its reference, or a third finger joined a series.
-        /// Permanent for this rest.
+        /// A third finger joined a series. Permanent for this rest.
         var isStopped = false
         /// A swap has fired under this rest: it blocks until the rest empties.
         var isSeries = false

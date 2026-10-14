@@ -227,10 +227,24 @@ import LauncherCore
         #expect(world.system.broughtToFront == [world.app("Mail")])
     }
 
-    @Test func fingersThatScrolledBeforeTheTapSwapNothing() {
+    @Test func fingersThatScrolledBeforeTheTapStillSwap() {
         let world = World.switcherWorld()
         world.play(rest().slide(byMM: (0, 10)).thumbTap())
-        #expect(nothingHappened(world))
+        #expect(world.system.broughtToFront == [world.app("Mail")])
+    }
+
+    @Test func fingersScrollingWhileTheThumbTapsStillSwap() {
+        let world = World.switcherWorld()
+        let fingers = { (y: Double) in [h.contact(1, atMM: 62, y), h.contact(2, atMM: 70, y)] }
+        world.hardware.touch([
+            h.frame(atMS: 0, [h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]),
+            h.frame(atMS: 50, fingers(50)),
+            h.frame(atMS: 100, fingers(55) + [h.contact(9, .landing, atMM: 10, 10)]),
+            h.frame(atMS: 150, fingers(60) + [h.contact(9, atMM: 10, 10)]),
+            h.frame(atMS: 200, fingers(65)),
+            h.frame(atMS: 300),
+        ], on: trackpad.id)
+        #expect(world.system.broughtToFront == [world.app("Mail")])
     }
 
     @Test func withTapToClickOnNothingRunsAndASwapEventThatSlipsInIsIgnored() {
@@ -255,36 +269,16 @@ import LauncherCore
         #expect(landed.system.broughtToFront == ["Mail", "Safari", "Mail", "Safari"].map { landed.app($0) })
     }
 
-    @Test func slightDriftBetweenTapsKeepsTheSeriesGoingFromWhereTheFingersWereAtTheLastSwap() {
-        let small = World.switcherWorld()
-        var script = small.swap(lift: false)
-        small.activate("Mail")
-        script = script.slide(byMM: (1, 0)).thumbTap()
-        small.play(script)
-        #expect(small.system.broughtToFront == [small.app("Mail"), small.app("Safari")])
-
-        let cumulative = World.switcherWorld()
-        script = cumulative.swap(lift: false)
-        cumulative.activate("Mail")
-        script = script.slide(byMM: (2, 0)).thumbTap()
-        cumulative.play(script)
-        cumulative.activate("Safari")
-        script = script.slide(byMM: (2, 0)).thumbTap()
-        cumulative.play(script)
-        #expect(cumulative.system.broughtToFront == ["Mail", "Safari", "Mail"].map { cumulative.app($0) })
-    }
-
-    @Test func slidingEndsTheSeriesUntilBothFingersLiftAndLandAgain() {
+    @Test func fingersMovingBetweenTapsKeepTheSeriesGoing() {
         let world = World.switcherWorld()
         var script = world.swap(lift: false)
         world.activate("Mail")
-        script = script.slide(byMM: (10, 0)).thumbTap().thumbTap()
+        script = script.slide(byMM: (10, 0)).thumbTap()
         world.play(script)
-        #expect(world.system.broughtToFront == [world.app("Mail")])
-
-        script = script.lift().land(fingers: 2).wait(.milliseconds(150)).thumbTap()
+        world.activate("Safari")
+        script = script.slide(byMM: (0, 15)).thumbTap()
         world.play(script)
-        #expect(world.system.broughtToFront == [world.app("Mail"), world.app("Safari")])
+        #expect(world.system.broughtToFront == ["Mail", "Safari", "Mail"].map { world.app($0) })
     }
 
     @Test func aFingerThatLiftsAndLandsAgainRejoinsTheSeries() {
