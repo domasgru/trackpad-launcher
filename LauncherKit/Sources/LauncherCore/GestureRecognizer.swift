@@ -230,11 +230,7 @@ public struct GestureRecognizer: Sendable {
         for touch in landed where touch.id != thumbLanding?.id { rest.fingers.insert(touch.id) }
         if rest.isSeries && rest.fingers.subtracting(rest.rolled).count > 2 { rest.isStopped = true }
         if let thumbLanding {
-            let qualifies = swaps && !rest.isStopped && rest.fingers.count == 2
-                && rest.fingers.allSatisfy { id in
-                    book[id].map { frame.time - $0.firstSeen >= GestureRules.minRestBeforeThumbTap } ?? false
-                }
-            rest.thumb = RestThumb(id: thumbLanding.id, canSwap: qualifies)
+            rest.thumb = RestThumb(id: thumbLanding.id, canSwap: swaps && !rest.isStopped && rest.fingers.count == 2)
         }
 
         if rest.fingers.isEmpty {

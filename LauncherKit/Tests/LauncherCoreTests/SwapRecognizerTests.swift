@@ -8,10 +8,10 @@ import LauncherCore
         TouchScript(.macBook14).land(fingers: 2).wait(.milliseconds(ms))
     }
 
-    @Test(arguments: [(afterMS: 90, swaps: false), (110, true), (5000, true)])
-    func theFingersMustHaveRestedAtLeastOneHundredMillisecondsBeforeTheThumbLands(afterMS: Int, swaps swapped: Bool) {
+    @Test(arguments: [10, 150, 5000])
+    func theFingersMayRestForAnyTimeBeforeTheThumbLands(afterMS: Int) {
         let frames = rest(for: afterMS).thumbTap().frames
-        #expect(swaps(frames) == (swapped ? [true] : []))
+        #expect(swaps(frames) == [true])
     }
 
     @Test(arguments: [(holdMS: 390, swaps: true), (410, false)])

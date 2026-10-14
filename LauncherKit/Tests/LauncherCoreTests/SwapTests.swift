@@ -167,13 +167,27 @@ import LauncherCore
         #expect(palm.system.broughtToFront == [palm.app("Mail")])
     }
 
-    @Test func fingersThatLandedJustBeforeTheThumbDoNotSwap() {
+    @Test func aThumbTappedJustAfterTheFingersLandSwaps() {
         let world = World.switcherWorld()
         world.hardware.touch([
             h.frame(atMS: 0, [h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]),
             h.frame(atMS: 20, [h.contact(1, atMM: 62, 45), h.contact(2, atMM: 70, 45), h.contact(9, .landing, atMM: 10, 10)]),
             h.frame(atMS: 60, [h.contact(1, atMM: 62, 45), h.contact(2, atMM: 70, 45), h.contact(9, atMM: 10, 10)]),
-            h.frame(atMS: 100),
+            h.frame(atMS: 100, [h.contact(1, atMM: 62, 45), h.contact(2, atMM: 70, 45)]),
+            h.frame(atMS: 200),
+        ], on: trackpad.id)
+        #expect(world.system.broughtToFront == [world.app("Mail")])
+    }
+
+    @Test func aThumbLandingInTheSameFrameAsTheFingersDoesNotSwap() {
+        let world = World.switcherWorld()
+        world.hardware.touch([
+            h.frame(atMS: 0, [
+                h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45), h.contact(9, .landing, atMM: 10, 10),
+            ]),
+            h.frame(atMS: 60, [h.contact(1, atMM: 62, 45), h.contact(2, atMM: 70, 45), h.contact(9, atMM: 10, 10)]),
+            h.frame(atMS: 100, [h.contact(1, atMM: 62, 45), h.contact(2, atMM: 70, 45)]),
+            h.frame(atMS: 200),
         ], on: trackpad.id)
         #expect(nothingHappened(world))
     }

@@ -15,8 +15,6 @@ package enum GestureRules {
     static let maxTapDuration = Duration.milliseconds(400)
     /// A finger farther than this from its landing point is dragging, not tapping.
     static let dragThresholdMM = 3.0
-    /// Both resting fingers must have been down this long when the thumb lands for its tap to be a swap.
-    static let minRestBeforeThumbTap = Duration.milliseconds(100)
     /// Clicks are blocked for this long after a thumb anchors. Strictly less blocks.
     static let clickBlockingWindow = Duration.seconds(3)
     /// The most icons a switcher row holds: the frontmost app and the most recently used others.

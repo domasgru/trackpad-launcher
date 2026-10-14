@@ -42,3 +42,6 @@
 - T23's recognizer half checked that some frame blocked → checks both flags on every thumb-down frame.
 - `docs/domain-model.md` said the model keeps nothing beyond the series in progress, while decision 7 replaces the memory only when the next series starts → the doc follows decision 7.
 - Not changed: the `swipes`/`swaps` flag pair (decision 6 folds them at a third option); `setSwap` and the switch row mirroring their neighbours; multi-clause tests, which follow the plan's lettered rows.
+
+## Change after hardware use
+- The 100 ms minimum rest before the thumb tap made quick swaps fail on the trackpad; the user asked to drop it and revisit only if accidental swaps appear → R6 now needs only the fingers to land in an earlier frame than the thumb; `minRestBeforeThumbTap` removed; T11 and T21 rewritten (a thumb 10 ms or 20 ms after the fingers swaps; the same frame does not).
