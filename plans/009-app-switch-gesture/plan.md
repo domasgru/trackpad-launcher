@@ -321,7 +321,7 @@ Two facts about the code shape the decisions. First, the recognizer already judg
 
 8. **The setting.** `Settings.isSwapOn`, default true, keyed by its field name permanently, decoded as true when the key is absent so any earlier record loads with it on and nothing else changed (R10). `Launcher.isSwapOn` exposes it; `setSwap(on:)` ignores a no-change call, saves at once and reconciles. It is independent of `isSwipeOn` (R13): the recognizer takes both. Until the setting exists (S2), `reconcile` passes `swaps: true`.
 
-9. **The window.** `SwitcherSection` becomes two setting rows: the swipe row as today, then "Thumb tap to swap apps" with a switch bound to `isSwapOn`, laid out like the swipe row, with its own illustration `assets/thumb-tap.svg` (the two resting fingers solid, the tapping thumb ringed, a ⇄ swap mark), mirrored in left-hand mode. The section's height is fixed, so the shell's refit observation is untouched. The hint is unchanged: no requirement names it (Further Notes).
+9. **The window.** `SwitcherSection` becomes two setting rows: the swipe row as today, then "Thumb tap to swap apps" with a switch bound to `isSwapOn`, laid out like the swipe row, with its own illustration `assets/thumb-tap.svg` (the two resting fingers solid, the tapping thumb ringed), mirrored in left-hand mode. The section's height is fixed, so the shell's refit observation is untouched. The hint is unchanged: no requirement names it (Further Notes).
 
 10. **The test fakes.** `InMemoryTrackpads.run` takes `swaps`. `RecordingSystemActions` is unchanged: it never updates `frontmost` or `running` on `bringToFront`, which is the in-flight read R3 needs; a test that wants an activation to land sets them through a new `World.activate(_:)`.
 
