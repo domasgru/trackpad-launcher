@@ -27,3 +27,9 @@
 - The human ruled this a requirement change, not a bug, and is sure their top-edge taps land within 3 mm → the reproduction and this plan's recording are dropped; the plan 007 palm replay stays as the hardware check.
 
 ## Implement
+
+- S1 committed as 59ded9d; gate green (376 tests), plan 007 replay harness prints nothing for rec1.txt.
+- Verification skill: none in this repo, so no Branch-mode pass.
+- Review (`.temp/review/report.md`, fixed point `origin/main` because local `main` is stale): no hard violations; 15 judgement calls or minor findings.
+- Fixes, F1 (c5d0c06): `HandMode` owns the hand-side arithmetic for `AnchorCorner` and `EdgeContacts`; `edgeBandMM` read once; glossary wording in the `EdgeContacts` and suite doc comments; T7 per-frame messages with the millisecond, built with `frames([Track])`; `phasesMatch` failures show the actual phases; one `thumbX` helper; the "more than 3 s" question recorded as resolved in design.md, testing.md and this log; S1 boxes ticked. Mutation check: main's rule fails T2, T4–T8; per-frame re-judging fails T8.
+- Left: the remaining multi-assertion findings (Standards #5, tdd #2 second and third bullets); each test asserts one behaviour as its testing.md row states it.
