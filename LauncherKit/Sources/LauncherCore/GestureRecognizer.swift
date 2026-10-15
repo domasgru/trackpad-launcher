@@ -42,7 +42,7 @@ public struct GestureRecognizer: Sendable {
     /// `travel`: how finger movement becomes switcher travel. A var, so a Debug tuner can change it between frames.
     public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool, swaps: Bool, travel: SwipeTravel) {
         self.corner = AnchorCorner(handMode, surface: surface)
-        self.edgeContacts = EdgeContacts(corner: corner, surface: surface)
+        self.edgeContacts = EdgeContacts(handMode, surface: surface)
         self.surface = surface
         self.swipes = swipes
         self.swaps = swaps
