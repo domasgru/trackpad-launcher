@@ -19,3 +19,16 @@
 - No row distinguished hiding by bundle identifier from hiding by the assignment's stored location → T2 runs a second copy of Arc from Downloads and expects both copies left out.
 - The slice's TDD line asked for a red on rows that pass on today's code (T3, T10) or on T1's code → the Strategy and the slice say which rows are regression rows and which may pass without a red.
 - The *Frontmost app* entry still said the row with no frontmost app is "the running apps alone", contradicting R5 → "the running apps without a gesture alone", and the design's Documentation lists the edit.
+
+## Implement
+- S1 (b19a265): all ten rows green in one pass; no red observed at the time → F1's red check: with `Switcher` ignoring `leavingOut` every leaving-out test goes red, and with missing apps skipped only the Trash test goes red.
+- No verification skill in the repo; that step was skipped.
+- Review fixes in F1 (6ef03d7):
+  - the no-frontmost test bundled two scenarios → split in two;
+  - T8(b) checked "no switcher" only after the lift → now checked mid-swipe;
+  - T5, T7 and T8(b) checked "nothing" only in part → now check the full set, including launch animations;
+  - `switcher?.` chains and a force-unwrap → `try #require`;
+  - `Launcher` reached into the assignments map → computed `Settings.assignedBundleIDs`, with no stored field added;
+  - the private `started(...)` helper duplicated `World.switcherWorld` → `switcherWorld` takes parameters.
+- Rejected: the call-count assertion (repo convention on a boundary fake), the bare `@Suite` (repo convention), and dropping the no-assignment test that overlaps `SwitcherTests` (kept as a check through `Launcher`).
+- Left for the human: R8's manual check of the launcher window and S1's hardware checks.
