@@ -70,18 +70,110 @@ import LauncherCore
     }
 
     @Test(arguments: [
-        (SurfaceSize.macBook14, 1.0, 45.0),
-        (.macBook14, 62.0, 1.0),
-        (.macBook14, 62.0, 75.8),
-        (.macBook14, 123.8, 45.0),
-        (.macBook14, 26.0, 1.0),
-        (.magicTrackpad, 159.0, 60.0),
+        (HandMode.right, SurfaceSize.macBook14, 123.8, 53.76),
+        (.left, .macBook14, 1.0, 53.76),
+        (.right, .macBook14, 123.8, 34.56),
+        (.right, .magicTrackpad, 159.0, 51.75),
+        (.right, .macBook14, 1.0, 75.8),
+        (.right, .macBook14, 62.4, 75.8),
+        (.right, .macBook14, 123.8, 75.8),
+        (.left, .macBook14, 1.0, 75.8),
+        (.left, .macBook14, 62.4, 75.8),
+        (.left, .macBook14, 123.8, 75.8),
     ])
-    func aTapLandingAtAnyEdgeFiresNothingAndTheNextTapStillFires(surface: SurfaceSize, x: Double, y: Double) {
-        let script = TouchScript(surface).thumb(atMM: (10, 10))
+    func aTapLandingInTheBottomEdgeOrTheLowerHandSideEdgeFiresNothingAndTheNextTapStillFires(handMode: HandMode, surface: SurfaceSize, x: Double, y: Double) {
+        let thumbX = handMode == .right ? 10.0 : surface.widthMM - 10
+        let script = TouchScript(surface).thumb(atMM: (thumbX, 10))
             .tap(fingers: 1, atMM: (x, y))
             .tap(fingers: 1, atMM: (62, 45))
-        #expect(fired(script.frames, surface: surface) == [.one])
+        #expect(fired(script.frames, handMode: handMode, surface: surface) == [.one])
+    }
+
+    @Test(arguments: [
+        (HandMode.right, SurfaceSize.macBook14, 62.4, 1.0),
+        (.left, .macBook14, 62.4, 1.0),
+        (.right, .macBook14, 30.0, 1.0),
+        (.right, .macBook14, 123.8, 1.0),
+        (.right, .macBook14, 1.0, 53.76),
+        (.right, .macBook14, 1.0, 23.04),
+        (.left, .macBook14, 123.8, 53.76),
+        (.right, .macBook14, 123.8, 15.36),
+        (.left, .macBook14, 1.0, 23.04),
+        (.right, .macBook14, 123.8, 26.88),
+        (.right, .magicTrackpad, 159.0, 40.25),
+    ])
+    func aTapNearTheTopEdgeTheOppositeEdgeOrTheUpperHandSideEdgeIsAFinger(handMode: HandMode, surface: SurfaceSize, x: Double, y: Double) {
+        let thumbX = handMode == .right ? 10.0 : surface.widthMM - 10
+        let script = TouchScript(surface).thumb(atMM: (thumbX, 10)).tap(fingers: 1, atMM: (x, y))
+        #expect(fired(script.frames, handMode: handMode, surface: surface) == [.one])
+    }
+
+    @Test(arguments: [
+        (HandMode.right, 123.8, 53.76),
+        (.left, 1.0, 53.76),
+    ])
+    func aPalmRestingAtTheHandSideEdgeDoesNotAddToATap(handMode: HandMode, palmX: Double, palmY: Double) {
+        let thumbX = handMode == .right ? 10.0 : 114.8
+        let all = frames([
+            .still(9, from: 0, until: 10_000, atMM: thumbX, 10),
+            .still(2, from: 50, until: 400, atMM: palmX, palmY),
+            .still(1, from: 120, until: 240, atMM: 62, 45),
+        ], throughMS: 500)
+        #expect(fired(all, handMode: handMode) == [.one])
+    }
+
+    @Test func aFingerAtTheTopEdgeCountsInATwoFingerTap() {
+        let all = frames([
+            thumb,
+            .still(1, from: 50, until: 170, atMM: 62, 45),
+            .still(2, from: 50, until: 170, atMM: 62.4, 1),
+        ], throughMS: 400)
+        #expect(fired(all) == [.two])
+    }
+
+    @Test func aFingerAtTheTopEdgeTakesPartInASwipe() {
+        let all = frames([
+            Track.still(9, from: 0, until: 10_000, atMM: 10, 10),
+            Track(id: 1, from: 100, until: 160) { ms in (62 + 0.4 * Double(min(ms, 150) - 100), 45) },
+            Track(id: 2, from: 100, until: 160) { ms in (62.4 + 0.4 * Double(min(ms, 150) - 100), 1) },
+        ], throughMS: 200)
+        let events = swipeEvents(all)
+        #expect(events.at == [110, 120, 130, 140, 150, 160])
+        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .moved(travelMM: 16), .ended]))
+        #expect(fired(all) == [])
+    }
+
+    @Test func aFingerRestingAtTheTopEdgeCountsForASwap() {
+        let all = frames([
+            .still(1, from: 0, until: 400, atMM: 62, 45),
+            .still(2, from: 0, until: 400, atMM: 62.4, 1),
+            .still(9, from: 150, until: 270, atMM: 10, 10),
+        ], throughMS: 500)
+        #expect(swaps(all) == [true])
+    }
+
+    @Test(arguments: [(62.4, 1.0), (62.0, 45.0)])
+    func aFingerRestingAtTheTopEdgeBlocksLikeOneInTheMiddleOfThePad(x: Double, y: Double) {
+        let times = [0, 100, 1000, 2990, 3010, 4000, 4100]
+        let all = times.map { ms -> TouchFrame in
+            var touches = [h.contact(9, ms == 0 ? .landing : .down, atMM: 10, 10)]
+            if ms >= 100 && ms < 4100 { touches.append(h.contact(1, ms == 100 ? .landing : .down, atMM: x, y)) }
+            return h.frame(atMS: ms, touches)
+        }
+        let recognized = recognitions(all)
+        #expect(recognized.map(\.blocksClicks) == [false, true, true, true, false, false, false])
+        #expect(recognized.map(\.blocksDockSwipes) == [false, true, true, true, true, true, false])
+    }
+
+    @Test func aFingerSlidingIntoTheHandSideBandStaysAFingerInATap() {
+        let all = frames([
+            thumb,
+            .still(1, from: 50, until: 150, atMM: 62, 45),
+            .line(2, from: 50, until: 170, fromMM: (123.8, 29.18), toMM: (123.8, 31.18), over: 60...110),
+        ], throughMS: 400)
+        let twos = zip(all, recognitions(all)).filter { $0.1.fired == .two }.map { ms($0.0) }
+        #expect(twos == [170])
+        #expect(fired(all) == [.two])
     }
 
     @Test func twoEdgeContactsTogetherAreNotATwoFingerTap() {
@@ -131,7 +223,7 @@ import LauncherCore
         (.magicTrackpad, 157.5, 60.0, false),
         (.magicTrackpad, 156.5, 60.0, true),
     ])
-    func theBandIsThreeMillimetresOnEveryEdgeAndSize(surface: SurfaceSize, x: Double, y: Double, fires: Bool) {
+    func theBandIsThreeMillimetresOnTheGuardedEdgesOfEverySize(surface: SurfaceSize, x: Double, y: Double, fires: Bool) {
         let script = TouchScript(surface).thumb(atMM: (10, 10)).tap(fingers: 1, atMM: (x, y))
         #expect(fired(script.frames, surface: surface) == (fires ? [.one] : []))
     }

@@ -26,11 +26,6 @@ public struct SurfaceSize: Hashable, Sendable {
     public func distanceMM(_ a: SurfacePoint, _ b: SurfacePoint) -> Double {
         hypot((a.x - b.x) * widthMM, (a.y - b.y) * heightMM)
     }
-
-    /// Distance in millimetres from a normalised point to the nearest edge of this surface.
-    public func distanceToNearestEdgeMM(_ p: SurfacePoint) -> Double {
-        min(p.x * widthMM, (1 - p.x) * widthMM, p.y * heightMM, (1 - p.y) * heightMM)
-    }
 }
 
 /// The fixed zone where a thumb arms gestures.
@@ -60,17 +55,17 @@ package struct AnchorCorner: Sendable {
     }
 }
 
-/// Remembers which contacts landed at the edge of the surface, outside the anchor corner, so the recognizer never
-/// sees them. An edge contact is a resting hand, not a finger, for as long as it stays down. Call once per frame, in
-/// frame order.
+/// Remembers which contacts landed in the guarded band, so the recognizer never sees them. The band is the bottom edge
+/// and the hand-side edge below the `edgeBandTop` line: where the heel of the hand rests. A contact there is a resting
+/// palm, not a finger, for as long as it stays down. Call once per frame, in frame order.
 package struct EdgeContacts: Sendable {
-    private let corner: AnchorCorner
+    private let handMode: HandMode
     private let surface: SurfaceSize
     private var edgeContactIDs: Set<TouchID> = []
     private var previouslyDown: Set<TouchID> = []
 
-    package init(corner: AnchorCorner, surface: SurfaceSize) {
-        self.corner = corner
+    package init(_ handMode: HandMode, surface: SurfaceSize) {
+        self.handMode = handMode
         self.surface = surface
     }
 
@@ -78,7 +73,7 @@ package struct EdgeContacts: Sendable {
     package mutating func fingers(in frame: TouchFrame) -> TouchFrame {
         let down = Set(frame.touches.map(\.id))
         for touch in frame.touches where touch.isLanding(after: previouslyDown) {
-            if isAtEdge(touch.position) {
+            if isInBand(touch.position) {
                 edgeContactIDs.insert(touch.id)
             } else {
                 edgeContactIDs.remove(touch.id)
@@ -89,7 +84,10 @@ package struct EdgeContacts: Sendable {
         return TouchFrame(time: frame.time, touches: frame.touches.filter { !edgeContactIDs.contains($0.id) }, press: frame.press)
     }
 
-    private func isAtEdge(_ p: SurfacePoint) -> Bool {
-        surface.distanceToNearestEdgeMM(p) < GestureRules.edgeBandMM && !corner.admits(p)
+    private func isInBand(_ p: SurfacePoint) -> Bool {
+        let fromHandSideEdgeMM = (handMode == .right ? 1 - p.x : p.x) * surface.widthMM
+        let fromBottomEdgeMM = (1 - p.y) * surface.heightMM
+        return fromBottomEdgeMM < GestureRules.edgeBandMM
+            || (fromHandSideEdgeMM < GestureRules.edgeBandMM && p.y > GestureRules.edgeBandTop)
     }
 }

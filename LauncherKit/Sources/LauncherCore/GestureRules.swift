@@ -8,9 +8,13 @@ package enum GestureRules {
     static let cornerHeight = 0.25
     /// An anchored thumb may roll this far past the zone edge before it stops being the anchor.
     static let anchorReleaseMarginMM = 2.0
-    /// A contact landing closer than this to any edge of the surface, outside the anchor corner's admission zone, is an
-    /// edge contact (a resting palm), not a finger. Strictly less is inside the band.
+    /// A contact landing closer than this to the bottom edge, or to the hand-side edge below the `edgeBandTop` line, is
+    /// an edge contact (a resting palm), not a finger. Strictly less is inside the band.
     static let edgeBandMM = 3.0
+    /// Fraction of the surface height, measured from the top edge, below which the hand-side edge is in the band. A
+    /// share of the height, not millimetres: the palm rests at the same share of the pad on every trackpad size.
+    /// Strictly more is inside the band.
+    static let edgeBandTop = 0.40
     /// First finger down to last finger up.
     static let maxTapDuration = Duration.milliseconds(400)
     /// A finger farther than this from its landing point is dragging, not tapping.
