@@ -198,12 +198,16 @@ extension World {
         makeRunning(names.map { app($0) })
     }
 
-    /// Safari, Mail, Slack and Notes installed and running in that order, Safari frontmost, started.
-    static func switcherWorld(accessGranted: Bool = false) -> World {
-        let world = World(apps: ["Safari", "Mail", "Slack", "Notes"], accessGranted: accessGranted)
+    /// `apps` installed and `running` (default: all of them, in that order), `frontmost` in front, started. By default
+    /// Safari, Mail, Slack and Notes, Safari frontmost.
+    static func switcherWorld(
+        apps: [String] = ["Safari", "Mail", "Slack", "Notes"], running: [String]? = nil, frontmost: String? = "Safari",
+        accessGranted: Bool = false
+    ) -> World {
+        let world = World(apps: apps, accessGranted: accessGranted)
         world.launcher.start()
-        world.makeRunning(["Safari", "Mail", "Slack", "Notes"])
-        world.makeFrontmost("Safari")
+        world.makeRunning(running ?? apps)
+        world.makeFrontmost(frontmost)
         return world
     }
 

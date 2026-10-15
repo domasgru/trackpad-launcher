@@ -15,6 +15,9 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Whether a thumb tap under two resting fingers swaps apps. The key is this field's name, permanently.
     public var isSwapOn = true
 
+    /// The bundle identifiers of every assigned app, missing ones included. Derived, never stored.
+    public var assignedBundleIDs: Set<BundleID> { Set(assignments.values.map(\.bundleID)) }
+
     public init() {}
 
     public init(from decoder: any Decoder) throws {

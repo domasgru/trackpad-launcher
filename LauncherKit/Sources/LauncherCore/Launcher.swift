@@ -208,7 +208,9 @@ public final class Launcher {
             guard switcher == nil, activity.isActive else { return }
             // With nothing to show the swipe still runs its course: the fingers stay blocked until they lift.
             let running = system.runningApps()
-            switcher = Switcher(frontmost: running.frontmost, running: running.apps, trackpad: event.trackpad)
+            switcher = Switcher(
+                frontmost: running.frontmost, running: running.apps,
+                leavingOut: settings.assignedBundleIDs, trackpad: event.trackpad)
         case .moved(let travel):
             guard var open = switcher, open.trackpad == event.trackpad else { return }
             let before = open.selected
