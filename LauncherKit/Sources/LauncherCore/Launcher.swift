@@ -210,7 +210,7 @@ public final class Launcher {
             let running = system.runningApps()
             switcher = Switcher(
                 frontmost: running.frontmost, running: running.apps,
-                leavingOut: Set(settings.assignments.values.map(\.bundleID)), trackpad: event.trackpad)
+                leavingOut: settings.assignedBundleIDs, trackpad: event.trackpad)
         case .moved(let travel):
             guard var open = switcher, open.trackpad == event.trackpad else { return }
             let before = open.selected

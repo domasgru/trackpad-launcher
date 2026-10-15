@@ -14,22 +14,15 @@ import LauncherCore
         }
     }
 
-    private func started(apps: [String], running: [String]? = nil, frontmost: String?, accessGranted: Bool = false) -> World {
-        let world = World(apps: apps, accessGranted: accessGranted)
-        world.launcher.start()
-        world.makeRunning(running ?? apps)
-        world.makeFrontmost(frontmost)
-        return world
-    }
-
-    @Test func anAssignedAppIsLeftOutAndTheLiftOpensTheNextOneInTheRow() {
-        let world = started(
+    @Test func anAssignedAppIsLeftOutAndTheLiftOpensTheNextOneInTheRow() throws {
+        let world = World.switcherWorld(
             apps: ["Safari", "Mail", "Notes", "Music"], running: ["Notes", "Mail", "Safari", "Music"], frontmost: "Notes")
         assign(world, ["Mail"], to: [.two])
 
         let hand = world.swipe(3.5, lift: false)
-        #expect(names(world) == ["Notes", "Safari", "Music"])
-        #expect(world.launcher.switcher?.selectsFrontmost == true)
+        let switcher = try #require(world.launcher.switcher)
+        #expect(switcher.row.map(\.name) == ["Notes", "Safari", "Music"])
+        #expect(switcher.selectsFrontmost)
 
         world.play(hand.slide(byMM: (12, 0)).lift())
         #expect(world.system.broughtToFront == [world.app("Safari")])
@@ -57,18 +50,19 @@ import LauncherCore
         #expect(names(world) == ["Safari", "Mail", "Notes"])
     }
 
-    @Test func withNoAssignmentTheRowIsStillTheFrontmostAppAndTheNineMostRecent() {
+    @Test func withNoAssignmentTheRowIsStillTheFrontmostAppAndTheNineMostRecent() throws {
         let all = ["Safari"] + (1...12).map { "App\($0)" }
-        let world = started(apps: all, frontmost: "Safari")
+        let world = World.switcherWorld(apps: all)
 
         world.swipe(3.5, lift: false)
 
-        #expect(names(world) == ["Safari"] + (1...9).map { "App\($0)" })
-        #expect(world.launcher.switcher?.selectedApp.name == "Safari")
+        let switcher = try #require(world.launcher.switcher)
+        #expect(switcher.row.map(\.name) == ["Safari"] + (1...9).map { "App\($0)" })
+        #expect(switcher.selectedApp.name == "Safari")
     }
 
     @Test func anAssignedAppMovedToTheTrashIsStillLeftOut() {
-        let world = started(apps: ["Safari", "Notes", "Mail"], frontmost: "Safari")
+        let world = World.switcherWorld(apps: ["Safari", "Notes", "Mail"])
         assign(world, ["Notes"], to: [.three])
         let notes = world.app("Notes")
         world.registry[World.bundleID("Notes")] = [world.trash("Notes")]
@@ -81,19 +75,22 @@ import LauncherCore
         #expect(names(world) == ["Safari", "Mail"])
     }
 
-    @Test func theFrontmostAppStaysAtTheLeftEndEvenWhenItAndAnotherAppHaveGestures() {
+    @Test func theFrontmostAppStaysAtTheLeftEndEvenWhenItAndAnotherAppHaveGestures() throws {
         let world = World.switcherWorld()
         world.launcher.openWindow()
         assign(world, ["Safari", "Mail"], to: [.one, .two])
 
         let hand = world.swipe(3.5, lift: false)
-        #expect(names(world) == ["Safari", "Slack", "Notes"])
-        #expect(world.launcher.switcher?.selectedApp.name == "Safari")
-        #expect(world.launcher.switcher?.selectsFrontmost == true)
+        let switcher = try #require(world.launcher.switcher)
+        #expect(switcher.row.map(\.name) == ["Safari", "Slack", "Notes"])
+        #expect(switcher.selectedApp.name == "Safari")
+        #expect(switcher.selectsFrontmost)
 
         world.play(hand.lift())
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.hardware.pulses.isEmpty)
+        #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.launcher.switcher == nil)
         #expect(world.launcher.isWindowOpen)
     }
 
@@ -103,7 +100,7 @@ import LauncherCore
     ])
     func theFreedSlotsGoToTheNextMostRecentAppsWithoutAGesture(running: Int, assigned: [Int], row: [Int]) {
         func name(_ index: Int) -> String { index == 0 ? "Front" : "App\(index)" }
-        let world = started(apps: (0...running).map(name), frontmost: "Front")
+        let world = World.switcherWorld(apps: (0...running).map(name), frontmost: "Front")
         assign(world, assigned.map(name), to: [.one, .two, .three])
 
         world.swipe(3.5, lift: false)
@@ -112,7 +109,7 @@ import LauncherCore
     }
 
     @Test func onlyAssignedAppsBesideTheFrontOneShowNoSwitcherAndStayBlockedUntilTheFingersLift() {
-        let world = started(apps: ["Notes", "Safari", "Mail"], frontmost: "Notes", accessGranted: true)
+        let world = World.switcherWorld(apps: ["Notes", "Safari", "Mail"], frontmost: "Notes", accessGranted: true)
         assign(world, ["Safari", "Mail"], to: [.one, .two])
         let runs = world.hardware.runCount
 
@@ -126,29 +123,39 @@ import LauncherCore
         #expect(world.hardware.pressVerdicts == [.drop, .drop])
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.hardware.pulses.isEmpty)
+        #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.launcher.switcher == nil)
         #expect(world.hardware.scroll(.fingers(.ended)) == .drop)
         #expect(world.hardware.scroll(.fingers(.began)) == .pass)
     }
 
-    @Test func withNoFrontmostAppTheRowIsTheRunningAppsWithoutAGestureAndTheSelectionStartsOnTheFirst() {
-        let some = started(apps: ["Safari", "Notes", "Mail"], frontmost: nil)
-        assign(some, ["Safari"], to: [.one])
+    @Test func withNoFrontmostAppTheRowIsTheRunningAppsWithoutAGestureAndTheSelectionStartsOnTheFirst() throws {
+        let world = World.switcherWorld(apps: ["Safari", "Notes", "Mail"], frontmost: nil)
+        assign(world, ["Safari"], to: [.one])
 
-        let hand = some.swipe(3.5, lift: false)
-        #expect(names(some) == ["Notes", "Mail"])
-        #expect(some.launcher.switcher?.selected == 0)
-        #expect(some.launcher.switcher?.selectedApp.name == "Notes")
+        let hand = world.swipe(3.5, lift: false)
+        let switcher = try #require(world.launcher.switcher)
+        #expect(switcher.row.map(\.name) == ["Notes", "Mail"])
+        #expect(switcher.selected == 0)
+        #expect(switcher.selectedApp.name == "Notes")
 
-        some.play(hand.lift())
-        #expect(some.system.broughtToFront == [some.app("Notes")])
-        #expect(some.hardware.feedback == [trackpad.id])
+        world.play(hand.lift())
+        #expect(world.system.broughtToFront == [world.app("Notes")])
+        #expect(world.hardware.feedback == [trackpad.id])
+    }
 
-        let every = started(apps: ["Safari", "Mail"], frontmost: nil)
-        assign(every, ["Safari", "Mail"], to: [.one, .two])
-        every.swipe(3.5)
-        #expect(every.launcher.switcher == nil)
-        #expect(every.system.broughtToFront.isEmpty)
-        #expect(every.hardware.pulses.isEmpty)
+    @Test func withNoFrontmostAppAndEveryRunningAppAssignedNoSwitcherShows() {
+        let world = World.switcherWorld(apps: ["Safari", "Mail"], frontmost: nil)
+        assign(world, ["Safari", "Mail"], to: [.one, .two])
+
+        let hand = world.swipe(3.5, lift: false)
+        #expect(world.launcher.switcher == nil)
+
+        world.play(hand.lift())
+        #expect(world.system.broughtToFront.isEmpty)
+        #expect(world.hardware.pulses.isEmpty)
+        #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.launcher.switcher == nil)
     }
 
     @Test func anAssignmentSetOrClearedBetweenSwipesCountsFromTheNextSwipe() {
@@ -171,7 +178,7 @@ import LauncherCore
     }
 
     @Test func theSwapStillReachesAnAssignedApp() {
-        let world = started(apps: ["Notes", "Mail", "Safari"], frontmost: "Notes")
+        let world = World.switcherWorld(apps: ["Notes", "Mail", "Safari"], frontmost: "Notes")
         assign(world, ["Mail"], to: [.two])
 
         world.swap()
