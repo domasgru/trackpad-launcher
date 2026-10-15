@@ -51,12 +51,12 @@ package struct AnchorCorner: Sendable {
 
     /// Distance from the anchor-side edge as a fraction of the width.
     private func fromEdge(_ p: SurfacePoint) -> Double {
-        handMode == .right ? p.x : 1 - p.x
+        handMode.fractionFromThumbSideEdge(x: p.x)
     }
 }
 
-/// Remembers which contacts landed in the guarded band, so the recognizer never sees them. The band is the bottom edge
-/// and the hand-side edge below the `edgeBandTop` line: where the heel of the hand rests. A contact there is a resting
+/// Remembers which edge contacts landed in the band, so the recognizer never sees them. The band is the bottom edge and
+/// the hand-side edge below the `edgeBandTop` line: where the heel of the hand rests. An edge contact is a resting
 /// palm, not a finger, for as long as it stays down. Call once per frame, in frame order.
 package struct EdgeContacts: Sendable {
     private let handMode: HandMode
@@ -85,9 +85,9 @@ package struct EdgeContacts: Sendable {
     }
 
     private func isInBand(_ p: SurfacePoint) -> Bool {
-        let fromHandSideEdgeMM = (handMode == .right ? 1 - p.x : p.x) * surface.widthMM
         let fromBottomEdgeMM = (1 - p.y) * surface.heightMM
-        return fromBottomEdgeMM < GestureRules.edgeBandMM
-            || (fromHandSideEdgeMM < GestureRules.edgeBandMM && p.y > GestureRules.edgeBandTop)
+        let fromHandSideEdgeMM = handMode.fractionFromHandSideEdge(x: p.x) * surface.widthMM
+        let nearestBandEdgeMM = p.y > GestureRules.edgeBandTop ? min(fromBottomEdgeMM, fromHandSideEdgeMM) : fromBottomEdgeMM
+        return nearestBandEdgeMM < GestureRules.edgeBandMM
     }
 }

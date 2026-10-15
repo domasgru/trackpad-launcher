@@ -1,7 +1,8 @@
 import Testing
 import LauncherCore
 
-/// A contact landing at the trackpad's edge is a resting hand, not a finger, for as long as it stays down.
+/// A contact landing at the bottom edge or the lower part of the hand-side edge is a resting hand, not a finger, for as
+/// long as it stays down. Anywhere else on the pad, the edges included, it is a finger.
 @Suite struct EdgeContactRecognizerTests {
     private let h = HandFrames()
 
@@ -58,6 +59,11 @@ import LauncherCore
 
     private let thumb = Track.still(9, from: 0, until: 10_000, atMM: 10, 10)
 
+    /// The thumb's x in the anchor corner for the hand mode, 10 mm from the anchor-side edge.
+    private func thumbX(_ handMode: HandMode, _ surface: SurfaceSize = .macBook14) -> Double {
+        handMode == .right ? 10 : surface.widthMM - 10
+    }
+
     @Test func aPalmBrushingTheEdgeDuringAOneFingerSlideFiresNothing() {
         let slidingAndBack = Track(id: 3, from: 0, until: 600) { ms in
             let t = Double(ms < 250 ? ms : max(500 - ms, 0)) / 250
@@ -82,8 +88,7 @@ import LauncherCore
         (.left, .macBook14, 123.8, 75.8),
     ])
     func aTapLandingInTheBottomEdgeOrTheLowerHandSideEdgeFiresNothingAndTheNextTapStillFires(handMode: HandMode, surface: SurfaceSize, x: Double, y: Double) {
-        let thumbX = handMode == .right ? 10.0 : surface.widthMM - 10
-        let script = TouchScript(surface).thumb(atMM: (thumbX, 10))
+        let script = TouchScript(surface).thumb(atMM: (thumbX(handMode, surface), 10))
             .tap(fingers: 1, atMM: (x, y))
             .tap(fingers: 1, atMM: (62, 45))
         #expect(fired(script.frames, handMode: handMode, surface: surface) == [.one])
@@ -103,8 +108,7 @@ import LauncherCore
         (.right, .magicTrackpad, 159.0, 40.25),
     ])
     func aTapNearTheTopEdgeTheOppositeEdgeOrTheUpperHandSideEdgeIsAFinger(handMode: HandMode, surface: SurfaceSize, x: Double, y: Double) {
-        let thumbX = handMode == .right ? 10.0 : surface.widthMM - 10
-        let script = TouchScript(surface).thumb(atMM: (thumbX, 10)).tap(fingers: 1, atMM: (x, y))
+        let script = TouchScript(surface).thumb(atMM: (thumbX(handMode, surface), 10)).tap(fingers: 1, atMM: (x, y))
         #expect(fired(script.frames, handMode: handMode, surface: surface) == [.one])
     }
 
@@ -113,9 +117,8 @@ import LauncherCore
         (.left, 1.0, 53.76),
     ])
     func aPalmRestingAtTheHandSideEdgeDoesNotAddToATap(handMode: HandMode, palmX: Double, palmY: Double) {
-        let thumbX = handMode == .right ? 10.0 : 114.8
         let all = frames([
-            .still(9, from: 0, until: 10_000, atMM: thumbX, 10),
+            .still(9, from: 0, until: 10_000, atMM: thumbX(handMode), 10),
             .still(2, from: 50, until: 400, atMM: palmX, palmY),
             .still(1, from: 120, until: 240, atMM: 62, 45),
         ], throughMS: 500)
@@ -139,7 +142,7 @@ import LauncherCore
         ], throughMS: 200)
         let events = swipeEvents(all)
         #expect(events.at == [110, 120, 130, 140, 150, 160])
-        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .moved(travelMM: 16), .ended]))
+        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .moved(travelMM: 16), .ended]), "phases were \(events.phases)")
         #expect(fired(all) == [])
     }
 
@@ -154,15 +157,16 @@ import LauncherCore
 
     @Test(arguments: [(62.4, 1.0), (62.0, 45.0)])
     func aFingerRestingAtTheTopEdgeBlocksLikeOneInTheMiddleOfThePad(x: Double, y: Double) {
-        let times = [0, 100, 1000, 2990, 3010, 4000, 4100]
-        let all = times.map { ms -> TouchFrame in
-            var touches = [h.contact(9, ms == 0 ? .landing : .down, atMM: 10, 10)]
-            if ms >= 100 && ms < 4100 { touches.append(h.contact(1, ms == 100 ? .landing : .down, atMM: x, y)) }
-            return h.frame(atMS: ms, touches)
+        let all = frames([
+            thumb,
+            .still(1, from: 100, until: 4100, atMM: x, y),
+        ], throughMS: 4100).filter { [0, 100, 1000, 2990, 3010, 4000, 4100].contains(ms($0)) }
+        let clicks = [false, true, true, true, false, false, false]
+        let dockSwipes = [false, true, true, true, true, true, false]
+        for (i, (frame, recognition)) in zip(all, recognitions(all)).enumerated() {
+            #expect(recognition.blocksClicks == clicks[i], "clicks at \(ms(frame)) ms")
+            #expect(recognition.blocksDockSwipes == dockSwipes[i], "dock swipes at \(ms(frame)) ms")
         }
-        let recognized = recognitions(all)
-        #expect(recognized.map(\.blocksClicks) == [false, true, true, true, false, false, false])
-        #expect(recognized.map(\.blocksDockSwipes) == [false, true, true, true, true, true, false])
     }
 
     @Test func aFingerSlidingIntoTheHandSideBandStaysAFingerInATap() {
@@ -274,7 +278,7 @@ import LauncherCore
             Track(id: 2, from: 100, until: 140) { ms in (70 + 0.4 * Double(ms - 100), 45) },
             Track(id: 3, from: 120, until: 160) { ms in (123.8, 60 + Double(ms - 120)) },
         ], throughMS: 200)
-        #expect(phasesMatch(swipeEvents(all).phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .ended]))
+        #expect(phasesMatch(swipeEvents(all).phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .ended]), "phases were \(swipeEvents(all).phases)")
         #expect(fired(all) == [])
     }
 
@@ -306,7 +310,7 @@ import LauncherCore
         ], throughMS: 200)
         let events = swipeEvents(all)
         #expect(events.at == [110, 120, 130, 140, 150])
-        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]))
+        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]), "phases were \(events.phases)")
         #expect(fired(all) == [])
     }
 }
