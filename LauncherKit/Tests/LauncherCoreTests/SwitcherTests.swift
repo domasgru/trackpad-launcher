@@ -17,7 +17,7 @@ import LauncherCore
     private func switcher(frontmost: AppEntry? = nil, running: [AppEntry]? = nil, travel: Double = 0) -> Switcher {
         var switcher = Switcher(
             frontmost: frontmost ?? safari, running: running ?? [safari, mail, slack, notes],
-            trackpad: Trackpad.macBook14.id)!
+            leavingOut: [], trackpad: Trackpad.macBook14.id)!
         switcher.travelMM = travel
         return switcher
     }
@@ -96,9 +96,9 @@ import LauncherCore
 
     @Test func aRowNeedsAnotherIconBesidesTheFrontmostApp() {
         let trackpad = Trackpad.macBook14.id
-        #expect(Switcher(frontmost: safari, running: [mail], trackpad: trackpad)?.row.count == 2)
-        #expect(Switcher(frontmost: safari, running: [], trackpad: trackpad) == nil)
-        #expect(Switcher(frontmost: safari, running: [safari], trackpad: trackpad) == nil)
+        #expect(Switcher(frontmost: safari, running: [mail], leavingOut: [], trackpad: trackpad)?.row.count == 2)
+        #expect(Switcher(frontmost: safari, running: [], leavingOut: [], trackpad: trackpad) == nil)
+        #expect(Switcher(frontmost: safari, running: [safari], leavingOut: [], trackpad: trackpad) == nil)
     }
 
     @Test(arguments: [

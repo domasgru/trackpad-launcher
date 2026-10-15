@@ -5,7 +5,8 @@ import Foundation
 /// app can be read, as while Trackpad Launcher itself is active.
 public struct Switcher: Equatable, Sendable {
     /// Left to right: the frontmost app, if any, then the running apps in ⌘-Tab order without the copy at the frontmost
-    /// app's location, at most `switcherMaxApps` in all. Always holds an app besides the frontmost one.
+    /// app's location and without any app whose bundle identifier is left out, at most `switcherMaxApps` in all.
+    /// Always holds an app besides the frontmost one.
     public let row: [AppEntry]
     /// Whether the first icon is the frontmost app, so lifting on it changes nothing.
     private let startsOnFrontmost: Bool
@@ -15,10 +16,11 @@ public struct Switcher: Equatable, Sendable {
     private var reportedMM: Double = 0
     public let trackpad: TrackpadID
 
-    /// nil when the row would hold nothing besides the frontmost app. Identity is the running copy's location: two
-    /// copies of one bundle at two locations are two icons.
-    package init?(frontmost: AppEntry?, running: [AppEntry], trackpad: TrackpadID) {
-        let others = running.filter { $0.url != frontmost?.url }
+    /// nil when the row would hold nothing besides the frontmost app. Identity for the frontmost app's copy is the
+    /// running copy's location: two copies of one bundle at two locations are two icons. Leaving out goes by bundle
+    /// identifier instead: every running copy of a left-out bundle is dropped, and the frontmost app is never left out.
+    package init?(frontmost: AppEntry?, running: [AppEntry], leavingOut: Set<BundleID>, trackpad: TrackpadID) {
+        let others = running.filter { $0.url != frontmost?.url && !leavingOut.contains($0.bundleID) }
         guard !others.isEmpty else { return nil }
         row = Array(((frontmost.map { [$0] } ?? []) + others).prefix(GestureRules.switcherMaxApps))
         startsOnFrontmost = frontmost != nil

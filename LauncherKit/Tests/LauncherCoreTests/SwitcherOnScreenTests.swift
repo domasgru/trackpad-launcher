@@ -549,7 +549,8 @@ import LauncherCore
 
     @Test func aReconcileMidSwipeRemovesTheSwitcherAndTheRemainingFingersDoNothingUntilTheyLift() {
         let world = World.switcherWorld()
-        world.launcher.setAssignment(.app(world.app("Mail")), for: .one)
+        world.install("Figma")
+        world.launcher.setAssignment(.app(world.app("Figma")), for: .one)
         let hand = world.swipe(3.5, 12, lift: false)
         #expect(world.launcher.switcher?.selectedApp.name == "Mail")
 
@@ -562,6 +563,6 @@ import LauncherCore
         #expect(world.system.broughtToFront.isEmpty)
 
         world.play(lifted.tap(fingers: 1))
-        #expect(world.system.broughtToFront == [world.app("Mail")])
+        #expect(world.system.broughtToFront == [world.app("Figma")])
     }
 }
