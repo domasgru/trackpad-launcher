@@ -51,7 +51,7 @@ import LauncherCore
         #expect(nothingHappened(held))
 
         let dragged = World.switcherWorld()
-        dragged.play(rest().thumbTap(dragMM: 3.5))
+        dragged.play(rest().thumbTap(dragMM: (3.5, 0)))
         #expect(nothingHappened(dragged))
     }
 

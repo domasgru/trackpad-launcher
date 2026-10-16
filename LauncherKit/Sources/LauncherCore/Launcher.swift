@@ -39,19 +39,19 @@ public final class Launcher {
     @ObservationIgnored private let isFirstLaunch: Bool
     @ObservationIgnored private let hardware: any TrackpadHardware
     @ObservationIgnored private let preferences: any TrackpadPreferences
-    @ObservationIgnored private let access: any AccessibilityPermission
+    @ObservationIgnored private let permissions: any Permissions
     @ObservationIgnored private let system: any SystemActions
     @ObservationIgnored private let catalog: AppCatalog
     @ObservationIgnored private let scanner: any AppScanner
     @ObservationIgnored private let store: SettingsStore
 
     public init(
-        hardware: any TrackpadHardware, preferences: any TrackpadPreferences, access: any AccessibilityPermission,
+        hardware: any TrackpadHardware, preferences: any TrackpadPreferences, permissions: any Permissions,
         system: any SystemActions, catalog: AppCatalog, scanner: any AppScanner, store: SettingsStore
     ) {
         self.hardware = hardware
         self.preferences = preferences
-        self.access = access
+        self.permissions = permissions
         self.system = system
         self.catalog = catalog
         self.scanner = scanner
@@ -76,14 +76,14 @@ public final class Launcher {
         scanner.onScan = { [unowned self] in installedApps = $0 }
         scanner.scan()
         preferences.onChange = { [unowned self] in reconcile() }
-        access.onChange = { [unowned self] in reconcile() }
+        permissions.onChange = { [unowned self] in reconcile() }
         reconcile()
         if isFirstLaunch {
             // Both effects come before the first save: a crash in between repeats them next time instead of
             // losing them.
             system.registerLoginItem()
             let prompting = !isAccessibilityGranted
-            if prompting { access.prompt() }
+            if prompting { permissions.ask(.accessibility) }
             store.save(settings)
             window = prompting ? .heldOpen : .open
         }
@@ -159,7 +159,7 @@ public final class Launcher {
         let trackpads: [Trackpad]
         let handMode: HandMode
         let blockClicks: Bool
-        let swipes: Bool
+        let slides: Set<SlideKind>
         let swaps: Bool
     }
 
@@ -172,7 +172,7 @@ public final class Launcher {
     private func reconcile(restart: Bool = false) {
         connected = hardware.connected()
         preferenceValues = preferences.current()
-        let granted = access.isGranted()
+        let granted = permissions.isGranted(.accessibility)
         // A grant ends the hold: the hint has done its job and the user is in System Settings.
         if granted && !isAccessibilityGranted && window == .heldOpen { window = .closed }
         isAccessibilityGranted = granted
@@ -180,12 +180,12 @@ public final class Launcher {
         // Blocking needs gestures active and access granted; without either, presses are plain clicks.
         let run = Run(
             trackpads: active ? connected : [], handMode: settings.handMode, blockClicks: active && granted,
-            swipes: settings.isSwipeOn, swaps: settings.isSwapOn)
+            slides: settings.slides, swaps: settings.isSwapOn)
         guard restart || run != lastRun else { return }
         lastRun = run
         // Running replaces every recognizer, which ends any swipe in progress.
         switcher = nil
-        hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, swipes: run.swipes, swaps: run.swaps)
+        hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, slides: run.slides, swaps: run.swaps)
     }
 
     /// Every silent case decided here and only here: inactive, unassigned, missing.
@@ -213,10 +213,9 @@ public final class Launcher {
                 leavingOut: settings.assignedBundleIDs, trackpad: event.trackpad)
         case .moved(let travel):
             guard var open = switcher, open.trackpad == event.trackpad else { return }
-            let before = open.selected
-            open.follow(travel)
+            let crossed = open.selection.follow(travel)
             switcher = open
-            for _ in 0..<abs(open.selected - before) { hardware.playFeedback(.lightTick, on: event.trackpad) }
+            for _ in 0..<crossed { hardware.playFeedback(.lightTick, on: event.trackpad) }
         case .ended:
             guard let open = switcher, open.trackpad == event.trackpad else { return }
             switcher = nil

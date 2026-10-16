@@ -37,14 +37,14 @@ public struct Recognition: Equatable, Sendable {
 /// same thumb. Feed every frame in order.
 /// Owned by exactly one frame thread (real adapter) or by the test (in-memory adapter); never shared.
 public struct GestureRecognizer: Sendable {
-    /// `swipes`: false (the swipe setting is off): a pair's drag spoils like any drag.
+    /// `slides`: the kinds whose setting is on. Empty: a pair's drag spoils like any drag, as with both settings off.
     /// `swaps`: false: a thumb landing under resting fingers is only ever held, never a thumb tap.
     /// `travel`: how finger movement becomes switcher travel. A var, so a Debug tuner can change it between frames.
-    public init(handMode: HandMode, surface: SurfaceSize, swipes: Bool, swaps: Bool, travel: SwipeTravel) {
+    public init(handMode: HandMode, surface: SurfaceSize, slides: Set<SlideKind>, swaps: Bool, travel: SwipeTravel) {
         self.corner = AnchorCorner(handMode, surface: surface)
         self.edgeContacts = EdgeContacts(handMode, surface: surface)
         self.surface = surface
-        self.swipes = swipes
+        self.slides = slides
         self.swaps = swaps
         self.travel = travel
     }
@@ -92,7 +92,7 @@ public struct GestureRecognizer: Sendable {
         case .tapping(let anchor, var tap):
             for id in lifted { tap.down.remove(id) }
             let joining = landed.filter { $0.id != anchor.id }
-            let pair = swipes ? Pair(tap, joining: joining) : nil
+            let pair = slides.isEmpty ? nil : Pair(tap, joining: joining)
             if frame.press == .click {
                 state = .spoiled(anchor)
             } else if let move = Self.drag(of: tap.fingers, in: down, book: book, on: surface) {
@@ -158,7 +158,8 @@ public struct GestureRecognizer: Sendable {
                     let count = Double(moves.count)
                     let dxMM = moves.map(\.0).reduce(0, +) / count * surface.widthMM
                     let dyMM = moves.map(\.1).reduce(0, +) / count * surface.heightMM
-                    let travel = swipe.travelMM + self.travel.travel(dxMM: dxMM, dyMM: dyMM, interval: interval)
+                    let travel = swipe.travelMM
+                        + self.travel.travel(along: swipe.kind, dxMM: dxMM, dyMM: dyMM, interval: interval)
                     if travel != swipe.travelMM {
                         swipe.travelMM = travel
                         event = .swipe(.moved(travelMM: travel))
@@ -239,13 +240,16 @@ public struct GestureRecognizer: Sendable {
         ids.isEmpty ? .idle : .rest(Rest(fingers: Set(ids)))
     }
 
-    /// A sideways drag of a pair begins the swipe; any other drag spoils the gesture like every drag does.
+    /// The one place a slide's direction is decided. A pair's drag along a kind that is on begins it; any other drag
+    /// spoils the gesture like every drag does. Only the swipe has an event to begin with so far.
     private func beginOrSpoil(
         _ pair: Pair?, _ move: Move, _ anchor: Anchor, _ down: [TouchID: Touch], _ time: FrameTime
     ) -> (State, Recognition.Event?) {
-        guard let pair, move.isSideways else { return (.spoiled(anchor), nil) }
+        guard let pair, let kind = move.slide, kind == .swipe, slides.contains(kind) else {
+            return (.spoiled(anchor), nil)
+        }
         let fingers = Dictionary(uniqueKeysWithValues: pair.fingers.compactMap { id in down[id].map { (id, $0.position) } })
-        return (.swiping(Swipe(fingers: fingers, lastTime: time, thumb: anchor)), .swipe(.began))
+        return (.swiping(Swipe(kind: kind, fingers: fingers, lastTime: time, thumb: anchor)), .swipe(.began))
     }
 
     private struct Anchor: Sendable {
@@ -318,6 +322,7 @@ public struct GestureRecognizer: Sendable {
     }
 
     private struct Swipe: Sendable {
+        let kind: SlideKind
         /// The swipe fingers down now, at most two, with their positions on the last frame.
         var fingers: [TouchID: SurfacePoint]
         var lastTime: FrameTime
@@ -331,8 +336,8 @@ public struct GestureRecognizer: Sendable {
         let dxMM: Double
         let dyMM: Double
 
-        /// More sideways than up or down.
-        var isSideways: Bool { abs(dxMM) > abs(dyMM) }
+        /// More sideways than up or down, or the other way round. Strict both ways: a diagonal tie is neither.
+        var slide: SlideKind? { abs(dxMM) > abs(dyMM) ? .swipe : abs(dyMM) > abs(dxMM) ? .windowSwipe : nil }
     }
 
     /// The farthest-moved finger's displacement, when it is more than `dragThresholdMM`. Deterministic: the maximum.
@@ -403,7 +408,7 @@ public struct GestureRecognizer: Sendable {
 
     private let corner: AnchorCorner
     private let surface: SurfaceSize
-    private let swipes: Bool
+    private let slides: Set<SlideKind>
     private let swaps: Bool
     private var edgeContacts: EdgeContacts
     private var state: State = .idle

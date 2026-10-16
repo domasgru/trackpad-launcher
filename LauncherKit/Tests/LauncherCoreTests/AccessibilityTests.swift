@@ -8,11 +8,11 @@ import LauncherCore
         #expect(!world.launcher.isAccessibilityGranted)
         #expect(world.launcher.activity == .active)
 
-        world.access.set(granted: true)
+        world.permissions.set(.accessibility, granted: true)
         #expect(world.launcher.isAccessibilityGranted)
         #expect(world.launcher.activity == .active)
 
-        world.access.set(granted: false)
+        world.permissions.set(.accessibility, granted: false)
         #expect(!world.launcher.isAccessibilityGranted)
         #expect(world.launcher.activity == .active)
     }
@@ -21,7 +21,7 @@ import LauncherCore
         let world = World()
 
         world.launcher.start()
-        #expect(world.access.prompts == 1)
+        #expect(world.permissions.asks == [.accessibility])
         #expect(world.launcher.isWindowOpen)
         #expect(world.system.loginItemRegistrations == 1)
 
@@ -31,7 +31,7 @@ import LauncherCore
         #expect(!world.launcher.isWindowOpen)
 
         world.relaunch().start()
-        #expect(world.access.prompts == 1)
+        #expect(world.permissions.asks == [.accessibility])
         #expect(!world.launcher.isWindowOpen)
     }
 
@@ -39,7 +39,7 @@ import LauncherCore
         let world = World(accessGranted: true)
 
         world.launcher.start()
-        #expect(world.access.prompts == 0)
+        #expect(world.permissions.asks.isEmpty)
         #expect(world.launcher.isWindowOpen)
         world.launcher.dismissWindow()
         #expect(!world.launcher.isWindowOpen)
@@ -54,7 +54,7 @@ import LauncherCore
         let world = World()
         world.launcher.start()
 
-        world.access.set(granted: true)
+        world.permissions.set(.accessibility, granted: true)
 
         #expect(!world.launcher.isWindowOpen)
         #expect(world.launcher.isAccessibilityGranted)
@@ -75,7 +75,7 @@ import LauncherCore
     @Test func promptComesBeforeTheFirstSave() {
         let world = World()
         var snapshots: [Settings?] = []
-        world.access.onPrompt = { [unowned world] in snapshots.append(world.store.load()) }
+        world.permissions.onAsk = { [unowned world] in snapshots.append(world.store.load()) }
 
         world.launcher.start()
 

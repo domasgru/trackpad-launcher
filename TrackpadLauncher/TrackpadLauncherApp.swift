@@ -12,7 +12,7 @@ enum TrackpadLauncherApp {
         let launcher = Launcher(
             hardware: MultitouchTrackpads(),
             preferences: SystemTrackpadPreferences(),
-            access: SystemAccessibilityPermission(),
+            permissions: SystemPermissions(),
             system: system,
             catalog: catalog,
             scanner: SystemAppScanner(catalog: catalog),

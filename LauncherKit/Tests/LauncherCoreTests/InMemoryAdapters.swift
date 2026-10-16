@@ -41,11 +41,11 @@ import LauncherCore
     /// How many times `run` was called.
     private(set) var runCount = 0
 
-    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool, swaps: Bool) {
+    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, slides: Set<SlideKind>, swaps: Bool) {
         runCount += 1
         running = Dictionary(
             uniqueKeysWithValues: trackpads.map {
-                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, swipes: swipes, swaps: swaps, travel: .linear))
+                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, slides: slides, swaps: swaps, travel: .linear))
             })
         deaf = []
         blocking = [:]
@@ -166,27 +166,29 @@ import LauncherCore
     }
 }
 
-@MainActor final class InMemoryAccessibilityPermission: AccessibilityPermission {
+@MainActor final class InMemoryPermissions: Permissions {
     var onChange: (@MainActor () -> Void)?
-    private(set) var granted: Bool
-    private(set) var prompts = 0
-    /// Runs inside `prompt()` so a test can observe what is stored at that moment.
-    var onPrompt: (() -> Void)?
+    private(set) var granted: Set<Permission>
+    /// Every `ask(_:)`, in order.
+    private(set) var asks: [Permission] = []
+    /// Runs inside `ask(_:)` so a test can observe what is stored at that moment.
+    var onAsk: (() -> Void)?
 
-    init(granted: Bool = false) { self.granted = granted }
+    init(granted: Set<Permission> = []) { self.granted = granted }
 
-    func isGranted() -> Bool { granted }
+    func isGranted(_ permission: Permission) -> Bool { granted.contains(permission) }
 
-    func prompt() {
-        prompts += 1
-        onPrompt?()
+    func ask(_ permission: Permission) {
+        asks.append(permission)
+        onAsk?()
     }
 
-    /// The user flips the switch in System Settings. Pushed synchronously on a real change only, as the real adapter does.
-    func set(granted: Bool) {
-        guard granted != self.granted else { return }
-        self.granted = granted
-        onChange?()
+    /// The user flips the switch in System Settings. Pushed synchronously on a real change only, as the real adapter
+    /// does; `push: false` changes it silently, as when the system withholds its broadcast.
+    func set(_ permission: Permission, granted: Bool, push: Bool = true) {
+        guard granted != self.granted.contains(permission) else { return }
+        if granted { self.granted.insert(permission) } else { self.granted.remove(permission) }
+        if push { onChange?() }
     }
 }
 

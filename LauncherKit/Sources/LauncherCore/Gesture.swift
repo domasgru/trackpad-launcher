@@ -21,16 +21,24 @@ public struct GestureEvent: Equatable, Sendable {
     }
 }
 
-/// A swipe's progress as the frame thread reports it.
+/// What two fingers sliding under an anchored thumb start. Decided once, on the frame the farthest-moved finger passes
+/// 3 mm, and held until both fingers lift.
+public enum SlideKind: Hashable, Sendable {
+    /// More sideways than up or down: the app switcher. Travel is positive to the right in both hand modes.
+    case swipe
+    /// More up or down than sideways: the window switcher. Travel is positive downwards in both hand modes.
+    case windowSwipe
+}
+
+/// A swipe's or a window swipe's progress; the event case says which.
 public enum SwipePhase: Equatable, Sendable {
-    /// Two fingers under an anchored thumb moved sideways past 3 mm. Travel is 0 here.
+    /// One of two fingers under an anchored thumb moved past 3 mm. Travel is 0 here: the 3 mm do not count.
     case began
-    /// Sideways movement of the two fingers' midpoint since `began`, in trackpad millimetres, positive to the right in
-    /// both hand modes. Absolute, not a delta. Sent only when it changed.
+    /// Travel along the slide since `began`, in step millimetres (12 per item), absolute. Sent only when it changed.
     case moved(travelMM: Double)
-    /// The first of the two fingers lifted: the selection opens.
+    /// Both fingers have lifted.
     case ended
-    /// A finger landed outside the anchor corner, or a press reached apps: nothing opens.
+    /// A third finger landed outside the anchor corner while both were down, or a click reached apps.
     case cancelled
 }
 

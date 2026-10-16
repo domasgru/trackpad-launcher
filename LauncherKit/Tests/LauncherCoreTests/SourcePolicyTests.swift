@@ -62,8 +62,8 @@ import Testing
     }
 
     static let confined: [Confined] = [
-        Confined(token: "AXIsProcessTrusted", onlyIn: "SystemAccessibilityPermission.swift", rule: "R9 one permission, one adapter"),
-        Confined(token: "notify_register", onlyIn: "SystemAccessibilityPermission.swift", rule: "R7 the trust push"),
+        Confined(token: "AXIsProcessTrusted", onlyIn: "SystemPermissions.swift", rule: "R9 one permission, one adapter"),
+        Confined(token: "notify_register", onlyIn: "SystemPermissions.swift", rule: "R7 the trust push"),
         Confined(token: "tapCreate", onlyIn: "ClickTap.swift", rule: "R9 the one event tap"),
         Confined(token: "CGEventTapCreate", onlyIn: "ClickTap.swift", rule: "R9 the one event tap"),
         Confined(token: "scrollWheel", onlyIn: "ClickTap.swift", rule: "scrolling is read only by the one event tap"),
@@ -104,10 +104,10 @@ import Testing
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
         let source = Data("func f() { _ = AXIsProcessTrusted() }\n".utf8)
-        try source.write(to: dir.appending(path: "SystemAccessibilityPermission.swift"))
+        try source.write(to: dir.appending(path: "SystemPermissions.swift"))
         try source.write(to: dir.appending(path: "Other.swift"))
 
-        let hits = try Self.scan(dir, for: "AXIsProcessTrusted", outside: "SystemAccessibilityPermission.swift")
+        let hits = try Self.scan(dir, for: "AXIsProcessTrusted", outside: "SystemPermissions.swift")
 
         #expect(hits == ["Other.swift:1: AXIsProcessTrusted"])
     }

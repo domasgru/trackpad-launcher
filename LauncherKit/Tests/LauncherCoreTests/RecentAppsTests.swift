@@ -167,7 +167,7 @@ import LauncherCore
         world.hardware.attach(.magicTrackpad)
         world.hardware.detach(Trackpad.magicTrackpad.id)
         world.hardware.wake()
-        world.access.set(granted: true)
+        world.permissions.set(.accessibility, granted: true)
         world.tap(1)
         world.launcher.closeWindow()
         world.launcher.dismissWindow()

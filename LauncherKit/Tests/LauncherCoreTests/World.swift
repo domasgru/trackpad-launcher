@@ -47,7 +47,7 @@ final class LaunchRecord: Sendable {
     let hardware: InMemoryTrackpads
     let preferences = InMemoryTrackpadPreferences()
     let system = RecordingSystemActions()
-    let access: InMemoryAccessibilityPermission
+    let permissions: InMemoryPermissions
     let registry = Registry()
     let launches = LaunchRecord()
     let scanner: InMemoryAppScanner
@@ -69,7 +69,7 @@ final class LaunchRecord: Sendable {
             try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         hardware = InMemoryTrackpads(attached: attached)
-        access = InMemoryAccessibilityPermission(granted: accessGranted)
+        permissions = InMemoryPermissions(granted: accessGranted ? [.accessibility] : [])
         let registry = registry
         let launches = launches
         let catalog = AppCatalog(
@@ -83,18 +83,18 @@ final class LaunchRecord: Sendable {
         let store = SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
         self.store = store
         launcher = Self.makeLauncher(
-            hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
+            hardware: hardware, preferences: preferences, permissions: permissions, system: system, catalog: catalog,
             scanner: scanner, store: store)
         install("Finder", in: coreServices)
         for name in apps { install(name) }
     }
 
     private static func makeLauncher(
-        hardware: InMemoryTrackpads, preferences: InMemoryTrackpadPreferences, access: InMemoryAccessibilityPermission,
+        hardware: InMemoryTrackpads, preferences: InMemoryTrackpadPreferences, permissions: InMemoryPermissions,
         system: RecordingSystemActions, catalog: AppCatalog, scanner: InMemoryAppScanner, store: SettingsStore
     ) -> Launcher {
         Launcher(
-            hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
+            hardware: hardware, preferences: preferences, permissions: permissions, system: system, catalog: catalog,
             scanner: scanner, store: store)
     }
 
@@ -177,7 +177,7 @@ final class LaunchRecord: Sendable {
         let store = SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
         self.store = store
         launcher = Self.makeLauncher(
-            hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
+            hardware: hardware, preferences: preferences, permissions: permissions, system: system, catalog: catalog,
             scanner: scanner, store: store)
         return launcher
     }

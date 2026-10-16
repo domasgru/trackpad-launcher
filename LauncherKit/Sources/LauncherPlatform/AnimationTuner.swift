@@ -186,8 +186,8 @@ struct TunerView: View {
                 }
                 Section {
                     Toggle("Move like the cursor", isOn: $model.tuning.swipeFollowsCursor)
-                    knob("Points per icon", \.swipePointsPerIcon, 20...300, step: 1, unit: "pt",
-                         hint: "cursor travel per icon; 100 = the icon pitch, lower reaches farther")
+                    knob("Points per step", \.swipePointsPerStep, 20...300, step: 1, unit: "pt",
+                         hint: "cursor travel per step; 100 = the icon pitch, lower reaches farther")
                     knob("Tracking speed", \.swipeTrackingSpeed, -1...3, step: 0.0625,
                          hint: "−1 = your System Settings value; default notch is 0.6875")
                 } header: {

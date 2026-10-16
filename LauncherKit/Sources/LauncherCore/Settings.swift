@@ -18,6 +18,9 @@ public struct Settings: Codable, Equatable, Sendable {
     /// The bundle identifiers of every assigned app, missing ones included. Derived, never stored.
     public var assignedBundleIDs: Set<BundleID> { Set(assignments.values.map(\.bundleID)) }
 
+    /// The slide kinds whose setting is on. Derived, never stored.
+    public var slides: Set<SlideKind> { isSwipeOn ? [.swipe] : [] }
+
     public init() {}
 
     public init(from decoder: any Decoder) throws {

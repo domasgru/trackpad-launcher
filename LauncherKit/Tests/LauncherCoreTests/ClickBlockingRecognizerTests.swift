@@ -5,12 +5,12 @@ import LauncherCore
     private let h = HandFrames()
 
     private func blocking(_ frames: [TouchFrame]) -> [Bool] {
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: true, travel: .linear)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
         return frames.map { recognizer.step($0).blocksClicks }
     }
 
     @Test func withTheSwipeOffASlideIsNeverASwipeAndOnlyTheThumbRulesBlock() {
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: false, swaps: true, travel: .linear)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [], swaps: true, travel: .linear)
         var frames = [h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)])]
         frames.append(h.frame(atMS: 100, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]))
         for ms in stride(from: 200, through: 5000, by: 100) {

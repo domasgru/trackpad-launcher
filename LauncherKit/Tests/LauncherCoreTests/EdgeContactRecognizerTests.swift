@@ -38,7 +38,7 @@ import LauncherCore
     }
 
     private func recognitions(_ frames: [TouchFrame]) -> [Recognition] {
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: true, travel: .linear)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
         return frames.map { recognizer.step($0) }
     }
 
@@ -296,7 +296,7 @@ import LauncherCore
 
     @Test func anEdgeContactRollingInwardStaysAnEdgeContact() {
         let script = TouchScript(.macBook14).thumb(atMM: (10, 10))
-            .tap(fingers: 1, atMM: (123.8, 45), dragMM: -2.5)
+            .tap(fingers: 1, atMM: (123.8, 45), dragMM: (-2.5, 0))
             .tap(fingers: 1, atMM: (62, 45))
         #expect(fired(script.frames) == [.one])
     }

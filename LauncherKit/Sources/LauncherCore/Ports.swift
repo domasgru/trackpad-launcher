@@ -30,9 +30,9 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// Forgets every session, removes the click tap, stops every device, then starts exactly `trackpads` with a fresh
     /// recognizer each and, if `blockClicks` and `trackpads` is not empty, a fresh click tap. Idempotent.
     /// The tap needs Accessibility. If the system refuses it, nothing is filtered, presses are sampled as before,
-    /// and taps behave exactly as without access. [] = nothing runs. `swipes`: whether each fresh recognizer recognises
-    /// swipes; `swaps`: whether it recognises swaps. Replacing the recognizers ends any swipe in progress.
-    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool, swaps: Bool)
+    /// and taps behave exactly as without access. [] = nothing runs. `slides`: the slide kinds each fresh recognizer
+    /// recognises; `swaps`: whether it recognises swaps. Replacing the recognizers ends any swipe in progress.
+    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, slides: Set<SlideKind>, swaps: Bool)
     /// One pulse of that kind on that trackpad. No-op if it is gone.
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID)
 }
@@ -62,14 +62,19 @@ public enum Haptic: Sendable { case gesture, lightTick }
     func runningApps() -> RunningApps
 }
 
-/// The Accessibility permission. Real: SystemAccessibilityPermission. Test: InMemoryAccessibilityPermission.
-@MainActor public protocol AccessibilityPermission: AnyObject {
-    /// On the main actor after trust changed, and only then. Carries no data; re-read with `isGranted()`.
+/// A permission macOS grants the app.
+public enum Permission: Hashable, Sendable {
+    case accessibility
+}
+
+/// The permissions macOS grants the app. Real: SystemPermissions. Test: InMemoryPermissions.
+@MainActor public protocol Permissions: AnyObject {
+    /// On the main actor after a permission changed, and only then. Carries no data: re-read.
     var onChange: (@MainActor () -> Void)? { get set }
     /// Read fresh. Never prompts.
-    func isGranted() -> Bool
-    /// Shows the system's Accessibility prompt. Returns at once; the prompt belongs to another process.
-    func prompt()
+    func isGranted(_ permission: Permission) -> Bool
+    /// The system's prompt for it. Returns at once; the prompt belongs to another process.
+    func ask(_ permission: Permission)
 }
 
 /// Reads the listed apps off the main actor and pushes the result. Real: SystemAppScanner. Test: InMemoryAppScanner.

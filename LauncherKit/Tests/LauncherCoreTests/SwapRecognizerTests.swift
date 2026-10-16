@@ -22,14 +22,14 @@ import LauncherCore
 
     @Test(arguments: [(dragMM: 2.5, swaps: true), (3.5, false)])
     func theThumbMustNotDragMoreThanThreeMillimetres(dragMM: Double, swaps swapped: Bool) {
-        let frames = rest(for: 150).thumbTap(dragMM: dragMM).frames
+        let frames = rest(for: 150).thumbTap(dragMM: (dragMM, 0)).frames
         #expect(swaps(frames) == (swapped ? [true] : []))
     }
 
     @Test func beforeTheFirstSwapTheThumbRulesBlockClicksForThreeSecondsAndDockSwipesWhileTheFingersAreDown() {
         let fingers = [h.contact(1, atMM: 62, 45), h.contact(2, atMM: 70, 45)]
         let thumb = h.contact(9, atMM: 10, 10)
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: true, travel: .linear)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
         _ = recognizer.step(h.frame(atMS: 0, [h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]))
         _ = recognizer.step(h.frame(atMS: 150, fingers + [h.contact(9, .landing, atMM: 10, 10)]))
         let soon = recognizer.step(h.frame(atMS: 200, fingers + [thumb]))
@@ -48,7 +48,7 @@ import LauncherCore
             .lift().wait(.milliseconds(150)).tap(fingers: 1)
             .liftThumb().wait(.milliseconds(100))
             .thumb(atMM: (10, 10)).tap(fingers: 1)
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: true, travel: .linear)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
         let recognitions = script.frames.map { (time: $0.time.seconds - 1.0, recognition: recognizer.step($0)) }
 
         for (time, recognition) in recognitions where time >= 0.2 && time < 0.4 {
@@ -71,7 +71,7 @@ import LauncherCore
     }
 
     @Test func withSwapsOffAThumbUnderRestingFingersOnlyFollowsTheThumbRules() {
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: false, travel: .linear)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: false, travel: .linear)
         let frames = rest(for: 150).thumbTap().frames
         let recognitions = frames.map { recognizer.step($0) }
         let thumbDown = zip(frames, recognitions).filter { $0.0.touches.count == 3 }.map(\.1)
@@ -83,7 +83,7 @@ import LauncherCore
     @Test func theSeriesBlocksClicksAndDockSwipesWhileAnyRestFingerIsDownWhateverTheClockDid() {
         let first = [h.contact(1, atMM: 62, 45), h.contact(2, atMM: 70, 45)]
         let thumb = h.contact(9, atMM: 10, 10)
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: true, travel: .linear)
+        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
         func step(_ ms: Int, _ touches: [Touch]) -> Recognition { recognizer.step(h.frame(atMS: ms, touches)) }
 
         _ = step(0, [h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)])

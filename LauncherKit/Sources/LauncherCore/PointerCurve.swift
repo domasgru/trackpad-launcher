@@ -88,15 +88,17 @@ public struct PointerCurve: Equatable, Sendable {
         }
     }
 
-    /// Cursor points the pointer moves along x for one report of finger movement (`dxMM`, `dyMM`), `interval`
-    /// seconds after the previous one. Reproduces `IOHIDPointerAccelerator::accelerate`.
-    public func cursorPoints(dxMM: Double, dyMM: Double, interval: Double) -> Double {
+    /// Cursor points the pointer moves along x and y for one report of finger movement (`dxMM`, `dyMM`), `interval`
+    /// seconds after the previous one. Reproduces `IOHIDPointerAccelerator::accelerate`: the HID system scales the
+    /// whole delta by one speed-dependent multiplier, so y moves by the same multiplier as x.
+    public func cursorMove(dxMM: Double, dyMM: Double, interval: Double) -> (x: Double, y: Double) {
         let dx = dxMM / 25.4 * Self.countsPerInch
         let dy = dyMM / 25.4 * Self.countsPerInch
         let period = 1 / Self.reportRate
         let rateMultiplier = interval > 0 ? period / max(interval, period) : 1
         let velocity = max((hypot(dx, dy)).rounded(.down) * rateMultiplier, 1 / 65536)
-        return dx * multiplier(velocity) / velocity
+        let scale = multiplier(velocity) / velocity
+        return (dx * scale, dy * scale)
     }
 
     /// `IOHIDParametricAcceleration::multiplier`.
@@ -129,23 +131,27 @@ public struct PointerCurve: Equatable, Sendable {
     }
 }
 
-/// How finger movement becomes switcher travel. Travel is in step millimetres: 12 per icon.
+/// How finger movement becomes switcher travel. Travel is in step millimetres: 12 per item.
 public enum SwipeTravel: Equatable, Sendable {
-    /// One step millimetre per millimetre of sideways finger movement.
+    /// One step millimetre per millimetre of finger movement along the slide.
     case linear
-    /// As far as the cursor would move: `pointsPerIcon` cursor points make one icon.
-    case cursor(PointerCurve, pointsPerIcon: Double)
+    /// As far as the cursor would move along the slide: `pointsPerStep` cursor points make one item.
+    case cursor(PointerCurve, pointsPerStep: Double)
 
-    /// The switcher's icon pitch, 80 pt icons with 20 pt between: the highlight moves exactly like the cursor over the row.
-    public static let shippedPointsPerIcon = 100.0
+    /// 100 cursor points per step: the app switcher's icon pitch (80 pt icons with 20 pt between), so its highlight
+    /// moves exactly like the cursor over the row. For a window switcher's rows the match is not literal: a row is one
+    /// step whatever its size on screen.
+    public static let shippedPointsPerStep = 100.0
 
-    func travel(dxMM: Double, dyMM: Double, interval: Double) -> Double {
+    /// `.linear`: the millimetres along the slide. `.cursor`: the cursor's points along it ÷ `pointsPerStep` × 12.
+    /// Along a swipe, positive is to the right; along a window swipe, positive is downwards.
+    func travel(along kind: SlideKind, dxMM: Double, dyMM: Double, interval: Double) -> Double {
         switch self {
         case .linear:
-            return dxMM
-        case .cursor(let curve, let pointsPerIcon):
-            return curve.cursorPoints(dxMM: dxMM, dyMM: dyMM, interval: interval)
-                / pointsPerIcon * GestureRules.switcherStepMM
+            return kind == .swipe ? dxMM : dyMM
+        case .cursor(let curve, let pointsPerStep):
+            let move = curve.cursorMove(dxMM: dxMM, dyMM: dyMM, interval: interval)
+            return (kind == .swipe ? move.x : move.y) / pointsPerStep * GestureRules.switcherStepMM
         }
     }
 }

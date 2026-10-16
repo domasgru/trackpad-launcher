@@ -22,10 +22,10 @@ func fired(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14,
-    swipes: Bool = true,
+    slides: Set<SlideKind> = [.swipe],
     swaps: Bool = true
 ) -> [Gesture] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, swaps: swaps, travel: .linear)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
     return frames.compactMap { recognizer.step($0).fired }
 }
 
@@ -34,10 +34,10 @@ func phases(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14,
-    swipes: Bool = true,
+    slides: Set<SlideKind> = [.swipe],
     swaps: Bool = true
 ) -> [SwipePhase] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, swaps: swaps, travel: .linear)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
     return frames.compactMap { recognizer.step($0).swipe }
 }
 
@@ -46,9 +46,10 @@ func swaps(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14,
+    slides: Set<SlideKind> = [.swipe],
     swaps: Bool = true
 ) -> [Bool] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: true, swaps: swaps, travel: .linear)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
     return frames.compactMap { recognizer.step($0).swapStartsSeries }
 }
 
@@ -57,9 +58,10 @@ func perFrame(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14,
+    slides: Set<SlideKind> = [.swipe],
     swaps: Bool = true
 ) -> [(swipe: SwipePhase?, blocks: Bool)] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: true, swaps: swaps, travel: .linear)
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
     return frames.map {
         let recognition = recognizer.step($0)
         return (recognition.swipe, recognition.blocksClicks)

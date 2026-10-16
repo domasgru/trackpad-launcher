@@ -37,14 +37,14 @@ import LauncherCore
 
     @Test func movingUpOrDownFirstIsNeverASwipeAndTheNextTapStillFires() {
         let frames = thumb.land(fingers: 2).slide(byMM: (0, 10)).slide(byMM: (20, 0)).lift().tap(fingers: 2).frames
-        #expect(phases(frames).isEmpty)
-        #expect(fired(frames) == [.two])
+        #expect(phases(frames, slides: [.swipe]).isEmpty)
+        #expect(fired(frames, slides: [.swipe]) == [.two])
     }
 
     @Test(arguments: [(dx: 3.0, dy: 2.9, begins: true), (dx: 2.9, dy: 3.0, begins: false)])
     func theMoveMustBeMoreSidewaysThanVerticalWhereItPassesThreeMillimetres(dx: Double, dy: Double, begins: Bool) {
         let frames = thumb.land(fingers: 2).slide(byMM: (dx, dy)).lift().frames
-        #expect(phases(frames).first == (begins ? .began : nil))
+        #expect(phases(frames, slides: [.swipe]).first == (begins ? .began : nil))
     }
 
     @Test(arguments: [1, 3])
@@ -86,8 +86,8 @@ import LauncherCore
     ] as [@Sendable (TouchScript) -> TouchScript])
     func aRestingPairThatIsDisturbedOrMovesVerticallyNeverSwipes(rest: @Sendable (TouchScript) -> TouchScript) {
         let frames = rest(thumb.land(fingers: 2).wait(.seconds(1))).tap(fingers: 1).frames
-        #expect(phases(frames).isEmpty)
-        #expect(fired(frames) == [.one])
+        #expect(phases(frames, slides: [.swipe]).isEmpty)
+        #expect(fired(frames, slides: [.swipe]) == [.one])
     }
 
     @Test func aClickOnARestingPairSpoilsItEvenIfTheFingersThenMoveSideways() {
@@ -132,12 +132,12 @@ import LauncherCore
     @Test func withSwipesOffASidewaysPairSpoilsLikeAnyDragAndARestingPairNeverBegins() {
         let slid = thumb.land(fingers: 2).slide(byMM: (20, 0)).lift().tap(fingers: 2).frames
         let rested = thumb.land(fingers: 2).wait(.seconds(1)).slide(byMM: (20, 0)).lift().frames
-        #expect(phases(slid, swipes: true).first == .began)
-        #expect(phases(slid, swipes: false).isEmpty)
-        #expect(fired(slid, swipes: false) == [.two])
-        #expect(fired(slid, swipes: true) == [.two])
-        #expect(phases(rested, swipes: true).first == .began)
-        #expect(phases(rested, swipes: false).isEmpty)
-        #expect(fired(rested, swipes: false).isEmpty)
+        #expect(phases(slid, slides: [.swipe]).first == .began)
+        #expect(phases(slid, slides: []).isEmpty)
+        #expect(fired(slid, slides: []) == [.two])
+        #expect(fired(slid, slides: [.swipe]) == [.two])
+        #expect(phases(rested, slides: [.swipe]).first == .began)
+        #expect(phases(rested, slides: []).isEmpty)
+        #expect(fired(rested, slides: []).isEmpty)
     }
 }

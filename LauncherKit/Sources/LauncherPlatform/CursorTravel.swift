@@ -39,6 +39,6 @@ enum CursorTravel {
         guard tuning.swipeFollowsCursor else { return .linear }
         let speed = tuning.swipeTrackingSpeed >= 0 ? tuning.swipeTrackingSpeed : trackingSpeed()
         guard let curve = PointerCurve(curves, trackingSpeed: speed) else { return .linear }
-        return .cursor(curve, pointsPerIcon: tuning.swipePointsPerIcon)
+        return .cursor(curve, pointsPerStep: tuning.swipePointsPerStep)
     }
 }

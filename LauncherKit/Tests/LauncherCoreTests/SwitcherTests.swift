@@ -14,13 +14,18 @@ import LauncherCore
     private var slack: AppEntry { entry("Slack") }
     private var notes: AppEntry { entry("Notes") }
 
-    private func switcher(frontmost: AppEntry? = nil, running: [AppEntry]? = nil, travel: Double = 0) throws -> Switcher {
-        var switcher = try #require(
+    private func switcher(frontmost: AppEntry? = nil, running: [AppEntry]? = nil) throws -> Switcher {
+        try #require(
             Switcher(
                 frontmost: frontmost ?? safari, running: running ?? [safari, mail, slack, notes],
                 leavingOut: [], trackpad: Trackpad.macBook14.id))
-        switcher.travelMM = travel
-        return switcher
+    }
+
+    /// A four-item selection, as over the default four-app row.
+    private func selection(travel: Double = 0) -> SwitcherSelection {
+        var selection = SwitcherSelection(count: 4)
+        selection.travelMM = travel
+        return selection
     }
 
     @Test func theRowHoldsTheFrontmostAppAndTheNineMostRecentOthers() throws {
@@ -31,53 +36,53 @@ import LauncherCore
 
     @Test func theBandPastTheLeftEndIsKeptUpToAQuarterIconAndForgivenOnTheTurn() throws {
         var switcher = try switcher()
-        switcher.follow(-30)
-        #expect(switcher.travelMM == -3)
-        #expect(switcher.selected == 0 && switcher.selectsFrontmost)
-        #expect(switcher.stretch < 0 && switcher.stretch > -0.2)
-        switcher.follow(-40)
-        #expect(switcher.travelMM == -3)
-        switcher.follow(-35)
-        #expect(switcher.travelMM == 5)
-        #expect(switcher.selected == 0)
-        #expect(switcher.stretch == 0)
-        switcher.follow(-34)
-        #expect(switcher.travelMM == 6)
-        #expect(switcher.selected == 1)
+        switcher.selection.follow(-30)
+        #expect(switcher.selection.travelMM == -3)
+        #expect(switcher.selection.selected == 0 && switcher.selectsFrontmost)
+        #expect(switcher.selection.stretch < 0 && switcher.selection.stretch > -0.2)
+        switcher.selection.follow(-40)
+        #expect(switcher.selection.travelMM == -3)
+        switcher.selection.follow(-35)
+        #expect(switcher.selection.travelMM == 5)
+        #expect(switcher.selection.selected == 0)
+        #expect(switcher.selection.stretch == 0)
+        switcher.selection.follow(-34)
+        #expect(switcher.selection.travelMM == 6)
+        #expect(switcher.selection.selected == 1)
     }
 
     @Test func turningBackTakesTheSameHalfIconHoweverFarTheFingersWentPastTheLeftEnd() throws {
-        var switcher = try switcher()
-        switcher.follow(-300)
-        switcher.follow(-294)
-        #expect(switcher.selected == 1)
-        #expect(switcher.travelMM == 6)
+        var selection = selection()
+        selection.follow(-300)
+        selection.follow(-294)
+        #expect(selection.selected == 1)
+        #expect(selection.travelMM == 6)
     }
 
     @Test func theBandPastTheRightEndIsForgivenOnTheTurnToo() throws {
-        var switcher = try switcher()
-        switcher.follow(60)
-        #expect(switcher.travelMM == 39)
-        #expect(switcher.selected == 3)
-        #expect(switcher.stretch > 0 && switcher.stretch < 0.2)
-        switcher.follow(54)
-        #expect(switcher.travelMM == 30)
-        #expect(switcher.selected == 3)
-        switcher.follow(53)
-        #expect(switcher.travelMM == 29)
-        #expect(switcher.selected == 2)
+        var selection = selection()
+        selection.follow(60)
+        #expect(selection.travelMM == 39)
+        #expect(selection.selected == 3)
+        #expect(selection.stretch > 0 && selection.stretch < 0.2)
+        selection.follow(54)
+        #expect(selection.travelMM == 30)
+        #expect(selection.selected == 3)
+        selection.follow(53)
+        #expect(selection.travelMM == 29)
+        #expect(selection.selected == 2)
     }
 
     @Test func restingAtTheStartHasNoStretch() throws {
-        var switcher = try switcher()
-        switcher.follow(0)
-        #expect(switcher.stretch == 0)
+        var selection = selection()
+        selection.follow(0)
+        #expect(selection.stretch == 0)
     }
 
     @Test func theFrontmostAppIsAlwaysFirstAndStartsSelected() throws {
         let switcher = try switcher(frontmost: mail, running: [safari, mail, slack, notes])
         #expect(switcher.row == [mail, safari, slack, notes])
-        #expect(switcher.selected == 0)
+        #expect(switcher.selection.selected == 0)
         #expect(switcher.selectedApp == mail)
         #expect(switcher.selectsFrontmost)
     }
@@ -106,38 +111,38 @@ import LauncherCore
         (travel: 5.9, selected: 0), (6.0, 1), (6.1, 1), (17.9, 1), (18.0, 2), (24.0, 2), (30.0, 3), (36.0, 3),
         (60.0, 3), (-30.0, 0),
     ])
-    func theSelectionIsTheNearestIconAndNeverPassesAnEnd(travel: Double, selected: Int) throws {
-        #expect(try switcher(travel: travel).selected == selected)
+    func theSelectionIsTheNearestIconAndNeverPassesAnEnd(travel: Double, selected: Int) {
+        #expect(selection(travel: travel).selected == selected)
     }
 
     @Test(arguments: [
         (travel: 18.0, selected: 2), (12.0, 1), (6.0, 1), (5.9, 0), (-6.0, 0),
     ])
-    func theSelectionMovesBackUnderTheSameRule(travel: Double, selected: Int) throws {
-        var switcher = try switcher()
-        switcher.follow(18)
-        switcher.follow(travel)
-        #expect(switcher.selected == selected)
+    func theSelectionMovesBackUnderTheSameRule(travel: Double, selected: Int) {
+        var selection = selection()
+        selection.follow(18)
+        selection.follow(travel)
+        #expect(selection.selected == selected)
     }
 
-    @Test func theHighlightSitsBetweenIconsInProportionToTheTravel() throws {
-        let half = try switcher(travel: 5)
+    @Test func theHighlightSitsBetweenIconsInProportionToTheTravel() {
+        let half = selection(travel: 5)
         #expect(abs(half.position - 5.0 / 12) < 1e-9)
         #expect(half.stretch == 0)
-        #expect(try switcher(travel: 36).position == 3)
-        #expect(try switcher(travel: -12).position == 0)
+        #expect(selection(travel: 36).position == 3)
+        #expect(selection(travel: -12).position == 0)
     }
 
-    @Test func pushingPastAnEndStretchesTheHighlightButNeverByAFifthOfAnIcon() throws {
-        let near = try switcher(travel: 48)
-        let far = try switcher(travel: 60)
+    @Test func pushingPastAnEndStretchesTheHighlightButNeverByAFifthOfAnIcon() {
+        let near = selection(travel: 48)
+        let far = selection(travel: 60)
         #expect(near.position == 3)
         #expect(near.stretch > 0 && near.stretch < 0.2)
         #expect(far.stretch > near.stretch && far.stretch < 0.2)
-        #expect(try switcher(travel: 1000).stretch < 0.2)
-        let before = try switcher(travel: -12)
+        #expect(selection(travel: 1000).stretch < 0.2)
+        let before = selection(travel: -12)
         #expect(before.stretch < 0 && before.stretch > -0.2)
-        #expect(try switcher(travel: 0).stretch == 0)
-        #expect(try switcher(travel: 36).stretch == 0)
+        #expect(selection(travel: 0).stretch == 0)
+        #expect(selection(travel: 36).stretch == 0)
     }
 }

@@ -146,7 +146,7 @@ import LauncherCore
         world.swipe(3.5, 5, lift: false)
         let switcher = world.launcher.switcher
         #expect(switcher?.selectsFrontmost == true)
-        #expect((switcher?.position ?? 0) > 0 && (switcher?.position ?? 1) < 0.5)
+        #expect((switcher?.selection.position ?? 0) > 0 && (switcher?.selection.position ?? 1) < 0.5)
         #expect(world.hardware.lightTicks.isEmpty)
     }
 
@@ -154,7 +154,7 @@ import LauncherCore
         let world = World.switcherWorld()
         world.swipe(3.5, 7, lift: false)
         #expect(world.launcher.switcher?.selectedApp.name == "Mail")
-        #expect((world.launcher.switcher?.position ?? 0) > 0.5)
+        #expect((world.launcher.switcher?.selection.position ?? 0) > 0.5)
         #expect(world.hardware.lightTicks.count == 1)
     }
 
@@ -166,8 +166,8 @@ import LauncherCore
         world.play(hand.slide(byMM: (30, 0)))
         let switcher = world.launcher.switcher
         #expect(switcher?.selectedApp.name == "Notes")
-        #expect(switcher?.position == 3)
-        #expect((switcher?.stretch ?? 0) > 0 && (switcher?.stretch ?? 1) < 0.2)
+        #expect(switcher?.selection.position == 3)
+        #expect((switcher?.selection.stretch ?? 0) > 0 && (switcher?.selection.stretch ?? 1) < 0.2)
         #expect(world.hardware.lightTicks.count == 3)
 
         world.play(hand.slide(byMM: (30, 0)).lift())
@@ -368,7 +368,7 @@ import LauncherCore
         world.swipe(3.5, lift: false)
 
         #expect(world.launcher.switcher?.row.map(\.name) == ["Safari", "Mail", "Slack", "Notes"])
-        #expect(world.launcher.switcher?.selected == 0)
+        #expect(world.launcher.switcher?.selection.selected == 0)
     }
 
     @Test func withNoReadableFrontmostAppLiftingOnTheFirstAppBringsItToFront() {
@@ -448,13 +448,13 @@ import LauncherCore
         let world = World.switcherWorld()
         let pushed = world.swipe(3.5, -30, lift: false)
         #expect(world.launcher.switcher?.selectedApp.name == "Safari")
-        #expect((world.launcher.switcher?.stretch ?? 0) < 0)
+        #expect((world.launcher.switcher?.selection.stretch ?? 0) < 0)
         #expect(world.hardware.lightTicks.isEmpty)
 
         let turned = pushed.slide(byMM: (5, 0))
         world.play(turned)
         #expect(world.launcher.switcher?.selectedApp.name == "Safari")
-        #expect(world.launcher.switcher?.stretch == 0)
+        #expect(world.launcher.switcher?.selection.stretch == 0)
 
         world.play(turned.slide(byMM: (2, 0)))
         #expect(world.launcher.switcher?.selectedApp.name == "Mail")

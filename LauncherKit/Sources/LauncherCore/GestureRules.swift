@@ -23,11 +23,11 @@ package enum GestureRules {
     static let clickBlockingWindow = Duration.seconds(3)
     /// The most icons a switcher row holds: the frontmost app and the most recently used others.
     static let switcherMaxApps = 10
-    /// Icons are this far apart in finger travel; the selection is the nearest icon.
+    /// Items are this many step millimetres apart in travel; the selection is the nearest item.
     static let switcherStepMM = 12.0
-    /// The most the highlight's rubber band shows past an end, in icons.
+    /// The most the highlight's rubber band shows past an end, in items.
     static let switcherMaxStretch = 0.2
-    /// Travel the switcher keeps past either end of its row, in icons; any more is dropped, so turning back moves the
-    /// selection at once however far the fingers went past the end.
+    /// Travel a switcher keeps past either end of its list, in items (a quarter of the 12 step millimetres per item);
+    /// any more is dropped, so turning back moves the selection at once however far the fingers went past the end.
     static let switcherMaxOvershoot = 0.25
 }
