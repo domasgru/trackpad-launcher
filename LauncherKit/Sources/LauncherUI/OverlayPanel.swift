@@ -1,12 +1,23 @@
 import AppKit
 import QuartzCore
 
+/// How an overlay appears: an opacity fade-in, and optionally a spring up from a smaller scale anchored at the panel's
+/// top-left corner.
+struct OverlayAppear {
+    var duration: CFTimeInterval
+    var fromScale: CGFloat?
+    var stiffness = 0.0
+    var damping = 0.0
+
+    static let fade = OverlayAppear(duration: 0.12)
+}
+
 /// Both switchers' window: borderless, non-activating, click-through, screen-saver level on every Space and beside
 /// full-screen apps, never key. Its content is Liquid Glass under `roundedClip`. Presents at once or with a short
 /// appear animation; dismisses with a 150 ms fade (at once with Reduce motion) unless presented again meanwhile.
 class OverlayPanel: NSPanel {
     private static let fadeKey = "fade"
-    private static let appearDuration: CFTimeInterval = 0.12
+    private static let appearScaleKey = "appearScale"
     private static let fadeDuration: CFTimeInterval = 0.15
 
     /// On screen, or about to be: true from `present` until `dismiss`, even while the fade still runs.
@@ -40,23 +51,49 @@ class OverlayPanel: NSPanel {
     /// Fully opaque and in front, dropping any fade still running. `animated` (never with Reduce motion) fades it in
     /// briefly instead of showing it at once.
     func present(animated: Bool) {
+        present(appear: animated ? .fade : nil)
+    }
+
+    /// Fully opaque and in front, dropping any fade still running. With `appear` (never with Reduce motion) it plays
+    /// that appear instead of showing at once.
+    func present(appear: OverlayAppear?) {
         isPresented = true
         generation += 1
         guard let layer = contentView?.layer else { return orderFrontRegardless() }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer.removeAnimation(forKey: Self.fadeKey)
+        layer.removeAnimation(forKey: Self.appearScaleKey)
         layer.opacity = 1
         CATransaction.commit()
-        if animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            let appear = CABasicAnimation(keyPath: "opacity")
-            appear.fromValue = 0
-            appear.toValue = 1
-            appear.duration = Self.appearDuration
-            appear.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            layer.add(appear, forKey: Self.fadeKey)
+        if let appear, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0
+            fade.toValue = 1
+            fade.duration = appear.duration
+            fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(fade, forKey: Self.fadeKey)
+            if let scale = appear.fromScale {
+                let spring = CASpringAnimation(keyPath: "transform")
+                spring.fromValue = NSValue(caTransform3D: Self.transform(layer, scaledBy: scale))
+                spring.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+                spring.stiffness = appear.stiffness
+                spring.damping = appear.damping
+                spring.duration = spring.settlingDuration
+                layer.add(spring, forKey: Self.appearScaleKey)
+            }
         }
         orderFrontRegardless()
+    }
+
+    /// `layer` scaled by `scale` about its top-left corner, wherever its anchor point is.
+    private static func transform(_ layer: CALayer, scaledBy scale: CGFloat) -> CATransform3D {
+        let bounds = layer.bounds
+        let anchor = CGPoint(x: layer.anchorPoint.x * bounds.width, y: layer.anchorPoint.y * bounds.height)
+        let topLeft = CGPoint(x: 0, y: layer.isGeometryFlipped ? 0 : bounds.height)
+        return CATransform3DConcat(
+            CATransform3DMakeScale(scale, scale, 1),
+            CATransform3DMakeTranslation((topLeft.x - anchor.x) * (1 - scale), (topLeft.y - anchor.y) * (1 - scale), 0))
     }
 
     /// Opacity to 0 over 150 ms on the render server, then out, unless presented again meanwhile (Reduce motion: out

@@ -73,6 +73,8 @@ import Testing
         Confined(
             token: "_LSCopyApplicationInformation", onlyIn: "LaunchServicesOrder.swift",
             rule: "the private ⌘-Tab order has one reader"),
+        Confined(token: "AXUIElement", onlyIn: "FrontmostAppWindows.swift", rule: "the window read has one reader"),
+        Confined(token: "CGWindowList", onlyIn: "FrontmostAppWindows.swift", rule: "the window read has one reader"),
     ]
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.

@@ -12,6 +12,20 @@ public enum Copy {
     public static let accessibilityHint =
         "Clicks and scrolling aren't blocked during gestures. Allow Accessibility access to block them."
 
+    /// The window switcher's single row when the frontmost app has no windows, or there is no frontmost app.
+    public static let noOpenWindows = "No open windows"
+
+    /// The window switcher's single row while Trackpad Launcher lacks the Accessibility permission.
+    public static let accessibilityForWindows = "Allow Accessibility to switch windows"
+
+    /// The badge on a minimised window's row.
+    public static let minimisedBadge = "Minimised"
+
+    /// What a window with no title reads as: the app's name, plus its 1-based row when the list has more than one.
+    public static func untitledWindow(of appName: String, position: Int, rows: Int) -> String {
+        rows > 1 ? "\(appName) — Window \(position)" : appName
+    }
+
     /// The sentence shown in place of the hint while gestures are inactive. The list is joined in English whatever the
     /// user's locale, because the sentence around it is English.
     public static func inactiveNotice(for cause: InactiveCause) -> String {

@@ -5,6 +5,7 @@ import ServiceManagement
 @MainActor public final class WorkspaceActions: SystemActions {
     private let overlay: LaunchOverlay
     private let reader = RunningAppsReader()
+    private let windows = FrontmostAppWindows()
 
     public init() {
         overlay = LaunchOverlay()
@@ -19,6 +20,8 @@ import ServiceManagement
     }
 
     public func runningApps() -> RunningApps { reader.read() }
+
+    public func frontmostWindows() -> FrontmostWindows { windows.read() }
 
     /// Registration failing (unsigned build, user-disabled item) leaves the app running without a login item.
     public func registerLoginItem() {

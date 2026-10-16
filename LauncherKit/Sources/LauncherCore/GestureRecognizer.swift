@@ -2,27 +2,31 @@ import Foundation
 
 /// What one frame meant on one trackpad.
 public struct Recognition: Equatable, Sendable {
-    /// What one frame produced, if anything. A frame never both fires a tap and moves a swipe.
+    /// What one frame produced, if anything. A frame never both fires a tap and moves a swipe or a window swipe.
     public enum Event: Equatable, Sendable {
         case fired(Gesture)
         case swipe(SwipePhase)
+        case windowSwipe(SwipePhase)
         /// A thumb tap under two resting fingers. `startsSeries`: the first swap under them.
         case swap(startsSeries: Bool)
     }
 
     public let event: Event?
-    /// This trackpad's half of click blocking: true for the whole of a swipe; otherwise a thumb this recognizer saw
-    /// land less than 3 s ago is still anchored and another finger is down. Whether a press is really blocked also
-    /// needs the click filter armed (access granted, gestures active), which the recognizer never knows.
+    /// This trackpad's half of click blocking: true for the whole of a swipe or a window swipe; otherwise a thumb this
+    /// recognizer saw land less than 3 s ago is still anchored and another finger is down. Whether a press is really
+    /// blocked also needs the click filter armed (access granted, gestures active), which the recognizer never knows.
     public let blocksClicks: Bool
-    /// This trackpad's half of Dock swipe blocking: true for the whole of a swipe, and while any thumb is anchored and
-    /// another finger is down, with no time limit. macOS may count the anchored thumb as a finger, so thumb plus two
-    /// sliding fingers can read as its three-finger swipe between desktops. Like `blocksClicks`, it only matters
-    /// while the tap is armed.
+    /// This trackpad's half of Dock swipe blocking: true for the whole of a swipe or a window swipe, and while any
+    /// thumb is anchored and another finger is down, with no time limit. macOS may count the anchored thumb as a
+    /// finger, so thumb plus two sliding fingers can read as its three-finger swipe between desktops. Like
+    /// `blocksClicks`, it only matters while the tap is armed.
     public let blocksDockSwipes: Bool
 
     public var fired: Gesture? { if case .fired(let gesture)? = event { gesture } else { nil } }
     public var swipe: SwipePhase? { if case .swipe(let phase)? = event { phase } else { nil } }
+    public var windowSwipe: SwipePhase? { if case .windowSwipe(let phase)? = event { phase } else { nil } }
+    /// This frame began a swipe or a window swipe: the frame thread installs the cursor travel now.
+    public var beginsSlide: Bool { swipe == .began || windowSwipe == .began }
 
     public var swapStartsSeries: Bool? { if case .swap(let startsSeries)? = event { startsSeries } else { nil } }
 
@@ -33,8 +37,15 @@ public struct Recognition: Equatable, Sendable {
     }
 }
 
-/// The tap-with-anchored-thumb rules for ONE trackpad, as a pure state machine, plus the swipe that starts under the
-/// same thumb. Feed every frame in order.
+extension Recognition.Event {
+    /// A slide's phase in its kind's event case.
+    static func slide(_ kind: SlideKind, _ phase: SwipePhase) -> Self {
+        kind == .swipe ? .swipe(phase) : .windowSwipe(phase)
+    }
+}
+
+/// The tap-with-anchored-thumb rules for ONE trackpad, as a pure state machine, plus the swipe and the window swipe
+/// that start under the same thumb. Feed every frame in order.
 /// Owned by exactly one frame thread (real adapter) or by the test (in-memory adapter); never shared.
 public struct GestureRecognizer: Sendable {
     /// `slides`: the kinds whose setting is on. Empty: a pair's drag spoils like any drag, as with both settings off.
@@ -139,11 +150,11 @@ public struct GestureRecognizer: Sendable {
             let joining = landed.filter { $0.id != swipe.thumb?.id && !corner.admits($0.position) }
             if frame.press == .click || swipe.fingers.count + joining.count > 2 {
                 state = after
-                event = .swipe(.cancelled)
+                event = .slide(swipe.kind, .cancelled)
             } else if swipe.fingers.isEmpty {
                 // The swipe lasts until both fingers have lifted. A finger landing on that frame starts nothing.
                 state = after
-                event = .swipe(.ended)
+                event = .slide(swipe.kind, .ended)
             } else {
                 // Movement is what the fingers present on both frames did, so a finger dropping out or rejoining
                 // never makes the highlight jump.
@@ -162,7 +173,7 @@ public struct GestureRecognizer: Sendable {
                         + self.travel.travel(along: swipe.kind, dxMM: dxMM, dyMM: dyMM, interval: interval)
                     if travel != swipe.travelMM {
                         swipe.travelMM = travel
-                        event = .swipe(.moved(travelMM: travel))
+                        event = .slide(swipe.kind, .moved(travelMM: travel))
                     }
                 }
                 state = .swiping(swipe)
@@ -241,15 +252,15 @@ public struct GestureRecognizer: Sendable {
     }
 
     /// The one place a slide's direction is decided. A pair's drag along a kind that is on begins it; any other drag
-    /// spoils the gesture like every drag does. Only the swipe has an event to begin with so far.
+    /// spoils the gesture like every drag does.
     private func beginOrSpoil(
         _ pair: Pair?, _ move: Move, _ anchor: Anchor, _ down: [TouchID: Touch], _ time: FrameTime
     ) -> (State, Recognition.Event?) {
-        guard let pair, let kind = move.slide, kind == .swipe, slides.contains(kind) else {
+        guard let pair, let kind = move.slide, slides.contains(kind) else {
             return (.spoiled(anchor), nil)
         }
         let fingers = Dictionary(uniqueKeysWithValues: pair.fingers.compactMap { id in down[id].map { (id, $0.position) } })
-        return (.swiping(Swipe(kind: kind, fingers: fingers, lastTime: time, thumb: anchor)), .swipe(.began))
+        return (.swiping(Swipe(kind: kind, fingers: fingers, lastTime: time, thumb: anchor)), .slide(kind, .began))
     }
 
     private struct Anchor: Sendable {

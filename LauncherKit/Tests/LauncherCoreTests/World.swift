@@ -229,6 +229,52 @@ extension World {
         return script
     }
 
+    /// Safari, Mail, Preview, TextEdit and Notes installed and running, `frontmost` in front (Finder is the copy in
+    /// CoreServices) with these windows, Accessibility granted unless `accessGranted` is false, started. `untitled`
+    /// names windows that have no title.
+    static func windowWorld(
+        visible: [String] = [], minimised: [String] = [], fullScreenFront: Bool = false, untitled: Set<String> = [],
+        frontmost: String? = "Safari", accessGranted: Bool = true, attached: [Trackpad] = [.macBook14]
+    ) -> World {
+        let apps = ["Safari", "Mail", "Preview", "TextEdit", "Notes"]
+        let world = World(apps: apps, attached: attached, accessGranted: accessGranted)
+        world.launcher.start()
+        world.makeRunning(apps)
+        world.system.frontmost = frontmost.map { $0 == "Finder" ? world.app("Finder", in: world.coreServices) : world.app($0) }
+        world.system.windows.set(
+            visible: visible, minimised: minimised, fullScreenFront: fullScreenFront, untitled: untitled)
+        return world
+    }
+
+    /// The fixed number of the frontmost app's window with this title.
+    func window(_ title: String) -> WindowID { system.windows.id(title) }
+
+    /// The thumb at `thumb`, two fingers down at (62, 30), each slide straight down in turn (millimetres, positive
+    /// down), then the fingers lift unless `lift` is false. Returns its script so a row can continue it with `play`.
+    @discardableResult
+    func windowSwipe(
+        _ slidesMM: Double..., lift: Bool = true, thumbAtMM thumb: (x: Double, y: Double) = (10, 10),
+        on trackpad: Trackpad = .macBook14
+    ) -> TouchScript {
+        var script = TouchScript(trackpad.surface).thumb(atMM: thumb).land(fingers: 2, atMM: (62, 30))
+        for slide in slidesMM { script = script.slide(byMM: (0, slide)) }
+        if lift { script = script.lift() }
+        play(script, on: trackpad)
+        return script
+    }
+
+    /// Delivers the frames of `script` not yet delivered one at a time, and what both switchers were after each.
+    func playFrameByFrame(
+        _ script: TouchScript, on trackpad: Trackpad = .macBook14
+    ) -> [(windowSwitcher: WindowSwitcher?, switcher: Switcher?)] {
+        let newer = script.frames.filter { $0.time.seconds > (delivered[trackpad.id] ?? 0) }
+        return newer.map { frame in
+            delivered[trackpad.id] = frame.time.seconds
+            hardware.touch([frame], on: trackpad.id)
+            return (launcher.windowSwitcher, launcher.switcher)
+        }
+    }
+
     /// Thumb at (10, 10), two fingers down, each slide in turn (millimetres, positive right), then the fingers lift
     /// unless `lift` is false. Returns its script so a row can continue it with `play`.
     @discardableResult

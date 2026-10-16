@@ -5,8 +5,9 @@ import LauncherCore
     private let trackpad = Trackpad.macBook14
     private var thumb: TouchScript { TouchScript(.macBook14).thumb(atMM: (10, 10)) }
 
-    @Test func slidingTwoFingersUpAndDownWithinTheWindowDoesNotScrollAndShowsNoSwitcher() {
+    @Test func withTheWindowSwipeOffSlidingTwoFingersUpAndDownWithinTheWindowDoesNotScrollAndShowsNoSwitcher() {
         let world = World.switcherWorld(accessGranted: true)
+        world.launcher.setWindowSwipe(on: false)
         world.play(thumb.land(fingers: 2).slide(byMM: (0, 10)))
         #expect(world.hardware.scroll(.fingers(.began)) == .drop)
         #expect(world.launcher.switcher == nil)
@@ -76,8 +77,9 @@ import LauncherCore
         #expect(world.hardware.scroll(.fingers(.began)) == .pass)
     }
 
-    @Test func aFlickWithinTheWindowDoesNotCoastAfterTheLift() {
+    @Test func withTheWindowSwipeOffAFlickWithinTheWindowDoesNotCoastAfterTheLift() {
         let world = World.switcherWorld(accessGranted: true)
+        world.launcher.setWindowSwipe(on: false)
         let hand = thumb.land(fingers: 2).slide(byMM: (0, -20))
         world.play(hand)
         #expect(world.hardware.scroll(.fingers(.began)) == .drop)

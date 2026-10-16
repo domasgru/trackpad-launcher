@@ -8,8 +8,14 @@ import Observation
 @MainActor @Observable
 public final class Launcher {
     public private(set) var rows: [GestureRow] = []
-    /// Non-nil exactly while a swipe shows the switcher. Written only by `swipe(_:)` and `reconcile()`.
-    public private(set) var switcher: Switcher?
+    /// Non-nil exactly while a swipe shows the switcher.
+    public var switcher: Switcher? {
+        if case .apps(let switcher)? = shown { switcher } else { nil }
+    }
+    /// Non-nil for the whole of a window swipe: it always shows.
+    public var windowSwitcher: WindowSwitcher? {
+        if case .windows(let switcher)? = shown { switcher } else { nil }
+    }
     /// Every app picker's list. Replaced only by a scan; never emptied while one runs.
     public private(set) var installedApps: InstalledApps
     public var isWindowOpen: Bool { window != .closed }
@@ -17,6 +23,7 @@ public final class Launcher {
     public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
     public var isSwipeOn: Bool { settings.isSwipeOn }
     public var isSwapOn: Bool { settings.isSwapOn }
+    public var isWindowSwipeOn: Bool { settings.isWindowSwipeOn }
     /// The window's hint, which mentions swiping only while the swipe is on.
     public var gestureHint: String { Copy.gestureHint(for: settings.handMode, swipe: settings.isSwipeOn) }
     /// One derivation, read by the icon, the notice and the fire guard.
@@ -33,6 +40,11 @@ public final class Launcher {
     private enum Window: Equatable { case closed, open, heldOpen }
 
     private var window: Window = .closed
+    /// At most one switcher of either kind at a time. Written only by `swipe(_:)`, `windowSwipe(_:)` and `reconcile()`.
+    private enum ShownSwitcher: Equatable { case apps(Switcher), windows(WindowSwitcher) }
+
+    private var shown: ShownSwitcher?
+    @ObservationIgnored private var windowSwipesBegun = 0
     private var settings: Settings
     private var connected: [Trackpad] = []
     private var preferenceValues: [TrackpadKind: TrackpadPreferenceValues] = [:]
@@ -69,6 +81,7 @@ public final class Launcher {
             switch event {
             case .gesture(let fired): fire(fired)
             case .swipe(let event): swipe(event)
+            case .windowSwipe(let event): windowSwipe(event)
             case .swap(let event): swap(event)
             case .trackpadsChanged: reconcile(restart: true)
             }
@@ -132,6 +145,15 @@ public final class Launcher {
         reconcile()
     }
 
+    /// Window swipe switch. Saved at once; the recognizers are rebuilt, so the next slide obeys it and a window swipe in
+    /// progress ends.
+    public func setWindowSwipe(on: Bool) {
+        guard on != settings.isWindowSwipeOn else { return }
+        settings.isWindowSwipeOn = on
+        store.save(settings)
+        reconcile()
+    }
+
     /// Swap switch. Saved at once; the recognizers are rebuilt, so the next thumb tap obeys it.
     public func setSwap(on: Bool) {
         guard on != settings.isSwapOn else { return }
@@ -183,8 +205,8 @@ public final class Launcher {
             slides: settings.slides, swaps: settings.isSwapOn)
         guard restart || run != lastRun else { return }
         lastRun = run
-        // Running replaces every recognizer, which ends any swipe in progress.
-        switcher = nil
+        // Running replaces every recognizer, which ends any swipe or window swipe in progress.
+        shown = nil
         hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, slides: run.slides, swaps: run.swaps)
     }
 
@@ -205,20 +227,21 @@ public final class Launcher {
     private func swipe(_ event: SwipeEvent) {
         switch event.phase {
         case .began:
-            guard switcher == nil, activity.isActive else { return }
+            guard shown == nil, activity.isActive else { return }
             // With nothing to show the swipe still runs its course: the fingers stay blocked until they lift.
             let running = system.runningApps()
-            switcher = Switcher(
+            shown = Switcher(
                 frontmost: running.frontmost, running: running.apps,
-                leavingOut: settings.assignedBundleIDs, trackpad: event.trackpad)
+                leavingOut: settings.assignedBundleIDs, trackpad: event.trackpad
+            ).map(ShownSwitcher.apps)
         case .moved(let travel):
-            guard var open = switcher, open.trackpad == event.trackpad else { return }
+            guard case .apps(var open)? = shown, open.trackpad == event.trackpad else { return }
             let crossed = open.selection.follow(travel)
-            switcher = open
+            shown = .apps(open)
             for _ in 0..<crossed { hardware.playFeedback(.lightTick, on: event.trackpad) }
         case .ended:
-            guard let open = switcher, open.trackpad == event.trackpad else { return }
-            switcher = nil
+            guard case .apps(let open)? = shown, open.trackpad == event.trackpad else { return }
+            shown = nil
             // Lifting on the frontmost app is silent and leaves the window as it was.
             guard !open.selectsFrontmost else { return }
             // An app that quit meanwhile is never relaunched.
@@ -229,7 +252,27 @@ public final class Launcher {
             system.bringToFront(open.selectedApp)
             window = .closed
         case .cancelled:
-            if switcher?.trackpad == event.trackpad { switcher = nil }
+            if case .apps(let open)? = shown, open.trackpad == event.trackpad { shown = nil }
+        }
+    }
+
+    /// The one place a window swipe becomes effects. Never the launch animation.
+    private func windowSwipe(_ event: SwipeEvent) {
+        switch event.phase {
+        case .began:
+            guard shown == nil, activity.isActive else { return }
+            windowSwipesBegun += 1
+            let read = system.frontmostWindows()
+            let content = isAccessibilityGranted ? WindowSwitcher.Content(read) : .accessibilityNeeded(for: read.app)
+            shown = .windows(WindowSwitcher(content, serial: windowSwipesBegun, trackpad: event.trackpad))
+        case .moved(let travel):
+            guard case .windows(var open)? = shown, open.trackpad == event.trackpad else { return }
+            let crossed = open.selection.follow(travel)
+            shown = .windows(open)
+            for _ in 0..<crossed { hardware.playFeedback(.lightTick, on: event.trackpad) }
+        case .ended, .cancelled:
+            // Lifting changes nothing yet: both only remove the window switcher, silently.
+            if case .windows(let open)? = shown, open.trackpad == event.trackpad { shown = nil }
         }
     }
 

@@ -18,6 +18,12 @@ import LauncherCore
                 == "Clicks and scrolling aren't blocked during gestures. Allow Accessibility access to block them.")
     }
 
+    @Test func theWindowSwitcherNamesItsMessagesAndBadgeVerbatim() {
+        #expect(Copy.minimisedBadge == "Minimised")
+        #expect(Copy.noOpenWindows == "No open windows")
+        #expect(Copy.accessibilityForWindows == "Allow Accessibility to switch windows")
+    }
+
     @Test(arguments: [
         (cause: InactiveCause.noTrackpad, notice: "No trackpad connected. Connect a trackpad to use gestures."),
         (cause: .settings(ConflictingSettings([.tapToClick])!),

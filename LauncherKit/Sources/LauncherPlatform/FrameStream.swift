@@ -33,9 +33,9 @@ final class DeviceSession: Sendable {
     func receive(_ frame: TouchFrame) {
         let recognition = recognizer.withLock {
             let recognition = $0.step(frame)
-            // Each swipe follows the cursor's acceleration at the tracking speed set when it starts. Travel is 0 on
-            // the frame a swipe begins, so the next frame is the first to use it.
-            if recognition.swipe == .began { $0.travel = CursorTravel.travel(curves: pointerCurves) }
+            // Each slide follows the cursor's acceleration at the tracking speed set when it starts. Travel is 0 on
+            // the frame a slide begins, so the next frame is the first to use it.
+            if recognition.beginsSlide { $0.travel = CursorTravel.travel(curves: pointerCurves) }
             return recognition
         }
         blocking.withLock { $0 = recognition.blocksClicks }

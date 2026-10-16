@@ -153,6 +153,11 @@ import LauncherCore
 
     func runningApps() -> RunningApps { RunningApps(frontmost: frontmost, apps: running) }
 
+    /// The frontmost app's windows the next `frontmostWindows()` answers.
+    let windows = FakeWindows()
+
+    func frontmostWindows() -> FrontmostWindows { windows.read(frontmost: frontmost) }
+
     func registerLoginItem() {
         loginItemRegistrations += 1
         onRegisterLoginItem?()
@@ -163,6 +168,60 @@ import LauncherCore
     func playLaunchAnimation(for app: AppEntry) {
         launchAnimations.append(app)
         onPlayLaunchAnimation?()
+    }
+}
+
+/// The frontmost app's window stack, by name: one fixed `WindowID` per name for the life of the test. A window's title is
+/// its name unless the name is marked untitled. Answers reads only and carries no policy: full-screen and minimised
+/// windows are reported as they are, uncut.
+@MainActor final class FakeWindows {
+    /// Front to back.
+    private(set) var onScreenTitles: [String] = []
+    /// In the order the app lists them.
+    private(set) var minimisedTitles: [String] = []
+    private var fullScreenFront = false
+    private var untitled: Set<String> = []
+    /// false: the app does not answer in time, so reads list nothing.
+    var answers = true
+    /// How many times the windows were read.
+    private(set) var reads = 0
+    private var ids: [String: WindowID] = [:]
+
+    /// `untitled`: names whose windows report an empty title.
+    func set(visible: [String], minimised: [String] = [], fullScreenFront: Bool = false, untitled: Set<String> = []) {
+        onScreenTitles = visible
+        minimisedTitles = minimised
+        self.fullScreenFront = fullScreenFront
+        self.untitled = untitled
+    }
+
+    /// A new visible window, in front.
+    func open(_ title: String) { onScreenTitles.insert(title, at: 0) }
+
+    func close(_ title: String) {
+        onScreenTitles.removeAll { $0 == title }
+        minimisedTitles.removeAll { $0 == title }
+    }
+
+    func id(_ title: String) -> WindowID {
+        if let id = ids[title] { return id }
+        let id = WindowID(rawValue: UInt32(1000 + ids.count))
+        ids[title] = id
+        return id
+    }
+
+    func read(frontmost: AppEntry?) -> FrontmostWindows {
+        reads += 1
+        guard let frontmost else { return .noApp }
+        guard answers else { return .app(frontmost, visible: [], minimised: []) }
+        let visible = onScreenTitles.enumerated().map { index, title in
+            AppWindow(id: id(title), title: self.title(of: title), isFullScreen: index == 0 && fullScreenFront)
+        }
+        let minimised = minimisedTitles.map { AppWindow(id: id($0), title: title(of: $0)) }
+        return .app(frontmost, visible: visible, minimised: minimised)
+    }
+
+    private func title(of name: String) -> String { untitled.contains(name) ? "" : name
     }
 }
 
