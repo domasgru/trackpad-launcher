@@ -1,0 +1,16 @@
+== Probe 5: another Space, full-screen front window
+-- before full screen
+   title="Beta.txt" subrole=AXStandardWindow minimized=false fullScreen=false cgid=6895 onScreen(CG)=true
+   title="Alpha.txt" subrole=AXStandardWindow minimized=false fullScreen=false cgid=6896 onScreen(CG)=true
+AXFullScreen settable: true
+set AXFullScreen=true err: 0
+-- front window full screen (its own Space); the other window stayed on the previous Space
+   title="" subrole=AXUnknown minimized=false fullScreen=false cgid=6903 onScreen(CG)=true
+   title="Beta.txt" subrole=AXStandardWindow minimized=false fullScreen=true cgid=6895 onScreen(CG)=true
+focused: Beta.txt
+AXRaise on the window on the other Space, err: 0
+-- after AXRaise of the other-Space window
+   title="Alpha.txt" subrole=AXStandardWindow minimized=false fullScreen=false cgid=6896 onScreen(CG)=true
+front app now: TextEdit
+Teardown: left full screen; fullScreen now: false
+Teardown: TextEdit terminated, previous front re-activated: Ghostty

@@ -28,6 +28,7 @@ import LauncherCore
         #expect(world.launcher.isLaunchAnimationOn)
         #expect(world.launcher.isSwipeOn)
         #expect(world.launcher.isSwapOn)
+        #expect(world.launcher.isWindowSwipeOn)
         #expect(world.launcher.isWindowOpen)
         #expect(world.system.loginItemRegistrations == 1)
     }
@@ -95,6 +96,7 @@ import LauncherCore
         #expect(!relaunched.isLaunchAnimationOn)
         #expect(!relaunched.isSwipeOn)
         #expect(relaunched.isSwapOn)
+        #expect(relaunched.isWindowSwipeOn)
     }
 
     /// The record a build without the launch animation setting wrote for Left hand with Arc, Figma and Notion on
@@ -193,6 +195,7 @@ import LauncherCore
 
         #expect(loaded.isSwipeOn)
         #expect(loaded.isSwapOn)
+        #expect(loaded.isWindowSwipeOn)
         #expect(loaded.handMode == .left)
         #expect(loaded.rows.map(\.app)[1] == .present(arc))
     }
@@ -227,6 +230,36 @@ import LauncherCore
         #expect(world.store.load() == expected)
     }
 
+    @Test func turningTheWindowSwipeOffSurvivesARelaunch() {
+        let world = World()
+        world.launcher.start()
+        world.launcher.setWindowSwipe(on: false)
+
+        let relaunched = world.relaunch()
+
+        #expect(!relaunched.isWindowSwipeOn)
+        #expect(relaunched.isSwipeOn)
+        #expect(relaunched.isSwapOn)
+    }
+
+    @Test func aRecordHoldingOnlyTheWindowSwipeKeyLoadsWithItOffAndEveryOtherDefault() {
+        let world = World()
+        world.seedSettingsRecord(Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>isWindowSwipeOn</key>
+                <false/>
+            </dict>
+            </plist>
+            """.utf8))
+
+        var expected = Settings()
+        expected.isWindowSwipeOn = false
+        #expect(world.store.load() == expected)
+    }
+
     @Test func everySettingsFieldSurvivesTheStore() {
         let world = World(apps: ["Arc"])
         var settings = Settings()
@@ -235,6 +268,8 @@ import LauncherCore
         settings.isLaunchAnimationOn = false
         settings.isSwipeOn = false
         settings.isSwapOn = false
+        settings.isWindowSwipeOn = false
+        settings.hasAskedForScreenRecording = true
         #expect(settings != Settings())
 
         world.store.save(settings)
@@ -244,7 +279,7 @@ import LauncherCore
 
     /// Written by `SettingsStore.save` (binary plist) and converted with `plutil -convert xml1`: Left hand, Launch
     /// animation off, apps on gestures 1, 2 and 5, and two apps in the switcher list. Never regenerate: this is the
-    /// format released builds write. It predates the swap key, so it also proves an upgrade keeps the swap on. The
+    /// format released builds write. It predates the swap and window swipe keys, so it also proves an upgrade keeps both on. The
     /// paths live under `/tl-fixture`, which no Mac has, so each app
     /// resolves through the world's registry and never through whatever this machine has installed.
     private static let savedSettings = """

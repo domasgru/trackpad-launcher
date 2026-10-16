@@ -1,0 +1,69 @@
+== Probe 2: AX windows, CGWindowList, raise, minimise, focus
+AXIsProcessTrusted: true  _AXUIElementGetWindow resolved: true
+Front app before: Ghostty
+
+-- AX windows (kAXWindowsAttribute order), 3 windows
+kAXWindowsAttribute read took 0.29 ms
+   title="Gamma.txt" role=AXWindow subrole=AXStandardWindow minimized=false main=true focused=false pos=210.0,131.0 size=656.0x422.0 cgid=6863
+   title="Beta.txt" role=AXWindow subrole=AXStandardWindow minimized=false main=false focused=false pos=181.0,102.0 size=656.0x422.0 cgid=6864
+   title="Alpha.txt" role=AXWindow subrole=AXStandardWindow minimized=false main=false focused=false pos=152.0,73.0 size=656.0x422.0 cgid=6865
+describing 3 windows (8 attributes each) took 0.62 ms
+kAXWindowsAttribute error code when read: 0
+
+-- CGWindowList on-screen, excluding desktop elements, front to back (pid 22076)
+CGWindowListCopyWindowInfo took 22.47 ms
+   number=6863 layer=0 name="Gamma.txt" onscreen=true alpha=1.0 bounds=210.0,131.0 656.0x422.0
+   number=6864 layer=0 name="Beta.txt" onscreen=true alpha=1.0 bounds=181.0,102.0 656.0x422.0
+   number=6865 layer=0 name="Alpha.txt" onscreen=true alpha=1.0 bounds=152.0,73.0 656.0x422.0
+-- CGWindowList optionAll for the pid
+   number=6865 layer=0 name="Alpha.txt" onscreen=true alpha=1.0 bounds=152.0,73.0 656.0x422.0
+   number=6864 layer=0 name="Beta.txt" onscreen=true alpha=1.0 bounds=181.0,102.0 656.0x422.0
+   number=6863 layer=0 name="Gamma.txt" onscreen=true alpha=1.0 bounds=210.0,131.0 656.0x422.0
+   number=6862 layer=0 name="" onscreen=nil alpha=1.0 bounds=0.0,482.0 500.0x500.0
+   number=6861 layer=0 name="" onscreen=nil alpha=1.0 bounds=0.0,0.0 1512.0x33.0
+   number=6860 layer=0 name="" onscreen=nil alpha=1.0 bounds=0.0,0.0 1512.0x33.0
+   number=6858 layer=0 name="" onscreen=nil alpha=1.0 bounds=0.0,0.0 1512.0x33.0
+   number=6859 layer=0 name="" onscreen=nil alpha=1.0 bounds=0.0,0.0 1512.0x33.0
+
+Focused window (TextEdit inactive): Gamma.txt  main: Gamma.txt  front app: TextEdit
+
+-- AXRaise "Alpha.txt" while TextEdit is inactive
+AXRaise took 2.15 ms err 0
+CG order now: ["Alpha.txt", "Gamma.txt", "Beta.txt"]  focused: Alpha.txt  main: Alpha.txt  front app: TextEdit
+
+-- activate TextEdit, then AXRaise the original front window
+front app: TextEdit  focused: Alpha.txt  CG order: ["Alpha.txt", "Gamma.txt", "Beta.txt"]
+AXRaise took 1.42 ms
+CG order now: ["Gamma.txt", "Alpha.txt", "Beta.txt"]  focused: Gamma.txt  main: Gamma.txt
+
+-- set kAXFocusedWindowAttribute on the app element to "Alpha.txt"
+set err 0  focused: Gamma.txt  CG order: ["Gamma.txt", "Alpha.txt", "Beta.txt"]
+-- set kAXMainAttribute=true on the front window
+set err 0  focused: Gamma.txt  main: Gamma.txt  CG order: ["Gamma.txt", "Alpha.txt", "Beta.txt"]
+
+-- set kAXMinimizedAttribute=true on "Beta.txt"
+set took 0.14 ms err 0
+AX windows now:
+   title="Gamma.txt" role=AXWindow subrole=AXStandardWindow minimized=false main=true focused=false pos=210.0,131.0 size=656.0x422.0 cgid=6863
+   title="Alpha.txt" role=AXWindow subrole=AXStandardWindow minimized=false main=false focused=false pos=152.0,73.0 size=656.0x422.0 cgid=6865
+   title="Beta.txt" role=AXWindow subrole=AXDialog minimized=true main=false focused=false pos=181.0,102.0 size=656.0x422.0 cgid=6864
+CG on-screen order: ["Gamma.txt", "Alpha.txt"]
+CG optionAll entries for the minimised window present: true
+focused: Gamma.txt  main: Gamma.txt
+
+-- AXRaise the minimised window (does it restore?)
+minimized now: false  CG order: ["Beta.txt", "Gamma.txt", "Alpha.txt"]  focused: Beta.txt
+
+-- set kAXMinimizedAttribute=false (restore)
+set took 0.38 ms err 0
+minimized now: false  CG order: ["Beta.txt", "Gamma.txt", "Alpha.txt"]  focused: Beta.txt  main: Beta.txt
+
+-- re-stack to [Gamma.txt, Alpha.txt, Beta.txt] by raising Beta, Alpha, Gamma in that order
+three raises took 7.85 ms
+CG order now: ["Gamma.txt", "Alpha.txt", "Beta.txt"]  focused: Gamma.txt
+
+-- close "Gamma.txt" via its close button, then query the stale element
+stale element title err: -25202  (kAXErrorInvalidUIElement = -25202)
+AXRaise on stale element err: -25202
+CG order now: ["Alpha.txt", "Beta.txt"]  AX windows: 2
+Teardown: TextEdit terminated, previous front re-activated: Ghostty

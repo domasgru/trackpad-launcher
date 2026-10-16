@@ -22,11 +22,12 @@ func fired(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14,
-    swipes: Bool = true,
-    swaps: Bool = true
+    slides: Set<SlideKind> = [.swipe, .windowSwipe],
+    swaps: Bool = true,
+    answering: Bool? = true
 ) -> [Gesture] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, swaps: swaps, travel: .linear)
-    return frames.compactMap { recognizer.step($0).fired }
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
+    return frames.compactMap { recognizer.step($0, answering: answering).fired }
 }
 
 /// Runs a fresh recognizer over `frames` and returns every swipe phase it reported, in order.
@@ -34,11 +35,25 @@ func phases(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14,
-    swipes: Bool = true,
-    swaps: Bool = true
+    slides: Set<SlideKind> = [.swipe, .windowSwipe],
+    swaps: Bool = true,
+    answering: Bool? = true
 ) -> [SwipePhase] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: swipes, swaps: swaps, travel: .linear)
-    return frames.compactMap { recognizer.step($0).swipe }
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
+    return frames.compactMap { recognizer.step($0, answering: answering).swipe }
+}
+
+/// Runs a fresh recognizer over `frames` and returns every window swipe phase it reported, in order.
+func windowPhases(
+    _ frames: [TouchFrame],
+    handMode: HandMode = .right,
+    surface: SurfaceSize = .macBook14,
+    slides: Set<SlideKind> = [.swipe, .windowSwipe],
+    swaps: Bool = true,
+    answering: Bool? = true
+) -> [SwipePhase] {
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
+    return frames.compactMap { recognizer.step($0, answering: answering).windowSwipe }
 }
 
 /// Runs a fresh recognizer over `frames` and returns `startsSeries` of every swap it reported, in order.
@@ -46,23 +61,39 @@ func swaps(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14,
-    swaps: Bool = true
+    slides: Set<SlideKind> = [.swipe, .windowSwipe],
+    swaps: Bool = true,
+    answering: Bool? = true
 ) -> [Bool] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: true, swaps: swaps, travel: .linear)
-    return frames.compactMap { recognizer.step($0).swapStartsSeries }
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
+    return frames.compactMap { recognizer.step($0, answering: answering).swapStartsSeries }
 }
 
-/// Per frame: what the recognizer said about a swipe, and whether it blocked clicks.
+/// Per frame: what the recognizer said about a swipe and a window swipe, and whether it blocked clicks.
 func perFrame(
     _ frames: [TouchFrame],
     handMode: HandMode = .right,
     surface: SurfaceSize = .macBook14,
-    swaps: Bool = true
-) -> [(swipe: SwipePhase?, blocks: Bool)] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, swipes: true, swaps: swaps, travel: .linear)
+    slides: Set<SlideKind> = [.swipe, .windowSwipe],
+    swaps: Bool = true,
+    answering: Bool? = true
+) -> [(swipe: SwipePhase?, windowSwipe: SwipePhase?, blocks: Bool)] {
+    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
     return frames.map {
-        let recognition = recognizer.step($0)
-        return (recognition.swipe, recognition.blocksClicks)
+        let recognition = recognizer.step($0, answering: answering)
+        return (recognition.swipe, recognition.windowSwipe, recognition.blocksClicks)
+    }
+}
+
+extension GestureRecognizer {
+    /// Steps `frame`; when it began a window swipe, answers that start with `answering` before the next frame, as the
+    /// adapters do. nil leaves the start unanswered.
+    mutating func step(_ frame: TouchFrame, answering: Bool?) -> Recognition {
+        let recognition = step(frame)
+        if recognition.windowSwipe == .began, let answering {
+            answerWindowSwipe(began: frame.time, isWindowSwipe: answering)
+        }
+        return recognition
     }
 }
 

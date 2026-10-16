@@ -65,7 +65,7 @@ import LauncherCore
 
     @Test func aTapRightAfterAccessIsGrantedBlocksItsPressWithNoFrameBeforeTheThumb() {
         let world = world(granted: false)
-        world.access.set(granted: true)
+        world.permissions.set(.accessibility, granted: true)
         world.hardware.touch(script().tap(fingers: 1, click: .firm).frames, on: trackpad.id)
         #expect(world.system.broughtToFront == [world.app("Arc")])
         #expect(world.hardware.pressVerdicts == [.drop, .drop])
@@ -132,13 +132,13 @@ import LauncherCore
         let world = world(granted: false)
         #expect(!world.hardware.isBlockingClicks)
 
-        world.access.set(granted: true)
+        world.permissions.set(.accessibility, granted: true)
         #expect(world.hardware.isBlockingClicks)
         world.hardware.touch(script().tap(fingers: 1, click: .firm).frames, on: trackpad.id)
         #expect(world.system.broughtToFront == [world.app("Arc")])
         #expect(world.hardware.pressVerdicts == [.drop, .drop])
 
-        world.access.set(granted: false)
+        world.permissions.set(.accessibility, granted: false)
         #expect(!world.hardware.isBlockingClicks)
         world.hardware.touch(script().tap(fingers: 1, click: .firm).frames, on: trackpad.id)
         #expect(world.system.broughtToFront == [world.app("Arc")])

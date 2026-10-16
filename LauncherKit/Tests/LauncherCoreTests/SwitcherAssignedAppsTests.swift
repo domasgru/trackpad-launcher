@@ -136,7 +136,7 @@ import LauncherCore
         let hand = world.swipe(3.5, lift: false)
         let switcher = try #require(world.launcher.switcher)
         #expect(switcher.row.map(\.name) == ["Notes", "Mail"])
-        #expect(switcher.selected == 0)
+        #expect(switcher.selection.selected == 0)
         #expect(switcher.selectedApp.name == "Notes")
 
         world.play(hand.lift())

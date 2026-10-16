@@ -47,7 +47,7 @@ final class LaunchRecord: Sendable {
     let hardware: InMemoryTrackpads
     let preferences = InMemoryTrackpadPreferences()
     let system = RecordingSystemActions()
-    let access: InMemoryAccessibilityPermission
+    let permissions: InMemoryPermissions
     let registry = Registry()
     let launches = LaunchRecord()
     let scanner: InMemoryAppScanner
@@ -56,7 +56,10 @@ final class LaunchRecord: Sendable {
     private(set) var launcher: Launcher
     private var delivered: [TrackpadID: Double] = [:]
 
-    init(apps: [String] = [], attached: [Trackpad] = [.macBook14], accessGranted: Bool = false) {
+    init(
+        apps: [String] = [], attached: [Trackpad] = [.macBook14], accessGranted: Bool = false,
+        screenRecording: Bool = false
+    ) {
         let root = FileManager.default.temporaryDirectory.appending(path: "tl-world-\(UUID().uuidString)")
         self.root = root
         applications = root.appending(path: "Applications")
@@ -69,7 +72,10 @@ final class LaunchRecord: Sendable {
             try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         hardware = InMemoryTrackpads(attached: attached)
-        access = InMemoryAccessibilityPermission(granted: accessGranted)
+        var granted: Set<Permission> = []
+        if accessGranted { granted.insert(.accessibility) }
+        if screenRecording { granted.insert(.screenRecording) }
+        permissions = InMemoryPermissions(granted: granted)
         let registry = registry
         let launches = launches
         let catalog = AppCatalog(
@@ -83,18 +89,18 @@ final class LaunchRecord: Sendable {
         let store = SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
         self.store = store
         launcher = Self.makeLauncher(
-            hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
+            hardware: hardware, preferences: preferences, permissions: permissions, system: system, catalog: catalog,
             scanner: scanner, store: store)
         install("Finder", in: coreServices)
         for name in apps { install(name) }
     }
 
     private static func makeLauncher(
-        hardware: InMemoryTrackpads, preferences: InMemoryTrackpadPreferences, access: InMemoryAccessibilityPermission,
+        hardware: InMemoryTrackpads, preferences: InMemoryTrackpadPreferences, permissions: InMemoryPermissions,
         system: RecordingSystemActions, catalog: AppCatalog, scanner: InMemoryAppScanner, store: SettingsStore
     ) -> Launcher {
         Launcher(
-            hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
+            hardware: hardware, preferences: preferences, permissions: permissions, system: system, catalog: catalog,
             scanner: scanner, store: store)
     }
 
@@ -177,7 +183,7 @@ final class LaunchRecord: Sendable {
         let store = SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
         self.store = store
         launcher = Self.makeLauncher(
-            hardware: hardware, preferences: preferences, access: access, system: system, catalog: catalog,
+            hardware: hardware, preferences: preferences, permissions: permissions, system: system, catalog: catalog,
             scanner: scanner, store: store)
         return launcher
     }
@@ -227,6 +233,60 @@ extension World {
         if lift { script = script.lift() }
         play(script, on: trackpad)
         return script
+    }
+
+    /// Safari, Mail, Preview, TextEdit and Notes installed and running, `frontmost` in front (Finder is the copy in
+    /// CoreServices) with these windows, Accessibility and Screen Recording granted unless `accessGranted` or
+    /// `screenRecording` is false, started. `untitled` names windows that have no title.
+    static func windowWorld(
+        visible: [String] = [], minimised: [String] = [], fullScreenFront: Bool = false, untitled: Set<String> = [],
+        frontmost: String? = "Safari", accessGranted: Bool = true, screenRecording: Bool = true,
+        attached: [Trackpad] = [.macBook14]
+    ) -> World {
+        let apps = ["Safari", "Mail", "Preview", "TextEdit", "Notes"]
+        let world = World(apps: apps, attached: attached, accessGranted: accessGranted, screenRecording: screenRecording)
+        world.launcher.start()
+        world.makeRunning(apps)
+        world.system.frontmost = frontmost.map { $0 == "Finder" ? world.app("Finder", in: world.coreServices) : world.app($0) }
+        world.system.windows.set(
+            visible: visible, minimised: minimised, fullScreenFront: fullScreenFront, untitled: untitled)
+        return world
+    }
+
+    /// The fixed number of the frontmost app's window with this title.
+    func window(_ title: String) -> WindowID { system.windows.id(title) }
+
+    /// The thumb at `thumb`, two fingers down at (62, 30), each slide straight down in turn (millimetres, positive
+    /// down), then the fingers lift unless `lift` is false. Returns its script so a row can continue it with `play`.
+    @discardableResult
+    func windowSwipe(
+        _ slidesMM: Double..., lift: Bool = true, thumbAtMM thumb: (x: Double, y: Double) = (10, 10),
+        on trackpad: Trackpad = .macBook14
+    ) -> TouchScript {
+        var script = TouchScript(trackpad.surface).thumb(atMM: thumb).land(fingers: 2, atMM: (62, 30))
+        for slide in slidesMM { script = script.slide(byMM: (0, slide)) }
+        if lift { script = script.lift() }
+        play(script, on: trackpad)
+        return script
+    }
+
+    /// Delivers the frames of `script` not yet delivered one at a time, and what both switchers were after each.
+    func playFrameByFrame(
+        _ script: TouchScript, on trackpad: Trackpad = .macBook14
+    ) -> [(windowSwitcher: WindowSwitcher?, switcher: Switcher?)] {
+        playFrameByFrame(script, on: trackpad) { (launcher.windowSwitcher, launcher.switcher) }
+    }
+
+    /// Delivers the frames of `script` not yet delivered one at a time, and what `observe` saw after each.
+    func playFrameByFrame<Seen>(
+        _ script: TouchScript, on trackpad: Trackpad = .macBook14, observing observe: () -> Seen
+    ) -> [Seen] {
+        let newer = script.frames.filter { $0.time.seconds > (delivered[trackpad.id] ?? 0) }
+        return newer.map { frame in
+            delivered[trackpad.id] = frame.time.seconds
+            hardware.touch([frame], on: trackpad.id)
+            return observe()
+        }
     }
 
     /// Thumb at (10, 10), two fingers down, each slide in turn (millimetres, positive right), then the fingers lift

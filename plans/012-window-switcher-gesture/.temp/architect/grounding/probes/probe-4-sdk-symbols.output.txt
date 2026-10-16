@@ -1,0 +1,15 @@
+probe-4-sdk-symbols.swift:7:5: error: 'CGWindowListCreateImage' is unavailable in macOS: Please use ScreenCaptureKit instead.
+ 5 | 
+ 6 | func deprecatedCapture(id: CGWindowID) -> CGImage? {
+ 7 |     CGWindowListCreateImage(.null, .optionIncludingWindow, id, [.boundsIgnoreFraming, .nominalResolution])
+   |     `- error: 'CGWindowListCreateImage' is unavailable in macOS: Please use ScreenCaptureKit instead.
+ 8 | }
+ 9 | 
+
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk/System/Library/Frameworks/CoreGraphics.framework/Headers/CGWindow.h:271:33: note: 'CGWindowListCreateImage' was obsoleted in macOS 15.0
+269 |    GUI session or the window server is disabled. */
+270 | 
+271 | CG_EXTERN CGImageRef __nullable CGWindowListCreateImage(CGRect screenBounds,
+    |                                 `- note: 'CGWindowListCreateImage' was obsoleted in macOS 15.0
+272 |     CGWindowListOption listOption, CGWindowID windowID,
+273 |     CGWindowImageOption imageOption)

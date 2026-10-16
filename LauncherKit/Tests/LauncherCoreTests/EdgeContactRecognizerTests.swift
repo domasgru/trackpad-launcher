@@ -38,8 +38,9 @@ import LauncherCore
     }
 
     private func recognitions(_ frames: [TouchFrame]) -> [Recognition] {
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, swipes: true, swaps: true, travel: .linear)
-        return frames.map { recognizer.step($0) }
+        var recognizer = GestureRecognizer(
+            handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
+        return frames.map { recognizer.step($0, answering: true) }
     }
 
     private func ms(_ frame: TouchFrame) -> Int {
@@ -53,6 +54,13 @@ import LauncherCore
     private func swipeEvents(_ frames: [TouchFrame]) -> (at: [Int], phases: [SwipePhase]) {
         let events = zip(frames, recognitions(frames)).compactMap { frame, recognition in
             recognition.swipe.map { (ms(frame), $0) }
+        }
+        return (events.map(\.0), events.map(\.1))
+    }
+
+    private func windowSwipeEvents(_ frames: [TouchFrame]) -> (at: [Int], phases: [SwipePhase]) {
+        let events = zip(frames, recognitions(frames)).compactMap { frame, recognition in
+            recognition.windowSwipe.map { (ms(frame), $0) }
         }
         return (events.map(\.0), events.map(\.1))
     }
@@ -296,7 +304,7 @@ import LauncherCore
 
     @Test func anEdgeContactRollingInwardStaysAnEdgeContact() {
         let script = TouchScript(.macBook14).thumb(atMM: (10, 10))
-            .tap(fingers: 1, atMM: (123.8, 45), dragMM: -2.5)
+            .tap(fingers: 1, atMM: (123.8, 45), dragMM: (-2.5, 0))
             .tap(fingers: 1, atMM: (62, 45))
         #expect(fired(script.frames) == [.one])
     }
@@ -309,6 +317,41 @@ import LauncherCore
             Track(id: 3, from: 130, until: 160) { ms in (62 + 0.8 * Double(ms - 130), 75.8) },
         ], throughMS: 200)
         let events = swipeEvents(all)
+        #expect(events.at == [110, 120, 130, 140, 150])
+        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]), "phases were \(events.phases)")
+        #expect(fired(all) == [])
+    }
+
+    @Test func aFingerAndAnEdgeContactSlidingUpTogetherAreNoWindowSwipe() {
+        let all = frames([
+            thumb,
+            .line(1, from: 100, until: 300, fromMM: (62, 60), toMM: (62, 50), over: 100...200),
+            .line(2, from: 100, until: 300, fromMM: (70, 75.8), toMM: (70, 65.8), over: 100...200),
+        ], throughMS: 400)
+        #expect(windowSwipeEvents(all).phases.isEmpty)
+        #expect(swipeEvents(all).phases.isEmpty)
+    }
+
+    @Test func anEdgeContactLandingDuringAWindowSwipeDoesNotCancelIt() {
+        let all = frames([
+            Track.still(9, from: 0, until: 170, atMM: 10, 10),
+            Track(id: 1, from: 100, until: 140) { ms in (62, 30 + 0.4 * Double(ms - 100)) },
+            Track(id: 2, from: 100, until: 140) { ms in (70, 30 + 0.4 * Double(ms - 100)) },
+            Track(id: 3, from: 120, until: 160) { ms in (123.8, 40 + Double(ms - 120)) },
+        ], throughMS: 200)
+        let phases = windowSwipeEvents(all).phases
+        #expect(phasesMatch(phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .ended]), "phases were \(phases)")
+        #expect(fired(all) == [])
+    }
+
+    @Test func anEdgeContactCannotRejoinAWindowSwipeAfterAFingerLifts() {
+        let all = frames([
+            Track.still(9, from: 0, until: 160, atMM: 10, 10),
+            Track(id: 1, from: 100, until: 150) { ms in (62, 30 + 0.4 * Double(ms - 100)) },
+            Track(id: 2, from: 100, until: 120) { ms in (70, 30 + 0.4 * Double(ms - 100)) },
+            Track(id: 3, from: 130, until: 160) { ms in (123.8, 40 + 0.8 * Double(ms - 130)) },
+        ], throughMS: 200)
+        let events = windowSwipeEvents(all)
         #expect(events.at == [110, 120, 130, 140, 150])
         #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]), "phases were \(events.phases)")
         #expect(fired(all) == [])

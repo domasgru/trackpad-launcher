@@ -2,10 +2,9 @@ import AppKit
 import LauncherCore
 import QuartzCore
 
-/// The switcher's window: the launch overlay's configuration (borderless, non-activating, click-through, above
-/// everything on every Space, never key) around Liquid Glass. It holds the icon layers, the glass highlight under
-/// them and the selected app's name; `SwitcherPresenter` decides everything shown.
-final class SwitcherPanel: NSPanel {
+/// The app switcher's window: an overlay panel holding the icon layers, the glass highlight under them and the
+/// selected app's name; `SwitcherPresenter` decides everything shown.
+final class SwitcherPanel: OverlayPanel {
     static let selectedScale: CGFloat = 1.12
 
     private static let cornerRadius: CGFloat = 34
@@ -14,9 +13,7 @@ final class SwitcherPanel: NSPanel {
     private static let nameHeight: CGFloat = 18
     private static let nameGap: CGFloat = 10
 
-    private static let fadeKey = "fade"
-
-    private let content = NSView()
+    private let content: NSView
     private let highlight = NSGlassEffectView()
     private let iconsHost = NSView()
     private let name = NSTextField(labelWithString: "")
@@ -24,17 +21,9 @@ final class SwitcherPanel: NSPanel {
     private var layout = SwitcherRowLayout(iconCount: 0, displayWidth: 0)
 
     init() {
-        super.init(
-            contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
-        isOpaque = false
-        backgroundColor = .clear
-        hasShadow = true
-        ignoresMouseEvents = true
-        level = .screenSaver
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        hidesOnDeactivate = false
-        animationBehavior = .none
-        isReleasedWhenClosed = false
+        let content = NSView()
+        self.content = content
+        super.init(cornerRadius: Self.cornerRadius, content: content)
 
         content.wantsLayer = true
         iconsHost.wantsLayer = true
@@ -48,40 +37,6 @@ final class SwitcherPanel: NSPanel {
         content.addSubview(highlight)
         content.addSubview(iconsHost)
         content.addSubview(name)
-
-        let glass = NSGlassEffectView()
-        glass.style = .regular
-        glass.cornerRadius = Self.cornerRadius
-        glass.contentView = content
-        contentView = roundedClip(glass, cornerRadius: Self.cornerRadius)
-    }
-
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
-
-    /// Opacity to 0 over `duration` on the render server; `completion` runs when the animation ends or is removed.
-    func fadeOut(duration: CFTimeInterval, completion: @escaping () -> Void) {
-        guard let layer = contentView?.layer else { return completion() }
-        CATransaction.begin()
-        CATransaction.setCompletionBlock(completion)
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = layer.presentation()?.opacity ?? layer.opacity
-        fade.toValue = 0
-        fade.duration = duration
-        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        layer.opacity = 0
-        layer.add(fade, forKey: Self.fadeKey)
-        CATransaction.commit()
-    }
-
-    /// Fully opaque again, dropping any fade still running.
-    func restoreOpacity() {
-        guard let layer = contentView?.layer else { return }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.removeAnimation(forKey: Self.fadeKey)
-        layer.opacity = 1
-        CATransaction.commit()
     }
 
     /// Replaces the icon layers with one layer per image, left to right, sized and spaced by `layout`, and centres

@@ -71,7 +71,7 @@ struct TouchScript {
         atMM p: (x: Double, y: Double) = (62, 45),
         stagger: Duration = .zero,
         hold: Duration = .milliseconds(120),
-        dragMM: Double = 0,
+        dragMM: (x: Double, y: Double) = (0, 0),
         click: ClickTiming = .none
     ) -> TouchScript {
         var s = self
@@ -84,8 +84,8 @@ struct TouchScript {
             let lift = land + holdMS
             let x = p.x + 8 * Double(i)
             var path = [Waypoint(ms: land, x: x, y: p.y)]
-            if dragMM != 0 {
-                path.append(Waypoint(ms: lift - Self.frameIntervalMS, x: x + dragMM, y: p.y))
+            if dragMM != (0, 0) {
+                path.append(Waypoint(ms: lift - Self.frameIntervalMS, x: x + dragMM.x, y: p.y + dragMM.y))
             }
             s.contacts.append(Contact(id: s.nextFingerID, landMS: land, liftMS: lift, path: path))
             s.nextFingerID += 1
@@ -106,7 +106,7 @@ struct TouchScript {
     func thumbTap(
         atMM p: (x: Double, y: Double) = (10, 10),
         hold: Duration = .milliseconds(120),
-        dragMM: Double = 0,
+        dragMM: (x: Double, y: Double) = (0, 0),
         click: ClickTiming = .none
     ) -> TouchScript {
         var s = self
@@ -114,8 +114,8 @@ struct TouchScript {
         let holdMS = Self.milliseconds(hold)
         let lift = start + holdMS
         var path = [Waypoint(ms: start, x: p.x, y: p.y)]
-        if dragMM != 0 {
-            path.append(Waypoint(ms: lift - Self.frameIntervalMS, x: p.x + dragMM, y: p.y))
+        if dragMM != (0, 0) {
+            path.append(Waypoint(ms: lift - Self.frameIntervalMS, x: p.x + dragMM.x, y: p.y + dragMM.y))
         }
         s.contacts.append(Contact(id: Self.thumbID, landMS: start, liftMS: lift, path: path))
         switch click {

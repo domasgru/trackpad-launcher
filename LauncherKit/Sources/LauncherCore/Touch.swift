@@ -31,7 +31,7 @@ public struct Touch: Sendable {
 }
 
 /// Monotonic seconds on the multitouch driver's clock. The only time recognition ever reads.
-public struct FrameTime: Sendable {
+public struct FrameTime: Equatable, Sendable {
     public var seconds: Double
 
     public init(seconds: Double) {

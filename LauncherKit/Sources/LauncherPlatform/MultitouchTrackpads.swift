@@ -19,6 +19,8 @@ import LauncherCore
     private var wakeObserver: (any NSObjectProtocol)?
     /// Counts `run` calls. A session delivers only while its own run is still the latest.
     private var runs = 0
+    /// Every event reaches `onEvent` through it, so a window swipe start comes back with its answer.
+    private let confirmation = WindowSwipeConfirmation()
 
     /// On a failed `dlopen`, `connected()` is empty: the app shows "No trackpad connected".
     public init() {
@@ -63,7 +65,7 @@ import LauncherCore
 
     /// Forgets every session, stops every device, then starts exactly `trackpads` with a fresh recognizer each.
     /// A click tap exists afterwards iff `blockClicks`, the system allows it and a trackpad is running.
-    public func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool, swaps: Bool) {
+    public func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, slides: Set<SlideKind>, swaps: Bool) {
         runs += 1
         guard let framework else { return }
         sessions.withLock { $0 = [:] }
@@ -87,16 +89,17 @@ import LauncherCore
             let ref = Unmanaged.passUnretained(device).toOpaque()
             let session = DeviceSession(
                 trackpad: trackpad.id,
-                recognizer: GestureRecognizer(handMode: handMode, surface: trackpad.surface, swipes: swipes, swaps: swaps, travel: .linear),
+                recognizer: GestureRecognizer(handMode: handMode, surface: trackpad.surface, slides: slides, swaps: swaps, travel: .linear),
                 pointerCurves: CursorTravel.curves(of: framework.getService(ref)),
                 clickTap: clickTap,
-                deliver: { [weak self] event in
+                deliver: { [weak self] event, reply in
                     // The main queue is FIFO from one frame thread, so events keep their frame order. An event
-                    // from a replaced session is dropped: a stale swipe start could never be ended.
+                    // from a replaced session is dropped, reply and all: a stale swipe start could never be ended.
                     DispatchQueue.main.async {
                         MainActor.assumeIsolated {
                             guard let self, self.runs == generation else { return }
-                            self.onEvent?(event)
+                            let answer = self.confirmation.deliver(event, to: self.onEvent)
+                            if let reply, let answer { reply(answer) }
                         }
                     }
                 })
@@ -117,6 +120,8 @@ import LauncherCore
         guard let framework, let actuator = actuators[trackpad] else { return }
         _ = framework.actuatorActuate(actuator, Self.actuation(for: haptic), 0, 0, 0)
     }
+
+    public func confirmWindowSwipe(on trackpad: TrackpadID) { confirmation.confirm(on: trackpad) }
 
     /// Chosen by feel: 3 weak, 4 medium, 6 strong. The tick starts at 3; if it is too faint next to 6, move it to 4.
     static func actuation(for haptic: Haptic) -> Int32 {

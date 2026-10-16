@@ -3,6 +3,7 @@ import Foundation
 public enum TrackpadEvent: Sendable {
     case gesture(GestureEvent)
     case swipe(SwipeEvent)
+    case windowSwipe(SwipeEvent)
     case swap(SwapEvent)
     /// Attached, detached, or the Mac woke.
     case trackpadsChanged
@@ -12,6 +13,7 @@ public enum TrackpadEvent: Sendable {
         switch event {
         case .fired(let gesture): self = .gesture(GestureEvent(gesture: gesture, trackpad: trackpad))
         case .swipe(let phase): self = .swipe(SwipeEvent(phase: phase, trackpad: trackpad))
+        case .windowSwipe(let phase): self = .windowSwipe(SwipeEvent(phase: phase, trackpad: trackpad))
         case .swap(let startsSeries): self = .swap(SwapEvent(startsSeries: startsSeries, trackpad: trackpad))
         }
     }
@@ -23,18 +25,24 @@ public enum Haptic: Sendable { case gesture, lightTick }
 /// The multitouch hardware.
 @MainActor public protocol TrackpadHardware: AnyObject {
     /// Always called on the main actor, in the order each trackpad's frames produced the events, and never for a session
-    /// that a later `run` replaced.
+    /// that a later `run` replaced. A `.windowSwipe(.began)` asks whether its slide is a window swipe. Once the call
+    /// returns, the adapter answers that start, true only if `confirmWindowSwipe(on:)` was called during it, and the
+    /// trackpad's recognizer takes the answer before its next frame: confirmed, the slide blocks until both fingers
+    /// lift; declined, it goes on as with the window swipe setting off.
     var onEvent: (@MainActor (TrackpadEvent) -> Void)? { get set }
     /// Trackpads connected now. Excludes multitouch devices that are not trackpads (Magic Mouse, Touch Bar).
     func connected() -> [Trackpad]
     /// Forgets every session, removes the click tap, stops every device, then starts exactly `trackpads` with a fresh
     /// recognizer each and, if `blockClicks` and `trackpads` is not empty, a fresh click tap. Idempotent.
     /// The tap needs Accessibility. If the system refuses it, nothing is filtered, presses are sampled as before,
-    /// and taps behave exactly as without access. [] = nothing runs. `swipes`: whether each fresh recognizer recognises
-    /// swipes; `swaps`: whether it recognises swaps. Replacing the recognizers ends any swipe in progress.
-    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool, swaps: Bool)
+    /// and taps behave exactly as without access. [] = nothing runs. `slides`: the slide kinds each fresh recognizer
+    /// recognises; `swaps`: whether it recognises swaps. Replacing the recognizers ends any swipe in progress.
+    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, slides: Set<SlideKind>, swaps: Bool)
     /// One pulse of that kind on that trackpad. No-op if it is gone.
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID)
+    /// Only while `onEvent` is handling a `.windowSwipe(.began)` from `trackpad`: makes that slide a window swipe.
+    /// Anywhere else, including an event a test injected, it does nothing.
+    func confirmWindowSwipe(on trackpad: TrackpadID)
 }
 
 /// The two trackpad preference domains.
@@ -60,16 +68,32 @@ public enum Haptic: Sendable { case gesture, lightTick }
     func playLaunchAnimation(for app: AppEntry)
     /// The active app and the ⌘-Tab apps, read now from their one source of truth.
     func runningApps() -> RunningApps
+    /// The frontmost app's windows, read now, beside `runningApps()`: about a millisecond, at most one messaging timeout
+    /// (0.2 s) when the app does not answer. Reads only. The windows it lists are the only ones a later `raiseWindows`
+    /// may name, until the next read.
+    func frontmostWindows() -> FrontmostWindows
+    /// Raises these windows of the latest `frontmostWindows()` read, the last first, so the first ends in front of its
+    /// app with the keyboard focus and the rest behind it in this order; beside `bringToFront`, which is app-level. A
+    /// raised minimised window is restored. A window that has closed is skipped; an id the latest read did not list is
+    /// skipped, so nothing on another Space is ever raised. About 2 ms per raise; once the app has timed out, no
+    /// further calls go to it for that read. [] does nothing.
+    func raiseWindows(_ frontToBack: [WindowID])
 }
 
-/// The Accessibility permission. Real: SystemAccessibilityPermission. Test: InMemoryAccessibilityPermission.
-@MainActor public protocol AccessibilityPermission: AnyObject {
-    /// On the main actor after trust changed, and only then. Carries no data; re-read with `isGranted()`.
+/// A permission macOS grants the app.
+public enum Permission: Hashable, Sendable {
+    case accessibility, screenRecording
+}
+
+/// The permissions macOS grants the app. Real: SystemPermissions. Test: InMemoryPermissions.
+@MainActor public protocol Permissions: AnyObject {
+    /// On the main actor after either permission changed, and only then. Carries no data: re-read.
     var onChange: (@MainActor () -> Void)? { get set }
-    /// Read fresh. Never prompts.
-    func isGranted() -> Bool
-    /// Shows the system's Accessibility prompt. Returns at once; the prompt belongs to another process.
-    func prompt()
+    /// Read fresh. Never prompts. Screen Recording's read costs about 4 ms, so the model reads it on pushes, never on a
+    /// gesture.
+    func isGranted(_ permission: Permission) -> Bool
+    /// The system's prompt for it. Returns at once; the prompt belongs to another process.
+    func ask(_ permission: Permission)
 }
 
 /// Reads the listed apps off the main actor and pushes the result. Real: SystemAppScanner. Test: InMemoryAppScanner.

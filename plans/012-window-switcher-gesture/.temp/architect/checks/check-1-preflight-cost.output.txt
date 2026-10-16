@@ -1,0 +1,2 @@
+first call: true in 10.447 ms
+200 warm calls: median 4.1405 ms, p95 5.9614 ms, max 6.6165 ms

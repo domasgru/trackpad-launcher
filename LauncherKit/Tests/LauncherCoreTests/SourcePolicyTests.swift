@@ -33,13 +33,13 @@ import Testing
         Entry(token: "makeTimerSource", rule: "timer"),
         Entry(token: "displayLink", rule: "timer"),
         Entry(token: "DisplayLink", rule: "timer"),
-        Entry(token: "IOHIDManager", rule: "R9 only Accessibility"),
-        Entry(token: "CGRequestListenEventAccess", rule: "R9 only Accessibility"),
-        Entry(token: "CGPreflightListenEventAccess", rule: "R9 only Accessibility"),
-        Entry(token: "IOHIDRequestAccess", rule: "R9 only Accessibility"),
-        Entry(token: "IOHIDCheckAccess", rule: "R9 only Accessibility"),
-        Entry(token: "CGRequestPostEventAccess", rule: "R9 only Accessibility"),
-        Entry(token: "CGPreflightPostEventAccess", rule: "R9 only Accessibility"),
+        Entry(token: "IOHIDManager", rule: "no Input Monitoring or event posting"),
+        Entry(token: "CGRequestListenEventAccess", rule: "no Input Monitoring or event posting"),
+        Entry(token: "CGPreflightListenEventAccess", rule: "no Input Monitoring or event posting"),
+        Entry(token: "IOHIDRequestAccess", rule: "no Input Monitoring or event posting"),
+        Entry(token: "IOHIDCheckAccess", rule: "no Input Monitoring or event posting"),
+        Entry(token: "CGRequestPostEventAccess", rule: "no Input Monitoring or event posting"),
+        Entry(token: "CGPreflightPostEventAccess", rule: "no Input Monitoring or event posting"),
         Entry(token: "keyDown", rule: "R9 no keyboard"),
         Entry(token: "keyUp", rule: "R9 no keyboard"),
         Entry(token: "KeyDown", rule: "R9 no keyboard"),
@@ -51,6 +51,13 @@ import Testing
         Entry(token: "CGEventPost", rule: "R9 never synthesise"),
         Entry(token: "postToPid", rule: "R9 never synthesise"),
         Entry(token: "nonisolated(unsafe)", rule: "one writer per field"),
+        Entry(token: "AXUIElementSetAttributeValue", rule: "the window switcher only raises a window"),
+        Entry(token: "kAXPressAction", rule: "the window switcher only raises a window"),
+        Entry(token: "SCStream(", rule: "previews are pictures, never a stream"),
+        Entry(token: "SCRecordingOutput", rule: "previews are pictures, never a recording"),
+        Entry(token: "CGImageDestination", rule: "a preview is never encoded or written"),
+        Entry(token: "representation(using", rule: "a preview is never encoded or written"),
+        Entry(token: "tiffRepresentation", rule: "a preview is never encoded or written"),
     ]
 
     /// Each permission API lives in exactly one file, the adapter that owns it. Any other hit fails.
@@ -62,8 +69,13 @@ import Testing
     }
 
     static let confined: [Confined] = [
-        Confined(token: "AXIsProcessTrusted", onlyIn: "SystemAccessibilityPermission.swift", rule: "R9 one permission, one adapter"),
-        Confined(token: "notify_register", onlyIn: "SystemAccessibilityPermission.swift", rule: "R7 the trust push"),
+        Confined(token: "AXIsProcessTrusted", onlyIn: "SystemPermissions.swift", rule: "R9 one permission, one adapter"),
+        Confined(token: "notify_register", onlyIn: "SystemPermissions.swift", rule: "R7 the trust push"),
+        Confined(
+            token: "ScreenCaptureAccess", onlyIn: "SystemPermissions.swift", rule: "one permission check, one adapter"),
+        Confined(token: "ScreenCaptureKit", onlyIn: "PreviewCapture.swift", rule: "one file captures the screen"),
+        Confined(token: "SCShareableContent", onlyIn: "PreviewCapture.swift", rule: "one file captures the screen"),
+        Confined(token: "SCScreenshotManager", onlyIn: "PreviewCapture.swift", rule: "one file captures the screen"),
         Confined(token: "tapCreate", onlyIn: "ClickTap.swift", rule: "R9 the one event tap"),
         Confined(token: "CGEventTapCreate", onlyIn: "ClickTap.swift", rule: "R9 the one event tap"),
         Confined(token: "scrollWheel", onlyIn: "ClickTap.swift", rule: "scrolling is read only by the one event tap"),
@@ -73,6 +85,8 @@ import Testing
         Confined(
             token: "_LSCopyApplicationInformation", onlyIn: "LaunchServicesOrder.swift",
             rule: "the private ⌘-Tab order has one reader"),
+        Confined(token: "AXUIElement", onlyIn: "FrontmostAppWindows.swift", rule: "the window read has one reader"),
+        Confined(token: "CGWindowList", onlyIn: "FrontmostAppWindows.swift", rule: "the window read has one reader"),
     ]
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.
@@ -104,10 +118,10 @@ import Testing
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
         let source = Data("func f() { _ = AXIsProcessTrusted() }\n".utf8)
-        try source.write(to: dir.appending(path: "SystemAccessibilityPermission.swift"))
+        try source.write(to: dir.appending(path: "SystemPermissions.swift"))
         try source.write(to: dir.appending(path: "Other.swift"))
 
-        let hits = try Self.scan(dir, for: "AXIsProcessTrusted", outside: "SystemAccessibilityPermission.swift")
+        let hits = try Self.scan(dir, for: "AXIsProcessTrusted", outside: "SystemPermissions.swift")
 
         #expect(hits == ["Other.swift:1: AXIsProcessTrusted"])
     }

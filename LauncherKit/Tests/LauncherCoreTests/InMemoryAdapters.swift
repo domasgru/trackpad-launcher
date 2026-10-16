@@ -21,6 +21,9 @@ import LauncherCore
     private var buttonWasDown = false
     private var pressInProgress: PressID?
     private var nextPressNumber: Int64 = 1
+    private let confirmation = WindowSwipeConfirmation()
+    /// The answer to every window swipe start a frame reported, in order.
+    private(set) var windowSwipeAnswers: [Bool] = []
 
     struct Pulse: Equatable {
         let haptic: Haptic
@@ -41,11 +44,11 @@ import LauncherCore
     /// How many times `run` was called.
     private(set) var runCount = 0
 
-    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, swipes: Bool, swaps: Bool) {
+    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, slides: Set<SlideKind>, swaps: Bool) {
         runCount += 1
         running = Dictionary(
             uniqueKeysWithValues: trackpads.map {
-                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, swipes: swipes, swaps: swaps, travel: .linear))
+                ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, slides: slides, swaps: swaps, travel: .linear))
             })
         deaf = []
         blocking = [:]
@@ -56,6 +59,8 @@ import LauncherCore
     }
 
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID) { pulses.append(Pulse(haptic: haptic, trackpad: trackpad)) }
+
+    func confirmWindowSwipe(on trackpad: TrackpadID) { confirmation.confirm(on: trackpad) }
 
     func attach(_ trackpad: Trackpad) {
         attached.append(trackpad)
@@ -86,9 +91,12 @@ import LauncherCore
                 press: TouchFrame.Press(holding: clickFilter?.holding, buttonDown: buttonDown))
             guard let recognition = running[id]?.step(sampled) else { return }
             blocking[id] = recognition.blocksClicks
-            if let event = recognition.event {
-                onEvent?(TrackpadEvent(event, on: id))
-            }
+            guard let event = recognition.event,
+                  let answer = confirmation.deliver(TrackpadEvent(event, on: id), to: onEvent) else { continue }
+            windowSwipeAnswers.append(answer)
+            // As the real adapter's reply: taken between frames, before the next one. A `run` inside `onEvent`
+            // replaced the recognizer with one that has no such start, and it ignores the answer.
+            running[id]?.answerWindowSwipe(began: sampled.time, isWindowSwipe: answer)
         }
     }
 
@@ -115,7 +123,7 @@ import LauncherCore
     }
 
     /// An event the frame thread recognised just before activity flipped, delivered regardless of `running`.
-    func inject(_ event: TrackpadEvent) { onEvent?(event) }
+    func inject(_ event: TrackpadEvent) { _ = confirmation.deliver(event, to: onEvent) }
 }
 
 @MainActor final class InMemoryTrackpadPreferences: TrackpadPreferences {
@@ -153,6 +161,13 @@ import LauncherCore
 
     func runningApps() -> RunningApps { RunningApps(frontmost: frontmost, apps: running) }
 
+    /// The frontmost app's windows the next `frontmostWindows()` answers.
+    let windows = FakeWindows()
+
+    func frontmostWindows() -> FrontmostWindows { windows.read(frontmost: frontmost) }
+
+    func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
+
     func registerLoginItem() {
         loginItemRegistrations += 1
         onRegisterLoginItem?()
@@ -166,27 +181,115 @@ import LauncherCore
     }
 }
 
-@MainActor final class InMemoryAccessibilityPermission: AccessibilityPermission {
-    var onChange: (@MainActor () -> Void)?
-    private(set) var granted: Bool
-    private(set) var prompts = 0
-    /// Runs inside `prompt()` so a test can observe what is stored at that moment.
-    var onPrompt: (() -> Void)?
+/// The frontmost app's window stack, by name: one fixed `WindowID` per name for the life of the test. A window's title is
+/// its name unless the name is marked untitled. Carries no policy: reads report full-screen and minimised windows as
+/// they are, uncut, and raises do what the system's raise does and nothing more.
+@MainActor final class FakeWindows {
+    /// Front to back.
+    private(set) var onScreenTitles: [String] = []
+    /// In the order the app lists them.
+    private(set) var minimisedTitles: [String] = []
+    private var fullScreenFront = false
+    private var untitled: Set<String> = []
+    /// false: the app does not answer in time, so reads list nothing.
+    var answers = true
+    /// true: raises are logged and change nothing, as with an app that ignores them.
+    var dropsRaises = false
+    /// How many times the windows were read.
+    private(set) var reads = 0
+    /// Every `raise(_:)` call, in order, empty ones included.
+    private(set) var raised: [[WindowID]] = []
+    private var ids: [String: WindowID] = [:]
+    /// The names the latest read listed: the only windows a raise may touch.
+    private var listed: Set<String> = []
 
-    init(granted: Bool = false) { self.granted = granted }
-
-    func isGranted() -> Bool { granted }
-
-    func prompt() {
-        prompts += 1
-        onPrompt?()
+    /// `untitled`: names whose windows report an empty title.
+    func set(visible: [String], minimised: [String] = [], fullScreenFront: Bool = false, untitled: Set<String> = []) {
+        onScreenTitles = visible
+        minimisedTitles = minimised
+        self.fullScreenFront = fullScreenFront
+        self.untitled = untitled
     }
 
-    /// The user flips the switch in System Settings. Pushed synchronously on a real change only, as the real adapter does.
-    func set(granted: Bool) {
-        guard granted != self.granted else { return }
-        self.granted = granted
-        onChange?()
+    /// A new visible window, in front.
+    func open(_ title: String) { onScreenTitles.insert(title, at: 0) }
+
+    /// The user minimises a visible window; it goes last among the minimised ones.
+    func minimise(_ title: String) {
+        guard let index = onScreenTitles.firstIndex(of: title) else { return }
+        onScreenTitles.remove(at: index)
+        minimisedTitles.append(title)
+    }
+
+    func close(_ title: String) {
+        onScreenTitles.removeAll { $0 == title }
+        minimisedTitles.removeAll { $0 == title }
+    }
+
+    func id(_ title: String) -> WindowID {
+        if let id = ids[title] { return id }
+        let id = WindowID(rawValue: UInt32(1000 + ids.count))
+        ids[title] = id
+        return id
+    }
+
+    func read(frontmost: AppEntry?) -> FrontmostWindows {
+        reads += 1
+        listed = []
+        guard let frontmost else { return .noApp }
+        guard answers else { return .app(frontmost, visible: [], minimised: []) }
+        listed = Set(onScreenTitles + minimisedTitles)
+        let visible = onScreenTitles.enumerated().map { index, title in
+            AppWindow(id: id(title), title: self.title(of: title), isFullScreen: index == 0 && fullScreenFront)
+        }
+        let minimised = minimisedTitles.map { AppWindow(id: id($0), title: title(of: $0)) }
+        return .app(frontmost, visible: visible, minimised: minimised)
+    }
+
+    /// The last first, each to the front of the visible stack; a minimised one is restored. Closed windows and windows
+    /// the latest read did not list are skipped.
+    func raise(_ frontToBack: [WindowID]) {
+        raised.append(frontToBack)
+        guard answers, !dropsRaises else { return }
+        for id in frontToBack.reversed() {
+            guard let name = ids.first(where: { $0.value == id })?.key, listed.contains(name) else { continue }
+            if let index = minimisedTitles.firstIndex(of: name) {
+                minimisedTitles.remove(at: index)
+            } else if let index = onScreenTitles.firstIndex(of: name) {
+                onScreenTitles.remove(at: index)
+            } else {
+                continue
+            }
+            onScreenTitles.insert(name, at: 0)
+        }
+    }
+
+    private func title(of name: String) -> String { untitled.contains(name) ? "" : name }
+}
+
+@MainActor final class InMemoryPermissions: Permissions {
+    var onChange: (@MainActor () -> Void)?
+    private(set) var granted: Set<Permission>
+    /// Every `ask(_:)`, in order.
+    private(set) var asks: [Permission] = []
+    /// Runs inside `ask(_:)` so a test can observe what is stored at that moment.
+    var onAsk: (() -> Void)?
+
+    init(granted: Set<Permission> = []) { self.granted = granted }
+
+    func isGranted(_ permission: Permission) -> Bool { granted.contains(permission) }
+
+    func ask(_ permission: Permission) {
+        asks.append(permission)
+        onAsk?()
+    }
+
+    /// The user flips the switch in System Settings. Pushed synchronously on a real change only, as the real adapter
+    /// does; `push: false` changes it silently, as when the system withholds its broadcast.
+    func set(_ permission: Permission, granted: Bool, push: Bool = true) {
+        guard granted != self.granted.contains(permission) else { return }
+        if granted { self.granted.insert(permission) } else { self.granted.remove(permission) }
+        if push { onChange?() }
     }
 }
 

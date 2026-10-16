@@ -8,8 +8,14 @@ import Observation
 @MainActor @Observable
 public final class Launcher {
     public private(set) var rows: [GestureRow] = []
-    /// Non-nil exactly while a swipe shows the switcher. Written only by `swipe(_:)` and `reconcile()`.
-    public private(set) var switcher: Switcher?
+    /// Non-nil exactly while a swipe shows the switcher.
+    public var switcher: Switcher? {
+        if case .apps(let switcher)? = shown { switcher } else { nil }
+    }
+    /// Non-nil for the whole of a window swipe: it always shows.
+    public var windowSwitcher: WindowSwitcher? {
+        if case .windows(let switcher)? = shown { switcher } else { nil }
+    }
     /// Every app picker's list. Replaced only by a scan; never emptied while one runs.
     public private(set) var installedApps: InstalledApps
     public var isWindowOpen: Bool { window != .closed }
@@ -17,6 +23,7 @@ public final class Launcher {
     public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
     public var isSwipeOn: Bool { settings.isSwipeOn }
     public var isSwapOn: Bool { settings.isSwapOn }
+    public var isWindowSwipeOn: Bool { settings.isWindowSwipeOn }
     /// The window's hint, which mentions swiping only while the swipe is on.
     public var gestureHint: String { Copy.gestureHint(for: settings.handMode, swipe: settings.isSwipeOn) }
     /// One derivation, read by the icon, the notice and the fire guard.
@@ -26,6 +33,14 @@ public final class Launcher {
 
     /// Drives the Accessibility hint. Deliberately not part of `activity`, so the icon never reads it.
     public private(set) var isAccessibilityGranted = false
+    /// Read with Accessibility on every push, so a window swipe never reads it.
+    private var isScreenRecordingGranted = false
+
+    /// nil while the window swipe setting is off or Screen Recording is granted.
+    public var screenRecordingHint: ScreenRecordingHint? {
+        guard settings.isWindowSwipeOn, !isScreenRecordingGranted else { return nil }
+        return settings.hasAskedForScreenRecording ? .openSettings : .ask
+    }
 
     /// `.heldOpen` is the first-launch window under the system's Accessibility prompt. The prompt takes focus when it
     /// appears and its buttons are outside clicks; both would close an ordinary window before the user saw the hint.
@@ -33,25 +48,30 @@ public final class Launcher {
     private enum Window: Equatable { case closed, open, heldOpen }
 
     private var window: Window = .closed
+    /// At most one switcher of either kind at a time. Written only by `swipe(_:)`, `windowSwipe(_:)` and `reconcile()`.
+    private enum ShownSwitcher: Equatable { case apps(Switcher), windows(WindowSwitcher) }
+
+    private var shown: ShownSwitcher?
+    @ObservationIgnored private var windowSwipesBegun = 0
     private var settings: Settings
     private var connected: [Trackpad] = []
     private var preferenceValues: [TrackpadKind: TrackpadPreferenceValues] = [:]
     @ObservationIgnored private let isFirstLaunch: Bool
     @ObservationIgnored private let hardware: any TrackpadHardware
     @ObservationIgnored private let preferences: any TrackpadPreferences
-    @ObservationIgnored private let access: any AccessibilityPermission
+    @ObservationIgnored private let permissions: any Permissions
     @ObservationIgnored private let system: any SystemActions
     @ObservationIgnored private let catalog: AppCatalog
     @ObservationIgnored private let scanner: any AppScanner
     @ObservationIgnored private let store: SettingsStore
 
     public init(
-        hardware: any TrackpadHardware, preferences: any TrackpadPreferences, access: any AccessibilityPermission,
+        hardware: any TrackpadHardware, preferences: any TrackpadPreferences, permissions: any Permissions,
         system: any SystemActions, catalog: AppCatalog, scanner: any AppScanner, store: SettingsStore
     ) {
         self.hardware = hardware
         self.preferences = preferences
-        self.access = access
+        self.permissions = permissions
         self.system = system
         self.catalog = catalog
         self.scanner = scanner
@@ -69,6 +89,7 @@ public final class Launcher {
             switch event {
             case .gesture(let fired): fire(fired)
             case .swipe(let event): swipe(event)
+            case .windowSwipe(let event): windowSwipe(event)
             case .swap(let event): swap(event)
             case .trackpadsChanged: reconcile(restart: true)
             }
@@ -76,14 +97,14 @@ public final class Launcher {
         scanner.onScan = { [unowned self] in installedApps = $0 }
         scanner.scan()
         preferences.onChange = { [unowned self] in reconcile() }
-        access.onChange = { [unowned self] in reconcile() }
+        permissions.onChange = { [unowned self] in reconcile() }
         reconcile()
         if isFirstLaunch {
             // Both effects come before the first save: a crash in between repeats them next time instead of
             // losing them.
             system.registerLoginItem()
             let prompting = !isAccessibilityGranted
-            if prompting { access.prompt() }
+            if prompting { permissions.ask(.accessibility) }
             store.save(settings)
             window = prompting ? .heldOpen : .open
         }
@@ -132,12 +153,30 @@ public final class Launcher {
         reconcile()
     }
 
+    /// Window swipe switch. Saved at once; the recognizers are rebuilt, so the next slide obeys it and a window swipe in
+    /// progress ends.
+    public func setWindowSwipe(on: Bool) {
+        guard on != settings.isWindowSwipeOn else { return }
+        settings.isWindowSwipeOn = on
+        store.save(settings)
+        reconcile()
+    }
+
     /// Swap switch. Saved at once; the recognizers are rebuilt, so the next thumb tap obeys it.
     public func setSwap(on: Bool) {
         guard on != settings.isSwapOn else { return }
         settings.isSwapOn = on
         store.save(settings)
         reconcile()
+    }
+
+    /// The screen recording hint's button while it asks. Records the ask and saves before asking, so a crash in
+    /// between never asks twice; a later press opens System Settings instead.
+    public func askForScreenRecording() {
+        guard screenRecordingHint == .ask else { return }
+        settings.hasAskedForScreenRecording = true
+        store.save(settings)
+        permissions.ask(.screenRecording)
     }
 
     /// Show the launcher window, re-resolve the rows and refresh the app list in the background.
@@ -159,7 +198,7 @@ public final class Launcher {
         let trackpads: [Trackpad]
         let handMode: HandMode
         let blockClicks: Bool
-        let swipes: Bool
+        let slides: Set<SlideKind>
         let swaps: Bool
     }
 
@@ -172,20 +211,23 @@ public final class Launcher {
     private func reconcile(restart: Bool = false) {
         connected = hardware.connected()
         preferenceValues = preferences.current()
-        let granted = access.isGranted()
+        let granted = permissions.isGranted(.accessibility)
         // A grant ends the hold: the hint has done its job and the user is in System Settings.
         if granted && !isAccessibilityGranted && window == .heldOpen { window = .closed }
         isAccessibilityGranted = granted
+        // Before the run guard: a Screen Recording change never re-runs the trackpads.
+        isScreenRecordingGranted = permissions.isGranted(.screenRecording)
         let active = activity.isActive
-        // Blocking needs gestures active and access granted; without either, presses are plain clicks.
+        // Blocking needs gestures active and access granted; without either, presses are plain clicks. Without access
+        // no window can be read, so a slide up or down is what it is with the window swipe setting off.
         let run = Run(
             trackpads: active ? connected : [], handMode: settings.handMode, blockClicks: active && granted,
-            swipes: settings.isSwipeOn, swaps: settings.isSwapOn)
+            slides: granted ? settings.slides : settings.slides.subtracting([.windowSwipe]), swaps: settings.isSwapOn)
         guard restart || run != lastRun else { return }
         lastRun = run
-        // Running replaces every recognizer, which ends any swipe in progress.
-        switcher = nil
-        hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, swipes: run.swipes, swaps: run.swaps)
+        // Running replaces every recognizer, which ends any swipe or window swipe in progress.
+        shown = nil
+        hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, slides: run.slides, swaps: run.swaps)
     }
 
     /// Every silent case decided here and only here: inactive, unassigned, missing.
@@ -205,21 +247,21 @@ public final class Launcher {
     private func swipe(_ event: SwipeEvent) {
         switch event.phase {
         case .began:
-            guard switcher == nil, activity.isActive else { return }
+            guard shown == nil, activity.isActive else { return }
             // With nothing to show the swipe still runs its course: the fingers stay blocked until they lift.
             let running = system.runningApps()
-            switcher = Switcher(
+            shown = Switcher(
                 frontmost: running.frontmost, running: running.apps,
-                leavingOut: settings.assignedBundleIDs, trackpad: event.trackpad)
+                leavingOut: settings.assignedBundleIDs, trackpad: event.trackpad
+            ).map(ShownSwitcher.apps)
         case .moved(let travel):
-            guard var open = switcher, open.trackpad == event.trackpad else { return }
-            let before = open.selected
-            open.follow(travel)
-            switcher = open
-            for _ in 0..<abs(open.selected - before) { hardware.playFeedback(.lightTick, on: event.trackpad) }
+            guard case .apps(var open)? = shown, open.trackpad == event.trackpad else { return }
+            let crossed = open.selection.follow(travel)
+            shown = .apps(open)
+            for _ in 0..<crossed { hardware.playFeedback(.lightTick, on: event.trackpad) }
         case .ended:
-            guard let open = switcher, open.trackpad == event.trackpad else { return }
-            switcher = nil
+            guard case .apps(let open)? = shown, open.trackpad == event.trackpad else { return }
+            shown = nil
             // Lifting on the frontmost app is silent and leaves the window as it was.
             guard !open.selectsFrontmost else { return }
             // An app that quit meanwhile is never relaunched.
@@ -230,7 +272,46 @@ public final class Launcher {
             system.bringToFront(open.selectedApp)
             window = .closed
         case .cancelled:
-            if switcher?.trackpad == event.trackpad { switcher = nil }
+            if case .apps(let open)? = shown, open.trackpad == event.trackpad { shown = nil }
+        }
+    }
+
+    /// The one place a window swipe becomes effects. Never the launch animation.
+    private func windowSwipe(_ event: SwipeEvent) {
+        switch event.phase {
+        case .began:
+            // A slide up or down is a window swipe only when the one read lists two or more rows. Unconfirmed, the
+            // recognizer makes it the slide the setting off would have made, before its next frame.
+            guard activity.isActive, let content = WindowSwitcher.Content(system.frontmostWindows()) else { return }
+            hardware.confirmWindowSwipe(on: event.trackpad)
+            // One switcher at a time: a second trackpad's window swipe runs its course with none, as its swipe would.
+            guard shown == nil else { return }
+            windowSwipesBegun += 1
+            // The grant as the last TCC push left it: a fresh preflight would cost about 4 ms here.
+            shown = .windows(
+                WindowSwitcher(
+                    content, showsPreviews: isScreenRecordingGranted, serial: windowSwipesBegun,
+                    trackpad: event.trackpad))
+        case .moved(let travel):
+            guard case .windows(var open)? = shown, open.trackpad == event.trackpad else { return }
+            let crossed = open.selection.follow(travel)
+            shown = .windows(open)
+            for _ in 0..<crossed { hardware.playFeedback(.lightTick, on: event.trackpad) }
+            // Only a visible window comes forward while sliding: raising a minimised one would restore it.
+            if crossed > 0, let window = open.selectedVisibleWindow { system.raiseWindows([window]) }
+        case .ended:
+            guard case .windows(let open)? = shown, open.trackpad == event.trackpad else { return }
+            shown = nil
+            // The second read: the lift follows the windows as they are now, whatever the raises while sliding did.
+            let lift = open.lift(now: system.frontmostWindows())
+            if lift.playsHaptic {
+                hardware.playFeedback(.gesture, on: event.trackpad)
+                window = .closed
+            }
+            system.raiseWindows(lift.raises)
+        case .cancelled:
+            // The windows stay as they are: no reordering, silent.
+            if case .windows(let open)? = shown, open.trackpad == event.trackpad { shown = nil }
         }
     }
 

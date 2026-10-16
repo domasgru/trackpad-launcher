@@ -38,8 +38,8 @@ struct LaunchTuning: Equatable, Sendable {
     var forceReduceMotion = false
     /// Switcher swipes move like the cursor, with macOS's acceleration; off, one millimetre of finger is one of travel.
     var swipeFollowsCursor = true
-    /// Cursor points of travel per icon. The icon pitch makes the highlight move exactly like the cursor over the row.
-    var swipePointsPerIcon = SwipeTravel.shippedPointsPerIcon
+    /// Cursor points of travel per step. The icon pitch makes the highlight move exactly like the cursor over the row.
+    var swipePointsPerStep = SwipeTravel.shippedPointsPerStep
     /// The tracking speed swipes use, 0...3; −1 uses System Settings' value.
     var swipeTrackingSpeed = -1.0
 
@@ -79,7 +79,7 @@ extension LaunchTuning: Codable {
         tiltCurve = try value(.tiltCurve, s.tiltCurve)
         forceReduceMotion = try value(.forceReduceMotion, s.forceReduceMotion)
         swipeFollowsCursor = try value(.swipeFollowsCursor, s.swipeFollowsCursor)
-        swipePointsPerIcon = try value(.swipePointsPerIcon, s.swipePointsPerIcon)
+        swipePointsPerStep = try value(.swipePointsPerStep, s.swipePointsPerStep)
         swipeTrackingSpeed = try value(.swipeTrackingSpeed, s.swipeTrackingSpeed)
     }
 }
