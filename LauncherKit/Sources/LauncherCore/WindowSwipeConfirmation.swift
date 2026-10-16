@@ -4,8 +4,9 @@ import Foundation
 /// `TrackpadEvent.init(_:on:)`: every event reaches `onEvent` through `deliver`, and a start comes back with its answer
 /// for the adapter to send to that trackpad's recognizer.
 @MainActor public final class WindowSwipeConfirmation {
-    /// The start being handed over now, and whether it was confirmed so far. nil outside a start's delivery.
-    private var asking: (trackpad: TrackpadID, confirmed: Bool)?
+    /// The trackpad whose start is being handed over now, and whether that start was confirmed so far. nil outside a
+    /// start's delivery.
+    private var startBeingHandled: (trackpad: TrackpadID, confirmed: Bool)?
 
     public init() {}
 
@@ -17,16 +18,16 @@ import Foundation
             handler?(event)
             return nil
         }
-        let outer = asking
-        asking = (start.trackpad, false)
-        defer { asking = outer }
+        let outer = startBeingHandled
+        startBeingHandled = (start.trackpad, false)
+        defer { startBeingHandled = outer }
         handler?(event)
-        return asking?.confirmed ?? false
+        return startBeingHandled?.confirmed ?? false
     }
 
     /// What the adapter's `confirmWindowSwipe(on:)` calls. Counts only while `deliver` hands over a start from
     /// `trackpad`; any other call does nothing, and nothing carries over to the next start.
     public func confirm(on trackpad: TrackpadID) {
-        if asking?.trackpad == trackpad { asking?.confirmed = true }
+        if startBeingHandled?.trackpad == trackpad { startBeingHandled?.confirmed = true }
     }
 }

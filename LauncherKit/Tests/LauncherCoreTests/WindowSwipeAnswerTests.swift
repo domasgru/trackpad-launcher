@@ -11,7 +11,7 @@ private struct AnswerHand {
         case sideways
         /// The thumb lifts, taps the corner while the fingers rest, and the fingers lift.
         case thumbTaps
-        /// On the frame after the start the thumb rolls 30 mm out of the corner; a new thumb taps the corner while the
+        /// On the frame after the start the thumb rolls 20 mm out of the corner; a new thumb taps the corner while the
         /// fingers rest, and they all lift.
         case thumbRolls
 
@@ -72,7 +72,7 @@ private struct AnswerHand {
                 + Array(repeating: fingers(dy: 5), count: 2)
                 + [[]]
         case .thumbRolls:
-            let rolled = h.contact(9, atMM: 40, 10)
+            let rolled = h.contact(9, atMM: 30, 10)
             let newThumb = h.contact(10, atMM: 10, 10)
             after = Array(repeating: [rolled] + fingers(dy: 5), count: 5)
                 + [[rolled, h.contact(10, .landing, atMM: 10, 10)] + fingers(dy: 5)]

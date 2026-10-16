@@ -76,3 +76,13 @@
 - plan-reviewer: R13's "a haptic MUST NOT play" against the swap a declined slide's fingers allow → read as the slide's own haptic, recorded in the trace and as open question 17.
 - plan-reviewer: `confirmWindowSwipe(on:)` sketched in a protocol extension, which would not dispatch to the adapter → written inside the protocol body.
 - plan-reviewer: requirement tags (S5 missing R2 and R13, T68 missing R13), stale docs (architecture's "a window swipe reads", the *Tap* entry without Accessibility, the renamed `SystemPermissionsTests`, the "same hop" bullet) → fixed.
+
+## Implement (change 1: window swipe only with two or more windows)
+- S5 committed (fc2e216). Departure: `FrameTime` made `Equatable` so an answer can name its start; `.trackpadsChanged` events still reach `onEvent` directly (no reply).
+- S6 committed (a88b1c3), with `docs/product-overview.md` updated. Departures: `FrontmostWindows.app` removed (its one user was the deleted Accessibility row); T70 compares apps brought to front by name (each world has its own temp folder); T72's slide after the grant re-anchors the thumb (the re-run recognizer never saw the old thumb land).
+- Open questions 14–17 kept at the plan's defaults, as instructed. No `.claude/skills/verify-*` → verification-skill step skipped.
+- Full gate after S6: green (480 tests, app builds).
+- implementation-reviewer (fixed point 8c3f56f): no requirement missing or wrong.
+- Fixed: T40(b) now shows the second trackpad's slide blocked until its lift (thumb rested 4 s, MacBook hand lifted, unphased probe drops then passes); T68 and T73 split into one test per case; `asking` → `startBeingHandled`, `answered` → `latestAnswer`; T67's thumb rolls 20 mm as planned; an unused binding from S1 in `SwapRecognizerTests` removed (build warning).
+- Declined: moving `WindowSwipeConfirmation` out of `LauncherCore`, a `WindowSwipeAnswer` parameter, a non-optional `deliver` result (all plan decisions); the one-line answer sites, per-driver `answering:`, the two `isConfirmed` checks and the forwarding `confirmWindowSwipe(on:)` (small or port-required).
+- Full gate after fixes: green (486 tests, no warnings, app builds).

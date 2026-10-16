@@ -44,9 +44,11 @@ final class DeviceSession: Sendable {
 
     /// Frame thread.
     func receive(_ frame: TouchFrame) {
-        let answered = answer.withLock { $0 }
+        let latestAnswer = answer.withLock { $0 }
         let recognition = recognizer.withLock {
-            if let answered { $0.answerWindowSwipe(began: answered.began, isWindowSwipe: answered.isWindowSwipe) }
+            if let latestAnswer {
+                $0.answerWindowSwipe(began: latestAnswer.began, isWindowSwipe: latestAnswer.isWindowSwipe)
+            }
             let recognition = $0.step(frame)
             // Each slide follows the cursor's acceleration at the tracking speed set when it starts. Travel is 0 on
             // the frame a slide begins, so the next frame is the first to use it.

@@ -21,14 +21,22 @@ import LauncherCore
         return (answer, handled)
     }
 
-    @Test func aStartIsAWindowSwipeOnlyWhenItsHandlerConfirmsItsOwnTrackpad() {
-        let confirmation = WindowSwipeConfirmation()
-        let own = deliver(start(on: macBook), confirming: macBook, through: confirmation)
-        let other = deliver(start(on: macBook), confirming: magic, through: confirmation)
-        let none = deliver(start(on: macBook), confirming: nil, through: confirmation)
-        #expect(own.answer == true && own.handled == 1)
-        #expect(other.answer == false && other.handled == 1)
-        #expect(none.answer == false && none.handled == 1)
+    @Test func aStartWhoseHandlerConfirmsItsOwnTrackpadIsAWindowSwipe() {
+        let delivered = deliver(start(on: macBook), confirming: macBook, through: WindowSwipeConfirmation())
+        #expect(delivered.answer == true)
+        #expect(delivered.handled == 1)
+    }
+
+    @Test func aStartWhoseHandlerConfirmsAnotherTrackpadIsNoWindowSwipe() {
+        let delivered = deliver(start(on: macBook), confirming: magic, through: WindowSwipeConfirmation())
+        #expect(delivered.answer == false)
+        #expect(delivered.handled == 1)
+    }
+
+    @Test func aStartWhoseHandlerConfirmsNothingIsNoWindowSwipe() {
+        let delivered = deliver(start(on: macBook), confirming: nil, through: WindowSwipeConfirmation())
+        #expect(delivered.answer == false)
+        #expect(delivered.handled == 1)
     }
 
     @Test func aStartWithNoHandlerIsNoWindowSwipe() {

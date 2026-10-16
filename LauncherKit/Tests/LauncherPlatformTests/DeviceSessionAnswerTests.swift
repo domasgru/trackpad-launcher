@@ -56,50 +56,73 @@ import Testing
         return (frames, slides)
     }
 
-    enum Replying: CaseIterable {
-        case confirmAtOnce, declineAtOnce, never, confirmAfterTheSecondStart
+    /// A frame that reported a window swipe start, and that start's reply.
+    private typealias Start = (frame: Int, reply: @Sendable (Bool) -> Void)
+
+    /// What a session did over `frames()`: each frame's `blocksClicks`, and the frames that reported a window swipe
+    /// start, with each start's reply.
+    private struct Played {
+        var blocks: [Bool] = []
+        var starts: [Start] = []
+        /// Whether every delivered event carried a reply exactly when it was a window swipe start.
+        var onlyStartsCarryAReply = true
+
+        var blockedFrames: [Int] { blocks.indices.filter { blocks[$0] } }
     }
 
-    @Test(arguments: Replying.allCases)
-    func aWindowSwipeBlocksClicksOnlyOnceItsOwnStartIsConfirmed(replying: Replying) {
+    /// Plays `frames()` through a fresh session. After each frame, `answering` gets that frame's index and every start
+    /// so far, and may call their replies, before the session's `blocksClicks` is read.
+    private func play(answering: (_ frame: Int, _ starts: [Start]) -> Void) -> Played {
         let delivered = Delivered()
         let session = session(delivered)
-        let (frames, slides) = frames()
-        var blocks: [Bool] = []
-        var starts: [Int] = []
-        for (index, frame) in frames.enumerated() {
+        var played = Played()
+        for (index, frame) in frames().all.enumerated() {
             let before = delivered.all.count
             session.receive(frame)
-            let new = delivered.all.dropFirst(before)
-            for (event, reply) in new {
+            for (event, reply) in delivered.all.dropFirst(before) {
                 let isStart = if case .windowSwipe(let e) = event, e.phase == .began { true } else { false }
-                #expect((reply != nil) == isStart, "frame \(index)")
-                if isStart { starts.append(index) }
+                if (reply != nil) != isStart { played.onlyStartsCarryAReply = false }
+                if let reply { played.starts.append((index, reply)) }
             }
-            if let reply = new.first?.reply {
-                switch replying {
-                case .confirmAtOnce: if starts.count == 1 { reply(true) }
-                case .declineAtOnce: if starts.count == 1 { reply(false) }
-                case .never, .confirmAfterTheSecondStart: break
-                }
-            }
-            if replying == .confirmAfterTheSecondStart, starts.count == 2, starts[1] == index {
-                delivered.all.first { $0.reply != nil }?.reply?(true)
-            }
-            blocks.append(session.blocksClicks)
+            answering(index, played.starts)
+            played.blocks.append(session.blocksClicks)
         }
-        #expect(starts.count == 2)
-        guard starts.count == 2 else { return }
-        let lift = slides[0].upperBound - 2
-        switch replying {
-        case .confirmAtOnce:
-            #expect(blocks[slides[0]].enumerated().allSatisfy { i, blocked in
-                blocked == (slides[0].lowerBound + i > starts[0] && slides[0].lowerBound + i < lift)
-            })
-        case .declineAtOnce, .never:
-            #expect(!blocks.contains(true))
-        case .confirmAfterTheSecondStart:
-            #expect(!blocks[slides[1]].contains(true))
+        return played
+    }
+
+    /// The frame the first slide's fingers lift on.
+    private var firstLift: Int { frames().slides[0].upperBound - 2 }
+
+    @Test func eachSlideReportsOneStartAndOnlyAStartCarriesAReply() {
+        let played = play { _, _ in }
+        #expect(played.starts.count == 2)
+        #expect(played.onlyStartsCarryAReply)
+    }
+
+    @Test func aStartConfirmedAtOnceBlocksClicksFromTheNextFrameUntilTheLift() {
+        let played = play { frame, starts in
+            if starts.count == 1, starts[0].frame == frame { starts[0].reply(true) }
         }
+        let start = played.starts.first?.frame ?? -1
+        #expect(played.blockedFrames == Array((start + 1)..<firstLift))
+    }
+
+    @Test func aStartDeclinedAtOnceNeverBlocksClicks() {
+        let played = play { frame, starts in
+            if starts.count == 1, starts[0].frame == frame { starts[0].reply(false) }
+        }
+        #expect(played.blockedFrames.isEmpty)
+    }
+
+    @Test func aStartNeverAnsweredNeverBlocksClicks() {
+        let played = play { _, _ in }
+        #expect(played.blockedFrames.isEmpty)
+    }
+
+    @Test func aConfirmationOfTheFirstStartArrivingAfterTheSecondStartNeverBlocksClicks() {
+        let played = play { frame, starts in
+            if starts.count == 2, starts[1].frame == frame { starts[0].reply(true) }
+        }
+        #expect(played.blockedFrames.isEmpty)
     }
 }

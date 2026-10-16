@@ -268,17 +268,34 @@ import LauncherCore
 
     @Test func aWindowSwipeFromASecondTrackpadWhileTheAppSwitcherIsUpRunsItsCourseWithNoSwitcher() {
         let world = World.windowWorld(visible: ["Docs", "Mail"], attached: [.macBook14, .magicTrackpad])
-        world.swipe(3.5, lift: false)
+        let macBookHand = world.swipe(3.5, lift: false)
         let appSwitcher = world.launcher.switcher
         #expect(appSwitcher != nil)
 
-        let magic = TouchScript(Trackpad.magicTrackpad.surface).thumb(atMM: (10, 10)).land(fingers: 2, atMM: (62, 30))
-            .slide(byMM: (0, 20))
+        let magicID = Trackpad.magicTrackpad.id
+        let magic = TouchScript(Trackpad.magicTrackpad.surface).thumb(atMM: (10, 10)).wait(.seconds(4))
+            .land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 20))
         let history = world.playFrameByFrame(magic, on: .magicTrackpad)
 
         #expect(history.allSatisfy { $0.windowSwitcher == nil && $0.switcher == appSwitcher })
         #expect(world.system.windows.reads == 1)
         #expect(world.hardware.windowSwipeAnswers == [true])
+
+        let macBookLift = world.playFrameByFrame(macBookHand.lift().liftThumb())
+        #expect(world.launcher.switcher == nil)
+
+        let sliding = magic.slide(byMM: (0, 10))
+        let slidingHistory = world.playFrameByFrame(sliding, on: .magicTrackpad) {
+            (windowSwitcher: world.launcher.windowSwitcher, probe: world.hardware.scroll(.unphased))
+        }
+        #expect(!slidingHistory.isEmpty)
+        #expect(slidingHistory.allSatisfy { $0.probe == .drop })
+
+        let liftHistory = world.playFrameByFrame(sliding.lift(), on: .magicTrackpad)
+        #expect(world.hardware.scroll(.unphased) == .pass)
+        let everyFrame = (history + macBookLift + liftHistory).map(\.windowSwitcher) + slidingHistory.map(\.windowSwitcher)
+        #expect(everyFrame.allSatisfy { $0 == nil })
+        #expect(!world.hardware.pulses.contains { $0.trackpad == magicID })
     }
 
     @Test func whileGesturesAreInactiveAWindowSwipeShowsNothingEvenIfOneWasInFlight() {

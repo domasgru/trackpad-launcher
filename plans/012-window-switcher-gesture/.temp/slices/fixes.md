@@ -1,77 +1,71 @@
-# Fixes after review
+# Fixes after review of S5 and S6
 
-The branch `feature/012-window-switcher-gesture` implements the window swipe (plan 012) in four committed slices. The full gate is green: `Scripts/test.sh` gives 473 tests passing, and the app bundle builds. The implementation reviewer raised the findings below, and the orchestrator decided to fix each one. Make each fix, keep the suite green and add no new warnings. Do not commit, and do not edit `plans/` or `docs/`. All paths are under `LauncherKit/`.
+The branch `feature/012-window-switcher-gesture` adds two slices on top of the earlier work:
+- **S5** (`fc2e216`): a window swipe's start waits for the model's answer.
+- **S6** (`a88b1c3`): a slide up or down is a window swipe only with two or more windows.
 
-## F1. Off-main work goes through an explicitly concurrent function
+The full gate is green: `Scripts/test.sh` gives 480 tests passing, and the app builds. The implementation reviewer raised the findings below, and the orchestrator decided to fix each one. Make each fix, keep the suite green, and add no new warnings. Do not commit, and do not edit `plans/` or `docs/`. All paths are under `LauncherKit/`.
 
-- **Where:** `Sources/LauncherPlatform/FrontmostAppWindows.swift`, in `init()` at about lines 38–40. The window-list warm-up uses `DispatchQueue.global(qos: .utility).async { _ = CGWindowListCopyWindowInfo(...) }`.
-- **Rule:** `docs/architecture.md` Concurrency says: "Work that would delay a click (folder scans, Spotlight reads, icon drawing) runs off the main actor in explicitly concurrent functions". The repo's form for this is `@concurrent private static func … async`, as in:
-  - `SystemAppScanner.read`
-  - `LaunchOverlay.renderOffMain`
-  - `AppIcons.renderChangedOffMain`
+## F1. T40(b) proves the second trackpad's slide runs its course blocked
+
+- **Where:** `Tests/LauncherCoreTests/WindowSwitcherOnScreenTests.swift`, `aWindowSwipeFromASecondTrackpadWhileTheAppSwitcherIsUpRunsItsCourseWithNoSwitcher` (about line 269). It checks no window switcher, the app switcher unchanged, `reads == 1` and the answer `[true]`. It never shows the slide being blocked, and the Magic Trackpad hand never lifts.
+- **Rule:** plan row T40(b), "the Magic Trackpad's start is read once and answered true, so it runs its course blocked with no switcher of its own". The tdd standard requires a test to exercise the behaviour its row names.
+- **Fix:** extend the row so the Magic Trackpad's own blocking is observable apart from the MacBook's swipe, which also blocks, because the merged flag covers both.
+  1. Let the Magic Trackpad's thumb rest 4 s (`wait(.seconds(4))`) before its fingers land, so its thumb rules no longer block clicks.
+  2. After its window swipe is confirmed, lift the MacBook hand. The app switcher's swipe ends.
+  3. Show that `world.hardware.scroll(.unphased) == .drop` while the Magic Trackpad's fingers keep sliding. Only its confirmed window swipe can block now.
+  4. Lift the Magic Trackpad hand. Show the probe now passes, no window switcher appeared on any frame, and the Magic Trackpad produced no pulse.
+  5. Keep the existing assertions.
+  6. If the MacBook lift brings an app to the front with a haptic, assert only what belongs to the Magic Trackpad: pulses on its id.
+
+## F2. Parameterise the tests that cover several cases in one body
+
+- **Where:**
+  - `Tests/LauncherPlatformTests/DeviceSessionAnswerTests.swift`, about lines 64–100. One test switches on `replying` in both its setup and its assertions to cover T68 (a) to (d).
+  - `Tests/LauncherCoreTests/WindowSwipeConfirmationTests.swift`, about lines 24–32. One body checks three cases.
+- **Rule:** the tdd standard says one logical assertion per test, and tests describe what, not how. Other rows in these files already use `@Test(arguments:)`.
 - **Fix:**
-  1. Replace the dispatch with a `@concurrent private static func warmWindowList() async` that makes the call.
-  2. Start it from `init` with `Task { await Self.warmWindowList() }`.
-  3. Keep the doc comment accurate.
-  4. Remember the source scan bans `asyncAfter`, `Timer` and `Task.sleep`.
+  1. Split each into separate tests, or `@Test(arguments:)` rows, so each case has its own name and its own expectations.
+  2. For T68, give each reply case its own test, with its expected `blocksClicks` sequence stated in that test. No switch in the assertions.
+  3. Keep the shared frame building in a helper.
 
-## F2. Preview capture runs in an explicitly concurrent function
+## F3. Names that say what they hold
 
-- **Where:** `Sources/LauncherUI/PreviewCapture.swift`, at about lines 19–40. `pictures(of:fitting:)` starts an unstructured `Task {}` whose body does the listing and the concurrent captures inline.
-- **Rule:** the same rule as F1, "explicitly concurrent functions, including inside `LauncherUI`".
+- **Where:**
+  - `Sources/LauncherCore/WindowSwipeConfirmation.swift`, the stored property `asking` (about line 8).
+  - `Sources/LauncherPlatform/FrameStream.swift`, the slot `answered` (about line 47).
+- **Rule:** baseline smell "Mysterious Name".
 - **Fix:**
-  1. Move the body (the `SCShareableContent` listing, then the task group of captures yielding into the continuation) into a `@concurrent private static func capture(_ wanted: Set<UInt32>, width: Int, height: Int, into continuation: AsyncStream<(WindowID, CGImage)>.Continuation) async`. Use any equivalent signature that compiles cleanly under Swift 6.
-  2. Have the `Task` only call that function.
-  3. Keep the behaviour the same: cancelling on termination stops the captures, and `finish()` runs at the end.
+  1. Rename `asking` to say it is the trackpad whose start is being handed over, for example `handingOver` or `startBeingHandled`, with the doc comment matching.
+  2. Rename `answered` to `latestAnswer`, keeping its writer and reader comment.
 
-## F3. The window-number fallback also covers a window whose private lookup fails
+## F4. T67's thumb rolls 20 mm, as the plan says
 
-- **Where:** `Sources/LauncherPlatform/FrontmostAppWindows.swift`, in `read()` at about lines 71–77. The fallback `Self.number(of:among:)` runs only when `getWindow == nil`. If the private symbol exists but fails for one window, that window gets no number and silently drops out of the list.
-- **Rule:** the plan's adapter design, step 4, says: "Number: _AXUIElementGetWindow, else Self.number(of:among:) against the pid's window-list entries."
-- **Fix:**
-  1. After the per-window loop, if any raw window has `number == nil`, read `Self.listedWindows(of: pid)` once.
-  2. Fill each nil number with `Self.number(of:among:)`.
-  3. Keep the single window-list read: do no read when every number came from the private call.
+- **Where:** `Tests/LauncherCoreTests/WindowSwipeAnswerTests.swift`, the `.thumbRolls` hand and its doc comment (about lines 14 and 74). The thumb rolls 30 mm.
+- **Rule:** plan row T67 (iv), "on the frame after the start the thumb rolls 20 mm out of the corner".
+- **Fix:** roll 20 mm.
+  - If 20 mm from the thumb's landing point does not leave the anchor corner on the surface the test uses, keep the smallest distance that does.
+  - In that case, say in a short comment why it is not 20, and report it.
 
-## F4. The panel's row count uses the rule constant
+## F5. An unused binding the branch introduced
 
-- **Where:** `Sources/LauncherUI/WindowSwitcherPanel.swift`, at about line 31, which reads `rowViews = (0..<10).map { … }`.
-- **Rule:** the plan puts the cut in `GestureRules.windowSwitcherMaxRows`. A magic number duplicated in the shell drifts from the rule.
-- **Fix:** use `(0..<GestureRules.windowSwitcherMaxRows)`.
+- **Where:** `Tests/LauncherCoreTests/SwapRecognizerTests.swift:84`, `let thumb = h.contact(9, atMM: 10, 10)`. It is never used, and the compiler warns on every build. The binding came in with this branch's S1.
+- **Rule:** the gate must add no warnings. Also baseline smell "Dead Code".
+- **Fix:** remove the binding, or use it in place of the repeated literal if that is clearly what was meant. Confirm that `Scripts/test.sh` builds with no warnings from the test targets.
 
-## F5. Remove the unused overlay present path
+## Declined, for the record (do not change)
 
-- **Where:** `Sources/LauncherUI/OverlayPanel.swift`, at about lines 12 and 51–55.
-  - `present(animated:)` has one caller, `SwitcherPresenter.swift:139`, which passes `false`.
-  - `OverlayAppear.fade` is used only by that unused branch.
-- **Rule:** this is speculative generality in the review's code-smell baseline. The window switcher already uses `present(appear:)`.
-- **Fix:**
-  1. Delete `present(animated:)` and `OverlayAppear.fade`.
-  2. `SwitcherPresenter` calls `panel.present(appear: nil)`.
-  3. Update the doc comments on `OverlayPanel` so they describe only `present(appear:)`.
-
-## F6. A test name says what, not how
-
-- **Where:** `Tests/LauncherCoreTests/WindowSwitchingTests.swift:185`, `theLiftReadsTheWindowsAgainSoItDoesNotDependOnTheRaisesWhileSliding` (T53).
-- **Rule:** `tests.md` flags a "test name [that] describes HOW not WHAT".
-- **Fix:** rename it to what the user sees, for example `liftingOrdersTheWindowsEvenWhenRaisesWhileSlidingWereIgnored`. Keep its assertions; the `reads == 2` row is part of the plan's T53.
-
-## F7. T19 checks "nothing read before the crossing frame" directly
-
-- **Where:** `Tests/LauncherCoreTests/WindowSwitcherOnScreenTests.swift`, the T19 test near line 18, which uses `playFrameByFrame`.
-- **Rule:** the plan's T19 says: "before the crossing frame `windowSwitcher` is nil and nothing was read". The reviewer found the read check is only indirect.
-- **Fix:**
-  1. Assert `world.system.windows.reads == 0` on every frame before the begin frame. The cleanest way is to have the frame-by-frame history also record `reads`, or to use the observer variant of the frame-by-frame player that S3 added.
-  2. Assert `reads == 1` on the begin frame.
-
-## Not fixed (decided, for the record; do not change)
-
-- **Count assertions on `reads` and `raised`.** The plan's tests name these handles as what a test observes; for example, "nothing is read" on message lifts is a design rule. They stay.
-- **`SwipePhase`, `SwipeEvent`, `SwipeTravel` and `.swiping` naming, and the two event cases instead of one `.slide` case.** These are deliberate plan decisions: the alternatives were considered and rejected.
-- **The similar `.moved` and `.cancelled` branches, the stretch-spring block in both presenters, `WindowSwitcherLook`'s `look:` parameter, the hint switch in `Copy` and `LauncherView`, the size tuples, `emptied()`, `isUnanswering`, and the missing `dismissFade`.** Each is a plan shape or a small judgement call; leave them as they are.
+- `WindowSwipeConfirmation` living in `LauncherCore`. The plan places it there on purpose, as the one main-actor rule both adapters share, like `TrackpadEvent.init(_:on:)`.
+- `answerWindowSwipe(began:isWindowSwipe:)` taking two values, and `deliver` returning `Bool?`. Both are the plan's signatures.
+- The three "answer the start before the next frame" sites. Each is a single line in a different adapter or driver.
+- The `answering:` parameter on each driver. It follows the existing per-driver defaults.
+- The two `isConfirmed` checks in the recognizer.
+- The forwarding `confirmWindowSwipe(on:)`. The port requires it.
+- The removal of `FrontmostWindows.app`. It had no users.
 
 ## Done when
 
-- F1–F7 are made.
-- `Scripts/test.sh` is green, and there are no new compiler warnings.
-- The app still builds: run `xcodegen generate` in the repo root, then `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project TrackpadLauncher.xcodeproj -scheme TrackpadLauncher -configuration Debug build CODE_SIGNING_ALLOWED=NO`.
+- [ ] F1 to F5 are made.
+- [ ] `Scripts/test.sh` is green, with no warnings from the files touched.
+- [ ] Nothing is committed.
+- [ ] Your report lists the files changed and any departure.

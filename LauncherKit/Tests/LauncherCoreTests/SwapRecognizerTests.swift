@@ -82,7 +82,6 @@ import LauncherCore
 
     @Test func theSeriesBlocksClicksAndDockSwipesWhileAnyRestFingerIsDownWhateverTheClockDid() {
         let first = [h.contact(1, atMM: 62, 45), h.contact(2, atMM: 70, 45)]
-        let thumb = h.contact(9, atMM: 10, 10)
         var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
         func step(_ ms: Int, _ touches: [Touch]) -> Recognition { recognizer.step(h.frame(atMS: ms, touches)) }
 
