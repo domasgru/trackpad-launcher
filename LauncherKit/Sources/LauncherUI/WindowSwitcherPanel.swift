@@ -47,7 +47,7 @@ final class WindowSwitcherPanel: OverlayPanel {
 
     /// Sizes the panel to `layout` with its top-left corner at `topLeft` and fills one row per entry of `rows`, each
     /// showing `icon` in its preview slot.
-    func lay(out rows: [WindowSwitcher.Row], icon: NSImage?, layout: WindowColumnLayout, topLeft: NSPoint) {
+    func lay(out rows: [WindowSwitcher.Row], icon: NSImage, layout: WindowColumnLayout, topLeft: NSPoint) {
         self.layout = layout
         shownRows = min(rows.count, rowViews.count)
         let size = CGSize(width: layout.panelSize.width, height: layout.panelSize.height)
@@ -204,7 +204,7 @@ private final class WindowRowView: NSView {
         iconView.alphaValue = 1
     }
 
-    func fill(_ row: WindowSwitcher.Row, icon: NSImage?, layout: WindowColumnLayout, font: NSFont) {
+    func fill(_ row: WindowSwitcher.Row, icon: NSImage, layout: WindowColumnLayout, font: NSFont) {
         let scale = layout.scale
         let isMinimised = if case .minimised = row { true } else { false }
         alphaValue = isMinimised ? look.minimisedAlpha : 1
@@ -212,7 +212,6 @@ private final class WindowRowView: NSView {
         slot.frame = NSRect(x: layout.inset, y: layout.inset, width: layout.slot.width, height: layout.slot.height)
         slot.layer?.cornerRadius = look.previewRadius * scale
         iconView.image = icon
-        iconView.isHidden = icon == nil
         iconView.frame = NSRect(
             x: (layout.slot.width - layout.icon) / 2, y: (layout.slot.height - layout.icon) / 2,
             width: layout.icon, height: layout.icon)

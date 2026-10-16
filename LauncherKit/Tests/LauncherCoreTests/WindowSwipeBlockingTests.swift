@@ -36,41 +36,6 @@ import LauncherCore
         #expect(world.hardware.scroll(.momentum(.began)) == .passStill)
     }
 
-    @Test func aWindowSwipeWithNothingToSwitchStaysBlockedUntilTheFingersLiftAndTheLiftIsSilent() {
-        let world = World.windowWorld(frontmost: "Finder")
-        let runs = world.hardware.runCount
-
-        let begin = thumb.wait(.seconds(4)).land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 3.5))
-        world.play(begin)
-        #expect(world.launcher.windowSwitcher?.rows == [.message("No open windows")])
-
-        world.play(begin.press().slide(byMM: (0, 12)).lift())
-        #expect(world.hardware.pressVerdicts == [.drop, .drop])
-        #expect(world.hardware.runCount == runs)
-        #expect(world.launcher.windowSwitcher == nil)
-        #expect(world.hardware.pulses.isEmpty)
-        #expect(world.system.broughtToFront.isEmpty)
-        #expect(world.system.windows.reads == 1)
-        #expect(world.hardware.scroll(.fingers(.began)) == .pass)
-    }
-
-    @Test func withoutAccessibilityAClickCancelsTheWindowSwipeSilently() {
-        let world = World.windowWorld(visible: ["Docs", "Mail", "News"], accessGranted: false)
-        let hand = world.windowSwipe(3.5, 12, lift: false)
-        #expect(world.launcher.windowSwitcher != nil)
-        let pulses = world.hardware.pulses
-
-        let pressed = hand.press().slide(byMM: (0, 12))
-        let history = world.playFrameByFrame(pressed)
-        #expect(history.allSatisfy { $0.windowSwitcher == nil })
-
-        world.play(pressed.lift())
-        #expect(world.launcher.windowSwitcher == nil)
-        #expect(world.hardware.pulses == pulses)
-        #expect(world.hardware.pressVerdicts.isEmpty)
-        #expect(world.system.windows.reads == 1)
-    }
-
     @Test func aPressOnTheFrameAfterALateStartPassesAndCancelsTheWindowSwipeSilently() {
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
         world.launcher.setAssignment(.app(world.app("Notes")), for: .one)

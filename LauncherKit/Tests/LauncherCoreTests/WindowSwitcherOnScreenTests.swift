@@ -35,15 +35,8 @@ import LauncherCore
         #expect(world.system.windows.reads == 1)
     }
 
-    @Test(arguments: ["three windows", "Finder without windows", "no frontmost app", "no Accessibility"])
-    func theWindowSwitcherShowsForTheWholeWindowSwipeAndGoesOnTheLiftFrame(world kind: String) {
-        let world: World
-        switch kind {
-        case "three windows": world = .windowWorld(visible: ["Docs", "Mail", "News"])
-        case "Finder without windows": world = .windowWorld(frontmost: "Finder")
-        case "no frontmost app": world = .windowWorld(frontmost: nil)
-        default: world = .windowWorld(visible: ["Docs", "Mail"], accessGranted: false)
-        }
+    @Test func theWindowSwitcherShowsForTheWholeWindowSwipeAndGoesOnTheLiftFrame() {
+        let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
         let first = thumb.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 24)).slide(byMM: (0, -12)).lift()
         let second = first.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 24)).lift()
 
@@ -55,9 +48,9 @@ import LauncherCore
         let ends = seen.indices.filter { seen[$0].windowSwipe == .ended }
         #expect(begins.count == 2 && ends.count == 2)
         for (began, ended) in zip(begins, ends) {
-            #expect(history[began..<ended].allSatisfy { $0.windowSwitcher != nil }, "\(kind)")
+            #expect(history[began..<ended].allSatisfy { $0.windowSwitcher != nil })
             let serial = history[began].windowSwitcher?.serial
-            #expect(history[began..<ended].allSatisfy { $0.windowSwitcher?.serial == serial }, "\(kind)")
+            #expect(history[began..<ended].allSatisfy { $0.windowSwitcher?.serial == serial })
             serials.append(serial ?? -1)
         }
         let shownAt = Set(begins.flatMap { began in ends.first { $0 > began }.map { Array(began..<$0) } ?? [] })
@@ -83,17 +76,6 @@ import LauncherCore
         let shown = world.launcher.windowSwitcher?.rows
         #expect(shown?.map(\.title) == rows)
         #expect(shown?.filter { if case .minimised = $0 { true } else { false } }.count == max(0, 10 - visible))
-    }
-
-    @Test func aFullScreenFrontWindowIsTheOnlyRowAndRubberBandsWithoutATick() {
-        let world = World.windowWorld(visible: ["Film", "Docs", "Mail"], minimised: ["Old"], fullScreenFront: true)
-
-        world.windowSwipe(3.5, 24, lift: false)
-
-        #expect(world.launcher.windowSwitcher?.rows == [.visible(world.window("Film"), title: "Film")])
-        #expect(selected(world) == 0)
-        #expect((world.launcher.windowSwitcher?.selection.stretch ?? 0) > 0)
-        #expect(world.hardware.lightTicks.isEmpty)
     }
 
     @Test func theListIsFixedWhenTheWindowSwipeBegins() {
@@ -125,10 +107,9 @@ import LauncherCore
 
     @Test(arguments: [
         (visible: ["U1", "U2"], rows: ["Preview — Window 1", "Preview — Window 2"]),
-        (visible: ["U1"], rows: ["Preview"]),
         (visible: ["Notes.pdf", "U1"], rows: ["Notes.pdf", "Preview — Window 2"]),
     ])
-    func anUntitledWindowReadsAsTheAppNumberedByItsRowWhenThereIsMoreThanOne(visible: [String], rows: [String]) {
+    func anUntitledWindowReadsAsTheAppNumberedByItsRow(visible: [String], rows: [String]) {
         let world = World.windowWorld(visible: visible, untitled: ["U1", "U2"], frontmost: "Preview")
 
         world.windowSwipe(3.5, lift: false)
@@ -196,57 +177,6 @@ import LauncherCore
 
         world.play(pushed.slide(byMM: (0, 6.1)))
         #expect(selected(world) == 1)
-    }
-
-    @Test func oneWindowIsOneSelectedRowThatRubberBandsAtBothEnds() {
-        let world = World.windowWorld(visible: ["Letter"], frontmost: "TextEdit")
-        let down = world.windowSwipe(3.5, 30, lift: false)
-        #expect(titles(world) == ["Letter"])
-        #expect(selected(world) == 0)
-        #expect((world.launcher.windowSwitcher?.selection.stretch ?? 0) > 0)
-
-        world.play(down.slide(byMM: (0, -60)))
-        #expect(selected(world) == 0)
-        #expect((world.launcher.windowSwitcher?.selection.stretch ?? 0) < 0)
-        #expect(world.hardware.lightTicks.isEmpty)
-    }
-
-    // MARK: Nothing to switch
-
-    @Test(arguments: ["Finder without windows", "no frontmost app", "Safari not answering"])
-    func withNothingToSwitchOneRowSaysNoOpenWindows(world kind: String) {
-        let world: World
-        switch kind {
-        case "Finder without windows": world = .windowWorld(frontmost: "Finder")
-        case "no frontmost app": world = .windowWorld(frontmost: nil)
-        default:
-            world = .windowWorld(visible: ["Docs", "Mail"])
-            world.system.windows.answers = false
-        }
-
-        world.windowSwipe(3.5, lift: false)
-
-        let shown = world.launcher.windowSwitcher
-        #expect(shown?.rows == [.message("No open windows")])
-        #expect(shown?.listsWindows == false)
-        switch kind {
-        case "Finder without windows": #expect(shown?.app == world.app("Finder", in: world.coreServices))
-        case "no frontmost app": #expect(shown?.app == nil)
-        default: #expect(shown?.app == world.app("Safari"))
-        }
-    }
-
-    @Test func withoutAccessibilityOneRowAsksForItAndNothingIsBlocked() {
-        let world = World.windowWorld(visible: ["Docs", "Mail"], accessGranted: false)
-
-        world.windowSwipe(3.5, 24, lift: false)
-
-        #expect(world.launcher.windowSwitcher?.rows == [.message("Allow Accessibility to switch windows")])
-        #expect(world.launcher.windowSwitcher?.app == world.app("Safari"))
-        #expect(world.hardware.lightTicks.isEmpty)
-        #expect(!world.hardware.isBlockingClicks)
-        #expect(world.hardware.scroll(.fingers(.began)) == nil)
-        #expect(!world.launcher.isAccessibilityGranted)
     }
 
     // MARK: One kind per slide
@@ -336,16 +266,19 @@ import LauncherCore
         #expect(world.launcher.windowSwitcher == nil)
     }
 
-    @Test func aWindowSwipeFromASecondTrackpadWhileTheAppSwitcherIsUpIsIgnored() {
+    @Test func aWindowSwipeFromASecondTrackpadWhileTheAppSwitcherIsUpRunsItsCourseWithNoSwitcher() {
         let world = World.windowWorld(visible: ["Docs", "Mail"], attached: [.macBook14, .magicTrackpad])
         world.swipe(3.5, lift: false)
-        #expect(world.launcher.switcher != nil)
+        let appSwitcher = world.launcher.switcher
+        #expect(appSwitcher != nil)
 
-        world.hardware.inject(.windowSwipe(SwipeEvent(phase: .began, trackpad: Trackpad.magicTrackpad.id)))
+        let magic = TouchScript(Trackpad.magicTrackpad.surface).thumb(atMM: (10, 10)).land(fingers: 2, atMM: (62, 30))
+            .slide(byMM: (0, 20))
+        let history = world.playFrameByFrame(magic, on: .magicTrackpad)
 
-        #expect(world.launcher.windowSwitcher == nil)
-        #expect(world.launcher.switcher != nil)
-        #expect(world.system.windows.reads == 0)
+        #expect(history.allSatisfy { $0.windowSwitcher == nil && $0.switcher == appSwitcher })
+        #expect(world.system.windows.reads == 1)
+        #expect(world.hardware.windowSwipeAnswers == [true])
     }
 
     @Test func whileGesturesAreInactiveAWindowSwipeShowsNothingEvenIfOneWasInFlight() {

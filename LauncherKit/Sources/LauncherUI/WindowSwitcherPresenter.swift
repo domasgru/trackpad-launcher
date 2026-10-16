@@ -62,7 +62,7 @@ final class WindowSwitcherPresenter {
         layout = WindowColumnLayout(
             rowCount: rows.count, widestTitle: panel.widestTitle(rows), displayHeight: Double(visible.height))
         panel.lay(
-            out: rows, icon: switcher.app.map { icons.icon(forSwitcher: $0) }, layout: layout,
+            out: rows, icon: icons.icon(forSwitcher: switcher.app), layout: layout,
             topLeft: NSPoint(x: visible.minX + WindowColumnLayout.margin, y: visible.maxY - WindowColumnLayout.margin))
         shownSerial = switcher.serial
         lastStretch = 0

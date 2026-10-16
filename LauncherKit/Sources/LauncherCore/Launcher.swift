@@ -218,10 +218,11 @@ public final class Launcher {
         // Before the run guard: a Screen Recording change never re-runs the trackpads.
         isScreenRecordingGranted = permissions.isGranted(.screenRecording)
         let active = activity.isActive
-        // Blocking needs gestures active and access granted; without either, presses are plain clicks.
+        // Blocking needs gestures active and access granted; without either, presses are plain clicks. Without access
+        // no window can be read, so a slide up or down is what it is with the window swipe setting off.
         let run = Run(
             trackpads: active ? connected : [], handMode: settings.handMode, blockClicks: active && granted,
-            slides: settings.slides, swaps: settings.isSwapOn)
+            slides: granted ? settings.slides : settings.slides.subtracting([.windowSwipe]), swaps: settings.isSwapOn)
         guard restart || run != lastRun else { return }
         lastRun = run
         // Running replaces every recognizer, which ends any swipe or window swipe in progress.
@@ -279,11 +280,13 @@ public final class Launcher {
     private func windowSwipe(_ event: SwipeEvent) {
         switch event.phase {
         case .began:
+            // A slide up or down is a window swipe only when the one read lists two or more rows. Unconfirmed, the
+            // recognizer makes it the slide the setting off would have made, before its next frame.
+            guard activity.isActive, let content = WindowSwitcher.Content(system.frontmostWindows()) else { return }
             hardware.confirmWindowSwipe(on: event.trackpad)
-            guard shown == nil, activity.isActive else { return }
+            // One switcher at a time: a second trackpad's window swipe runs its course with none, as its swipe would.
+            guard shown == nil else { return }
             windowSwipesBegun += 1
-            let read = system.frontmostWindows()
-            let content = isAccessibilityGranted ? WindowSwitcher.Content(read) : .accessibilityNeeded(for: read.app)
             // The grant as the last TCC push left it: a fresh preflight would cost about 4 ms here.
             shown = .windows(
                 WindowSwitcher(
@@ -299,8 +302,6 @@ public final class Launcher {
         case .ended:
             guard case .windows(let open)? = shown, open.trackpad == event.trackpad else { return }
             shown = nil
-            // A message row has nothing to switch: silent, and nothing is read.
-            guard open.listsWindows else { return }
             // The second read: the lift follows the windows as they are now, whatever the raises while sliding did.
             let lift = open.lift(now: system.frontmostWindows())
             if lift.playsHaptic {

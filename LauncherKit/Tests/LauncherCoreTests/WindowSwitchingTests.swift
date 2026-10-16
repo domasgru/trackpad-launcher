@@ -77,18 +77,13 @@ import LauncherCore
         #expect(world.launcher.windowSwitcher?.selection.selected == 0)
     }
 
-    @Test(arguments: ["back to the first row", "onto the second row", "one minimised window"])
+    @Test(arguments: ["back to the first row", "onto the second row"])
     func withEveryWindowMinimisedLiftingRestoresTheSelectedOneWithTheHaptic(path: String) {
-        let world = World.windowWorld(
-            minimised: path == "one minimised window" ? ["X"] : ["X", "Y"], frontmost: "Finder")
+        let world = World.windowWorld(minimised: ["X", "Y"], frontmost: "Finder")
         world.launcher.openWindow()
 
-        let hand: TouchScript
-        switch path {
-        case "back to the first row": hand = world.windowSwipe(3.5, 12, -12, lift: false)
-        case "onto the second row": hand = world.windowSwipe(3.5, 12, lift: false)
-        default: hand = world.windowSwipe(3.5, lift: false)
-        }
+        let hand = path == "back to the first row"
+            ? world.windowSwipe(3.5, 12, -12, lift: false) : world.windowSwipe(3.5, 12, lift: false)
         #expect(world.system.windows.raised.isEmpty)
         #expect(stack(world).isEmpty)
 
@@ -96,23 +91,17 @@ import LauncherCore
 
         let restored = path == "onto the second row" ? "Y" : "X"
         #expect(stack(world) == [restored])
-        #expect(world.system.windows.minimisedTitles == (path == "one minimised window" ? [] : [restored == "X" ? "Y" : "X"]))
+        #expect(world.system.windows.minimisedTitles == [restored == "X" ? "Y" : "X"])
         #expect(world.hardware.feedback.count == 1)
         #expect(!world.launcher.isWindowOpen)
     }
 
-    @Test(arguments: ["no slide", "full-screen front window", "one window"])
-    func liftingOnTheFrontWindowRaisesNothingAndIsSilent(world kind: String) {
-        let world: World
-        switch kind {
-        case "no slide": world = .windowWorld(visible: ["Docs", "Mail", "News"])
-        case "full-screen front window": world = .windowWorld(visible: ["Film", "Docs", "Mail"], fullScreenFront: true)
-        default: world = .windowWorld(visible: ["Letter"], frontmost: "TextEdit")
-        }
+    @Test func liftingOnTheFrontWindowRaisesNothingAndIsSilent() {
+        let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
         world.launcher.openWindow()
         let before = stack(world)
 
-        if kind == "no slide" { world.windowSwipe(3.5) } else { world.windowSwipe(3.5, 24) }
+        world.windowSwipe(3.5)
 
         #expect(world.system.windows.raised.allSatisfy { $0.isEmpty })
         #expect(world.system.windows.raised.count == 1)
@@ -215,22 +204,6 @@ import LauncherCore
         #expect(stack(world) == (change == "every listed window closes" ? [] : before))
         #expect(world.hardware.feedback.isEmpty)
         #expect(world.launcher.isWindowOpen)
-    }
-
-    @Test(arguments: ["no windows", "no frontmost app", "no Accessibility"])
-    func liftingOnAMessageReadsNothingRaisesNothingAndIsSilent(world kind: String) {
-        let world: World
-        switch kind {
-        case "no windows": world = .windowWorld(frontmost: "Finder")
-        case "no frontmost app": world = .windowWorld(frontmost: nil)
-        default: world = .windowWorld(visible: ["Docs", "Mail"], accessGranted: false)
-        }
-
-        world.windowSwipe(3.5, 24)
-
-        #expect(world.system.windows.raised.isEmpty)
-        #expect(world.system.windows.reads == 1)
-        #expect(world.hardware.pulses.isEmpty)
     }
 
     // MARK: Cancelling

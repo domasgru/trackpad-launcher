@@ -12,10 +12,11 @@ import LauncherCore
         #expect(Copy.gestureHint(for: .left, swipe: false) == left)
     }
 
-    @Test func theAccessibilityHintNamesScrolling() {
+    @Test func theAccessibilityHintNamesScrollingAndSwitchingWindows() {
         #expect(
             Copy.accessibilityHint
-                == "Clicks and scrolling aren't blocked during gestures. Allow Accessibility access to block them.")
+                == "Clicks and scrolling aren't blocked during gestures, and windows can't be switched. "
+                + "Allow Accessibility access to do both.")
     }
 
     @Test func theScreenRecordingHintSaysPreviewsNeedItAndItsButtonNamesWhatItDoes() {
@@ -24,10 +25,8 @@ import LauncherCore
         #expect(Copy.screenRecordingButton(.openSettings) == "Open System Settings…")
     }
 
-    @Test func theWindowSwitcherNamesItsMessagesAndBadgeVerbatim() {
+    @Test func theWindowSwitcherNamesItsBadgeVerbatim() {
         #expect(Copy.minimisedBadge == "Minimised")
-        #expect(Copy.noOpenWindows == "No open windows")
-        #expect(Copy.accessibilityForWindows == "Allow Accessibility to switch windows")
     }
 
     @Test(arguments: [
