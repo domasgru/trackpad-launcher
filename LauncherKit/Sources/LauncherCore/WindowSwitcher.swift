@@ -84,10 +84,13 @@ public struct WindowSwitcher: Equatable, Sendable {
     /// once per window swipe and nothing taken for one ever shows in another.
     public let serial: Int
     public let trackpad: TrackpadID
+    /// Screen Recording was granted when the window swipe began, so visible rows show previews.
+    public let showsPreviews: Bool
 
     /// The selection counts the rows (one for a message) and starts on the first row.
-    package init(_ content: Content, serial: Int, trackpad: TrackpadID) {
+    package init(_ content: Content, showsPreviews: Bool, serial: Int, trackpad: TrackpadID) {
         self.content = content
+        self.showsPreviews = showsPreviews
         self.serial = serial
         self.trackpad = trackpad
         selection = SwitcherSelection(count: Self.rows(of: content).count)
@@ -131,6 +134,12 @@ public struct WindowSwitcher: Equatable, Sendable {
             }
             return visibleRows + minimisedRows
         }
+    }
+
+    /// The windows to capture: the visible rows while `showsPreviews`, else none.
+    public var previewWindows: [WindowID] {
+        guard showsPreviews else { return [] }
+        return rows.compactMap { if case .visible(let id, _) = $0 { id } else { nil } }
     }
 
     /// The app's window in front when the window swipe began. nil when every window is minimised, or for a message.

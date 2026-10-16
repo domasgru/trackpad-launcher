@@ -18,6 +18,12 @@ import LauncherCore
                 == "Clicks and scrolling aren't blocked during gestures. Allow Accessibility access to block them.")
     }
 
+    @Test func theScreenRecordingHintSaysPreviewsNeedItAndItsButtonNamesWhatItDoes() {
+        #expect(Copy.screenRecordingHint == "Window previews need Screen Recording.")
+        #expect(Copy.screenRecordingButton(.ask) == "Allow Screen Recording…")
+        #expect(Copy.screenRecordingButton(.openSettings) == "Open System Settings…")
+    }
+
     @Test func theWindowSwitcherNamesItsMessagesAndBadgeVerbatim() {
         #expect(Copy.minimisedBadge == "Minimised")
         #expect(Copy.noOpenWindows == "No open windows")

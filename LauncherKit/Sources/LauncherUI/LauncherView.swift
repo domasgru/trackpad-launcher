@@ -3,7 +3,8 @@ import LauncherCore
 import SwiftUI
 
 /// Five gesture rows, the switcher section, the hand toggle, the Launch animation switch, a divider, then the hint
-/// while gestures are active or the trackpad settings notice while they are not, and a bottom bar holding Quit.
+/// while gestures are active or the trackpad settings notice while they are not, the Accessibility and screen recording
+/// hints while each applies, and a bottom bar holding Quit.
 struct LauncherView: View {
     let launcher: Launcher
     let actions: LauncherActions
@@ -31,6 +32,14 @@ struct LauncherView: View {
                     SettingsNotice(
                         message: Copy.accessibilityHint,
                         button: "Grant access…", open: { actions.openSettings(.accessibility) })
+                }
+                if let hint = launcher.screenRecordingHint {
+                    SettingsNotice(message: Copy.screenRecordingHint, button: Copy.screenRecordingButton(hint)) {
+                        switch hint {
+                        case .ask: launcher.askForScreenRecording()
+                        case .openSettings: actions.openSettings(.screenRecording)
+                        }
+                    }
                 }
             }
             .padding(16)
@@ -157,7 +166,7 @@ struct HintText: View {
     }
 }
 
-/// A hint plus a System Settings button. The trackpad settings notice and the Accessibility hint share it.
+/// A hint plus a button. The trackpad settings notice, the Accessibility hint and the screen recording hint share it.
 struct SettingsNotice: View {
     let message: String
     let button: String

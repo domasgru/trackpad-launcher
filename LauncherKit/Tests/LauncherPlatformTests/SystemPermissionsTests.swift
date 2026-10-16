@@ -25,25 +25,37 @@ import notify
         return arrived
     }
 
-    @Test func broadcastReachesOnChangeOnlyWhenTrustChanged() async {
-        let flag = Mutex(false)
-        let adapter = SystemPermissions(trusted: { flag.withLock { $0 } })
+    @Test func broadcastReachesOnChangeOnlyWhenTrustOrScreenCaptureChanged() async {
+        let trusted = Mutex(false)
+        let capturing = Mutex(false)
+        let adapter = SystemPermissions(
+            trusted: { trusted.withLock { $0 } }, capturing: { capturing.withLock { $0 } })
         #expect(!adapter.isGranted(.accessibility))
+        #expect(!adapter.isGranted(.screenRecording))
 
         let noise = await changeArrives(on: adapter, within: 1) {
             notify_post(SystemPermissions.changeNotification)
         }
-        #expect(!noise, "a broadcast without a trust change stays silent")
+        #expect(!noise, "a broadcast without a change stays silent")
 
-        let granted = await changeArrives(on: adapter, within: 5) {
-            flag.withLock { $0 = true }
+        let captureGranted = await changeArrives(on: adapter, within: 5) {
+            capturing.withLock { $0 = true }
             notify_post(SystemPermissions.changeNotification)
         }
-        #expect(granted, "onChange arrives within 5 s of a grant")
+        #expect(captureGranted, "onChange arrives within 5 s of a Screen Recording grant")
+        #expect(adapter.isGranted(.screenRecording))
+        #expect(!adapter.isGranted(.accessibility))
+
+        let trustGranted = await changeArrives(on: adapter, within: 5) {
+            trusted.withLock { $0 = true }
+            notify_post(SystemPermissions.changeNotification)
+        }
+        #expect(trustGranted, "onChange arrives within 5 s of an Accessibility grant")
         #expect(adapter.isGranted(.accessibility))
+        #expect(adapter.isGranted(.screenRecording))
 
         let revoked = await changeArrives(on: adapter, within: 5) {
-            flag.withLock { $0 = false }
+            trusted.withLock { $0 = false }
             notify_post(SystemPermissions.changeNotification)
         }
         #expect(revoked, "onChange arrives within 5 s of a revoke")

@@ -33,6 +33,14 @@ public final class Launcher {
 
     /// Drives the Accessibility hint. Deliberately not part of `activity`, so the icon never reads it.
     public private(set) var isAccessibilityGranted = false
+    /// Read with Accessibility on every push, so a window swipe never reads it.
+    private var isScreenRecordingGranted = false
+
+    /// nil while the window swipe setting is off or Screen Recording is granted.
+    public var screenRecordingHint: ScreenRecordingHint? {
+        guard settings.isWindowSwipeOn, !isScreenRecordingGranted else { return nil }
+        return settings.hasAskedForScreenRecording ? .openSettings : .ask
+    }
 
     /// `.heldOpen` is the first-launch window under the system's Accessibility prompt. The prompt takes focus when it
     /// appears and its buttons are outside clicks; both would close an ordinary window before the user saw the hint.
@@ -162,6 +170,15 @@ public final class Launcher {
         reconcile()
     }
 
+    /// The screen recording hint's button while it asks. Records the ask and saves before asking, so a crash in
+    /// between never asks twice; a later press opens System Settings instead.
+    public func askForScreenRecording() {
+        guard screenRecordingHint == .ask else { return }
+        settings.hasAskedForScreenRecording = true
+        store.save(settings)
+        permissions.ask(.screenRecording)
+    }
+
     /// Show the launcher window, re-resolve the rows and refresh the app list in the background.
     public func openWindow() {
         if window == .closed { window = .open }
@@ -198,6 +215,8 @@ public final class Launcher {
         // A grant ends the hold: the hint has done its job and the user is in System Settings.
         if granted && !isAccessibilityGranted && window == .heldOpen { window = .closed }
         isAccessibilityGranted = granted
+        // Before the run guard: a Screen Recording change never re-runs the trackpads.
+        isScreenRecordingGranted = permissions.isGranted(.screenRecording)
         let active = activity.isActive
         // Blocking needs gestures active and access granted; without either, presses are plain clicks.
         let run = Run(
@@ -264,7 +283,11 @@ public final class Launcher {
             windowSwipesBegun += 1
             let read = system.frontmostWindows()
             let content = isAccessibilityGranted ? WindowSwitcher.Content(read) : .accessibilityNeeded(for: read.app)
-            shown = .windows(WindowSwitcher(content, serial: windowSwipesBegun, trackpad: event.trackpad))
+            // The grant as the last TCC push left it: a fresh preflight would cost about 4 ms here.
+            shown = .windows(
+                WindowSwitcher(
+                    content, showsPreviews: isScreenRecordingGranted, serial: windowSwipesBegun,
+                    trackpad: event.trackpad))
         case .moved(let travel):
             guard case .windows(var open)? = shown, open.trackpad == event.trackpad else { return }
             let crossed = open.selection.follow(travel)

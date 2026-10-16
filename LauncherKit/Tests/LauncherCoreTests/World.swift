@@ -56,7 +56,10 @@ final class LaunchRecord: Sendable {
     private(set) var launcher: Launcher
     private var delivered: [TrackpadID: Double] = [:]
 
-    init(apps: [String] = [], attached: [Trackpad] = [.macBook14], accessGranted: Bool = false) {
+    init(
+        apps: [String] = [], attached: [Trackpad] = [.macBook14], accessGranted: Bool = false,
+        screenRecording: Bool = false
+    ) {
         let root = FileManager.default.temporaryDirectory.appending(path: "tl-world-\(UUID().uuidString)")
         self.root = root
         applications = root.appending(path: "Applications")
@@ -69,7 +72,10 @@ final class LaunchRecord: Sendable {
             try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         hardware = InMemoryTrackpads(attached: attached)
-        permissions = InMemoryPermissions(granted: accessGranted ? [.accessibility] : [])
+        var granted: Set<Permission> = []
+        if accessGranted { granted.insert(.accessibility) }
+        if screenRecording { granted.insert(.screenRecording) }
+        permissions = InMemoryPermissions(granted: granted)
         let registry = registry
         let launches = launches
         let catalog = AppCatalog(
@@ -230,14 +236,15 @@ extension World {
     }
 
     /// Safari, Mail, Preview, TextEdit and Notes installed and running, `frontmost` in front (Finder is the copy in
-    /// CoreServices) with these windows, Accessibility granted unless `accessGranted` is false, started. `untitled`
-    /// names windows that have no title.
+    /// CoreServices) with these windows, Accessibility and Screen Recording granted unless `accessGranted` or
+    /// `screenRecording` is false, started. `untitled` names windows that have no title.
     static func windowWorld(
         visible: [String] = [], minimised: [String] = [], fullScreenFront: Bool = false, untitled: Set<String> = [],
-        frontmost: String? = "Safari", accessGranted: Bool = true, attached: [Trackpad] = [.macBook14]
+        frontmost: String? = "Safari", accessGranted: Bool = true, screenRecording: Bool = true,
+        attached: [Trackpad] = [.macBook14]
     ) -> World {
         let apps = ["Safari", "Mail", "Preview", "TextEdit", "Notes"]
-        let world = World(apps: apps, attached: attached, accessGranted: accessGranted)
+        let world = World(apps: apps, attached: attached, accessGranted: accessGranted, screenRecording: screenRecording)
         world.launcher.start()
         world.makeRunning(apps)
         world.system.frontmost = frontmost.map { $0 == "Finder" ? world.app("Finder", in: world.coreServices) : world.app($0) }

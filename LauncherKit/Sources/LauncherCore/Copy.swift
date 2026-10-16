@@ -12,6 +12,16 @@ public enum Copy {
     public static let accessibilityHint =
         "Clicks and scrolling aren't blocked during gestures. Allow Accessibility access to block them."
 
+    /// Shown in the launcher window while Screen Recording is missing and the window swipe is on.
+    public static let screenRecordingHint = "Window previews need Screen Recording."
+
+    public static func screenRecordingButton(_ hint: ScreenRecordingHint) -> String {
+        switch hint {
+        case .ask: "Allow Screen Recording…"
+        case .openSettings: "Open System Settings…"
+        }
+    }
+
     /// The window switcher's single row when the frontmost app has no windows, or there is no frontmost app.
     public static let noOpenWindows = "No open windows"
 

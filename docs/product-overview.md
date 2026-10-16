@@ -5,7 +5,7 @@ Trackpad launcher is an app to launch apps on MacOS using gestures on trackpad. 
 ### Additional notes
 - After installation trackpad should continously run in the background
 - Trackpad launcher should be as performant as possible, consuming the least possible resources as it's technically possible. We don't need performance tests, but we should just pick the most performant technical path available when doin technical research.
-- Trackpad launcher should be secure and privat - it should do 0 network calls, no logging.
+- Trackpad launcher should be secure and privat - it should do 0 network calls, no logging. It may ask for Screen Recording, only from a button in the window, and uses it only to draw window previews while the window switcher shows: one picture of each window when the window swipe begins, kept in memory and dropped when it ends, never saved. Without it the window switcher shows app icons instead.
 - Each gesture, should be followed by a smooth haptic feedback and a subtle gentle sound effect (the sound effect is still deferred). The one exception: a swipe or window swipe lift or a thumb tap that changes nothing is silent, whether the user lifts on the starting app, on an app that quit, or with no switcher showing, lifts a window swipe on the window that was in front, on a "No open windows" or Accessibility message, or on a window that closed while the window in front stayed in front, or taps the thumb with nothing to swap to. A cancelled window swipe is silent too.
 - We should use the latest liquid glass human interface design.
 - All the design assets needed for this app are kept in /assets directory.

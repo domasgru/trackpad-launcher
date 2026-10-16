@@ -76,14 +76,15 @@ public enum Haptic: Sendable { case gesture, lightTick }
 
 /// A permission macOS grants the app.
 public enum Permission: Hashable, Sendable {
-    case accessibility
+    case accessibility, screenRecording
 }
 
 /// The permissions macOS grants the app. Real: SystemPermissions. Test: InMemoryPermissions.
 @MainActor public protocol Permissions: AnyObject {
-    /// On the main actor after a permission changed, and only then. Carries no data: re-read.
+    /// On the main actor after either permission changed, and only then. Carries no data: re-read.
     var onChange: (@MainActor () -> Void)? { get set }
-    /// Read fresh. Never prompts.
+    /// Read fresh. Never prompts. Screen Recording's read costs about 4 ms, so the model reads it on pushes, never on a
+    /// gesture.
     func isGranted(_ permission: Permission) -> Bool
     /// The system's prompt for it. Returns at once; the prompt belongs to another process.
     func ask(_ permission: Permission)

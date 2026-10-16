@@ -16,6 +16,9 @@ public struct Settings: Codable, Equatable, Sendable {
     public var isSwapOn = true
     /// Whether two fingers sliding up or down under the thumb switch windows. The key is this field's name, permanently.
     public var isWindowSwipeOn = true
+    /// Whether the screen recording hint's button has asked macOS for the permission. The key is this field's name,
+    /// permanently.
+    public var hasAskedForScreenRecording = false
 
     /// The bundle identifiers of every assigned app, missing ones included. Derived, never stored.
     public var assignedBundleIDs: Set<BundleID> { Set(assignments.values.map(\.bundleID)) }
@@ -40,6 +43,8 @@ public struct Settings: Codable, Equatable, Sendable {
         isSwipeOn = try container.decodeIfPresent(Bool.self, forKey: .isSwipeOn) ?? isSwipeOn
         isSwapOn = try container.decodeIfPresent(Bool.self, forKey: .isSwapOn) ?? isSwapOn
         isWindowSwipeOn = try container.decodeIfPresent(Bool.self, forKey: .isWindowSwipeOn) ?? isWindowSwipeOn
+        hasAskedForScreenRecording =
+            try container.decodeIfPresent(Bool.self, forKey: .hasAskedForScreenRecording) ?? hasAskedForScreenRecording
     }
 }
 

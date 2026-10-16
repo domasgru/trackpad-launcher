@@ -269,6 +269,7 @@ import LauncherCore
         settings.isSwipeOn = false
         settings.isSwapOn = false
         settings.isWindowSwipeOn = false
+        settings.hasAskedForScreenRecording = true
         #expect(settings != Settings())
 
         world.store.save(settings)
