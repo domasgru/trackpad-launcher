@@ -3,9 +3,9 @@ import ApplicationServices
 import CoreGraphics
 import LauncherCore
 
-/// The frontmost app's windows, read through the Accessibility element API and the window server's window list: the
-/// only file that touches either. The element API defines which windows exist (titles, roles, minimised, full screen);
-/// the window list orders the visible ones and tells which are on this Space.
+/// The frontmost app's windows, read through the Accessibility element API and the window server's window list, and
+/// raised through the element API: the only file that touches either. The element API defines which windows exist
+/// (titles, roles, minimised, full screen); the window list orders the visible ones and tells which are on this Space.
 ///
 /// A window's number comes from the private `_AXUIElementGetWindow`, resolved once with `dlsym` from the image
 /// AppKit already loaded; when a macOS drops it, windows are matched to the window list by frame and title instead,
@@ -17,6 +17,10 @@ import LauncherCore
     private typealias GetWindow = @convention(c) (AXUIElement, UnsafeMutablePointer<CGWindowID>) -> AXError
 
     private let getWindow: GetWindow?
+    /// The windows the latest read listed: the only ones a raise may touch, so nothing on another Space is raised.
+    private var listed: [WindowID: AXUIElement] = [:]
+    /// The app timed out during the latest read or a raise since: no further calls go to it until the next read.
+    private var isUnanswering = false
 
     private static let attributes = [
         kAXRoleAttribute, kAXSubroleAttribute, kAXTitleAttribute, kAXMinimizedAttribute, "AXFullScreen",
@@ -37,32 +41,57 @@ import LauncherCore
     }
 
     func read() -> FrontmostWindows {
+        listed = [:]
+        isUnanswering = false
         guard let running = NSWorkspace.shared.frontmostApplication,
             running.processIdentifier != ProcessInfo.processInfo.processIdentifier,
             let entry = RunningApp.entry(for: running)
         else { return .noApp }
         let pid = running.processIdentifier
         var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXWindowsAttribute as CFString, &value)
-            == .success, let elements = value as? [AXUIElement]
-        else { return .app(entry, visible: [], minimised: []) }
+        let windowsError = AXUIElementCopyAttributeValue(
+            AXUIElementCreateApplication(pid), kAXWindowsAttribute as CFString, &value)
+        guard windowsError == .success, let elements = value as? [AXUIElement] else {
+            isUnanswering = windowsError == .cannotComplete
+            return .app(entry, visible: [], minimised: [])
+        }
 
         var raw: [RawWindow] = []
+        var rawElements: [AXUIElement] = []
         for element in elements {
             var values: CFArray?
             let error = AXUIElementCopyMultipleAttributeValues(
                 element, Self.attributes, AXCopyMultipleAttributeOptions(rawValue: 0), &values)
-            // The app stopped answering: what was read so far stands.
-            if error == .cannotComplete { break }
+            // The app stopped answering: what was read so far stands, and nothing is raised.
+            if error == .cannotComplete {
+                isUnanswering = true
+                break
+            }
             guard error == .success, let values = values as? [AnyObject] else { continue }
             raw.append(Self.rawWindow(values, number: number(of: element)))
+            rawElements.append(element)
         }
         if getWindow == nil {
-            let listed = Self.listedWindows(of: pid)
-            for i in raw.indices { raw[i].number = Self.number(of: raw[i], among: listed) }
+            let listedWindows = Self.listedWindows(of: pid)
+            for i in raw.indices { raw[i].number = Self.number(of: raw[i], among: listedWindows) }
         }
         let sorted = Self.sort(raw, onScreen: Self.onScreenNumbers(of: pid))
+        var elementsByID: [WindowID: AXUIElement] = [:]
+        for (window, element) in zip(raw, rawElements) {
+            if let number = window.number { elementsByID[WindowID(rawValue: number)] = element }
+        }
+        for window in sorted.visible + sorted.minimised { listed[window.id] = elementsByID[window.id] }
         return .app(entry, visible: sorted.visible, minimised: sorted.minimised)
+    }
+
+    /// The last first, each to the front of its app; a raised minimised window is restored. A closed window answers
+    /// invalid-element and is skipped; a window the latest read did not list is skipped.
+    func raise(_ frontToBack: [WindowID]) {
+        for id in frontToBack.reversed() {
+            guard !isUnanswering else { return }
+            guard let element = listed[id] else { continue }
+            if AXUIElementPerformAction(element, kAXRaiseAction as CFString) == .cannotComplete { isUnanswering = true }
+        }
     }
 
     private func number(of element: AXUIElement) -> UInt32? {

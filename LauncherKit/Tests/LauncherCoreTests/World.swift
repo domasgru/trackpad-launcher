@@ -267,11 +267,18 @@ extension World {
     func playFrameByFrame(
         _ script: TouchScript, on trackpad: Trackpad = .macBook14
     ) -> [(windowSwitcher: WindowSwitcher?, switcher: Switcher?)] {
+        playFrameByFrame(script, on: trackpad) { (launcher.windowSwitcher, launcher.switcher) }
+    }
+
+    /// Delivers the frames of `script` not yet delivered one at a time, and what `observe` saw after each.
+    func playFrameByFrame<Seen>(
+        _ script: TouchScript, on trackpad: Trackpad = .macBook14, observing observe: () -> Seen
+    ) -> [Seen] {
         let newer = script.frames.filter { $0.time.seconds > (delivered[trackpad.id] ?? 0) }
         return newer.map { frame in
             delivered[trackpad.id] = frame.time.seconds
             hardware.touch([frame], on: trackpad.id)
-            return (launcher.windowSwitcher, launcher.switcher)
+            return observe()
         }
     }
 

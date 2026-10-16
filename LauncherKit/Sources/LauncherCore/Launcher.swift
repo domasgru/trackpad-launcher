@@ -270,8 +270,22 @@ public final class Launcher {
             let crossed = open.selection.follow(travel)
             shown = .windows(open)
             for _ in 0..<crossed { hardware.playFeedback(.lightTick, on: event.trackpad) }
-        case .ended, .cancelled:
-            // Lifting changes nothing yet: both only remove the window switcher, silently.
+            // Only a visible window comes forward while sliding: raising a minimised one would restore it.
+            if crossed > 0, let window = open.selectedVisibleWindow { system.raiseWindows([window]) }
+        case .ended:
+            guard case .windows(let open)? = shown, open.trackpad == event.trackpad else { return }
+            shown = nil
+            // A message row has nothing to switch: silent, and nothing is read.
+            guard open.listsWindows else { return }
+            // The second read: the lift follows the windows as they are now, whatever the raises while sliding did.
+            let lift = open.lift(now: system.frontmostWindows())
+            if lift.playsHaptic {
+                hardware.playFeedback(.gesture, on: event.trackpad)
+                window = .closed
+            }
+            system.raiseWindows(lift.raises)
+        case .cancelled:
+            // The windows stay as they are: no reordering, silent.
             if case .windows(let open)? = shown, open.trackpad == event.trackpad { shown = nil }
         }
     }

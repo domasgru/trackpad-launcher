@@ -158,6 +158,8 @@ import LauncherCore
 
     func frontmostWindows() -> FrontmostWindows { windows.read(frontmost: frontmost) }
 
+    func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
+
     func registerLoginItem() {
         loginItemRegistrations += 1
         onRegisterLoginItem?()
@@ -172,8 +174,8 @@ import LauncherCore
 }
 
 /// The frontmost app's window stack, by name: one fixed `WindowID` per name for the life of the test. A window's title is
-/// its name unless the name is marked untitled. Answers reads only and carries no policy: full-screen and minimised
-/// windows are reported as they are, uncut.
+/// its name unless the name is marked untitled. Carries no policy: reads report full-screen and minimised windows as
+/// they are, uncut, and raises do what the system's raise does and nothing more.
 @MainActor final class FakeWindows {
     /// Front to back.
     private(set) var onScreenTitles: [String] = []
@@ -183,9 +185,15 @@ import LauncherCore
     private var untitled: Set<String> = []
     /// false: the app does not answer in time, so reads list nothing.
     var answers = true
+    /// true: raises are logged and change nothing, as with an app that ignores them.
+    var dropsRaises = false
     /// How many times the windows were read.
     private(set) var reads = 0
+    /// Every `raise(_:)` call, in order, empty ones included.
+    private(set) var raised: [[WindowID]] = []
     private var ids: [String: WindowID] = [:]
+    /// The names the latest read listed: the only windows a raise may touch.
+    private var listed: Set<String> = []
 
     /// `untitled`: names whose windows report an empty title.
     func set(visible: [String], minimised: [String] = [], fullScreenFront: Bool = false, untitled: Set<String> = []) {
@@ -212,8 +220,10 @@ import LauncherCore
 
     func read(frontmost: AppEntry?) -> FrontmostWindows {
         reads += 1
+        listed = []
         guard let frontmost else { return .noApp }
         guard answers else { return .app(frontmost, visible: [], minimised: []) }
+        listed = Set(onScreenTitles + minimisedTitles)
         let visible = onScreenTitles.enumerated().map { index, title in
             AppWindow(id: id(title), title: self.title(of: title), isFullScreen: index == 0 && fullScreenFront)
         }
@@ -221,8 +231,25 @@ import LauncherCore
         return .app(frontmost, visible: visible, minimised: minimised)
     }
 
-    private func title(of name: String) -> String { untitled.contains(name) ? "" : name
+    /// The last first, each to the front of the visible stack; a minimised one is restored. Closed windows and windows
+    /// the latest read did not list are skipped.
+    func raise(_ frontToBack: [WindowID]) {
+        raised.append(frontToBack)
+        guard answers, !dropsRaises else { return }
+        for id in frontToBack.reversed() {
+            guard let name = ids.first(where: { $0.value == id })?.key, listed.contains(name) else { continue }
+            if let index = minimisedTitles.firstIndex(of: name) {
+                minimisedTitles.remove(at: index)
+            } else if let index = onScreenTitles.firstIndex(of: name) {
+                onScreenTitles.remove(at: index)
+            } else {
+                continue
+            }
+            onScreenTitles.insert(name, at: 0)
+        }
     }
+
+    private func title(of name: String) -> String { untitled.contains(name) ? "" : name }
 }
 
 @MainActor final class InMemoryPermissions: Permissions {

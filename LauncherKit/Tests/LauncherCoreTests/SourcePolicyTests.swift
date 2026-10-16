@@ -51,6 +51,8 @@ import Testing
         Entry(token: "CGEventPost", rule: "R9 never synthesise"),
         Entry(token: "postToPid", rule: "R9 never synthesise"),
         Entry(token: "nonisolated(unsafe)", rule: "one writer per field"),
+        Entry(token: "AXUIElementSetAttributeValue", rule: "the window switcher only raises a window"),
+        Entry(token: "kAXPressAction", rule: "the window switcher only raises a window"),
     ]
 
     /// Each permission API lives in exactly one file, the adapter that owns it. Any other hit fails.

@@ -142,6 +142,11 @@ public struct WindowSwitcher: Equatable, Sendable {
     public var listsWindows: Bool {
         if case .windows = content { true } else { false }
     }
+
+    /// The window that comes to the front while its row is selected. nil on a minimised row or a message.
+    public var selectedVisibleWindow: WindowID? {
+        if case .visible(let id, _) = rows[selection.selected] { id } else { nil }
+    }
 }
 
 extension WindowSwitcher.Content {

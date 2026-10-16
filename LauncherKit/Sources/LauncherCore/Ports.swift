@@ -63,8 +63,15 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// The active app and the ⌘-Tab apps, read now from their one source of truth.
     func runningApps() -> RunningApps
     /// The frontmost app's windows, read now, beside `runningApps()`: about a millisecond, at most one messaging timeout
-    /// (0.2 s) when the app does not answer. Reads only.
+    /// (0.2 s) when the app does not answer. Reads only. The windows it lists are the only ones a later `raiseWindows`
+    /// may name, until the next read.
     func frontmostWindows() -> FrontmostWindows
+    /// Raises these windows of the latest `frontmostWindows()` read, the last first, so the first ends in front of its
+    /// app with the keyboard focus and the rest behind it in this order; beside `bringToFront`, which is app-level. A
+    /// raised minimised window is restored. A window that has closed is skipped; an id the latest read did not list is
+    /// skipped, so nothing on another Space is ever raised. About 2 ms per raise; once the app has timed out, no
+    /// further calls go to it for that read. [] does nothing.
+    func raiseWindows(_ frontToBack: [WindowID])
 }
 
 /// A permission macOS grants the app.

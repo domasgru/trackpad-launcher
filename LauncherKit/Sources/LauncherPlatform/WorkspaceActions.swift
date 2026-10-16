@@ -23,6 +23,8 @@ import ServiceManagement
 
     public func frontmostWindows() -> FrontmostWindows { windows.read() }
 
+    public func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
+
     /// Registration failing (unsigned build, user-disabled item) leaves the app running without a login item.
     public func registerLoginItem() {
         try? SMAppService.mainApp.register()
