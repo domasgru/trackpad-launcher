@@ -126,6 +126,26 @@ import LauncherCore
         #expect(world.launcher.isWindowOpen)
     }
 
+    @Test func aWindowMinimisedMidSwipeStaysMinimisedWhenTheLiftIsOnAnotherRow() {
+        let world = World.windowWorld(visible: ["A", "B", "C", "D"])
+        world.launcher.openWindow()
+        let hand = world.windowSwipe(3.5, lift: false)
+
+        world.system.windows.minimise("B")
+        let down = hand.slide(byMM: (0, 36), over: .milliseconds(10))
+        world.play(down)
+        #expect(stack(world) == ["D", "A", "C"])
+        let back = down.slide(byMM: (0, -36), over: .milliseconds(10))
+        world.play(back)
+        #expect(stack(world) == ["A", "D", "C"])
+
+        world.play(back.lift())
+
+        #expect(world.system.windows.minimisedTitles == ["B"])
+        #expect(stack(world) == ["A", "C", "D"])
+        #expect(world.hardware.feedback.isEmpty)
+    }
+
     @Test func liftingOnAMinimisedWindowRestoresItInFrontOfTheFrontWindowWithTheHaptic() {
         let world = World.windowWorld(visible: ["A", "B"], minimised: ["M"])
 

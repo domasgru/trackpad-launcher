@@ -214,6 +214,13 @@ import LauncherCore
     /// A new visible window, in front.
     func open(_ title: String) { onScreenTitles.insert(title, at: 0) }
 
+    /// The user minimises a visible window; it goes last among the minimised ones.
+    func minimise(_ title: String) {
+        guard let index = onScreenTitles.firstIndex(of: title) else { return }
+        onScreenTitles.remove(at: index)
+        minimisedTitles.append(title)
+    }
+
     func close(_ title: String) {
         onScreenTitles.removeAll { $0 == title }
         minimisedTitles.removeAll { $0 == title }

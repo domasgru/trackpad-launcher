@@ -13,13 +13,13 @@ public enum WindowStack {
     public static func raises(current: [WindowID], target: [WindowID]) -> [WindowID] {
         guard let first = target.first else { return [] }
         let onScreen = Set(current)
+        let target = [first] + target.dropFirst().filter { onScreen.contains($0) }
         let targeted = Set(target)
         let start = current.first == first ? 0 : 1
         for count in start...target.count {
             let raised = Set(target.prefix(count))
             let unraised = current.filter { targeted.contains($0) && !raised.contains($0) }
-            let wanted = target.dropFirst(count).filter { onScreen.contains($0) }
-            if unraised == wanted { return Array(target.prefix(count)) }
+            if unraised[...] == target.dropFirst(count) { return Array(target.prefix(count)) }
         }
         return target
     }
