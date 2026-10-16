@@ -8,7 +8,7 @@ Trackpad Launcher reaches apps, not windows. The swipe brings another app to the
 
 A new action, the **window swipe**: with the thumb anchored, the user slides two fingers up or down instead of sideways. A small **window switcher** appears in the top-left corner of the display. It lists the frontmost app's windows, front window first, each as a row with a small preview and the window title. Sliding down moves the selection to the next window and up moves it back. Each time the selection moves, the selected window comes to the front at once, so the user sees it at full size behind the switcher. Lifting keeps the selected window in front. Sliding back to the first row and lifting leaves things as they were.
 
-The switcher always shows, so the user knows the window swipe works. With one window it shows that one row. With no windows it shows a single "No open windows" row.
+The window swipe exists only when there is something to switch to: the frontmost app has at least two windows. Otherwise, a slide up or down is no window swipe. Nothing appears, and the slide behaves exactly as if the window swipe switch were off. The same holds without the Accessibility permission, since windows cannot be read without it.
 
 Previews need the macOS Screen Recording permission. Without it, rows show the app icon and the title. The launcher window shows a hint that asks for the permission. The window swipe itself never prompts.
 
@@ -18,12 +18,12 @@ Terms, for the glossary. New: *window swipe* (the action above), *window switche
 
 ### Documentation
 
-`docs/product-overview.md` gains the window swipe next to the swipe: with the thumb held in the corner, sliding two fingers up or down shows the frontmost app's windows in the top-left corner and brings each visible window to the front as the fingers pass it. The app switcher's silent-lift exception extends to the window swipe. The privacy note changes: the app may ask for Screen Recording, used only to draw window previews while the window switcher shows. `docs/domain-model.md` follows the terms above.
+`docs/product-overview.md` gains the window swipe next to the swipe: with the thumb held in the corner, sliding two fingers up or down shows the frontmost app's windows in the top-left corner and brings each visible window to the front as the fingers pass it. That sentence gains "when the frontmost app has two or more windows". The app switcher's silent-lift exception extends to the window swipe, and loses its clause about a "No open windows" or Accessibility message: there is no such message, since a slide on an app with fewer than two windows, or without Accessibility, is no window swipe. The privacy note changes: the app may ask for Screen Recording, used only to draw window previews while the window switcher shows. `docs/domain-model.md` follows the terms above.
 
 ## Requirements
 
 ### R1. Two fingers sliding up or down under an anchored thumb start a window swipe
-While the window swipe setting is on and gestures are active, a window swipe MUST start when the thumb is anchored first, exactly two fingers land, and one of them moves more than 3 mm, more up or down than sideways. The start rules MUST otherwise match the swipe's. There MUST be no time limit. Edge contacts (as the glossary defines them) MUST neither start nor join a window swipe. Once a window swipe has started, the thumb may stay, lift, leave the corner or land again, and nothing MUST change. The window swipe MUST work in both hand modes. "Gestures are active" is the glossary's term: Trackpad Launcher is running, a trackpad is connected, and no conflicting setting is on. It does not need the Accessibility permission.
+While the window swipe setting is on and gestures are active, a window swipe MUST start when the thumb is anchored first, exactly two fingers land, and one of them moves more than 3 mm, more up or down than sideways. The start rules MUST otherwise match the swipe's. There MUST be no time limit. Edge contacts (as the glossary defines them) MUST neither start nor join a window swipe. Once a window swipe has started, the thumb may stay, lift, leave the corner or land again, and nothing MUST change. The window swipe MUST work in both hand modes. A window swipe MUST start only when the frontmost app has at least two windows (R13). Deciding this MUST add no delay the user can notice: the switcher MUST appear within 50 ms of the movement that starts the window swipe. The window count MUST be the number of rows the switcher shows, so a switcher never appears with fewer than two rows. "Gestures are active" is the glossary's term: Trackpad Launcher is running, a trackpad is connected, and no conflicting setting is on. Gestures being active does not need the Accessibility permission; the window swipe does (R14).
 
 #### Scenario: Slide down starts a window swipe
 - **GIVEN** Safari is frontmost with two windows
@@ -31,7 +31,7 @@ While the window swipe setting is on and gestures are active, a window swipe MUS
 - **THEN** the window switcher appears
 
 #### Scenario: Left-hand mode
-- **GIVEN** hand mode is Left hand
+- **GIVEN** hand mode is Left hand and Safari is frontmost with two windows
 - **WHEN** the user anchors the thumb in the top-right corner and slides two fingers down
 - **THEN** the window switcher appears
 
@@ -49,7 +49,7 @@ While the window swipe setting is on and gestures are active, a window swipe MUS
 - **THEN** Mail comes to the front and no window switcher appears
 
 ### R2. A slide's direction is decided once
-The first movement past 3 mm MUST decide whether a slide is a swipe (more sideways) or a window swipe (more up or down). The decision MUST hold until both fingers lift. A window swipe MUST never turn into a swipe, nor a swipe into a window swipe.
+The first movement past 3 mm MUST decide whether a slide is sideways (a swipe) or up or down (a window swipe when R13 and R14 allow; otherwise as R16 describes with the setting off). The decision MUST hold until both fingers lift. A window swipe MUST never turn into a swipe, nor a swipe into a window swipe.
 
 #### Scenario: Sideways wobble during a window swipe
 - **GIVEN** a window swipe is on, its switcher showing
@@ -62,7 +62,7 @@ The first movement past 3 mm MUST decide whether a slide is a swipe (more sidewa
 - **THEN** the window switcher does not appear and the app switcher stays
 
 ### R3. The window switcher lists the frontmost app's windows
-The window switcher MUST list the windows of the frontmost app at the moment the window swipe begins. It MUST list the visible windows front to back, the front window first, then the minimised windows in the order the app lists them, and cut the list at 10. When the front window is full screen, the switcher MUST show that window as its single row, with its title and preview, and lifting MUST change nothing. The list MUST be fixed when the window swipe begins: a window that opens during it is not added, and one that closes stays listed.
+The window switcher MUST list the windows of the frontmost app at the moment the window swipe begins. It MUST list the visible windows front to back, the front window first, then the minimised windows in the order the app lists them, and cut the list at 10. When the front window is full screen, it MUST count as the app's only window, so there is no window swipe (R13). The list MUST be fixed when the window swipe begins: a window that opens during it is not added, and one that closes stays listed.
 
 #### Scenario: Front-to-back order
 - **GIVEN** Safari is frontmost, and its windows are, front to back, "Docs", "Mail" and "News"
@@ -75,9 +75,9 @@ The window switcher MUST list the windows of the frontmost app at the moment the
 - **THEN** the switcher lists the 10 frontmost windows
 
 #### Scenario: Full-screen front window
-- **GIVEN** Safari is frontmost, its front window full screen, and it has two other windows
-- **WHEN** the user starts a window swipe, slides down and lifts
-- **THEN** the switcher shows one row, the full-screen window with its title and preview, and nothing changes on lift
+- **GIVEN** Safari is frontmost, its front window full screen, it has two other windows, and the thumb landed just now
+- **WHEN** the user anchors the thumb, slides two fingers down and lifts
+- **THEN** no window switcher appears, the page does not scroll, no tap gesture fires and nothing changes
 
 #### Scenario: Window opens during the window swipe
 - **GIVEN** a window swipe is on with 2 rows
@@ -93,20 +93,20 @@ A *window* MUST be one of the app's normal document or app windows on the curren
 - **THEN** the switcher shows three rows, the minimised one last, dimmed and badged "Minimised"
 
 #### Scenario: Floating panel left out
-- **GIVEN** the frontmost app shows one document window and a floating colour panel
+- **GIVEN** the frontmost app shows two document windows and a floating colour panel
 - **WHEN** the user starts a window swipe
-- **THEN** the switcher shows one row, the document window
+- **THEN** the switcher shows two rows, the document windows, and no row for the panel
 
 #### Scenario: Window on another Space left out
-- **GIVEN** Safari has one window on the current Space and one on another Space
+- **GIVEN** Safari is frontmost with two windows on the current Space and one on another Space
 - **WHEN** the user starts a window swipe
-- **THEN** the switcher shows one row
+- **THEN** the switcher shows two rows, and no row for the window on the other Space
 
 ### R5. The window switcher sits in the top-left corner of the pointer's display
 The window switcher MUST be a Liquid Glass panel in the top-left corner of the display that holds the pointer, just below the menu bar, with a small margin, in both hand modes. It MUST hold one vertical column of rows. When the column would not fit the display's height, the rows MUST shrink by one factor so the whole column fits. It MUST never take focus or receive clicks, and MUST disappear when the window swipe ends.
 
 #### Scenario: Two displays
-- **GIVEN** the pointer is on the second display
+- **GIVEN** the pointer is on the second display and Safari is frontmost with two windows
 - **WHEN** the user starts a window swipe
 - **THEN** the switcher appears in the top-left corner of the second display
 
@@ -116,15 +116,15 @@ The window switcher MUST be a Liquid Glass panel in the top-left corner of the d
 - **THEN** all 10 rows show, each shrunk by the same factor, and the column fits the display
 
 #### Scenario: Focus stays put
-- **GIVEN** a text field in the front window has the keyboard focus
+- **GIVEN** Safari is frontmost with two windows, and a text field in the front window has the keyboard focus
 - **WHEN** the user starts a window swipe and lifts without moving the selection
 - **THEN** the text field still has the keyboard focus
 
 ### R6. Each row shows a preview and a title
-Each row MUST show a preview of its window 60 points tall, keeping the window's proportions, at most 120 points wide, with the window's title to its right on one line, truncated at the end. A window with no title MUST show the app's name, followed by " — Window N" when the list has more than one row, N being its position in the list. The selected row MUST carry a glass highlight. Previews MUST show the window as it looked when the window swipe began. A minimised window's row MUST show the app icon in place of a preview. The switcher MUST appear in the same movement that starts the window swipe. Previews MAY fill in afterwards; until a row's preview is ready, that row MUST show the app icon.
+Each row MUST show a preview of its window 60 points tall, keeping the window's proportions, at most 120 points wide, with the window's title to its right on one line, truncated at the end. A window with no title MUST show the app's name, followed by " — Window N", N being its position in the list. The selected row MUST carry a glass highlight. Previews MUST show the window as it looked when the window swipe began. A minimised window's row MUST show the app icon in place of a preview. The switcher MUST appear in the same movement that starts the window swipe. Previews MAY fill in afterwards; until a row's preview is ready, that row MUST show the app icon.
 
 #### Scenario: Titled window
-- **GIVEN** Screen Recording is allowed and a Safari window's title is "Apple Developer"
+- **GIVEN** Screen Recording is allowed, Safari is frontmost with two windows, and one window's title is "Apple Developer"
 - **WHEN** the user starts a window swipe
 - **THEN** its row shows a small picture of that window and "Apple Developer"
 
@@ -134,6 +134,7 @@ Each row MUST show a preview of its window 60 points tall, keeping the window's 
 - **THEN** the rows read "Preview — Window 1" and "Preview — Window 2"
 
 #### Scenario: Long title
+- **GIVEN** a window swipe is on with two windows
 - **WHEN** a window's title is too long for its row
 - **THEN** the title is cut short with an ellipsis at the end
 
@@ -152,7 +153,7 @@ While Trackpad Launcher lacks the Screen Recording permission, each row MUST sho
 
 #### Scenario: Permission granted later
 - **GIVEN** Screen Recording was not allowed, and the user then allows it in System Settings and relaunches Trackpad Launcher if macOS asks to
-- **WHEN** the user starts the next window swipe
+- **WHEN** the user starts the next window swipe on Safari with two windows
 - **THEN** the rows show previews
 
 ### R8. The launcher window shows a screen recording hint
@@ -228,6 +229,7 @@ When both fingers lift, the selected window MUST be in front and have the keyboa
 - **THEN** the window is restored and in front
 
 #### Scenario: Lift on the front window
+- **GIVEN** Safari is frontmost with two windows
 - **WHEN** the user starts a window swipe and lifts without leaving the first row
 - **THEN** nothing changes and no haptic plays
 
@@ -240,43 +242,81 @@ When both fingers lift, the selected window MUST be in front and have the keyboa
 Each change of the selection MUST give one light tick. A lift MUST give the gesture haptic if, and only if, the window in front after the lift differs from the front window at the start of the window swipe, or a minimised window was restored. Otherwise the lift MUST be silent. The window swipe MUST never play the launch animation.
 
 #### Scenario: Ticks while sliding
+- **GIVEN** Safari is frontmost with three windows
 - **WHEN** the user slides down across two rows
 - **THEN** the trackpad gives two light ticks
 
 #### Scenario: Lift on another window
+- **GIVEN** Safari is frontmost with two windows
 - **WHEN** the user slides down one row and lifts
 - **THEN** the trackpad gives the gesture haptic and no launch animation plays
 
-### R13. One window, no windows, or no frontmost app still shows the switcher
-The window switcher MUST appear on every window swipe. With one window it MUST show that one row, selected, with the rubber band at both ends. When the frontmost app has no windows, it MUST show one row with the app's icon and "No open windows". When there is no frontmost app, it MUST show one "No open windows" row without an app icon. In each of these cases lifting MUST change nothing and be silent.
+### R13. Fewer than two windows means no window swipe
+When the frontmost app has fewer than two windows (R4) at the moment a slide's direction is decided, or there is no frontmost app (as the glossary defines it, such as while Trackpad Launcher itself is active), the slide MUST NOT be a window swipe. A switcher MUST NOT appear and a haptic MUST NOT play. The slide MUST then behave exactly as it does with the window swipe setting off (R16): it scrolls once the blocking window has passed, and it never becomes a swipe, since its first movement was up or down. The count MUST be fixed when the direction is decided: a window that opens later in the slide does not start a window swipe, and a window that closes during a window swipe does not end it.
 
 #### Scenario: One window
-- **GIVEN** TextEdit is frontmost with one window
-- **WHEN** the user slides down and lifts
-- **THEN** the switcher shows that one row, it rubber-bands, and nothing changes on lift
+- **GIVEN** TextEdit is frontmost with one window, and the thumb landed just now
+- **WHEN** the user anchors the thumb, slides two fingers down and lifts
+- **THEN** no switcher appears, no haptic plays, the page does not scroll, no tap gesture fires and nothing changes
 
 #### Scenario: No windows
 - **GIVEN** Finder is frontmost with no windows open
-- **WHEN** the user starts a window swipe
-- **THEN** the switcher shows one row with the Finder icon and "No open windows"
+- **WHEN** the user anchors the thumb and slides two fingers down
+- **THEN** no switcher appears
 
-### R14. Without Accessibility, the switcher says so
-While Trackpad Launcher lacks the Accessibility permission, a window swipe MUST show one row with the frontmost app's icon and "Allow Accessibility to switch windows". Lifting MUST change nothing and be silent. The launcher window MUST keep showing the existing Accessibility hint. Without the permission, clicks and scrolling are not blocked during a window swipe, as everywhere without it, so the page under the pointer may scroll.
+#### Scenario: One visible and one minimised window
+- **GIVEN** Finder is frontmost with one visible and one minimised window
+- **WHEN** the user anchors the thumb and slides two fingers down
+- **THEN** the window switcher appears with two rows
+
+#### Scenario: Only window minimised
+- **GIVEN** Finder is frontmost with only one window, and it is minimised
+- **WHEN** the user anchors the thumb and slides two fingers down
+- **THEN** no switcher appears
+
+#### Scenario: Sideways after down stays no swipe
+- **GIVEN** TextEdit is frontmost with one window and the swipe setting is on
+- **WHEN** the user slides two fingers 5 mm down, then 20 mm sideways
+- **THEN** neither the app switcher nor the window switcher appears
+
+#### Scenario: One window scrolls after the blocking window
+- **GIVEN** TextEdit is frontmost with one long document window, and the thumb landed more than 3 seconds ago
+- **WHEN** the user slides two fingers down
+- **THEN** the document scrolls
+
+#### Scenario: Window opens mid-slide
+- **GIVEN** TextEdit is frontmost with one window, and the user is sliding two fingers down with no switcher showing
+- **WHEN** TextEdit opens a second window while the fingers keep sliding
+- **THEN** no switcher appears until the fingers lift
+
+### R14. Without Accessibility, there is no window swipe
+While Trackpad Launcher lacks the Accessibility permission, a slide up or down MUST NOT be a window swipe, as in R13. The launcher window's existing Accessibility hint MUST also say that switching windows needs the permission.
 
 #### Scenario: Accessibility missing
-- **GIVEN** Trackpad Launcher lacks the Accessibility permission and Safari is frontmost
-- **WHEN** the user starts a window swipe
-- **THEN** the switcher shows one row with the Safari icon and "Allow Accessibility to switch windows"
+- **GIVEN** Trackpad Launcher lacks the Accessibility permission and Safari is frontmost with two windows
+- **WHEN** the user anchors the thumb and slides two fingers down
+- **THEN** no switcher appears
+
+#### Scenario: Accessibility granted later
+- **GIVEN** Trackpad Launcher lacked the Accessibility permission, and the user then allows it in System Settings
+- **WHEN** the user next slides two fingers down under an anchored thumb on Safari with two windows
+- **THEN** the window switcher appears
+
+#### Scenario: The hint names window switching
+- **GIVEN** Trackpad Launcher lacks the Accessibility permission
+- **WHEN** the user opens the launcher window
+- **THEN** the Accessibility hint says switching windows needs the permission
 
 ### R15. Clicks, scrolling and system swipes stay blocked during a window swipe
 Click blocking MUST apply for the whole of a window swipe, as for a swipe: clicks, scrolling and the system's trackpad swipes are blocked, and the blocking window is held open until both fingers lift. A window swipe MUST end when both fingers lift, and a finger that loses contact and lands again while the other finger is still down, as in a swipe, MUST rejoin it. The thumb lifting during a window swipe MUST change nothing: the switcher stays and the selection keeps following the fingers. It MUST be cancelled when a third finger lands outside the anchor corner while both are down, or a click reaches apps; a cancelled window swipe MUST keep the window in front as it is at that moment, without the lift's reordering, and be silent.
 
 #### Scenario: No scroll under a window swipe
-- **GIVEN** Trackpad Launcher has the Accessibility permission and the pointer is over a scrollable page
+- **GIVEN** Trackpad Launcher has the Accessibility permission, Safari is frontmost with two windows, and the pointer is over a scrollable page
 - **WHEN** the user window-swipes down
 - **THEN** the page does not scroll
 
 #### Scenario: Third finger cancels
+- **GIVEN** Safari is frontmost with two windows
 - **WHEN** a third finger lands outside the anchor corner during a window swipe
 - **THEN** the switcher disappears, no haptic plays, and nothing more happens until every finger has lifted
 
@@ -304,7 +344,7 @@ The *Swipe up or down to switch windows* switch MUST sit in the launcher window'
 - **THEN** no switcher appears and the page under the pointer scrolls
 
 #### Scenario: Swipe setting off, window swipe on
-- **GIVEN** the swipe setting is off and the window swipe setting is on
+- **GIVEN** the swipe setting is off, the window swipe setting is on, and Safari is frontmost with two windows
 - **WHEN** the user anchors the thumb and slides two fingers down
 - **THEN** the window switcher appears
 
@@ -337,6 +377,7 @@ Window previews MUST be captured only while a window swipe begins, MUST be kept 
 - **Hidden apps.** The window swipe works on the frontmost app, which is never hidden.
 - **Previews of minimised windows.** macOS keeps no current picture of them; their rows show the app icon.
 - **Sound effect.** Deferred, as for every gesture.
+- **An app whose only window is minimised.** One window is nothing to switch between; the Dock restores it.
 
 ## Design
 

@@ -51,3 +51,12 @@
 - Fixed: off-main warm-up and preview capture moved into `@concurrent` functions (architecture.md Concurrency, "explicitly concurrent functions"); the window-number fallback now also covers a window whose private lookup fails (plan adapter step 4); panel row count from `GestureRules.windowSwitcherMaxRows` (made `package`); unused `present(animated:)` and `OverlayAppear.fade` removed; T53's name says what, not how; T19 asserts no read before the crossing frame directly.
 - Declined: count assertions on `reads`/`raised` (the plan's named test handles); `Swipe*` naming and the two event cases (plan decisions, alternatives rejected); small duplication and naming smells (`.moved`/`.cancelled` branches, stretch spring, `look:` parameter, size tuples, `emptied()`, `dismissFade`).
 - Full gate after fixes: green (473 tests, app builds).
+
+## Specify (change 1: window swipe only with two or more windows)
+- Human: no window swipe and no switcher when the frontmost app has fewer than two windows, no frontmost app, or no Accessibility → Solution, R1, R3, R13, R14 rewritten; the slide behaves as with the setting off.
+- prd-reviewer: Design still builds message rows → left to the planner.
+- prd-reviewer: R4 one-row scenarios, unstated window counts in scenarios, blocking-window timing in no-swipe scenarios → scenarios given window counts and "thumb landed just now".
+- prd-reviewer: lone minimised window → rule kept; Non-goal and R13 scenario added.
+- prd-reviewer: untestable speed rule → 50 ms bound; the count is the switcher's row count.
+- prd-reviewer: R2 two-kinds wording, R1 Accessibility wording, R13 MUST NOT, R3 full-screen wording, R6 dead condition, docs clauses → applied.
+- prd-reviewer: missing scenarios (vertical-then-sideways stays no swipe, Accessibility granted later) → added to R13, R14.
