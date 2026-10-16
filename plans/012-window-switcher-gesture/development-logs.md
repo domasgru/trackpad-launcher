@@ -60,3 +60,19 @@
 - prd-reviewer: untestable speed rule → 50 ms bound; the count is the switcher's row count.
 - prd-reviewer: R2 two-kinds wording, R1 Accessibility wording, R13 MUST NOT, R3 full-screen wording, R6 dead condition, docs clauses → applied.
 - prd-reviewer: missing scenarios (vertical-then-sideways stays no swipe, Accessibility granted later) → added to R13, R14.
+
+## Plan (change 1: window swipe only with two or more windows)
+- Decision point: the recognizer decides on the frame thread, only the main actor reads windows → a window swipe's start became a question the model answers before the next frame, the unconfirmed slide blocking by the thumb rules so a declined slide is exactly the setting-off slide. Rejected: a frame-thread window read, a pushed window count, a read when the pair lands, starting blocked then releasing (the scroll filter never relaxes). Without Accessibility the recognizers run without the window swipe. `docs/architecture.md` Concurrency gains the answer hop; `docs/domain-model.md` follows R1, R3, R6, R13, R14.
+- Built work kept: S1 to S4 left as history; S5 (the answer protocol, no visible change) and S6 (the product change) added; superseded rows retired rather than rewritten.
+- plan-reviewer W1: the main-actor reply bookkeeping written twice (real and in-memory adapters), checked only by review → one `WindowSwipeConfirmation` in `LauncherCore` both adapters use, T73 for its edges; M21 shrinks to wiring.
+- plan-reviewer W2: M20 timed only part of R1's 50 ms with a sampling profiler → end-to-end 240 fps video from the fingertip crossing a 3 mm mark to the panel; T19 claimed only for the model.
+- plan-reviewer: T35's new case (a) proves S5's one visible change but sat in S6 → moved to S5; the old no-Accessibility click case is deleted in S6.
+- plan-reviewer: T22, T28, T29, T30 reused for new scenarios while S2 claims them green → retired; their change-1 content is T69 to T72.
+- plan-reviewer: S5 said the system's swipes unblock on the start frame, but the anchored thumb keeps them blocked → S5 reworded.
+- plan-reviewer: requirements proved by both a test and a manual check → every manual entry now names the clause no test can reach; "All requirements" narrowed to "no requirement on its own".
+- plan-reviewer: M13 could fail where open question 8's Mission Control applies → compared against the same slide with the switch off. M14 had no thumb timing → a within-3 s run and a rested-thumb run.
+- plan-reviewer: a late decline after the thumb rolled out was underspecified → "a rest of every contact down, as `restOrIdle` gives"; T67 gains the rolled-thumb hand and the `[.windowSwipe]` against `[]` pairing.
+- plan-reviewer: the differential row's no-Accessibility pair compared identical recognizers; "(h1)'s probes drop" was false while only the thumb is down; the full-screen world was missing → pair dropped (T72 covers it), wording fixed, world added, swipe-off pairing added (T70).
+- plan-reviewer: R13's "a haptic MUST NOT play" against the swap a declined slide's fingers allow → read as the slide's own haptic, recorded in the trace and as open question 17.
+- plan-reviewer: `confirmWindowSwipe(on:)` sketched in a protocol extension, which would not dispatch to the adapter → written inside the protocol body.
+- plan-reviewer: requirement tags (S5 missing R2 and R13, T68 missing R13), stale docs (architecture's "a window swipe reads", the *Tap* entry without Accessibility, the renamed `SystemPermissionsTests`, the "same hop" bullet) → fixed.

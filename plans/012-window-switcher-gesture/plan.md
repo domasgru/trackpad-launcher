@@ -392,9 +392,11 @@ the lift then acts on), the first use of the `AXUIElement` family and of a priva
 windows, which arrive after the window swipe began and must go when it ends.
 
 The grounding fixes these constraints, and the design honours each:
-- One recognizer and one `.swiping` state; the direction is decided once, in `beginOrSpoil`; the recognizer never
-  learns whether the app has windows; a window swipe with nothing to switch still runs its course blocked (`why.md`
-  Preserve 1, 3; Avoid 1, 2).
+- One recognizer and one `.swiping` state; the direction is decided once, in `beginOrSpoil` (`why.md` Preserve 1, 3;
+  Avoid 1, 2). Change 1 overturns the original "the recognizer never learns whether the app has windows": a slide up
+  or down is a window swipe only when the frontmost app has two or more windows (R13) and Accessibility is granted
+  (R14), and otherwise must be exactly the slide the window swipe setting off makes. Only the main actor can read
+  windows, so the recognizer learns the verdict as the model's answer to the start, before its next frame.
 - Travel crosses the port as one scalar in step millimetres, through the pointer curve installed at begin; 100 cursor
   points make a row (Preserve 4; R9).
 - The list is fixed at begin; the system is read at begin and again at the lift; a window closed mid-swipe is the
@@ -415,14 +417,18 @@ The grounding fixes these constraints, and the design honours each:
 
 ### Usage (caller's view)
 
-**README for the next maintainer.** A slide is a *swipe* (more sideways) or a *window swipe* (more up or down). The
+**README for the next maintainer.** A slide is a *swipe* (more sideways) or a slide up or down (more up or down). The
 recognizer decides which on the frame the farthest-moved finger passes 3 mm and holds that until both fingers lift. A
-window swipe's phases arrive as `.windowSwipe(phase)` through the same hop as the swipe's, and
-`Launcher.windowSwipe(_:)` is the one place a window swipe becomes effects. It reads the frontmost app's windows with
-`system.frontmostWindows()`, beside `runningApps()` on `SystemActions`, and builds a `WindowSwitcher` value whose
-content is fixed for the window swipe. Each selection change onto a visible window is `system.raiseWindows([window])`,
-beside `bringToFront`. The lift reads the windows again and asks the value for a `WindowLift`, a pure plan of which
-windows to raise and whether to pulse. The selection maths is the app switcher's,
+slide up or down is reported as `.windowSwipe(.began)` through the same hop as the swipe's phases, but it is a *window
+swipe* only once the model confirms it: `Launcher.windowSwipe(_:)`, the one place a window swipe becomes effects, reads
+the frontmost app's windows with `system.frontmostWindows()`, beside `runningApps()` on `SystemActions`, and calls
+`hardware.confirmWindowSwipe(on:)` only when the read makes a `WindowSwitcher.Content` (two or more rows). Whatever the
+model did, the adapter answers the start once `onEvent` returns, and the recognizer takes the answer before its next
+frame: confirmed, the slide blocks until both fingers lift; declined, it becomes the slide the window swipe setting off
+would have made. Without Accessibility the recognizers run without the window swipe at all. The confirmed window
+swipe's `WindowSwitcher` value has content fixed for the window swipe. Each selection change onto a visible window is
+`system.raiseWindows([window])`, beside `bringToFront`. The lift reads the windows again and asks the value for a
+`WindowLift`, a pure plan of which windows to raise and whether to pulse. The selection maths is the app switcher's,
 extracted into `SwitcherSelection`. The shell draws `launcher.windowSwitcher`. Previews are a shell asset, like icons:
 the model says whether rows show previews and which windows; the window switcher's presenter captures those windows
 once per window swipe and holds the pictures only while that window switcher is on screen. Both permissions sit behind
@@ -435,10 +441,13 @@ one `Permissions` port that owns the one TCC broadcast.
 private func windowSwipe(_ event: SwipeEvent) {
     switch event.phase {
     case .began:
-        guard shown == nil, activity.isActive else { return }
+        // A slide up or down is a window swipe only when the one read lists two or more rows (R1, R13). Unconfirmed,
+        // the recognizer makes it the slide the setting off would have made, before its next frame.
+        guard activity.isActive, let content = WindowSwitcher.Content(system.frontmostWindows()) else { return }
+        hardware.confirmWindowSwipe(on: event.trackpad)
+        // One switcher at a time: a second trackpad's window swipe runs its course with none, as its swipe would.
+        guard shown == nil else { return }
         windowSwipesBegun += 1
-        let read = system.frontmostWindows()
-        let content = isAccessibilityGranted ? WindowSwitcher.Content(read) : .accessibilityNeeded(for: read.app)
         // The grant as the last TCC push left it (R7): a fresh preflight would cost about 4 ms here.
         shown = .windows(WindowSwitcher(
             content, showsPreviews: isScreenRecordingGranted, serial: windowSwipesBegun, trackpad: event.trackpad))
@@ -452,8 +461,6 @@ private func windowSwipe(_ event: SwipeEvent) {
     case .ended:
         guard case .windows(let open)? = shown, open.trackpad == event.trackpad else { return }
         shown = nil
-        // A message row has nothing to switch: silent, and nothing is read (R13, R14).
-        guard open.listsWindows else { return }
         // The second read: the plan follows the windows as they are now, whatever the raises while sliding did.
         let lift = open.lift(now: system.frontmostWindows())
         if lift.playsHaptic {
@@ -494,7 +501,7 @@ private func open(_ switcher: WindowSwitcher) {
     let scale = screen?.backingScaleFactor ?? 2
     layout = WindowColumnLayout(
         rowCount: switcher.rows.count, widestTitle: panel.widestTitle(switcher.rows), displayHeight: visible.height)
-    panel.lay(out: switcher.rows, icon: switcher.app.map(icons.icon(forSwitcher:)), layout: layout,
+    panel.lay(out: switcher.rows, icon: icons.icon(forSwitcher: switcher.app), layout: layout,
               topLeft: NSPoint(x: visible.minX + WindowColumnLayout.margin, y: visible.maxY - WindowColumnLayout.margin))
     shownSerial = switcher.serial
     lastStretch = 0
@@ -581,11 +588,12 @@ func twoFingersSlidingDownPastThreeMillimetresBeginAWindowSwipe(hand: HandMode, 
 
 **Data first.** One read of the system, `FrontmostWindows` (the app; its visible windows on the current Space, front
 to back; its minimised windows in the app's order), is parsed once at the model's edge into
-`WindowSwitcher.Content`, a sum type: `.windows(of:, WindowList)` where `WindowList` is `.front(…)` or
-`.minimisedOnly(…)`, `.noWindows(of:)`, or `.accessibilityNeeded(for:)`. Everything else derives from that fixed value:
-the rows the presenter draws, the window a move raises (`selectedVisibleWindow`), the front window (`frontWindow`), the
-windows the presenter captures (`previewWindows`), and, given the second read, the lift (`lift(now:)`). Every dominant
-access reads the one value; nothing needs an index or a cache.
+`WindowSwitcher.Content`: the app and a `WindowList` (`.front(…)` or `.minimisedOnly(…)`) of two to ten windows. The
+parse is failable, and its nil is the whole of R13: no frontmost app, or fewer than two rows, so the slide is no window
+swipe. Everything else derives from that fixed value: whether the start is confirmed, the rows the presenter draws, the
+window a move raises (`selectedVisibleWindow`), the front window (`frontWindow`), the windows the presenter captures
+(`previewWindows`), and, given the second read, the lift (`lift(now:)`). Every dominant access reads the one value;
+nothing needs an index or a cache.
 
 **Load-bearing decisions.**
 
@@ -594,10 +602,36 @@ access reads the one value; nothing needs an index or a cache.
   replaces `swipes: Bool`; `Swipe.kind` is a `let`. `.swiping` is unchanged, so blocking, rejoin, thumb, cancel and end
   apply to both kinds by construction (R15). A pair and `.resting` exist while any kind is on (R16: swipe off with the
   window swipe on); with only one kind on, the other axis spoils exactly as today.
+- **A window swipe's start is a question the model answers before the next frame** (change 1; per
+  separate-before-serializing-shared-state). Whether a slide up or down is a window swipe depends on the frontmost app's
+  windows, which only the main actor reads, while the slide's blocking is decided frame by frame on the frame thread.
+  So `beginOrSpoil` still begins a `.swiping` slide for `.windowSwipe` and reports `.windowSwipe(.began)`, but the
+  `Swipe` is born unconfirmed: its phases are reported as usual, and it blocks only by the thumb rules, exactly what the
+  spoiled slide of the setting off would block on that frame. `GestureRecognizer.answerWindowSwipe(began:isWindowSwipe:)`
+  settles it: true confirms it, and from the next frame it blocks like any `.swiping` slide; false turns the state into
+  the one `beginOrSpoil` returns with the setting off, `.spoiled` under the slide's thumb, or, once that thumb has gone,
+  a rest of every contact down, as the spoiled state's own exit (`restOrIdle`) gives, a thumb that rolled out of the
+  corner included. The answer names its start by the frame time it began on, so an answer to an earlier start, one
+  after its slide ended and a second answer change nothing. A swipe is born confirmed. On the port, the model calls
+  `TrackpadHardware.confirmWindowSwipe(on:)` while it handles the start, and the adapter replies to every start it
+  delivers once `onEvent` returns, true only if confirmed: an answer is never forgotten, and nothing but the start's own
+  handling can confirm it. That main-actor bookkeeping lives once, in `WindowSwipeConfirmation` in `LauncherCore`, as
+  `TrackpadEvent.init(_:on:)` and `TouchFrame.Press.init(holding:buttonDown:)` do for rules both adapters share: each
+  adapter hands every event to `onEvent` through it and forwards `confirmWindowSwipe(on:)` to it, so every World row
+  runs the same rule the hardware does. The real adapter's `DeviceSession` delivers each start with a reply that writes
+  `(began, isWindowSwipe)` into a slot only the main actor writes; its frame callback hands the slot to the recognizer
+  before stepping each frame. The answer normally lands between the start frame and the next, so a declined slide is,
+  from the next frame on, the very state the setting off would have reached; if the main actor is busy the slide waits,
+  unconfirmed, on the frames that keep arriving. No timer, no poll.
+- **Without Accessibility there is no window swipe to recognise** (change 1, R14). The model runs the recognizers
+  with `settings.slides` minus `.windowSwipe` while the permission is missing, so a slide up or down spoils on the frame
+  it passes 3 mm, nothing is read, and nothing hops. A grant already re-runs the trackpads (click blocking follows it),
+  so the window swipe returns with the next slide.
 - **Phases by kind, same hop** (per type-system-discipline). `Recognition.Event.windowSwipe` and
   `TrackpadEvent.windowSwipe` are new cases, so the compiler routes a window swipe to its own handler and the tests'
   existing `.swipe(...)` phases and injections are untouched; only the frame thread's per-begin travel hook widens, to
-  `Recognition.beginsSlide`. The hop, the generation check and `TrackpadEvent.init` are the same code.
+  `Recognition.beginsSlide`. The hop, the generation check and `TrackpadEvent.init` are the same code; change 1 adds
+  only the reply that follows a window swipe's start back to its session.
 - **Travel along the slide.** `PointerCurve.cursorMove` returns both components, scaled by the one speed-dependent
   multiplier; `SwipeTravel.travel(along:)` picks the component. One step is 100 cursor points on either axis: the app
   switcher's icon pitch and R9's row.
@@ -606,9 +640,11 @@ access reads the one value; nothing needs an index or a cache.
 - **At most one switcher.** The model stores `shown: ShownSwitcher?` (`.apps` or `.windows`) and derives `switcher` and
   `windowSwitcher`; `reconcile` clears both with one write (per encode-lessons-in-structure).
 - **Content as a construction, not flags** (per type-system-discipline). The front window exists only in `.front`; the
-  all-minimised case is its own variant; a message row exists only as the single row of a message content. The rules
-  live in the one parse: a full-screen front window alone, other full-screen windows left out, visible before
-  minimised, the cut at 10 (per boundary-discipline).
+  all-minimised case is its own variant; a content exists only with two or more windows, so the switcher has no message
+  rows and every row names a window. The rules live in the one parse: a full-screen front window alone (one row, so no
+  content), other full-screen windows left out, visible before minimised, the cut at 10, and nil below two rows (per
+  boundary-discipline). The model's confirmation and the switcher's rows come from the same parse of the same read, so
+  the count that decides is the count the user sees (R1).
 - **The lift is a pure plan from a second read** (per make-operations-idempotent; Risk 4). `lift(now:)` takes the
   windows as they are at the lift and returns which to raise and whether to pulse, so it never depends on what the
   raises while sliding did. The target is the selected window, then the visible windows in their begin order (the
@@ -642,11 +678,17 @@ messaging timeout, with no further raises to an app after its first timeout; the
 frame-matching fallback; the current-Space test by the on-screen window list; subrole filtering for visible windows
 only (F9); the full-screen flag; closed-element errors; focus; restore by raise. `Permissions` is three members over AX
 trust, screen-capture access, both prompts and the shared broadcast. `WindowSwitcher` hides row derivation, naming, the
-cut, the message rows, the lift plan and the haptic rule behind reads plus `follow` and `lift(now:)`. The model's
-public surface grows by `windowSwitcher`, `isWindowSwipeOn` / `setWindowSwipe(on:)` and `screenRecordingHint` /
-`askForScreenRecording()`; the grant stays private because the hint and `showsPreviews` carry it.
+cut, the two-row threshold, the lift plan and the haptic rule behind a failable parse, reads, `follow` and
+`lift(now:)`. `TrackpadHardware` gains one method, `confirmWindowSwipe(on:)`; behind it, `WindowSwipeConfirmation`'s
+one rule for when a confirmation counts, the reply each start carries, the answer slot, and the hand-over before the
+next frame. The recognizer gains one, `answerWindowSwipe(began:isWindowSwipe:)`;
+behind it, the unconfirmed slide's thumb-rule blocking, the stale-answer rule and the conversion to the setting-off
+state. The model's public surface grows by `windowSwitcher`, `isWindowSwipeOn` / `setWindowSwipe(on:)` and
+`screenRecordingHint` / `askForScreenRecording()`; the grant stays private because the hint and `showsPreviews` carry
+it.
 
-**Deliberately not done.** No main-to-frame channel. No window state in the model between window swipes. No restore
+**Deliberately not done.** No main-to-frame channel beyond the one answer per window swipe start. No window read on
+the frame thread. No window state in the model between window swipes. No restore
 while sliding. No raise of an unlisted window. No prompt from a gesture. No live previews, no stream. No attribute
 writes: closing, minimising and moving windows are banned by the source policy. No change to the gesture hint text.
 
@@ -659,6 +701,10 @@ writes: closing, minimising and moving windows are banned by the source policy. 
 | LauncherUI | `OverlayPanel` (new base for both switcher panels), `Displays.screen(under:)` (moved out of `SwitcherPresenter`); `WindowSwitcherPanel`, `WindowSwitcherPresenter`, `WindowSwitcherLook`, `PreviewCapture` (new); `SwitcherPanel` and `SwitcherPresenter` adopt the base and read `selection`; `SwitcherSection` third row through `SettingRow`; `LauncherView` hint; `SettingsPane.screenRecording`; `MenuBarShell` builds the presenter and adds `screenRecordingHint` to the refit observation |
 | App target | `SystemPermissions()` in place of `SystemAccessibilityPermission()`; `assets/window-swipe.svg` |
 | Tests | `RecordingSystemActions.windows` (a `FakeWindows` stack), `InMemoryPermissions` (replaces `InMemoryAccessibilityPermission`); `World` (`permissions`, `windowWorld`, `windowSwipe`, `window(_:)`); the `windowPhases` driver; `slides:` at every recognizer construction site; `TouchScript.tap(dragMM:)` takes `(x, y)`; source policy rows |
+| Change 1, LauncherCore | `GestureRecognizer.answerWindowSwipe(began:isWindowSwipe:)`; `Swipe.began`, `Swipe.isConfirmed`; an unconfirmed `.swiping` blocks by the thumb rules; `TrackpadHardware.confirmWindowSwipe(on:)`; `WindowSwipeConfirmation` (new, the adapters' shared main-actor half of the answer); `WindowSwitcher.Content` becomes a struct (`app`, `windows`) with a failable parse; `Row` loses `.message`, `window` and `app` stop being optional, `listsWindows` goes; `Copy.untitledWindow(of:position:)`; `Copy.noOpenWindows` and `Copy.accessibilityForWindows` go; `Copy.accessibilityHint` names switching windows; `Launcher.windowSwipe(_:)` confirms only a content and lifts every shown switcher; `reconcile` runs without `.windowSwipe` while Accessibility is missing |
+| Change 1, LauncherPlatform | `DeviceSession`: each window swipe start delivered with a reply; the answer slot (writer: main), handed to the recognizer before each step; `MultitouchTrackpads`: hands every event through a `WindowSwipeConfirmation`, calls a start's reply with its answer, and forwards `confirmWindowSwipe(on:)` to it |
+| Change 1, LauncherUI | `WindowSwitcherPresenter` and `WindowSwitcherPanel` take the non-optional app and window |
+| Change 1, Tests | `InMemoryTrackpads` hands every event through a `WindowSwipeConfirmation`, answers each start between frames and logs it in `windowSwipeAnswers`; the recognizer drivers take `answering: Bool?` (default true: every start confirmed before the next frame; nil: never answered); `DeviceSession` test helpers take the reply |
 
 #### Core types and signatures
 
@@ -676,7 +722,9 @@ public enum SlideKind: Hashable, Sendable {
 
 /// A swipe's or a window swipe's progress; the event case says which. (Replaces the three stale comments.)
 public enum SwipePhase: Equatable, Sendable {
-    /// One of two fingers under an anchored thumb moved past 3 mm. Travel is 0 here: the 3 mm do not count.
+    /// One of two fingers under an anchored thumb moved past 3 mm. Travel is 0 here: the 3 mm do not count. A window
+    /// swipe's start is a question: it is a window swipe only if the model confirms it while handling this phase
+    /// (`TrackpadHardware.confirmWindowSwipe(on:)`).
     case began
     /// Travel along the slide since `began`, in step millimetres (12 per item), absolute. Sent only when it changed.
     case moved(travelMM: Double)
@@ -714,7 +762,21 @@ extension GestureRecognizer {
     // Move:       var slide: SlideKind? { abs(dxMM) > abs(dyMM) ? .swipe : abs(dyMM) > abs(dxMM) ? .windowSwipe : nil }
     //
     // .swiping:   travel = swipe.travelMM + self.travel.travel(along: swipe.kind, dxMM: dxMM, dyMM: dyMM, interval: interval)
-    //             every phase is emitted as .slide(swipe.kind, phase); blocking stays `if case .swiping = state`
+    //             every phase is emitted as .slide(swipe.kind, phase)
+    //
+    // Change 1. Swipe gains `let began: FrameTime` and `var isConfirmed: Bool` (true for .swipe, false for
+    // .windowSwipe at begin). Blocking: a confirmed .swiping blocks; an unconfirmed one falls to the thumb rules on
+    // swipe.thumb, the flags the spoiled slide of the setting off gives on the same frame.
+
+    /// The model's answer to the window swipe start reported on the frame at `began`. true confirms it: from the next
+    /// frame it blocks clicks, scrolling and the system's swipes until both fingers lift. false turns the slide into
+    /// what the window swipe setting off makes of it: `.spoiled` under the slide's thumb, or, once that thumb has gone,
+    /// a rest of every contact down as `restOrIdle` gives it (a thumb that rolled out of the corner counts as one of
+    /// them), so it never becomes a swipe and a thumb tap under it may swap as it would there. Changes nothing
+    /// unless an unconfirmed slide that began at `began` is in progress: an earlier start's answer, an answer after the
+    /// slide ended and a second answer are ignored. (Exactly the setting-off state when it arrives before the next
+    /// frame; a thumb that lifted and landed again before a late false is taken as the slide's thumb.)
+    public mutating func answerWindowSwipe(began: FrameTime, isWindowSwipe: Bool) { fatalError("not implemented") }
 }
 
 extension PointerCurve {
@@ -743,7 +805,7 @@ public enum SwipeTravel: Equatable, Sendable {
 /// ends; a rubber band of at most a quarter step, forgotten the moment the fingers turn back (no dead zone).
 /// `Switcher.follow`, `selected`, `position` and `stretch` today, moved here unchanged.
 public struct SwitcherSelection: Equatable, Sendable {
-    /// At least 1: a one-row switcher rubber-bands at both ends (R13).
+    /// At least 1: an app switcher of one icon rubber-bands at both ends. A window switcher has two or more rows.
     public let count: Int
     public package(set) var travelMM: Double = 0
     private var reportedMM: Double = 0
@@ -805,15 +867,15 @@ public enum WindowStack {
 /// The window switcher during one window swipe. Its content is fixed when the window swipe begins: a window that opens
 /// later is not added, and one that closes stays listed. The selection follows the travel.
 public struct WindowSwitcher: Equatable, Sendable {
-    public enum Content: Equatable, Sendable {
-        case windows(of: AppEntry, WindowList)
-        /// "No open windows", with the app's icon when there is a frontmost app.
-        case noWindows(of: AppEntry?)
-        /// "Allow Accessibility to switch windows", with the frontmost app's icon.
-        case accessibilityNeeded(for: AppEntry?)
+    /// What a window swipe lists: the frontmost app and two to ten of its windows. One exists only for a window swipe
+    /// (change 1: the old `.noWindows` and `.accessibilityNeeded` message contents are gone).
+    public struct Content: Equatable, Sendable {
+        /// Whose windows these are; their rows show its icon.
+        public let app: AppEntry
+        public let windows: WindowList
     }
 
-    /// At most `GestureRules.windowSwitcherMaxRows` windows in all.
+    /// Two to `GestureRules.windowSwitcherMaxRows` windows in all.
     public enum WindowList: Equatable, Sendable {
         /// The front window, the other visible windows front to back, then the minimised ones in the app's order.
         /// A full-screen front window is alone.
@@ -827,10 +889,8 @@ public struct WindowSwitcher: Equatable, Sendable {
         case visible(WindowID, title: String)
         /// Dimmed, with the app icon, its title and the "Minimised" badge.
         case minimised(WindowID, title: String)
-        /// The single row of a window switcher with nothing to switch.
-        case message(String)
 
-        public var window: WindowID? { fatalError("not implemented") }
+        public var window: WindowID { fatalError("not implemented") }
         public var title: String { fatalError("not implemented") }
     }
 
@@ -843,27 +903,25 @@ public struct WindowSwitcher: Equatable, Sendable {
     public let serial: Int
     public let trackpad: TrackpadID
 
-    /// The selection count is `rows.count` (one for a message) and starts on the first row (R9, R11).
+    /// The selection count is `rows.count` (two to ten) and starts on the first row (R9, R11).
     package init(_ content: Content, showsPreviews: Bool, serial: Int, trackpad: TrackpadID) {
         fatalError("not implemented")
     }
 
-    /// Whose windows these are and whose icon the rows show. nil: no frontmost app.
-    public var app: AppEntry? { fatalError("not implemented") }
-    /// Top to bottom. A window titled "" reads as the app's name, plus " — Window N" when there is more than one row,
-    /// N its 1-based row (`Copy.untitledWindow`).
+    /// Whose windows these are and whose icon the rows show: `content.app`.
+    public var app: AppEntry { fatalError("not implemented") }
+    /// Top to bottom, two to ten. A window titled "" reads as the app's name followed by " — Window N", N its 1-based
+    /// row (`Copy.untitledWindow`; R6).
     public var rows: [Row] { fatalError("not implemented") }
-    /// The app's window in front when the window swipe began. nil when every window is minimised, or for a message.
+    /// The app's window in front when the window swipe began. nil when every listed window is minimised.
     public var frontWindow: WindowID? { fatalError("not implemented") }
     /// The windows to capture: the visible rows while `showsPreviews`, else none.
     public var previewWindows: [WindowID] { fatalError("not implemented") }
-    /// The window that comes to the front while its row is selected. nil on a minimised row or a message (R10).
+    /// The window that comes to the front while its row is selected. nil on a minimised row (R10).
     public var selectedVisibleWindow: WindowID? { fatalError("not implemented") }
-    /// Windows are listed, so a lift can change something. false for a message: its lift reads nothing and is silent.
-    public var listsWindows: Bool { fatalError("not implemented") }
 
     /// The lift (R11, R12), from the rows fixed at begin and a second read of the frontmost app's windows. Pure.
-    /// - `now` is no app or another app, or nothing is listed → `.nothing`: no raises, silent.
+    /// - `now` is no app or another app → `.nothing`: no raises, silent.
     /// - The selected window has closed → no raises (no reordering); the haptic plays iff a window is in front now and
     ///   it is not `frontWindow`. Every listed window closed is therefore silent.
     /// - Otherwise the target is the selected window, then the visible windows in their begin order (the front window
@@ -881,11 +939,13 @@ public struct WindowLift: Equatable, Sendable {
 }
 
 extension WindowSwitcher.Content {
-    /// The one parse from what the system read to what the switcher lists:
-    /// - `.noApp`, or an app with no windows, reads as `.noWindows`.
+    /// The one parse from what the system read to what the switcher lists, and so whether a slide up or down is a
+    /// window swipe at all (R1, R13):
     /// - A full-screen front window is the single row; other full-screen windows are left out.
     /// - Visible windows come before minimised ones, and the list is cut at 10.
-    package init(_ read: FrontmostWindows) { fatalError("not implemented") }
+    /// - nil for `.noApp`, and for fewer than two rows after these rules: one window, an only window minimised, no
+    ///   windows, a full-screen front window, or an app that did not answer (its read lists nothing).
+    package init?(_ read: FrontmostWindows) { fatalError("not implemented") }
 }
 
 /// Where the window switcher's rows and highlight sit: one column of `rowCount` rows on a display whose visible frame
@@ -947,6 +1007,35 @@ public enum Permission: Hashable, Sendable { case accessibility, screenRecording
 // TrackpadEvent gains `case windowSwipe(SwipeEvent)`; `TrackpadEvent.init(_:on:)` maps `.windowSwipe(phase)` to it.
 // TrackpadHardware.run(_:handMode:blockClicks:slides:swaps:) replaces `swipes: Bool` with `slides: Set<SlideKind>`.
 
+@MainActor public protocol TrackpadHardware: AnyObject {
+    // onEvent, connected(), run(_:handMode:blockClicks:slides:swaps:), playFeedback(_:on:): as above. Change 1:
+    // `onEvent`'s doc gains "A `.windowSwipe(.began)` asks whether its slide is a window swipe. Once the call returns,
+    // the adapter answers that start, true only if `confirmWindowSwipe(on:)` was called during it, and the trackpad's
+    // recognizer takes the answer before its next frame: confirmed, the slide blocks until both fingers lift;
+    // declined, it goes on as with the window swipe setting off."
+
+    /// A requirement of the protocol (change 1), so a call through `any TrackpadHardware` reaches the adapter. Only
+    /// while `onEvent` is handling a `.windowSwipe(.began)` from `trackpad`: makes that slide a window swipe. Anywhere
+    /// else, including an event a test injected, it does nothing.
+    func confirmWindowSwipe(on trackpad: TrackpadID)
+}
+
+/// The main-actor half of the answer to a window swipe's start, one rule both hardware adapters share (change 1), as
+/// they share `TrackpadEvent.init(_:on:)`: every event reaches `onEvent` through `deliver`, and a start comes back with
+/// its answer for the adapter to send to that trackpad's recognizer.
+@MainActor public final class WindowSwipeConfirmation {
+    public init() { fatalError("not implemented") }
+    /// Hands `event` to `handler`; nil drops it. For a `.windowSwipe(.began)`, returns whether `confirm(on:)` named the
+    /// event's trackpad while `handler` ran, so false when it did not, or `handler` is nil. nil for every other event,
+    /// which gets no reply.
+    public func deliver(_ event: TrackpadEvent, to handler: (@MainActor (TrackpadEvent) -> Void)?) -> Bool? {
+        fatalError("not implemented")
+    }
+    /// What the adapter's `confirmWindowSwipe(on:)` calls. Counts only while `deliver` hands over a start from
+    /// `trackpad`; any other call does nothing, and nothing carries over to the next start.
+    public func confirm(on trackpad: TrackpadID) { fatalError("not implemented") }
+}
+
 // MARK: Model additions
 
 extension Settings {
@@ -971,7 +1060,7 @@ extension Launcher {
     //                                              // Run guard; a Screen Recording change never restarts trackpads
     // @ObservationIgnored private var windowSwipesBegun = 0
     public var switcher: Switcher? { fatalError("not implemented") }
-    /// Non-nil for the whole of a window swipe: it always shows (R13).
+    /// Non-nil for the whole of a window swipe, unless another trackpad's switcher was already up when it began.
     public var windowSwitcher: WindowSwitcher? { fatalError("not implemented") }
     public var isWindowSwipeOn: Bool { fatalError("not implemented") }
     /// nil while the window swipe setting is off or Screen Recording is granted (R8).
@@ -982,13 +1071,16 @@ extension Launcher {
     public func askForScreenRecording() { fatalError("not implemented") }
     // start(): onEvent routes `.windowSwipe(let e)` to windowSwipe(e); permissions.onChange = { reconcile() };
     //          the first-launch prompt becomes permissions.ask(.accessibility).
-    // reconcile(): Run.slides = settings.slides.
+    // reconcile(): Run.slides = settings.slides, minus .windowSwipe while Accessibility is missing (change 1, R14):
+    //             without it no window can be read, so a slide up or down spoils as with the setting off.
 }
 
 // GestureRules: windowSwitcherMaxRows = 10.
-// Copy: noOpenWindows, accessibilityForWindows, minimisedBadge, untitledWindow(of:position:rows:),
+// Copy: minimisedBadge, untitledWindow(of:position:) ("Preview — Window 2"),
 //       screenRecordingHint ("Window previews need Screen Recording."),
-//       screenRecordingButton(_:) ("Allow Screen Recording…" for .ask, "Open System Settings…" for .openSettings).
+//       screenRecordingButton(_:) ("Allow Screen Recording…" for .ask, "Open System Settings…" for .openSettings),
+//       accessibilityHint ("Clicks and scrolling aren't blocked during gestures, and windows can't be switched. Allow
+//       Accessibility access to do both."; change 1, R14). Change 1 removes noOpenWindows and accessibilityForWindows.
 ```
 
 #### Platform and shell signatures
@@ -1045,6 +1137,32 @@ struct ListedWindow: Sendable { let number: UInt32; let frame: CGRect; let name:
 
 // WorkspaceActions: `private let windows = FrontmostAppWindows()`; frontmostWindows() → windows.read();
 // raiseWindows(_:) → windows.raise(_:).
+
+// Change 1: the answer to a window swipe start, the one thing that hops from the main actor to a frame thread.
+
+/// The answer to one window swipe start: the frame time the start was reported on, and whether it is a window swipe.
+struct WindowSwipeAnswer: Sendable { let began: FrameTime; let isWindowSwipe: Bool }
+
+final class DeviceSession: Sendable {
+    /// `deliver` now also carries, for a frame that reported `.windowSwipe(.began)`, the reply for that start: called
+    /// once on the main actor, it records `WindowSwipeAnswer(began: frame.time, isWindowSwipe:)`. nil for every other
+    /// event.
+    init(trackpad: TrackpadID, recognizer: GestureRecognizer, pointerCurves: [PointerCurve.Point], clickTap: ClickTap?,
+         deliver: @escaping @Sendable (TrackpadEvent, _ reply: (@Sendable (Bool) -> Void)?) -> Void) {
+        fatalError("not implemented")
+    }
+    // Writer: the main actor, through a reply. Reader: this device's frame callback, which reads it before taking the
+    // recognizer's lock and hands it to `answerWindowSwipe(began:isWindowSwipe:)` before `step`. Never cleared: the
+    // recognizer ignores an answer it has already taken or that names another start.
+    // private let answer = Mutex<WindowSwipeAnswer?>(nil)
+}
+
+// MultitouchTrackpads, on the main actor in the hop: `let answer = confirmation.deliver(event, to: onEvent)`, then
+// `reply?(answer)` when both exist; `confirmWindowSwipe(on:)` forwards to `confirmation.confirm(on:)`. An event from
+// a replaced run is dropped before `deliver`, as today, reply and all: its session is gone.
+// InMemoryTrackpads does the same between frames, giving the answer straight to the running recognizer with the
+// start frame's time and appending it to `windowSwipeAnswers`; `inject(_:)` also goes through `deliver`, and its
+// answer goes nowhere.
 
 /// Permissions over AX trust, screen-capture access and tccd's one broadcast (about 30 ms after a change, main queue,
 /// no payload, no service named): both are re-read on every post, and `onChange` runs only when either changed. The
@@ -1144,23 +1262,25 @@ geometry):
 
 | Case | Behaviour | Where |
 |---|---|---|
-| No Accessibility | One row: the frontmost app's icon and "Allow Accessibility to switch windows". The lift is silent. The window swipe is still recognised; nothing is blocked (R14). | model gate on `isAccessibilityGranted` |
-| App does not answer | The read lists nothing, so the row is "No open windows". A timeout during `raiseWindows` stops raises to that app for this read. | adapter |
+| No Accessibility | No window swipe: the recognizers run without `.windowSwipe`, so a slide up or down spoils on its first frame past 3 mm, exactly as with the setting off; nothing is read and nothing hops (R14). | model's `Run` |
+| App does not answer | The read lists nothing, so the start is declined and the slide goes on as with the setting off. The decision waits up to one messaging timeout (0.2 s), during which the slide blocks only by the thumb rules. A timeout during `raiseWindows` stops raises to that app for this read. | adapter; parse |
+| Main actor busy past the next frame | The start waits, unconfirmed: its phases are reported, and it blocks only by the thumb rules, until the answer reaches the frame thread on a later frame. A declined slide is then spoiled from that frame; a thumb that lifted and landed again meanwhile is taken as the slide's thumb, so it cannot swap until the fingers lift. | recognizer; `DeviceSession` |
 | Window closed | A raise changes nothing. The lift does no reordering, with the haptic only if another window is now in front (R10, R11). | adapter; `lift(now:)` |
 | Every listed window closed | Nothing is in front: the lift is silent. | `lift(now:)` |
 | Another app in front at the lift | Nothing is raised; silent. | `lift(now:)` |
 | No `_AXUIElementGetWindow` | Numbers come from frame matching; an unmatched window is not listed. | adapter |
 | No Screen Recording | `previewWindows == []`: nothing captures, rows show the icon, nothing prompts (R7). | model; shell |
 | Capture fails for a window | Its row keeps the icon. | shell |
-| No frontmost app | "No open windows" with no icon (R13). | model parse |
+| No frontmost app | No window swipe: the parse gives nothing and the start is declined (R13). | model parse |
+| Another trackpad's switcher is up | A slide down over an app with two or more windows is confirmed and runs its course blocked with no switcher of its own, as a second trackpad's swipe does; one with fewer is declined. | model |
 
 #### Requirement trace
 
 | R | Carried by |
 |---|---|
-| R1 | `beginOrSpoil` (`Move.slide`, `slides.contains`); pair and `.resting` exist while `!slides.isEmpty`; `dragThresholdMM` shared; the edge filter; `.windowSwipe(.began)` → `windowSwipe(_:)` builds the switcher whatever the permissions |
-| R2 | `Swipe.kind` fixed at begin; phases emitted by kind (`.slide(kind, _)`); a slide never re-enters `beginOrSpoil` |
-| R3 | Current Space and window-list order in `FrontmostAppWindows.sort`; `Content.init(_:)`: the full-screen front window alone, visible before minimised, the cut at 10; `content` is a `let` |
+| R1 | `beginOrSpoil` (`Move.slide`, `slides.contains`); pair and `.resting` exist while `!slides.isEmpty`; `dragThresholdMM` shared; the edge filter; `.windowSwipe(.began)` → `windowSwipe(_:)` confirms only a `Content` (two or more rows, the same parse the rows come from) and shows the switcher in that main turn; `answerWindowSwipe` |
+| R2 | `Swipe.kind` fixed at begin; phases emitted by kind (`.slide(kind, _)`); a slide never re-enters `beginOrSpoil`, and a declined one is `.spoiled` |
+| R3 | Current Space and window-list order in `FrontmostAppWindows.sort`; `Content.init?(_:)`: the full-screen front window alone (so nil), visible before minimised, the cut at 10; `content` is a `let` |
 | R4 | `FrontmostAppWindows.sort` (standard visible windows on screen; minimised by `kAXMinimized` alone); `Row.minimised` drawn dimmed with the badge and the icon |
 | R5 | `Displays.screen(under:)` + `visibleFrame` top-left with `margin`; `WindowColumnLayout.scale`; `OverlayPanel` (never key, click-through); `dismiss()` on nil |
 | R6 | `rows` titles (`Copy.untitledWindow`); `WindowColumnLayout.previewSize(aspect:)`; the icon until `PreviewCapture` yields; one capture per `serial` at the open; the panel shown in the begin turn |
@@ -1170,9 +1290,9 @@ geometry):
 | R10 | `selectedVisibleWindow` + `system.raiseWindows([window])` in `.moved`; row 0 is the front window, so sliding back raises it; nothing when every window is minimised; a closed window is skipped by the adapter |
 | R11 | the second read; `lift(now:)` and `WindowStack.raises` (restore of the first only, closed selected → no reordering); `system.raiseWindows(lift.raises)`; `window = .closed` on a changing lift |
 | R12 | Ticks = `follow`'s return; `WindowLift.playsHaptic`; `windowSwipe(_:)` never calls `playLaunchAnimation` |
-| R13 | `.noWindows(of:)`; a one-row `SwitcherSelection`; a single visible row's lift raises nothing and is silent |
-| R14 | `.accessibilityNeeded(for: read.app)`; the existing Accessibility hint unchanged |
-| R15 | `.swiping` unchanged; `.cancelled` → `shown = nil` with no read and no raise |
+| R13 | `Content.init?` nil below two rows or with no app; no confirmation, so `answerWindowSwipe(…, false)` turns the slide into the setting-off `.spoiled` before the next frame; the unconfirmed start frame blocks by the thumb rules; one read at the start, never repeated in the slide; "a haptic MUST NOT play" read as the slide's own, a swap under its fingers keeping its haptic as with the setting off (open question 17) |
+| R14 | `Run.slides` without `.windowSwipe` while Accessibility is missing; `Copy.accessibilityHint` names switching windows |
+| R15 | `.swiping` unchanged once confirmed, blocking from the frame after the start; `.cancelled` → `shown = nil` with no read and no raise |
 | R16 | `Settings.isWindowSwipeOn`, `slides`, `Run.slides`, `setWindowSwipe(on:)`, the third `SwitcherSection` row |
 | R17 | One capture per `serial`, only at the open; cancelled at nil; arrivals checked against the shown serial; `emptied()`; no image type in the core; bans on streams, recordings, image encoders and file writes |
 
@@ -1180,10 +1300,10 @@ geometry):
 
 | Seam | Scenarios | Handles a test holds |
 |---|---|---|
-| The recognizer over `TouchScript` (`windowPhases`, `phases`, `perFrame`) | R1, R2, R15 (blocking, rejoin, thumb lift, third finger, click), R16 (each kind alone, both, neither); the old vertical-spoil rows flipped to "window swipe off" | the frame clock |
-| `World`: the real `Launcher`, recognizer and filters inside `InMemoryTrackpads`, `RecordingSystemActions` with its `FakeWindows`, `InMemoryPermissions` | R3/R4 as the fake lists them, R6 titles, R7 (`showsPreviews`, `previewWindows`, no ask), R8, R9 (linear), R10, R11, R12, R13, R14, R15 (cancel, no scroll), R16 (persistence, upgrade with the frozen record) | `system.windows.set(visible:minimised:fullScreenFront:)`, `close(_:)` / `open(_:)` between `play` pieces, `answers = false`, `dropsRaises`, `onScreenTitles`, `minimisedTitles`, `raised`, `reads`; `permissions.set(_:granted:)` (the push) and `set(_:granted:push: false)` (a withheld push), `asks`, `onAsk`; `World.playFrameByFrame(_:)` for "on every frame" rows |
-| Pure values | `SwitcherSelection`, `Content.init`, `rows` and titles, `lift(now:)`, `WindowStack.raises`, `WindowColumnLayout` (scale, `previewSize`), `cursorMove` y, `Copy` | none |
-| `LauncherPlatformTests` | `FrontmostAppWindows.sort` and `number(of:among:)` over raw facts (R3, R4 filters and order); `SystemPermissions` re-reads both on a posted broadcast and pushes only on a change (injected closures); `DeviceSession.receive` installs the cursor travel when a window swipe begins | the posted notification |
+| The recognizer over `TouchScript` (`windowPhases`, `phases`, `perFrame`) | R1, R2, R15 (blocking, rejoin, thumb lift, third finger, click), R16 (each kind alone, both, neither); the old vertical-spoil rows flipped to "window swipe off"; change 1: the answer to a start (confirmed, declined, late, unanswered, stale) against the setting-off recognizers (`[.swipe]`, and `[]` with the swipe off) as the reference | the frame clock; `answering:` on the drivers, or `answerWindowSwipe` called by hand between frames |
+| `World`: the real `Launcher`, recognizer and filters inside `InMemoryTrackpads`, `RecordingSystemActions` with its `FakeWindows`, `InMemoryPermissions` | R3/R4 as the fake lists them, R6 titles, R7 (`showsPreviews`, `previewWindows`, no ask), R8, R9 (linear), R10, R11, R12, R13, R14, R15 (cancel, no scroll), R16 (persistence, upgrade with the frozen record); change 1: a world with the window swipe setting off as the reference for "exactly as with the setting off" | `system.windows.set(visible:minimised:fullScreenFront:)`, `close(_:)` / `open(_:)` between `play` pieces, `answers = false`, `dropsRaises`, `onScreenTitles`, `minimisedTitles`, `raised`, `reads`; `hardware.windowSwipeAnswers` (each start's answer, in order); `permissions.set(_:granted:)` (the push) and `set(_:granted:push: false)` (a withheld push), `asks`, `onAsk`; `World.playFrameByFrame(_:)` for "on every frame" rows |
+| Pure values | `SwitcherSelection`, `Content.init`, `rows` and titles, `lift(now:)`, `WindowStack.raises`, `WindowColumnLayout` (scale, `previewSize`), `cursorMove` y, `Copy`; change 1: `WindowSwipeConfirmation`'s edges no model produces (a confirmation outside a hand-over, for another trackpad, or around a non-start event) | none |
+| `LauncherPlatformTests` | `FrontmostAppWindows.sort` and `number(of:among:)` over raw facts (R3, R4 filters and order); `SystemPermissions` re-reads both on a posted broadcast and pushes only on a change (injected closures); `DeviceSession.receive` installs the cursor travel when a window swipe begins; change 1: a reply reaches the recognizer before the session's next frame, and a stale one does nothing | the posted notification; the reply `deliver` hands over; `blocksClicks` as the click tap reads it |
 | By hand | The glass, placement on two displays, shrink, motion; real AX across apps (Spaces, full screen, restore, focus, Chromium and Electron); previews arriving with the icon until then, and R17 by code review (LauncherUI has no test target); the TCC prompt and the Settings page; any relaunch; a hung app (`kill -STOP`); the periodic capture alert (F31) | none |
 
 `FakeWindows`, held by `RecordingSystemActions` as `windows`, is a small window stack that does what `AXRaise` does and
@@ -1211,6 +1331,10 @@ model's pure functions, so the fake carries none. The rest of `RecordingSystemAc
   its fallback; the confinement sentence covering the AX element API, the window list and capture.
 - `docs/domain-model.md`: the plan's new terms (window swipe, window switcher, window, front window, window swipe
   setting, screen recording hint) and the changed entries.
+- Change 1, updated with this plan: `docs/architecture.md` Concurrency gains the one answer that hops back to a frame
+  thread, and Privacy says windows are read when a slide up or down begins; `docs/domain-model.md`'s *Window swipe*,
+  *Window switcher*, *Tap*, *Swipe*, *Frontmost app*, *Feedback* and *Accessibility hint* entries follow R1, R3, R6,
+  R13 and R14. `docs/product-overview.md` follows the requirements' Documentation section in S6.
 
 ### Synthesis decision
 
@@ -1307,8 +1431,8 @@ begin, because a preflight costs about 4 ms on the calling thread (check-1). The
 - We accept AX calls synchronously on the main actor (about a millisecond to read, about 2 ms per raise), bounded by a
   0.2 s process-wide messaging timeout with no further raises to an app after its first timeout, in exchange for a
   synchronous model and model tests with no held reads. An app that hangs mid-swipe can stall the main actor for up to
-  0.2 s at the raise that meets it and again at the lift's read; one that hangs before the begin costs 0.2 s once and
-  shows "No open windows".
+  0.2 s at the raise that meets it and again at the lift's read; one that hangs before the begin costs 0.2 s once, and
+  the slide is then no window swipe.
 - We accept a second window read at the lift (about a millisecond) in exchange for a lift that follows the windows as
   they are, whatever the raises while sliding did, with every R11 and R12 rule in one pure function.
 - We accept that preview arrival, the icon until a picture is ready, and the discard are checked by hand and in code
@@ -1331,14 +1455,34 @@ begin, because a preflight costs about 4 ms on the calling thread (check-1). The
 - We accept `WindowID` being the window server's number: a macOS without `_AXUIElementGetWindow` falls back to frame
   matching and leaves unmatched windows out.
 - We accept one `pointsPerStep` (100) for both slides, so the Debug tuner moves them together.
-- We accept a wasted AX read without Accessibility (it fails at once) in exchange for one read path that always yields
-  the app for R14's row.
 - We accept that a lift that changes the window in front closes the launcher window, as the swipe's lift does,
   because a key launcher window would otherwise keep the keyboard from the raised window.
 - We accept both presenters waking on every write to `shown` (the idle one sees nil and returns) in exchange for "at
   most one switcher" being a property of the type.
-- We accept, with the window swipe setting on, that two fingers sliding up or down under an anchored thumb no longer
-  scroll after the blocking window: R16's switch is the way out (`why.md` Risk 1).
+- We accept, with the window swipe setting on, that two fingers sliding up or down under an anchored thumb over an
+  app with two or more windows no longer scroll after the blocking window: R16's switch is the way out (`why.md`
+  Risk 1). Over an app with fewer, they scroll as before (R13).
+- Change 1. We accept a window swipe's blocking starting on the frame after its start, about 10 ms later, in exchange
+  for a declined slide being exactly the setting-off slide: on the start frame the slide blocks only by the thumb
+  rules, which is what a declined slide must have blocked, because a scroll the filter has once stilled stays stilled
+  until the fingers lift. After the 3 s blocking window, a scroll in that frame reaches apps and is stilled from the
+  next, as a scroll that began before any window swipe is; a press in it reaches apps and cancels the window swipe
+  (T35). Within the blocking window nothing changes, since the thumb rules already block.
+- Change 1. We accept one main-to-frame answer per window swipe start, through a slot only the main actor writes and a
+  reply only the adapter calls, in exchange for every window read staying on the main actor and the frame thread never
+  waiting on another app.
+- Change 1. We accept one window read on the main actor for every slide up or down, declined or not (about a
+  millisecond), in exchange for the confirmation and the rows coming from one read, so the count that decides is the
+  count the user sees (R1).
+- Change 1. We accept that a busy main actor delays the decision: the slide waits unconfirmed, blocking only by the
+  thumb rules, and a thumb that lifts and lands again before a late decline cannot swap until the fingers lift. A
+  window swipe's switcher already waited on the same main actor before change 1.
+- Change 1. We accept that an app that stops answering partway through the begin read can delay a switcher past R1's
+  50 ms, by up to the 0.2 s messaging timeout, when the windows read before the stop still make two rows; an app that
+  stops before the read makes the slide no window swipe after the same wait.
+- Change 1. We accept that a second trackpad's slide down, while another switcher is up, is read and, over two or more
+  windows, confirmed and blocked with no switcher of its own, as R1's "start rules otherwise match the swipe's" and the
+  second trackpad's swipe precedent ask.
 
 ### Alternatives considered
 
@@ -1362,6 +1506,26 @@ begin, because a preflight costs about 4 ms on the calling thread (check-1). The
 - **Raises on a serial background queue, or an async window read.** The main actor would never wait on another app,
   but the model would gain a loading state and a lift that can arrive before the read lands. For a read of about a
   millisecond, bounded timeouts instead.
+- **Change 1: read the windows on the frame thread at the start frame.** The recognizer would decide on the very frame,
+  with no answer and no unconfirmed state, and blocking would start on time. But the frame thread would make AX calls
+  into another app, waiting up to the 0.2 s timeout with every trackpad's recognition stalled; `FrontmostAppWindows`
+  and its raise handles would be shared across threads; the touch adapter would depend on the window reader and the
+  read would ride a touch event to the model. Lost on locality and on the frame thread's promise never to wait.
+- **Change 1: a window count the frame thread reads, kept current by pushes.** Accessibility observers on the
+  frontmost app for windows created, closed, minimised and restored, plus activation and Space notifications. No round
+  trip, but no push exists for a window entering full screen or moving Space, Chromium and Electron trees are
+  unreliable observers, a read would run on every window change even when no slide happens, and a pushed count could
+  disagree with the begin read's rows, which R1 forbids. Rejected.
+- **Change 1: read when the pair lands, decide at the start.** The answer would usually be ready before the start
+  frame, but a pair may rest for seconds (R1 has no time limit), so the count would not be the one at the decision
+  (R13), and every 2-finger tap under the thumb would pay a read. Rejected.
+- **Change 1: start blocked, and release on a decline.** Simpler blocking, but the scroll filter never relaxes a
+  scroll it has stilled, so a declined slide after the blocking window would stop scrolling (R13's "One window scrolls
+  after the blocking window"), and presses in the gap would be withheld. Rejected.
+- **Change 1: the answer as `onEvent`'s return value, or as a reply handle inside the event.** Both enforce the reply by
+  type, but the first gives every event a result only one ever has, and the second puts a capability in a domain value
+  that tests also inject. One `confirmWindowSwipe(on:)` with the adapter guaranteeing the reply after `onEvent` keeps one
+  handler and one event shape; its timing rule is stated on the port. Lost narrowly.
 
 ### Open questions and risks
 
@@ -1369,42 +1533,58 @@ begin, because a preflight costs about 4 ms on the calling thread (check-1). The
    hardware check should compare a vertical slide's feel with a sideways one at the same tracking speed.
 2. A minimised window may belong to another Space, and restoring it on the lift may switch Spaces (F24). Is that
    acceptable because the user picked that window?
-3. One minimised window and nothing else: R13 says one window changes nothing, R11 says every window minimised
-   restores with the haptic. The design restores. Is that right?
+3. Answered by change 1: one minimised window and nothing else is no window swipe (R13's "Only window minimised",
+   the Non-goal); R11's all-minimised rule holds from two minimised windows.
 4. Edge readings of R11 and R12 the design makes, for you to confirm: when the front window closes mid-swipe and the
    user lifts on its row, the haptic plays because another window is now in front; when every listed window has
    closed, the lift is silent; when the app opens a window in front mid-swipe, the lift brings the selected window back
    above it and leaves the new window just behind, above the other listed windows (R3 does not list it, so R11's order
    binds only the listed ones); when another app is in front at the lift, nothing is raised. And R11's "Lifting on the
    front window MUST change nothing" is read as "leaves the windows as they were before the window swipe": after
-   sliding away and back, the lift raises windows to restore that order, silently. T47(c) (question 3) and T49(b) and
-   T52(b) (this question) flip if you answer otherwise.
+   sliding away and back, the lift raises windows to restore that order, silently. T49(b) and T52(b) flip if you
+   answer otherwise.
 5. Is 0.2 s the right AX messaging timeout? Apps whose accessibility tree wakes on the first query (Chromium, O5) may
-   read as "No open windows" on the first window swipe.
+   read as having no windows on the first slide down, which is then no window swipe and scrolls after the blocking
+   window.
 6. Since macOS 15, capture without the system picker can bring a periodic system alert (F31). Acceptable for a few
    pictures per window swipe, or should previews wait for a product decision?
 7. If macOS needs a relaunch after the grant (F30), the hint stays until the relaunch. Acceptable under R8?
 8. Without Accessibility, thumb plus two fingers sliding up or down may open Mission Control, since Dock-swipe blocking
-   needs the event tap (`why.md` Risk 2). Should R14 say so?
-9. Two- and three-finger taps that drift up or down past 3 mm will flash the window switcher, as sideways drift already
-   flashes the app switcher (`why.md` Risk 3).
+   needs the event tap (`why.md` Risk 2). It is no window swipe then, so it does what it does with the setting off.
+   Should R14 say so?
+9. Two-finger taps that drift up or down past 3 mm over an app with two or more windows will flash the window
+   switcher, as sideways drift already flashes the app switcher (`why.md` Risk 3); three-finger taps never start one.
 10. Should the launcher window's gesture hint mention the window swipe? The design leaves it unchanged.
 11. `AXRaise` restoring a minimised window was probed on TextEdit only, and the source policy bans attribute writes; an
     app whose raise does not restore would need that ban lifted deliberately.
 12. R15's scenario "Click reaching apps cancels" cannot happen on hardware as written: raising "Mail" needs
-    Accessibility, and with Accessibility every press during a window swipe is blocked, so none reaches apps; without
-    it, R14's row shows and nothing is raised. The cancel rule itself stands and is tested through a click without
-    Accessibility (T35), a third finger after raises (T56) and the recognizer (T10). Should the scenario be reworded?
+    Accessibility, and with Accessibility every press during a confirmed window swipe is blocked, so none reaches apps;
+    without it there is no window swipe (R14). A click can reach apps only in the frame between a window swipe's start
+    and its blocking, after the 3 s blocking window, before any row but the first is selected. The cancel rule itself
+    stands and is tested through that click (T35), a third finger after raises (T56) and the recognizer (T10). Should
+    the scenario be reworded?
 13. The real adapter's messaging timeout and its stop after a timed-out raise have no automated test: faking the AX
     calls would test our model of the Accessibility API rather than the API, so they are checked by hand (M18), and the
     model's handle on an app that does not answer is `FakeWindows.answers`. Acceptable?
+14. Change 1: a window swipe blocks from the frame after its start (about 10 ms later), so after the 3 s blocking
+    window a scroll or press in that one frame reaches apps, and the press cancels the window swipe (Tradeoffs). The
+    alternative, blocking on the start frame, would make a declined slide stop scrolling, which R13 forbids. Acceptable?
+15. Change 1: a hung frontmost app delays the decision by up to the 0.2 s messaging timeout, and one that hangs
+    partway through the read can show a switcher past R1's 50 ms. Acceptable as a degraded case, or should R1 name it?
+16. Change 1: with a switcher already up on one trackpad, a slide down on another trackpad over an app with two or more
+    windows is confirmed and blocks until it lifts, with no switcher of its own, as that trackpad's swipe would. Is a
+    blocked slide with nothing on screen the behaviour you want there, or should it be declined and scroll?
+17. Change 1: R13's "a haptic MUST NOT play" is read as "the slide itself plays none". A thumb tap under the declined
+    slide's resting fingers is a swap with its gesture haptic, as it is with the window swipe setting off, which R13
+    also asks for (T70's hand h4). Is that the reading you meant?
 
 ### Next implementation step
 
-Slice S1, the prefactor with no visible change: move the app switcher's maths into `SwitcherSelection` under the
-existing `SwitcherTests`, add `PointerCurve.cursorMove` test first (T1), and thread `slides: Set<SlideKind>` through
-the recognizer, `TrackpadHardware.run` and every driver, with today's vertical-spoil tests pinned under
-`slides: [.swipe]`.
+S1 to S4 are built. Next is slice S5, the change-1 prefactor with no visible change: the recognizer's unconfirmed
+window swipe and `answerWindowSwipe(began:isWindowSwipe:)` test first (T67), `WindowSwipeConfirmation` (T73), the
+`DeviceSession` reply and answer slot (T68), `TrackpadHardware.confirmWindowSwipe(on:)` in both adapters through the
+confirmation, the drivers' `answering:` default, and the model confirming every start, so the existing suite keeps its
+meaning with T11 moved to the frame after the start.
 
 ## Testing Decisions
 
@@ -1415,7 +1595,7 @@ The window swipe is proven at the five places the swipe already is, with one fak
 - **World** (`LauncherKit/Tests/LauncherCoreTests/World.swift`) carries most rows: the real `Launcher`, the real recognizer, click filter and scroll filter inside `InMemoryTrackpads`, a throwaway settings suite. It observes what the user would: `launcher.windowSwitcher` and `launcher.switcher` frame by frame, the haptic pulses in order, the press and scroll verdicts, the hint, the store, and the fake window stack with its log of raises and reads. It misses the AX adapter, the panel, the presenter and capture. New rows resemble `SwitcherOnScreenTests.swift`, `ScrollSuppressionTests.swift`, `SwipeSettingTests.swift`, `PersistenceTests.swift` and `AccessibilityTests.swift`.
 - **The recognizer over scripted frames** (`TouchScript`, `HandFrames`, the drivers in `Fixtures.swift`), for what only the frame thread decides: the direction, the travel along the slide and the blocking flags on every frame. It is the only seam where a wrongly emitted phase shows, because the model's begin guard (`shown == nil`) would hide a stray `.swipe(.began)` during a window swipe. Rows resemble `SwipeRecognizerTests.swift`, `SwipeTravelAndExitTests.swift` and `EdgeContactRecognizerTests.swift`.
 - **Pure values in `LauncherCore`**, only where World cannot reach: `WindowColumnLayout` (only the shell reads it), the pointer curve's vertical component (World runs `.linear` travel), the badge and hint copy. Like `SwitcherRowLayoutTests.swift`, `PointerCurveTests.swift` and `CopyTests.swift`. The existing `SwitcherTests.swift` rows move onto `SwitcherSelection` unchanged and keep the exact 6 mm boundary.
-- **`LauncherPlatformTests`**, for the three adapter internals the design gives a handle: `FrontmostAppWindows.sort` and `number(of:among:)` over raw facts copied from the probes' printed output; `SystemPermissions` over injected reads and a really posted `com.apple.tcc.access.changed`, like `SystemAccessibilityPermissionTests.swift`; `DeviceSession.receive` over two sessions, which proves the frame thread installs cursor travel when a window swipe begins.
+- **`LauncherPlatformTests`**, for the three adapter internals the design gives a handle: `FrontmostAppWindows.sort` and `number(of:among:)` over raw facts copied from the probes' printed output; `SystemPermissions` over injected reads and a really posted `com.apple.tcc.access.changed`, like `SystemPermissionsTests.swift` (named `SystemAccessibilityPermissionTests.swift` before S1); `DeviceSession.receive` over two sessions, which proves the frame thread installs cursor travel when a window swipe begins.
 - **The source scan** (`SourcePolicyTests.swift`) gains confined and banned rows.
 
 Faked, and only these boundaries:
@@ -1426,6 +1606,15 @@ Faked, and only these boundaries:
 Helpers: every recognizer driver takes `slides:` (default both kinds, the shipped default); `windowPhases(_:handMode:surface:slides:)`; `perFrame` returns `(swipe, windowSwipe, blocks)`. World gains `windowWorld(visible:minimised:fullScreenFront:frontmost:accessGranted:screenRecording:)` (started; Safari frontmost and both permissions granted unless a row says otherwise), `windowSwipe(_ slidesMM: Double..., lift:)` (thumb at (10, 10), two fingers, each slide straight down, positive down; returns its script) and `playFrameByFrame(_:)`, which delivers one frame at a time and records `(windowSwitcher, switcher)` after each, so the "at no moment" and "on every frame" rows check the whole history.
 
 Not tested by code: everything in `LauncherUI` (no test target: the panel, the presenter, capture, the hint view, the switch row), the real AX adapter talking to other apps (raise, restore, focus, Spaces, the messaging timeout), ScreenCaptureKit, the TCC prompt and the System Settings page, and haptics on hardware. Each is under Verified without a test with exact steps.
+
+**Change 1.** The same seams prove that a slide up or down is a window swipe only over two or more windows with Accessibility, and is otherwise exactly the setting-off slide; no new seam, port or fake.
+
+- **World** carries the product rules. Its oracle for R13 and R14's "exactly as with the window swipe setting off" is a second world built the same way with the setting off, played the same hand frame by frame: that world's behaviour is today's, pinned by T37 and the pre-plan rows, so the expected values come from it, never from the decline code. A probe after every frame, an unphased scroll (decided on the merged blocking flag alone, with no state of its own), makes the per-frame blocking visible at World; press verdicts, pulses, apps brought to front, raises and fired gestures are compared at the end. `InMemoryTrackpads` answers each start the way the real adapter does, once `onEvent` returns and before the next frame, and logs it in `windowSwipeAnswers`, so rows can say a start was confirmed or declined. New rows resemble `WindowSwitcherOnScreenTests.swift`, `WindowSwipeBlockingTests.swift` and `AccessibilityTests.swift`.
+- **The recognizer** carries the answer protocol, the one place where a late, missing, stale or second answer can be fed: World's in-memory adapter always answers before the next frame, and only the real adapter can lag. Its reference is the setting-off recognizer: `slides: [.swipe]`, or `[]` beside `[.windowSwipe]` when the swipe setting is off too. The drivers in `Fixtures.swift` take `answering: Bool?`, default true (every start confirmed before the next frame), so every existing recognizer row keeps its meaning; nil leaves starts unanswered. Rows resemble `WindowSwipeRecognizerTests.swift`.
+- **`LauncherPlatformTests`** carries the hop's frame-thread half: `DeviceSession` delivers a start with its reply and hands the slot to the recognizer before the next step, observed through `blocksClicks` as the click tap reads it, like `DeviceSessionTravelTests.swift`. The main-actor half is `WindowSwipeConfirmation` in `LauncherCore`, which both adapters run, so every World row exercises it; what is left in `MultitouchTrackpads` is wiring that needs real devices, checked by code review (M21).
+- **Pure values**: the Accessibility hint's copy, and `WindowSwipeConfirmation` driven directly for the edges no model produces, like `CopyTests.swift` in shape.
+
+Nothing new is faked: the window reads are `FakeWindows` as before, and the answer protocol runs for real inside both adapters.
 
 ### Test scenarios
 
@@ -1441,7 +1630,7 @@ Not tested by code: everything in `LauncherUI` (no test target: the panel, the p
 | T8 | R2 | Recognizer, every frame | When (a) a window swipe begins with 3.5 mm down, drifts 20 mm sideways, slides 12 mm down and lifts; (b) a swipe begins with 3.5 mm right, drifts 20 mm down, slides 12 mm right and lifts. Then over every frame (a) has no `.swipe` phase and its last travel is 12.35 (the drift adds nothing); (b) has no `.windowSwipe` phase and its last travel is 12.35. | R2 "A window swipe MUST never turn into a swipe, nor a swipe into a window swipe". |
 | T9 | R1, R15 | Recognizer, per kind | When each existing `.swiping` row runs once per kind, the slide turned vertical for the window swipe: the thumb lifts and lands again mid-slide; the thumb rolls out of the corner; the thumb lifts and stays away; one finger lifts and the other keeps steering; a finger drops out and returns with a new id; the whole hand lifts at once. Then each gives the swipe row's phase sequence and travel values in its own event case, no `.cancelled`, and the tap after it fires as in the swipe row. | R15 "as in a swipe"; R1 "the thumb may stay, lift, leave the corner or land again, and nothing MUST change"; the worked phases in `SwipeTravelAndExitTests`. |
 | T10 | R15 | Recognizer, hand frames | Given a window swipe. When a third finger lands outside the corner while both are down; a press frame is sampled `.click`; a press is sampled `.blocked`; a third finger lands on the frame both fingers lift; a click comes on the frame both lift. Then `[.began, .cancelled]`; `[.began, .cancelled]`; the travel goes on to `.ended`; `[.began, .ended]`; `[.began, .cancelled]`; after each cancel nothing until the fingers lift, then a tap fires. | R15 "cancelled when a third finger lands outside the anchor corner while both are down, or a click reaches apps"; the interleavings recorded for the swipe in `SwipeTravelAndExitTests`. |
-| T11 | R15 | Recognizer, every frame | When window swipes begin 4 s after the thumb landed, with the thumb lifting and landing again, or rolling out of the corner, mid-slide. Then `blocksClicks` and `blocksDockSwipes` are true on every frame from `.began` to the frame before `.ended`, and `blocksClicks` is false from `.ended` on. | R15 "the blocking window is held open until both fingers lift"; glossary *Blocking window*. |
+| T11 | R15 | Recognizer, every frame | When window swipes begin 4 s after the thumb landed, with the thumb lifting and landing again, or rolling out of the corner, mid-slide, each start confirmed before the next frame. Then on the `.began` frame `blocksClicks` is false and `blocksDockSwipes` is true (the thumb rules: the thumb is anchored and other fingers are down); both are true on every frame after it up to the frame before `.ended`; `blocksClicks` is false from `.ended` on. | R15 "the blocking window is held open until both fingers lift"; glossary *Blocking window*; the design's answer rule (a window swipe blocks from the frame after its start; the start frame blocks as the setting off would). |
 | T12 | R16 | Recognizer | When the same hands run with `slides` `[]`, `[.swipe]`, `[.windowSwipe]` and both: a pair sliding 20 mm down; 20 mm right; resting 1 s then sliding down; each followed by a 2-finger tap. Then `[]`: no phase of either kind and the resting pair never begins; `[.swipe]`: the vertical slides spoil, and today's vertical-spoil rows pass unchanged under it; `[.windowSwipe]`: the sideways slide spoils and the next tap fires, while both vertical hands begin; both: each hand begins its own kind. | R16 "a slide's direction rules MUST be exactly today's"; the pre-plan rows in `SwipeRecognizerTests` as the record of today. |
 | T13 | R5, R6 | Pure: `WindowColumnLayout` | When (a) `previewSize(aspect:)` at scale 1 for aspects 2, 1.6, 3 and 0.5; (b) a 10-row layout at H, the full-size column's panel height plus a margin above and below, and at H − 1; (c) `previewPixels(scale: 2)` at scale 1. Then (a) 120 × 60, 96 × 60, 120 × 40, 30 × 60; (b) scale 1 at H; at H − 1 scale below 1, the panel height plus two margins at most H − 1 and above H − 2, and `pitch` and `previewSize` shrunk by that same factor; (c) 240 × 120. | R6 "60 points tall, keeping the window's proportions, at most 120 points wide"; R5 "the rows MUST shrink by one factor so the whole column fits"; probe 3's 240 × 120 px capture box. |
 | T14 | R4 | Pure: `Copy` | When `Copy.minimisedBadge` is read. Then "Minimised". | R4 "a "Minimised" badge". |
@@ -1449,43 +1638,43 @@ Not tested by code: everything in `LauncherUI` (no test target: the panel, the p
 | T16 | R3, R4 | Platform: `FrontmostAppWindows.number(of:among:)` | Given probe 2's window list: 6863 at (210, 131), 6864 at (181, 102), 6865 at (152, 73), each 656 × 422 and named. When Alpha (152, 73, 656 × 422, "Alpha.txt") is matched: as listed; with every name absent; against two unnamed entries at its frame; against two entries at its frame named "Alpha.txt" and "Other"; with no entry at its frame; with no frame. Then 6865; 6865; nil; 6865; nil; nil. | probe-2 output; `docs/architecture.md` Privacy "a window that matches none is not listed" (F12). |
 | T17 | R9 | Platform: `DeviceSession.receive` | Given two sessions on the built-in curves, each recognizer for both kinds starting `.linear`. When hand-built 10 ms frames slide session A's fingers 3.5 mm then 12 mm down and session B's the same distances right at the same times. Then every `.windowSwipe(.moved)` travel A delivers equals B's `.swipe(.moved)` travel on the same frame, within 1e-9. | R9 "as the cursor would travel ... with macOS's own pointer acceleration"; the swipe's cursor travel as the reference; open question 1. |
 | T18 | R3, R4 | Source scan | When the sources are scanned. Then `AXUIElement` and `CGWindowList` appear only in `FrontmostAppWindows.swift`, comments included. | `docs/architecture.md` Privacy: the Accessibility element API with the window list confined to one file. |
-| T19 | R1, R3, R6 | World, frame by frame | Given Safari frontmost with windows, front to back, "Docs", "Mail", "News". When the thumb anchors and two fingers slide 5 mm down, one frame at a time. Then before the crossing frame `windowSwitcher` is nil and nothing was read; on the frame the window swipe begins, rows read "Docs", "Mail", "News", the first is selected, `frontWindow` is Docs, `app` is Safari, `switcher` is nil and `reads == 1`. | R3 scenario "Front-to-back order"; R6 "The switcher MUST appear in the same movement that starts the window swipe"; R1 scenario "Slide down starts a window swipe". |
-| T20 | R5, R13, R17 | World, frame by frame | Given four worlds: three windows; Finder with no windows; no frontmost app; Safari without Accessibility. When a window swipe slides 24 mm down and 12 mm up and lifts, one frame at a time, and a second window swipe follows under the same thumb. Then `windowSwitcher` is non-nil on every frame from the begin frame to the frame before the lift and nil from the lift frame on; its `serial` is the same on every frame of one window swipe and larger on the second. | R13 "The window switcher MUST appear on every window swipe"; R5 "MUST disappear when the window swipe ends"; R17 "discarded when the window swipe ends" (the presenter drops pictures on nil and on a new serial). |
+| T19 | R1, R3, R6 | World, frame by frame | Given Safari frontmost with windows, front to back, "Docs", "Mail", "News". When the thumb anchors and two fingers slide 5 mm down, one frame at a time. Then before the crossing frame `windowSwitcher` is nil and nothing was read; on the frame the window swipe begins, rows read "Docs", "Mail", "News", the first is selected, `frontWindow` is Docs, `app` is Safari, `switcher` is nil, `reads == 1` and the start is answered true (`windowSwipeAnswers == [true]`). | R3 scenario "Front-to-back order"; R6 "The switcher MUST appear in the same movement that starts the window swipe"; R1 scenario "Slide down starts a window swipe". |
+| T20 | R5, R17 | World, frame by frame | Given Safari frontmost with three windows. When a window swipe slides 24 mm down and 12 mm up and lifts, one frame at a time, and a second window swipe follows under the same thumb. Then `windowSwitcher` is non-nil on every frame from the begin frame to the frame before the lift and nil from the lift frame on; its `serial` is the same on every frame of one window swipe and larger on the second. (Change 1 drops the old no-windows, no-app and no-Accessibility worlds: T69, T70 and T72 cover them.) | R5 "MUST disappear when the window swipe ends"; R17 "discarded when the window swipe ends" (the presenter drops pictures on nil and on a new serial). |
 | T21 | R3 | World | Given (visible, minimised) counts (14, 0), (10, 0), (11, 0), (9, 3) and (0, 12), titled W1, W2, … in order. When a window swipe begins. Then the rows are the 10 frontmost; all 10; the first 10; the 9 visible then the first minimised; the first 10 minimised in the app's order. | R3 "cut the list at 10", scenario "More than 10 windows"; R4 "Minimised windows MUST come after the visible ones". |
-| T22 | R3 | World | Given Safari's front window full screen, two other visible windows and one minimised. When a window swipe slides 24 mm down. Then one row, the full-screen window's title, selected, `stretch` above 0, and no light tick. | R3 scenario "Full-screen front window"; R13's one-row rubber band. |
+| T22 | — | — | Retired by change 1 (S6): a full-screen front window is no window swipe, so there is no one-row switcher to rubber-band; T69 and T70 prove what replaced it. | — |
 | T23 | R3 | World | Given a window swipe on "Docs", "Mail". When mid-swipe the app opens "Draft", "Mail" closes and Notes becomes the frontmost app, and the fingers slide on. Then the rows still read "Docs", "Mail" and the selection still follows. | R3 scenario "Window opens during the window swipe"; R3 "one that closes stays listed". |
 | T24 | R4 | World | Given Finder frontmost with two visible windows and one minimised. When a window swipe begins. Then three rows, the minimised one last as `Row.minimised` with its title, the other two `Row.visible`. | R4 scenario "Minimised window". |
-| T25 | R6 | World | Given Preview frontmost with (a) two untitled windows, (b) one untitled window, (c) "Notes.pdf" then an untitled window. When a window swipe begins. Then (a) "Preview — Window 1", "Preview — Window 2"; (b) "Preview"; (c) "Notes.pdf", "Preview — Window 2". | R6 scenario "Untitled windows"; R6 "followed by " — Window N" when the list has more than one row, N being its position". |
+| T25 | R6 | World | Given Preview frontmost with (a) two untitled windows, (b) "Notes.pdf" then an untitled window. When a window swipe begins. Then (a) "Preview — Window 1", "Preview — Window 2"; (b) "Notes.pdf", "Preview — Window 2". (Change 1 drops the one-untitled-window case: one window is no window swipe.) | R6 scenario "Untitled windows"; R6 "followed by " — Window N", N being its position in the list". |
 | T26 | R9, R12 | World | Given "Docs", "Mail", "News". When a window swipe begins with 3.5 mm down and slides until the travel after the begin frame is 5.9 mm, then 6.1, then 18.1, then back up 12; and, in a second world, slides 24 mm within one frame. Then 5.9: first row, no tick; 6.1: second, one tick; 18.1: third, two ticks; back up: second, three ticks; the one-frame slide: third row and two ticks on that frame. | R9 "one row for every 100 points" (12 step mm under `.linear`) and "the selection changes halfway to the next row"; R12 "one light tick"; glossary *Light tick* "one per icon or row the highlight crosses". |
 | T27 | R9 | World | Given two windows. When a window swipe reaches the second row, pushes 30 mm further down, turns up 5.9 mm, then 0.2 mm more; and, in a second world, pushes 30 mm up from the first row and turns down 6.1 mm. Then past the bottom the second stays selected with `stretch` above 0 and no further tick; after 5.9 mm up still the second; after 6.1 mm up the first, with one more tick. Past the top `stretch` is below 0, and 6.1 mm down selects the second. | R9 scenario "Turning back at the end" ("after half a row of travel up, not more"); glossary *Switcher* rubber band. |
-| T28 | R13 | World | Given TextEdit frontmost with one window. When a window swipe slides 30 mm down, then 60 mm up. Then one row, selected throughout, `stretch` above 0 then below 0, and no light tick. | R13 "With one window it MUST show that one row, selected, with the rubber band at both ends". |
-| T29 | R13 | World | Given (a) Finder frontmost with no windows; (b) no frontmost app; (c) Safari frontmost not answering (`answers = false`). When a window swipe begins. Then one row "No open windows" with `app` (a) Finder, (b) nil, (c) Safari; `listsWindows` false in each. | R13 scenario "No windows" and "When there is no frontmost app"; the design's degraded case for an app that does not answer. |
-| T30 | R14 | World | Given Safari frontmost with "Docs" and "Mail", which the fake lists, and Accessibility missing. When a window swipe slides 24 mm down. Then one row "Allow Accessibility to switch windows" with `app` Safari, no light tick, no click tap armed, a scroll reaches apps untouched (nil), and `isAccessibilityGranted` is false. | R14 scenario "Accessibility missing"; R14 "clicks and scrolling are not blocked". |
+| T28 | — | — | Retired by change 1 (S6): one window is no window swipe, so there is no one-row switcher; T70 proves what replaced it. | — |
+| T29 | — | — | Retired by change 1 (S6): no windows, no frontmost app or an app that does not answer make no window swipe and no "No open windows" row; T69 and T70 prove what replaced it. | — |
+| T30 | — | — | Retired by change 1 (S6): without Accessibility there is no window swipe and no Accessibility row; T72 proves what replaced it. | — |
 | T31 | R2 | World, frame by frame | When (a) a window swipe on "Docs", "Mail", "News" reaches Mail, then the fingers drift 20 mm sideways; (b) an app switcher swipe reaches Mail, then the fingers drift 20 mm down. Then over every frame (a) `switcher` is nil and the window switcher stays on Mail with no further tick; (b) `windowSwitcher` is nil and the app switcher stays on Mail. | R2 scenarios "Sideways wobble during a window swipe" and "Vertical drift during a swipe". |
-| T32 | R13, R15 | World | Given Accessibility, Finder frontmost with no windows, the thumb rested 4 s. When a window swipe holds a press through a 12 mm slide, then lifts. Then both press edges are dropped, the trackpads are not re-run, the lift is silent, and a scroll after the lift passes. | R15 "Click blocking MUST apply for the whole of a window swipe"; glossary *Switcher* (a slide with nothing to switch still runs its course, blocking); `aSwipeWithNothingToShowStaysBlocked…`. |
+| T32 | — | — | Retired by change 1 (S6): a slide down over an app with no windows is no window swipe and no longer runs its course blocked; T70 proves what replaced it. | — |
 | T33 | R15 | World | Given Accessibility. When (a) a fresh thumb's window swipe slides 3.5 + 12 mm down and lifts; (b) with the thumb rested 4 s, the fingers move 2 mm down, then 10 mm more, then lift with a press. Then (a) a scroll's may-begin, changed, ended and momentum are all dropped, and a new scroll after the lift passes; (b) a scroll beginning before the window swipe passes, its changed, ended and momentum pass stilled, and both press edges are dropped. | R15 scenario "No scroll under a window swipe"; glossary *Click blocking*. |
 | T34 | R1, R15 | World | Given a window swipe on "Docs", "Mail", "News" at Mail. When the thumb lifts and the fingers slide 12 mm on; then one finger lifts and a new finger lands while the other is down, and they slide 12 mm up. Then the window switcher stays throughout, News is selected after the thumbless slide, and Mail after the rejoined slide. | R15 scenarios "Thumb lifts mid-swipe" and "Finger rejoins". |
-| T35 | R15 | World | When (a) without Accessibility, a press comes during a window swipe; (b) with it, a press is held while a window swipe slides from Mail to News, then the fingers lift. Then (a) the window switcher is gone on the press frame, nothing more happens until every finger lifts, no pulse and no press verdict; (b) both press edges are dropped and the window switcher stays and follows to News. | R15 "It MUST be cancelled when ... a click reaches apps" (a click reaches apps only without Accessibility); glossary *Click blocking*. |
+| T35 | R15 | World | Given Accessibility, Notes on the 1-finger gesture and "Docs", "Mail", "News". When (a) with the thumb rested 4 s, a window swipe starts and a press comes on the very next frame, the fingers slide on and lift, then a 1-finger tap; (b) a press is held while a window swipe slides from Mail to News, then the fingers lift. Then (a) the press passes (its edge is decided on the start frame's flags, which block nothing 4 s after the thumb landed), the window switcher is gone on that frame with no pulse, nothing more happens until every finger lifts, and the tap's gesture fires; (b) both press edges are dropped and the window switcher stays and follows to News. | R15 "It MUST be cancelled when ... a click reaches apps"; the design's blocking from the frame after the start (open question 14); glossary *Click blocking*. |
 | T36 | R15, R16 | World | Given a window swipe at Mail. When (a) `setWindowSwipe(on: false)`, (b) `setSwipe(on: false)`, (c) the Mac wakes; then the fingers slide on and lift; then a 1-finger tap. Then `windowSwitcher` is nil at once; the slide and lift give no tick, no pulse and no further read; the tap fires its gesture. | R16 "A change MUST apply to the next slide"; `aReconcileMidSwipeRemovesTheSwitcher…`. |
 | T37 | R16 | World | Given Accessibility and the window swipe setting off. When (a) with a fresh thumb two fingers slide 20 mm down; (b) with the thumb rested 4 s, the same with a press. Then no window switcher in either; (a) the scroll is dropped; (b) the scroll and both press edges pass; `reads == 0` and no pulse. | R16 scenario "Setting off"; `withTheSwipeOffASlideShowsNothingAndScrollsOnlyAfterTheBlockingWindow`. |
 | T38 | R16 | World | When (a) with the swipe off and the window swipe on, a vertical and a sideways slide; (b) with the window swipe off and the swipe on, a sideways slide; (c) the window swipe setting toggled off and on; (d) with the window swipe off, a swap. Then (a) the window switcher for the vertical slide and no switcher for the sideways; (b) the app switcher; (c) `isSwipeOn` and `isSwapOn` unchanged; (d) Mail comes to the front. | R16 scenario "Swipe setting off, window swipe on"; R16 "independent of the swipe and swap settings". |
 | T39 | R16 | World and store | When (a) first launch; (b) the setting is turned off and the app relaunched; (c) the frozen `savedSettings` record (swipe off, no window swipe key) loads; (d) the plan 002 record loads; (e) every settings field with `isWindowSwipeOn` false goes through the store; (f) a record holding only `isWindowSwipeOn` false loads. Then (a) on; (b) off; (c) on, with the swipe still off and every other value as recorded; (d) on; (e) equal; (f) every other field at its default. | R16 scenarios "Survives a restart" and "Upgrade with the swipe setting off"; the frozen records, never regenerated. |
-| T40 | R1, R2 | World, two trackpads | Given the MacBook and the Magic Trackpad. When (a) a window swipe on the MacBook selects Mail and the Magic Trackpad injects `.swipe(.began)`, `.windowSwipe(.moved(24))`, `.windowSwipe(.ended)` and `.windowSwipe(.cancelled)`; (b) an app switcher is up on the MacBook and the Magic Trackpad injects `.windowSwipe(.began)`. Then (a) no app switcher, Mail still selected, no further tick, and the MacBook's lift ends it; (b) no window switcher and nothing read. | R1 "The start rules MUST otherwise match the swipe's" (one switcher at a time); `aSwipeOnASecondTrackpadWhileOneSwitcherIsUpIsIgnored`. |
+| T40 | R1, R2 | World, two trackpads | Given the MacBook and the Magic Trackpad, and "Docs", "Mail", "News". When (a) a window swipe on the MacBook selects Mail and the Magic Trackpad injects `.swipe(.began)`, `.windowSwipe(.moved(24))`, `.windowSwipe(.ended)` and `.windowSwipe(.cancelled)`; (b) an app switcher is up on the MacBook and, on the Magic Trackpad, the thumb anchors and two fingers slide 20 mm down, frame by frame. Then (a) no app switcher, Mail still selected, no further tick, and the MacBook's lift ends it; (b) no window switcher on any frame, the app switcher stays as it was, and the Magic Trackpad's start is read once and answered true, so it runs its course blocked with no switcher of its own. | R1 "The start rules MUST otherwise match the swipe's" (one switcher at a time; a second trackpad's swipe runs its course unseen); `aSwipeOnASecondTrackpadWhileOneSwitcherIsUpIsIgnored`; open question 16. |
 | T41 | R1 | World | Given Tap to click on, so gestures are inactive. When two fingers slide down under the thumb, and then an in-flight `.windowSwipe(.began)` is injected. Then no window switcher and nothing read. | R1 "While ... gestures are active"; glossary *Gestures active / inactive*. |
 | T42 | R1 | World, frame by frame | Given Mail on the 2-finger gesture. When the thumb anchors and two fingers tap, drifting 2 mm down before lifting. Then Mail comes to the front with the gesture haptic, `windowSwitcher` is nil on every frame and nothing is read. | R1 scenario "A tap that drifts stays a tap". |
 | T43 | R1, R9 | World | Given Left hand and "Docs", "Mail". When the thumb anchors at (114.8, 10) and two fingers slide 3.5 mm, then 12 mm down. Then the window switcher appears and Mail is selected with one tick. | R1 scenario "Left-hand mode"; R9 "in both hand modes". |
 | T44 | R10 | World | Given "Docs", then "Mail". When a window swipe slides one row down, then back up. Then before any lift Mail leads the stack and `raised == [[Mail]]`; after sliding back Docs leads and `raised == [[Mail], [Docs]]`. | R10 scenarios "Live switch" and "Slide back". |
 | T45 | R10 | World, frame by frame | Given A and B visible and M minimised. When a window swipe slides onto M, then back to A. Then over every frame `raised` never names M, M stays minimised, and the stack does not change between reaching B and reaching M. | R10 scenario "Passing a minimised window"; R10 "Selecting a minimised window MUST NOT restore it while sliding". |
 | T46 | R10 | World | Given "Docs", "Mail", "News" and a window swipe at Mail. When News closes and the fingers slide onto its row. Then the stack stays [Mail, Docs], the move ticks once, and the rows still list News. | R10 "Selecting a window that has closed MUST change nothing on screen"; R3 "one that closes stays listed". |
-| T47 | R10, R11, R12 | World | Given the launcher window open and Finder with only X and Y, both minimised. When (a) a window swipe slides to Y and back to X and lifts; (b) slides to Y and lifts; (c) with one minimised window only, lifts. Then nothing is raised while sliding; (a) X is restored and in front, Y still minimised, the gesture haptic plays and the launcher window closes; (b) Y is restored and in front; (c) restored, with the haptic, as the design answers open question 3. | R11 scenario "Every window minimised"; R10 "When there is no front window, sliding back to the first row MUST change nothing"; R12; open question 3 for (c). |
+| T47 | R10, R11, R12 | World | Given the launcher window open and Finder with only X and Y, both minimised. When (a) a window swipe slides to Y and back to X and lifts; (b) slides to Y and lifts. Then nothing is raised while sliding; (a) X is restored and in front, Y still minimised, the gesture haptic plays and the launcher window closes; (b) Y is restored and in front. (Change 1 drops the one-minimised-window case: it is no window swipe, T69.) | R11 scenario "Every window minimised"; R10 "When there is no front window, sliding back to the first row MUST change nothing"; R12. |
 | T48 | R11, R12 | World | Given the launcher window open and "Docs", "Mail", "News". When a window swipe slides 24 mm down and lifts, then a second window swipe begins under the same thumb. Then the stack is [News, Docs, Mail]; the pulses are light tick, light tick, gesture; no launch animation; the launcher window is closed; the second window swipe's rows read "News", "Docs", "Mail", with News selected. | R11 scenario "Toggle between the last two windows"; R12 scenario "Lift on another window". |
-| T49 | R3, R5, R11, R12, R13 | World | Given the launcher window open. When (a) on "Docs", "Mail", "News" a window swipe lifts without leaving the first row; (b) it slides 24 mm down within one frame and 24 mm up within one frame (stack [Docs, News, Mail]) and lifts; (c) a full-screen front window's window swipe slides 24 mm down and lifts; (d) a one-window app's does the same. Then (a), (c), (d): every `raised` call is empty, no gesture haptic, the launcher window stays open; (b) the stack is [Docs, Mail, News], silent, the window open. | R11 "Lifting on the front window MUST change nothing and be silent" and its order rule; R5 scenario "Focus stays put"; R3 "lifting MUST change nothing"; R13; open question 4 for (b) ("the lift raises windows to restore that order, silently"). |
+| T49 | R5, R11, R12 | World | Given the launcher window open. When (a) on "Docs", "Mail", "News" a window swipe lifts without leaving the first row; (b) it slides 24 mm down within one frame and 24 mm up within one frame (stack [Docs, News, Mail]) and lifts. Then (a) every `raised` call is empty, no gesture haptic, the launcher window stays open; (b) the stack is [Docs, Mail, News], silent, the window open. (Change 1 drops the full-screen and one-window cases: neither is a window swipe, T69 and T70.) | R11 "Lifting on the front window MUST change nothing and be silent" and its order rule; R5 scenario "Focus stays put"; open question 4 for (b) ("the lift raises windows to restore that order, silently"). |
 | T50 | R11, R12 | World | Given A and B visible and M minimised. When a window swipe slides onto M and lifts. Then M is restored and in front, the stack is [M, A, B], and the gesture haptic plays. | R11 scenario "Lift on a minimised window" and its order rule. |
 | T51 | R11, R12 | World | Given "Docs", "Mail", "News". When (a) a window swipe slides to Mail, Mail closes (Docs leads again) and the fingers lift; (b) it slides 24 mm down and 12 mm up (stack [Mail, News, Docs]), Mail closes and the fingers lift. Then the lift's raise call is empty in both; (a) the stack is [Docs, News] and the lift silent; (b) the stack is [News, Docs] and the gesture haptic plays. | R11 scenario "Selected window closes". |
 | T52 | R11, R12 | World | Given "Docs", "Mail", "News". When (a) a window swipe slides to Mail, the app opens "Draft" in front, the fingers lift; (b) no slide, "Draft" opens in front, the fingers lift. Then (a) the stack is [Mail, Draft, Docs, News] and the gesture haptic plays; (b) the stack is [Docs, Draft, Mail, News], silently. | R11 "the selected window, then the front window, then the others in their order from before" for the listed windows; open question 4 ("leaves the new window just behind, above the other listed windows") for where Draft lands and for (b)'s silence; check-2's worked stack. |
 | T53 | R11 | World | Given "Docs", "Mail", "News". When the fake drops raises (`dropsRaises`) while a window swipe slides to Mail, so Docs still leads; then raises work again; the fingers lift. Then the stack is [Mail, Docs, News], `reads == 2`, and the gesture haptic plays. | R11 order rule; the design's Risk 4 ("the lift must not depend on what the raises while sliding did"). |
 | T54 | R11, R12 | World | Given the launcher window open and a window swipe at Mail. When (a) the app stops answering; (b) Notes becomes the frontmost app; (c) every listed window closes; then the fingers lift. Then the lift's raise call is empty, no gesture haptic, and the launcher window stays open. | R11 "Lifting on a window that has closed MUST leave the windows as they are"; R12's haptic rule; the design's degraded cases. |
-| T55 | R12, R13, R14 | World | Given (a) no windows, (b) no frontmost app, (c) Accessibility missing with "Docs", "Mail" listed. When each window swipe slides 24 mm down and lifts. Then no `raised` call at all, `reads == 1`, and no pulse. | R13 "In each of these cases lifting MUST change nothing and be silent"; R14 "Lifting MUST change nothing and be silent". |
+| T55 | — | — | Retired by change 1 (S6): with no windows, no frontmost app or no Accessibility there is no window swipe and so no lift; T70 and T72 prove those slides change nothing and pulse nothing. | — |
 | T56 | R15 | World | Given Accessibility and "Docs", "Mail", "News". When a window swipe slides 24 mm down and 12 mm up (stack [Mail, News, Docs]), a third finger lands at (86, 45), the fingers slide on and lift, then a 1-finger tap. Then `windowSwitcher` is nil on the third finger's frame, the stack stays [Mail, News, Docs], no gesture haptic, `reads == 1`, nothing more until every finger has lifted, and the tap's gesture fires. | R15 scenario "Third finger cancels"; R15 "keep the window in front as it is at that moment, without the lift's reordering, and be silent". |
 | T57 | R10, R11 | Source scan | When the sources are scanned. Then `AXUIElementSetAttributeValue` and `kAXPressAction` appear nowhere. | Non-goal "Closing or minimising windows from the switcher"; R10: only a raise changes a window, so nothing restores while sliding. |
 | T58 | R7, R17 | World | Given Screen Recording missing, "Docs", "Mail" visible and "Notes" minimised. When (a) a window swipe slides and lifts; (b) the TCC push grants and the next window swipe begins. Then (a) `showsPreviews` false, `previewWindows` empty and `permissions.asks` empty; (b) `showsPreviews` true, `previewWindows` the Docs and Mail ids (Notes left out), `asks` still empty. | R7 scenarios "Permission missing" and "Permission granted later"; R17 "captured only while a window swipe begins" (only the open switcher's visible rows). |
@@ -1494,37 +1683,49 @@ Not tested by code: everything in `LauncherUI` (no test target: the panel, the p
 | T61 | R8 | World | Given Screen Recording missing and never asked for. When the window swipe setting goes off, then on; the push grants; the push revokes. Then the hint is `.ask`, nil, `.ask`, nil, `.ask`. | R8 scenarios "Setting off hides the hint" and "Permission granted". |
 | T62 | R8 | World and store | Given the hint `.ask`. When `askForScreenRecording()` runs twice, the app relaunches, then the push grants. Then `asks == [.screenRecording]` after both calls; inside the ask the store already holds `hasAskedForScreenRecording` true; the hint is `.openSettings` after the first call and after the relaunch, and nil after the grant; a settings record with `hasAskedForScreenRecording` true survives the store with every other field. | R8 "The first press MUST ask macOS", "Any later press ... MUST open the Screen Recording page"; the design's "a crash in between never asks twice". |
 | T63 | R8 | Pure: `Copy` | When the hint copy is read. Then `screenRecordingHint` is "Window previews need Screen Recording.", `screenRecordingButton(.ask)` "Allow Screen Recording…" and `screenRecordingButton(.openSettings)` "Open System Settings…". | R8 "a hint saying window previews need Screen Recording"; the design's copy. |
-| T64 | R7, R8 | Platform: `SystemPermissions` | Given injected `trusted` and `capturing` reads. When `com.apple.tcc.access.changed` is posted with neither changed, then with `capturing` flipped, then with `trusted` flipped. Then no `onChange` within 1 s for the first; `onChange` within 5 s for each flip, with `isGranted` reading the new values. | probe 6 (the broadcast fires on a Screen Capture change and carries no payload); `SystemAccessibilityPermissionTests`. |
+| T64 | R7, R8 | Platform: `SystemPermissions` | Given injected `trusted` and `capturing` reads. When `com.apple.tcc.access.changed` is posted with neither changed, then with `capturing` flipped, then with `trusted` flipped. Then no `onChange` within 1 s for the first; `onChange` within 5 s for each flip, with `isGranted` reading the new values. | probe 6 (the broadcast fires on a Screen Capture change and carries no payload); `SystemPermissionsTests` (named `SystemAccessibilityPermissionTests` before S1). |
 | T65 | R7, R17 | Source scan | When the sources are scanned. Then `AXIsProcessTrusted`, `notify_register` and `ScreenCaptureAccess` appear only in `SystemPermissions.swift`; `ScreenCaptureKit`, `SCShareableContent` and `SCScreenshotManager` only in `PreviewCapture.swift`; `SCStream(`, `SCRecordingOutput`, `CGImageDestination`, `representation(using` and `tiffRepresentation` nowhere; the "R9 only Accessibility" labels read "no Input Monitoring or event posting". | R17 "They MUST never be written to disk"; `docs/architecture.md` Privacy ("never streamed, recorded, encoded or written to a file"). |
+| T66 | R14 | Pure: `Copy` | When `Copy.accessibilityHint` is read. Then "Clicks and scrolling aren't blocked during gestures, and windows can't be switched. Allow Accessibility access to do both." | R14 "The launcher window's existing Accessibility hint MUST also say that switching windows needs the permission"; the design's copy. |
+| T67 | R1, R2, R13, R15 | Recognizer, every frame, against a setting-off recognizer | Given a recognizer with both kinds on and, as the reference, one with `slides: [.swipe]`; and again one with `[.windowSwipe]` against one with `[]` (the swipe setting off in both); each pair stepped through the same frames: the thumb landed just now, or 4 s ago; two fingers slide 5 mm down; then (i) 20 mm more down and lift; (ii) 20 mm sideways and lift; (iii) the thumb lifts, taps the corner while the fingers rest, and the fingers lift; (iv) on the frame after the start the thumb rolls 20 mm out of the corner, then a new thumb taps the corner while the fingers rest, and they lift. When the start is (a) answered false before the next frame; (b) answered true before the next frame; (c) never answered; (d) answered false three frames later; (e) answered true before the next frame, but naming the start of an earlier slide down that lifted under the same thumb; (f) answered true only after the fingers lifted; (g) answered true, then false a frame later. Then (a) from the start frame on, every recognition equals the reference's, the start's own `.windowSwipe(.began)` aside: (ii) begins no swipe and (iii) swaps in both; (b) both flags are true on every frame after the start up to the frame before `.ended`; (c), (e), (f) on hands (i) and (ii), both flags equal the reference's on every frame, and the window swipe phases still run to `.ended` (on hand (iii) an unanswered start cannot swap, as the design's degraded case says); (d) both flags equal the reference's on every frame, and from the answer's frame on every recognition does, so on (iv), where the answer comes after the thumb has gone, the rolled thumb counts among the rest's fingers and the new thumb's tap swaps in neither; (g) as (b). | R13 "MUST then behave exactly as it does with the window swipe setting off" and "it never becomes a swipe"; R2 "The decision MUST hold until both fingers lift"; R15 "the blocking window is held open until both fingers lift"; the setting-off recognizers (`[.swipe]`, and `[]` with the swipe off) as the reference; the design's answer rule ("an answer names its start") for (e) to (g). |
+| T68 | R1, R13, R15 | Platform: `DeviceSession` | Given a session on the built-in surface with both kinds on and hand-built 10 ms frames: the thumb rested 4 s, two fingers slide 3.5 mm down, then 12 mm more, then lift; a second such slide follows under the same thumb. When the reply delivered with the first start is called (a) with true before the next frame; (b) with false before the next frame; (c) not at all; (d) with true, but only after the second slide's start, whose own reply is never called. Then exactly one delivered event per start carries a reply, and no other event does; `blocksClicks`, read as the click tap reads it after each frame, is (a) true from the frame after the start until the lift; (b), (c) false on every frame; (d) false on every frame of the second slide. | R15 "Click blocking MUST apply for the whole of a window swipe"; R13 "behave exactly as ... with the window swipe setting off" (a thumb rested 4 s blocks no click); the design's answer rule. |
+| T69 | R1, R3, R13 | World, frame by frame | Given the frontmost app's read listing, as (visible, minimised): (1, 1); (2, 0); (0, 2); (14, 0); (1, 0); (0, 1); (0, 0); a full-screen front window with two visible windows and one minimised behind it; two windows from an app that does not answer (`answers = false`). When the thumb anchors and two fingers slide 5 mm down. Then the first four answer the start true and show 2, 2, 2 and 10 rows from the start frame; the other five answer it false and show no window switcher on any frame; each reads once. | R1 "The window count MUST be the number of rows the switcher shows, so a switcher never appears with fewer than two rows"; R3 "When the front window is full screen, it MUST count as the app's only window"; R13 scenarios "One visible and one minimised window", "Only window minimised" and "No windows"; the design's degraded case for an app that does not answer. |
+| T70 | R2, R3, R12, R13 | World, frame by frame, against a reference world | Given Notes on the 1-finger gesture, Mail on the 2-finger gesture, and four worlds: TextEdit with one window; Finder with no windows; no frontmost app; Safari with its front window "Film" full screen and "Docs" and "Mail" behind it. Each is built twice: the window swipe setting on and, as the reference, off; and every pair again with the swipe setting off in both. When each pair plays the same hands frame by frame, probing with an unphased scroll after every frame: (h1) the thumb anchors, two fingers slide 20 mm down, press, lift; (h2) the thumb rests 4 s, two fingers slide 2 mm, then 18 mm down, press, lift; (h3) two fingers slide 5 mm down, then 20 mm sideways, lift; (h4) two fingers slide 5 mm down, the thumb lifts and taps the corner while they rest, they lift. Then in every pair and hand the setting-on world's probes, `windowSwitcher` and `switcher` on every frame, and its press verdicts, pulses, apps brought to front, raises and fired gestures, equal the reference's; `windowSwitcher` and `switcher` are nil on every frame; each start is answered false (`windowSwipeAnswers` all false) and each hand reads once; in TextEdit's and the full-screen pairs, (h1)'s probes drop from the fingers' landing to their lift, no gesture fires, nothing is raised and nothing pulses, and (h2)'s probes pass; (h4) swaps in both worlds, the same app with one gesture haptic. | R13 "MUST then behave exactly as it does with the window swipe setting off (R16)" and its scenarios "One window", "One window scrolls after the blocking window", "Sideways after down stays no swipe" and "No windows"; R3 scenario "Full-screen front window"; R12 and R13's "a haptic MUST NOT play" for the slide itself, read with the swap under its resting fingers playing its own as with the setting off (open question 17); the setting-off world as the reference, itself pinned by T37. |
+| T71 | R13 | World, frame by frame | Given TextEdit frontmost with one window. When two fingers slide 5 mm down under the anchored thumb, TextEdit then opens a second window, the fingers slide 20 mm more and lift, and a new pair then slides 5 mm down under the same thumb. Then no window switcher on any frame of the first slide and `reads == 1` until it lifts; the second slide's start is answered true and its switcher lists both windows. | R13 scenario "Window opens mid-slide"; R13 "The count MUST be fixed when the direction is decided". |
+| T72 | R14 | World | Given Safari frontmost with "Docs" and "Mail", and Accessibility missing. When two fingers slide 24 mm down under the anchored thumb and lift; then the TCC push grants Accessibility, and the next slide down begins. Then the first slide shows no window switcher on any frame, reports no start (`windowSwipeAnswers` empty) and reads nothing; after the grant the trackpads re-run and the next slide shows the window switcher with "Docs" and "Mail". | R14 scenarios "Accessibility missing" and "Accessibility granted later". |
+| T73 | R1, R13 | Pure: `WindowSwipeConfirmation` | Given a confirmation and a handler that records what it is handed. When it delivers (a) a `.windowSwipe(.began)` from the MacBook whose handler confirms the MacBook; (b) one whose handler confirms the Magic Trackpad; (c) one whose handler confirms nothing; (d) one with a nil handler; (e) a `.swipe(.began)`, a `.windowSwipe(.moved(travelMM: 12))` and a fired gesture, each with a handler that confirms the MacBook; (f) a start after `confirm(on:)` named the MacBook between two deliveries. Then the handler receives each event exactly once; the answer is (a) true; (b), (c), (d) false; (e) nil for each; (f) false. | The port's rule for `confirmWindowSwipe(on:)` ("only while `onEvent` is handling a `.windowSwipe(.began)` from `trackpad` ... anywhere else it does nothing"); R13 (a start nobody confirmed is no window swipe). |
 
 ### Verified without a test
 
-Every manual check runs a Debug build from Xcode, right hand, all three switches on, the default tracking speed, Accessibility and Screen Recording granted unless a step says otherwise.
+Every manual check runs a Debug build from Xcode, right hand, all three switches on, the default tracking speed, Accessibility and Screen Recording granted unless a step says otherwise. Each entry names the part of a requirement no test can observe (real apps, the screen, the hardware, real time); the rest of that requirement is proved by its test rows.
 
-- **All requirements: the build and the suite.** `swift build` and `swift test` in `LauncherKit` pass, every pre-plan row included (R16 "no change to the swipe"); `xcodegen` then `xcodebuild` builds the app with `SystemPermissions()` at the composition root and `window-swipe.svg` among its resources.
-- **R4, R5, R6 (M1).** Open Safari with windows "A", "B", "C" front to back and a minimised "D"; pointer on the main display; anchor the thumb top-left, slide two fingers 5 mm down and hold. Expect a Liquid Glass panel whose top-left corner sits 12 pt below the menu bar and 12 pt from the display's left edge (right of a left-side Dock); four rows A, B, C, D, A under a glass highlight; A to C with pictures 60 pt tall and at most 120 pt wide, their titles to the right on one line; D at reduced opacity with Safari's icon and a "Minimised" badge. On the first window swipe after launch the rows show Safari's icon first, then crossfade to pictures. Lift: the panel fades. Repeat in Left hand: same corner.
-- **R5 (M2).** Pointer on a second display, repeat M1: the panel sits at that display's top-left.
-- **R5 (M3).** System Settings › Displays › Larger Text; TextEdit with 10 windows; window swipe: all 10 rows show, each the same smaller height, the last row above the bottom of the screen.
-- **R5 (M4).** Type in a TextEdit document; window swipe and lift without moving; type again: the text goes on in the same document. While the panel shows, clicking on it does not focus it or reach the window under it.
-- **R6 (M5).** A Safari tab whose title is longer than the row: the row's title ends in "…".
-- **R6 (M6).** A window playing a video: window swipe and hold 3 s: its picture does not change.
-- **R7 (M7).** `tccutil reset ScreenCapture com.domasgru.TrackpadLauncherApp`, relaunch, five window swipes: rows show the app icon with each title, and no system dialog appears. Note whether macOS shows its periodic screen-access alert (F31).
-- **R8 (M8).** Continuing from M7, open the launcher window: after the Accessibility hint's place, "Window previews need Screen Recording." with "Allow Screen Recording…". Press it: macOS asks whether Trackpad Launcher may record the screen; deny. Reopen the launcher window: the button reads "Open System Settings…"; press it: System Settings opens on the screen recording page of Privacy & Security. Allow Trackpad Launcher, quit and reopen if macOS asks; reopen the launcher window: no hint; the next window swipe shows pictures (R7). Reset again and turn the window swipe switch off: no hint.
-- **R9 (M9, open question 1).** At the default tracking speed, compare the finger distance for one icon of the app switcher sideways with one row of the window switcher down, at the same pace: about the same. At the fastest tracking speed: both shorter.
-- **R10, R11 (M10).** Safari "Docs", "Mail", "News": slide down one row and hold: Mail fully in front behind the panel; continue to News and lift; press ⌘L: News's address bar takes the focus; window swipe again: rows read News, Docs, Mail.
-- **R11 (M11, open question 11).** In TextEdit, Finder, Safari, Google Chrome and Visual Studio Code in turn, minimise a window; slide past its row: it stays minimised; lift on its row: it is restored and in front.
-- **R12 (M12).** Slide across two rows: two light ticks; lift on another window: one firm click; lift on the first row: nothing.
-- **R14 (M13).** Remove Trackpad Launcher from Accessibility; window swipe with Safari in front: one row with Safari's icon and "Allow Accessibility to switch windows"; lift: nothing changes; the launcher window still shows the existing Accessibility hint.
-- **R15 (M14).** Over a long web page, window swipe down and up: the page does not scroll and Mission Control does not open; during a window swipe land a third finger: the panel disappears and no click reaches the page.
-- **R16 (M15).** Launcher window: a third row "Swipe up or down to switch windows" below "Thumb tap to swap apps", with the window swipe illustration (the thumb in the corner, two fingers, an up-and-down arrow, in the style of `swipe.svg`), mirrored in Left hand. Switch it off, anchor the thumb, wait 4 s, slide two fingers down over a page: the page scrolls and no panel shows. Quit and reopen: still off.
-- **R17 (M16).** Code review of `WindowSwitcherPresenter`, `WindowSwitcherPanel` and `PreviewCapture`: capture starts only in `open(_:)` and only for a non-empty `previewWindows`; the task is cancelled on nil; every arrival checks the shown serial; `emptied()` clears every slot layer's contents; no `CGImage` lives in any other property, cache or static. Then Instruments › Allocations: mark a generation, run five window swipes with pictures, wait 1 s after the last fade, mark again: no persistent `CGImage` or `IOSurface` growth from `PreviewCapture`.
+- **The build and the suite (no requirement on its own).** `swift build` and `swift test` in `LauncherKit` pass, every pre-plan row included (R16 "no change to the swipe"); `xcodegen` then `xcodebuild` builds the app with `SystemPermissions()` at the composition root and `window-swipe.svg` among its resources.
+- **R4, R5, R6 on screen: real windows, the glass panel, real pictures (M1).** Open Safari with windows "A", "B", "C" front to back and a minimised "D"; pointer on the main display; anchor the thumb top-left, slide two fingers 5 mm down and hold. Expect a Liquid Glass panel whose top-left corner sits 12 pt below the menu bar and 12 pt from the display's left edge (right of a left-side Dock); four rows A, B, C, D, A under a glass highlight; A to C with pictures 60 pt tall and at most 120 pt wide, their titles to the right on one line; D at reduced opacity with Safari's icon and a "Minimised" badge. On the first window swipe after launch the rows show Safari's icon first, then crossfade to pictures. Lift: the panel fades. Repeat in Left hand: same corner.
+- **R5, the second display (M2).** Pointer on a second display, repeat M1: the panel sits at that display's top-left.
+- **R5, shrinking on a real display (M3).** System Settings › Displays › Larger Text; TextEdit with 10 windows; window swipe: all 10 rows show, each the same smaller height, the last row above the bottom of the screen.
+- **R5, real focus and clicks (M4).** Type in a TextEdit document; window swipe and lift without moving; type again: the text goes on in the same document. While the panel shows, clicking on it does not focus it or reach the window under it.
+- **R6, the drawn ellipsis (M5).** A Safari tab whose title is longer than the row: the row's title ends in "…".
+- **R6, a picture that stays as it began (M6).** A window playing a video: window swipe and hold 3 s: its picture does not change.
+- **R7, no system prompt on screen (M7).** `tccutil reset ScreenCapture com.domasgru.TrackpadLauncherApp`, relaunch, five window swipes: rows show the app icon with each title, and no system dialog appears. Note whether macOS shows its periodic screen-access alert (F31).
+- **R8, the real prompt and System Settings page (M8).** Continuing from M7, open the launcher window: after the Accessibility hint's place, "Window previews need Screen Recording." with "Allow Screen Recording…". Press it: macOS asks whether Trackpad Launcher may record the screen; deny. Reopen the launcher window: the button reads "Open System Settings…"; press it: System Settings opens on the screen recording page of Privacy & Security. Allow Trackpad Launcher, quit and reopen if macOS asks; reopen the launcher window: no hint; the next window swipe shows pictures (R7). Reset again and turn the window swipe switch off: no hint.
+- **R9, the real pointer acceleration (M9, open question 1).** At the default tracking speed, compare the finger distance for one icon of the app switcher sideways with one row of the window switcher down, at the same pace: about the same. At the fastest tracking speed: both shorter.
+- **R10, R11 on real windows and focus (M10).** Safari "Docs", "Mail", "News": slide down one row and hold: Mail fully in front behind the panel; continue to News and lift; press ⌘L: News's address bar takes the focus; window swipe again: rows read News, Docs, Mail.
+- **R11, restoring in real apps (M11, open question 11).** In TextEdit, Finder, Safari, Google Chrome and Visual Studio Code in turn, minimise a window; slide past its row: it stays minimised; lift on its row: it is restored and in front.
+- **R12, the haptics as felt (M12).** Slide across two rows: two light ticks; lift on another window: one firm click; lift on the first row: nothing.
+- **R14, a real revocation and the hint view (M13).** Remove Trackpad Launcher from Accessibility; with Safari in front with two windows over a long page, anchor the thumb, wait 4 s and slide two fingers down: no panel appears, and the slide does what the same slide does with the window swipe switch off (turn the switch off, repeat, and compare: both scroll the page, or both open Mission Control, open question 8). Turn the switch back on. Open the launcher window: the Accessibility hint reads "Clicks and scrolling aren't blocked during gestures, and windows can't be switched. Allow Accessibility access to do both." Allow Trackpad Launcher again in System Settings, without relaunching: the next slide down shows the panel with both windows.
+- **R15, real scrolling and Mission Control (M14).** Safari with two windows, the pointer over a long page. Within 3 s of anchoring the thumb, window swipe down and up: the page does not scroll and Mission Control does not open. Again with the thumb anchored 4 s first: the page may move during the first 3 mm, as it did before change 1, then stays still until the fingers lift (the scroll is stilled, as in T33(b)), and Mission Control does not open. During a window swipe land a third finger: the panel disappears and no click reaches the page.
+- **R16, the switch row and its illustration (M15).** Launcher window: a third row "Swipe up or down to switch windows" below "Thumb tap to swap apps", with the window swipe illustration (the thumb in the corner, two fingers, an up-and-down arrow, in the style of `swipe.svg`), mirrored in Left hand. Switch it off, anchor the thumb, wait 4 s, slide two fingers down over a page: the page scrolls and no panel shows. Quit and reopen: still off.
+- **R17, the presenter's pictures (M16).** Code review of `WindowSwitcherPresenter`, `WindowSwitcherPanel` and `PreviewCapture`: capture starts only in `open(_:)` and only for a non-empty `previewWindows`; the task is cancelled on nil; every arrival checks the shown serial; `emptied()` clears every slot layer's contents; no `CGImage` lives in any other property, cache or static. Then Instruments › Allocations: mark a generation, run five window swipes with pictures, wait 1 s after the last fade, mark again: no persistent `CGImage` or `IOSurface` growth from `PreviewCapture`.
 - **R17, the capture race (M17).** Right after launch, window swipe on Safari and lift within a fraction of a second, then at once window swipe on TextEdit: no Safari picture ever shows in TextEdit's rows.
-- **The messaging timeout and the unanswering app (M18).** TextEdit with two windows; in Terminal run `sleep 5; kill -STOP $(pgrep -x TextEdit)` and click TextEdit within 5 s; after it stops, window swipe: within a fraction of a second, one row with TextEdit's icon and "No open windows", and the pointer never stalls longer. `kill -CONT $(pgrep -x TextEdit)`. Again, but start the window swipe before the stop and keep sliding across rows past it: at most one short hitch, then no further hitches; lift: nothing changes, no haptic. `kill -CONT`.
+- **The messaging timeout and the unanswering app (M18).** TextEdit with two windows; in Terminal run `sleep 5; kill -STOP $(pgrep -x TextEdit)` and click TextEdit within 5 s; after it stops, slide two fingers down under the thumb: no panel appears, the slide behaves as with the window swipe switch off, and the pointer stalls at most once, for a fraction of a second. `kill -CONT $(pgrep -x TextEdit)`. Again, but start the window swipe before the stop and keep sliding across rows past it: at most one short hitch, then no further hitches; lift: nothing changes, no haptic. `kill -CONT`.
 - **The private window number's fallback.** Code review: `FrontmostAppWindows` resolves `_AXUIElementGetWindow` once with `dlsym` and, when it is missing, numbers windows only through `number(of:among:)` (T16), leaving unmatched windows out; the window list's first call runs off the main actor in `init()`.
 - **The app switcher after the prefactor (M19).** The sideways swipe's panel looks, centres, follows (one icon per 100 cursor points) and fades as before.
-- **Documentation.** `docs/product-overview.md` describes the window swipe beside the swipe, extends the silent-lift exception to it, and its privacy note says the app may ask for Screen Recording, used only to draw window previews while the window switcher shows.
+- **R1, the 50 ms bound, and R13, real apps' window counts (M20, change 1).** World proves only that the model shows the switcher in the main-actor turn that handles the start (T19); the bound runs from the movement to the panel on screen, so it is timed end to end on video, since sampling profilers cannot time one interval and the logging ban rules out signposts. Draw a mark on the trackpad 3 mm below where two fingers will land; film the trackpad and the screen's top-left corner together at 240 fps (one frame per 4.2 ms); with Safari frontmost with 10 windows, anchor the thumb, land two fingers above the mark and slide them firmly down past it. Count video frames from the first frame the leading fingertip covers the mark to the first frame the panel shows: at most 12 (50 ms) on each of five runs, and again five runs with the launcher window open. Compare with the app switcher, filmed the same way with a sideways mark: the window switcher is at most two video frames slower. Then, each with the thumb anchored 4 s before sliding two fingers down over a long document: TextEdit with one window: the document scrolls and no panel shows; Finder with no windows, Finder with its only window minimised, and Safari with its only window full screen: no panel; Finder with one visible and one minimised window: the panel shows two rows. In TextEdit with one window, slide down and, while still sliding, press ⌘N: no panel until the fingers lift; the next slide shows two rows.
+- **The real adapter's wiring of the answer (M21, change 1).** Code review of `MultitouchTrackpads`: every event reaches `onEvent` through its `WindowSwipeConfirmation` (T73 proves the rule, and every World row runs it through `InMemoryTrackpads`); a start's reply is called once, with the confirmation's answer; `confirmWindowSwipe(on:)` only forwards; events of a replaced run are dropped before the confirmation, reply included. No timer, queue or wait is added. Why not a test: what is left is wiring around real multitouch devices.
+- **Documentation.** `docs/product-overview.md` describes the window swipe beside the swipe, "when the frontmost app has two or more windows", extends the silent-lift exception to it without the old clause about a "No open windows" or Accessibility message, and its privacy note says the app may ask for Screen Recording, used only to draw window previews while the window switcher shows.
 
 ## Slices
+
+S1 to S4 are built and committed, and describe the requirements as they stood then. Change 1 (a window swipe only with two or more windows) follows as S5 and S6, which change the built code.
 
 ### S1: Make the change easy: one selection rule, two-axis travel, slide kinds, one permissions port, one overlay panel
 
@@ -1582,3 +1783,50 @@ Every manual check runs a Debug build from Xcode, right hand, all three switches
 - [ ] T58 to T65 green, and the earlier rows still green.
 - [ ] M1 with pictures, M6, M7, M8, M16 and M17 by hand.
 - [ ] `docs/product-overview.md`'s privacy note names Screen Recording for previews only.
+
+### S5: Make the change easy: a window swipe's start waits for the model's answer
+
+**What to build:** Nothing the user can see changes, except one thing: a window swipe now blocks clicks and scrolling from the frame after its start, not on it. The system's swipes stay blocked on that frame, because the thumb is still anchored there. The recognizer begins a slide up or down unconfirmed: its phases are reported as today, and it blocks only by the thumb rules until `answerWindowSwipe(began:isWindowSwipe:)` settles it.
+- True confirms it, and it blocks from the next frame until both fingers lift, as today.
+- False turns it into the setting-off state: `.spoiled` under the slide's thumb or, once that thumb has gone, a rest of every contact down as `restOrIdle` gives it.
+- An answer naming another start, arriving after the slide ended, or coming second changes nothing.
+
+A swipe is born confirmed. `TrackpadHardware` gains `confirmWindowSwipe(on:)` as a protocol requirement. `WindowSwipeConfirmation` in `LauncherCore` holds the one main-actor rule for when a confirmation counts. Both adapters hand every event to `onEvent` through it and forward `confirmWindowSwipe(on:)` to it, and so answer every window swipe start once `onEvent` returns. In the real adapter, `DeviceSession` delivers the start with a reply that fills its answer slot (the main actor is the one writer), and the frame callback hands the slot to the recognizer before each step; `MultitouchTrackpads` calls the reply with the confirmation's answer. In memory, `InMemoryTrackpads` gives the answer to the running recognizer between frames and logs it in `windowSwipeAnswers`. The model confirms every window swipe start as the first thing it does with it, which keeps today's behaviour, message rows and all. The recognizer drivers take `answering:` (default true), and the `DeviceSession` test helpers take the reply. `docs/architecture.md` already describes the answer hop (updated with this plan).
+
+**Blocked by:** S4.
+
+**Requirements:** R1, R2, R13 and R15, in the part the answer protocol carries: a start answered once, by its own handling; a declined slide exactly the setting-off slide, at the recognizer; blocking once confirmed, from the frame after the start.
+
+**Test scenarios:** T67, T68, T73, then T11, T19 and T35 as revised.
+
+- [ ] T67, T68 and T73 green; T11 green in its revised form (blocking from the frame after the start); T19 asserts the start is answered true; T35's new case (a), a press on the frame after the start passing and cancelling, green beside the old no-Accessibility click case, which S6 deletes.
+- [ ] The existing suite green with its meaning unchanged: every other recognizer row runs with starts confirmed before the next frame, and every World row passes as before.
+- [ ] M21 passes code review; the app builds.
+- [ ] M14 by hand, both runs.
+
+### S6: A slide up or down is a window swipe only with two or more windows
+
+**What to build:** Over an app with two or more windows, and with Accessibility, a slide up or down is a window swipe as before. Otherwise nothing shows, nothing pulses, and the slide behaves exactly as with the window swipe switch off. That covers one window, an only window minimised, no windows, a full-screen front window, no frontmost app, an app that does not answer, and no Accessibility. Such a slide scrolls once the blocking window has passed, never becomes a swipe, lets a thumb tap under its resting fingers swap, and stays no window swipe if a window opens before the fingers lift. In the model:
+- `windowSwipe(_:)` confirms a start only while gestures are active and `WindowSwitcher.Content(system.frontmostWindows())` exists.
+- It shows the switcher only when none is up, so a second trackpad's window swipe runs its course with none.
+- It lifts every switcher it shows.
+- `reconcile` runs the recognizers without `.windowSwipe` while Accessibility is missing.
+
+In the core:
+- `WindowSwitcher.Content` becomes a struct (`app`, `windows`) with the failable parse: nil below two rows or with no app.
+- `Row` loses `.message`; `Row.window` and `WindowSwitcher.app` stop being optional; `listsWindows` goes.
+- `Copy.untitledWindow(of:position:)` always numbers ("Preview — Window 2").
+- `Copy.noOpenWindows` and `Copy.accessibilityForWindows` go.
+- `Copy.accessibilityHint` names switching windows.
+
+The presenter and panel take the non-optional app and window. These tests are deleted or rewritten as their rows now read: those that proved the retired T22, T28, T29, T30, T32 and T55; T35's old no-Accessibility click case; and the old one-row, message-row and one-untitled-window cases of T20, T25, T47 and T49. `docs/product-overview.md` follows the requirements' Documentation section.
+
+**Blocked by:** S5.
+
+**Requirements:** R1 (only over two or more windows, the count being the rows), R2 (a slide that is no window swipe never becomes a swipe), R3 (the full-screen front window), R6 (untitled windows always numbered), R12 (no haptic without a window swipe), R13, R14.
+
+**Test scenarios:** T69, T70, T71, T72, T66, then T20, T25, T40, T47 and T49 as revised; T22, T28, T29, T30, T32 and T55 retired.
+
+- [ ] T66, T69, T70, T71 and T72 green; T20, T25, T40, T47 and T49 green as revised; no test still expects a "No open windows" or Accessibility row; and every earlier row still green.
+- [ ] M13, M18 and M20 by hand; M1 to M4 and M10 still pass on apps with two or more windows.
+- [ ] `docs/product-overview.md` says the window swipe works "when the frontmost app has two or more windows", and its silent-lift exception no longer mentions a "No open windows" or Accessibility message.
