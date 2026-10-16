@@ -15,11 +15,16 @@ import LauncherCore
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
         let script = thumb.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 5))
 
-        let history = world.playFrameByFrame(script)
+        let history = world.playFrameByFrame(script) {
+            (windowSwitcher: world.launcher.windowSwitcher, switcher: world.launcher.switcher,
+             reads: world.system.windows.reads)
+        }
 
         let beganAt = perFrame(script.frames).firstIndex { $0.windowSwipe == .began }
         #expect(beganAt != nil)
         #expect(history.firstIndex { $0.windowSwitcher != nil } == beganAt)
+        #expect(history.prefix(beganAt ?? 0).allSatisfy { $0.reads == 0 })
+        #expect(beganAt.map { history[$0].reads } == 1)
         let shown = world.launcher.windowSwitcher
         #expect(shown?.rows.map(\.title) == ["Docs", "Mail", "News"])
         #expect(shown?.selection.selected == 0)

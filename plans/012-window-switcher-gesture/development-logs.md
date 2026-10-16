@@ -39,3 +39,15 @@
 - test-planner: `WindowColumnLayout` did not define "fits" → the panel plus `margin` above and below within the visible height (T13).
 - test-planner: T47(c), T49(b) and T52(b) rest on unanswered readings of R11 and R13 → open question 4 states the "front-window lift restores the order" reading and names the rows that flip.
 - test-planner, second pass: no new findings; T49's source now cites open question 4.
+
+## Implement
+- No `AGENTS.md` in the repo → quick gate taken as `Scripts/test.sh`; full gate as a clean `Scripts/test.sh` plus `xcodegen generate` and a Debug `xcodebuild` of the app. No `.claude/skills/verify-*` → verification-skill step skipped.
+- S1 committed (f4590b1). Departure: `beginOrSpoil` held a temporary `kind == .swipe` stop-gap until S2 added the event; removed in S2.
+- S2 committed (a09ddfa). Departures: T4's exact tie uses a 128 × 64 mm test surface (the MacBook's fraction round-trip never ties exactly); `FakeWindows.set` takes `untitled:` since ids are keyed by name; the vertical `ScrollSuppressionTests` rows now turn the window swipe off to keep pinning today's behaviour.
+- S3 committed (ffa025d). A hung app mid-swipe can cost a second 0.2 s timeout at the lift's read → kept: the plan's Tradeoffs accept a stall "at the raise that meets it and again at the lift's read".
+- S4 committed (ae4354e). `@preconcurrency import ScreenCaptureKit` needed for Swift 6; no Info.plist key needed for capture.
+- Full gate after S4: green (473 tests, app builds).
+- implementation-reviewer (against origin/main; local `main` is stale): no requirement missing or wrong, every T row has a test.
+- Fixed: off-main warm-up and preview capture moved into `@concurrent` functions (architecture.md Concurrency, "explicitly concurrent functions"); the window-number fallback now also covers a window whose private lookup fails (plan adapter step 4); panel row count from `GestureRules.windowSwitcherMaxRows` (made `package`); unused `present(animated:)` and `OverlayAppear.fade` removed; T53's name says what, not how; T19 asserts no read before the crossing frame directly.
+- Declined: count assertions on `reads`/`raised` (the plan's named test handles); `Swipe*` naming and the two event cases (plan decisions, alternatives rejected); small duplication and naming smells (`.moved`/`.cancelled` branches, stretch spring, `look:` parameter, size tuples, `emptied()`, `dismissFade`).
+- Full gate after fixes: green (473 tests, app builds).

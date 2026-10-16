@@ -24,7 +24,7 @@ package enum GestureRules {
     /// The most icons a switcher row holds: the frontmost app and the most recently used others.
     static let switcherMaxApps = 10
     /// The most rows a window switcher holds: the front window, the other visible ones, then the minimised ones.
-    static let windowSwitcherMaxRows = 10
+    package static let windowSwitcherMaxRows = 10
     /// Items are this many step millimetres apart in travel; the selection is the nearest item.
     static let switcherStepMM = 12.0
     /// The most the highlight's rubber band shows past an end, in items.

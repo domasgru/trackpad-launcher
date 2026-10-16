@@ -136,6 +136,6 @@ final class SwitcherPresenter {
             scale: screen?.backingScaleFactor ?? 2)
         laidOutRow = row
         lastStretch = 0
-        panel.present(animated: false)
+        panel.present(appear: nil)
     }
 }

@@ -8,13 +8,12 @@ struct OverlayAppear {
     var fromScale: CGFloat?
     var stiffness = 0.0
     var damping = 0.0
-
-    static let fade = OverlayAppear(duration: 0.12)
 }
 
 /// Both switchers' window: borderless, non-activating, click-through, screen-saver level on every Space and beside
-/// full-screen apps, never key. Its content is Liquid Glass under `roundedClip`. Presents at once or with a short
-/// appear animation; dismisses with a 150 ms fade (at once with Reduce motion) unless presented again meanwhile.
+/// full-screen apps, never key. Its content is Liquid Glass under `roundedClip`. Presents at once, or with an
+/// `OverlayAppear` when one is given; dismisses with a 150 ms fade (at once with Reduce motion) unless presented again
+/// meanwhile.
 class OverlayPanel: NSPanel {
     private static let fadeKey = "fade"
     private static let appearScaleKey = "appearScale"
@@ -47,12 +46,6 @@ class OverlayPanel: NSPanel {
 
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
-
-    /// Fully opaque and in front, dropping any fade still running. `animated` (never with Reduce motion) fades it in
-    /// briefly instead of showing it at once.
-    func present(animated: Bool) {
-        present(appear: animated ? .fade : nil)
-    }
 
     /// Fully opaque and in front, dropping any fade still running. With `appear` (never with Reduce motion) it plays
     /// that appear instead of showing at once.

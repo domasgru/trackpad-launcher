@@ -16,28 +16,32 @@ enum PreviewCapture {
         let wanted = Set(windows.map(\.rawValue))
         let (width, height) = fitting
         return AsyncStream { continuation in
-            let work = Task {
-                defer { continuation.finish() }
-                guard
-                    let content = try? await SCShareableContent.excludingDesktopWindows(
-                        true, onScreenWindowsOnly: true)
-                else { return }
-                await withTaskGroup { group in
-                    for window in content.windows where wanted.contains(window.windowID) {
-                        let id = WindowID(rawValue: window.windowID)
-                        let filter = SCContentFilter(desktopIndependentWindow: window)
-                        let still = configuration(for: window.frame.size, width: width, height: height)
-                        group.addTask {
-                            guard !Task.isCancelled,
-                                let picture = try? await SCScreenshotManager.captureImage(
-                                    contentFilter: filter, configuration: still)
-                            else { return }
-                            continuation.yield((id, picture))
-                        }
-                    }
+            let work = Task { await capture(wanted, width: width, height: height, into: continuation) }
+            continuation.onTermination = { _ in work.cancel() }
+        }
+    }
+
+    @concurrent private static func capture(
+        _ wanted: Set<UInt32>, width: Int, height: Int,
+        into continuation: AsyncStream<(WindowID, CGImage)>.Continuation
+    ) async {
+        defer { continuation.finish() }
+        guard
+            let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+        else { return }
+        await withTaskGroup { group in
+            for window in content.windows where wanted.contains(window.windowID) {
+                let id = WindowID(rawValue: window.windowID)
+                let filter = SCContentFilter(desktopIndependentWindow: window)
+                let still = configuration(for: window.frame.size, width: width, height: height)
+                group.addTask {
+                    guard !Task.isCancelled,
+                        let picture = try? await SCScreenshotManager.captureImage(
+                            contentFilter: filter, configuration: still)
+                    else { return }
+                    continuation.yield((id, picture))
                 }
             }
-            continuation.onTermination = { _ in work.cancel() }
         }
     }
 

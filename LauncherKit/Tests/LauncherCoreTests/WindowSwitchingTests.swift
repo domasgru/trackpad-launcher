@@ -182,7 +182,7 @@ import LauncherCore
         #expect(world.hardware.feedback.isEmpty == !haptic)
     }
 
-    @Test func theLiftReadsTheWindowsAgainSoItDoesNotDependOnTheRaisesWhileSliding() {
+    @Test func liftingOrdersTheWindowsEvenWhenRaisesWhileSlidingWereIgnored() {
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
         world.system.windows.dropsRaises = true
         let hand = world.windowSwipe(3.5, 12, lift: false)

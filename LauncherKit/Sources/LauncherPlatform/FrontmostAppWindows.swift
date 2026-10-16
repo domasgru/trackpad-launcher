@@ -8,8 +8,8 @@ import LauncherCore
 /// (titles, roles, minimised, full screen); the window list orders the visible ones and tells which are on this Space.
 ///
 /// A window's number comes from the private `_AXUIElementGetWindow`, resolved once with `dlsym` from the image
-/// AppKit already loaded; when a macOS drops it, windows are matched to the window list by frame and title instead,
-/// and a window that matches none is left out.
+/// AppKit already loaded; when a macOS drops it, or it fails for one window, that window is matched to the window list
+/// by frame and title instead, and a window that matches none is left out.
 @MainActor final class FrontmostAppWindows {
     /// Bounds every call into another app: one that does not answer in time reads as having no windows.
     static let messagingTimeout: Float = 0.2
@@ -35,9 +35,11 @@ import LauncherCore
         // RTLD_DEFAULT
         getWindow = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "_AXUIElementGetWindow")
             .map { unsafeBitCast($0, to: GetWindow.self) }
-        DispatchQueue.global(qos: .utility).async {
-            _ = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
-        }
+        Task { await Self.warmWindowList() }
+    }
+
+    @concurrent private static func warmWindowList() async {
+        _ = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
     }
 
     func read() -> FrontmostWindows {
@@ -71,9 +73,11 @@ import LauncherCore
             raw.append(Self.rawWindow(values, number: number(of: element)))
             rawElements.append(element)
         }
-        if getWindow == nil {
+        if raw.contains(where: { $0.number == nil }) {
             let listedWindows = Self.listedWindows(of: pid)
-            for i in raw.indices { raw[i].number = Self.number(of: raw[i], among: listedWindows) }
+            for i in raw.indices where raw[i].number == nil {
+                raw[i].number = Self.number(of: raw[i], among: listedWindows)
+            }
         }
         let sorted = Self.sort(raw, onScreen: Self.onScreenNumbers(of: pid))
         var elementsByID: [WindowID: AXUIElement] = [:]

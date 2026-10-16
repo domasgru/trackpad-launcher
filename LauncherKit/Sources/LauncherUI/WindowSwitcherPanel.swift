@@ -28,7 +28,7 @@ final class WindowSwitcherPanel: OverlayPanel {
 
     init(look: WindowSwitcherLook = .shipped) {
         self.look = look
-        rowViews = (0..<10).map { _ in WindowRowView(look: look) }
+        rowViews = (0..<GestureRules.windowSwitcherMaxRows).map { _ in WindowRowView(look: look) }
         super.init(cornerRadius: look.panelRadius, content: content)
         content.wantsLayer = true
         highlight.style = .clear
