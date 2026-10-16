@@ -1,0 +1,45 @@
+== Probe 3: ScreenCaptureKit previews
+CGPreflightScreenCaptureAccess: true
+CGWindowListCopyWindowInfo on-screen, cold: 52.15 ms
+CGWindowListCopyWindowInfo on-screen, warm: 1.26 ms
+CGWindowListCreate (ids only) on-screen via dlsym: 0.12 ms  count: 28  first ids: [110, 92, 1840, 81, 51, 48, 56, 108, 52, 49, 32, 6882]
+CGWindowListCreateDescriptionFromArray for 12 ids: 0.14 ms  pids: []
+CGWindowListCopyWindowInfo third call + pid filter: 0.40 ms  TextEdit windows: 2
+SCShareableContent (all windows) took 55.23 ms  total windows: 191
+-- TextEdit windows in SCShareableContent order:
+   id=6880 title="" onScreen=false active=false layer=0 frame=0.0,482.0 500.0x500.0 app=TextEdit
+   id=6881 title="Alpha.txt" onScreen=true active=true layer=0 frame=152.0,73.0 656.0x422.0 app=TextEdit
+   id=6882 title="Beta.txt" onScreen=true active=true layer=0 frame=181.0,102.0 656.0x422.0 app=TextEdit
+   id=6879 title="" onScreen=false active=false layer=0 frame=0.0,0.0 1512.0x33.0 app=TextEdit
+   id=6878 title="" onScreen=false active=false layer=0 frame=0.0,0.0 1512.0x33.0 app=TextEdit
+   id=6877 title="" onScreen=false active=false layer=0 frame=0.0,0.0 1512.0x33.0 app=TextEdit
+   id=6876 title="" onScreen=false active=false layer=0 frame=0.0,0.0 1512.0x33.0 app=TextEdit
+SCShareableContent (on-screen only) took 14.46 ms  TextEdit windows: ["Beta.txt", "Alpha.txt"]
+capture "" took 100.15 ms  image 120x120 bpp=32
+capture "Alpha.txt" took 27.87 ms  image 186x120 bpp=32
+capture "Beta.txt" took 26.00 ms  image 186x120 bpp=32
+capture "" took 25.47 ms  image 240x5 bpp=32
+capture "" took 23.61 ms  image 240x5 bpp=32
+capture "" took 20.24 ms  image 240x5 bpp=32
+capture "" took 18.76 ms  image 240x5 bpp=32
+  concurrent capture ("", 120, 120)
+  concurrent capture ("Alpha.txt", 186, 120)
+  concurrent capture ("Beta.txt", 186, 120)
+  concurrent capture ("", 240, 5)
+  concurrent capture ("", 240, 5)
+  concurrent capture ("", 240, 5)
+  concurrent capture ("", 240, 5)
+concurrent captures of 7 windows took 93.58 ms
+capture of occluded "Beta.txt" took 24.62 ms  image 186x120
+-- after minimising Beta, SCShareableContent (all):
+   id=6882 title="Beta.txt" onScreen=false active=false layer=0 frame=181.0,102.0 656.0x422.0 app=TextEdit
+   id=6881 title="Alpha.txt" onScreen=true active=true layer=0 frame=152.0,73.0 656.0x422.0 app=TextEdit
+   id=6880 title="" onScreen=false active=false layer=0 frame=0.0,482.0 500.0x500.0 app=TextEdit
+   id=6879 title="" onScreen=false active=false layer=0 frame=0.0,0.0 1512.0x33.0 app=TextEdit
+   id=6878 title="" onScreen=false active=false layer=0 frame=0.0,0.0 1512.0x33.0 app=TextEdit
+   id=6877 title="" onScreen=false active=false layer=0 frame=0.0,0.0 1512.0x33.0 app=TextEdit
+   id=6876 title="" onScreen=false active=false layer=0 frame=0.0,0.0 1512.0x33.0 app=TextEdit
+on-screen only now: ["Alpha.txt"]
+capture of minimised "Beta.txt" took 24.95 ms  image 186x120
+CG on-screen order (layer 0): [6882, 6881]  SC on-screen order: [6882, 6881]
+Teardown: TextEdit terminated, previous front re-activated: Ghostty

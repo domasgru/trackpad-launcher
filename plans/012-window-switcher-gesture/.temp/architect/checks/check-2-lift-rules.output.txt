@@ -1,0 +1,24 @@
+ok   R11 toggle order
+ok   R11 toggle haptic
+ok   R10 live switch
+ok   R11 front, no slide: no raises
+ok   R11 front, no slide: silent
+ok   R10/R11 slide away and back: order restored
+ok   R10/R11 slide away and back: silent
+ok   R11 closed selected: no raises
+ok   R11 closed selected: order as it is
+ok   R11 closed selected, Docs in front: silent
+ok   R11 closed selected (Mail), News in front: haptic
+ok   R10 passing a minimised window: stays minimised
+ok   R11 lift on minimised: restored in front
+ok   R11 lift on minimised: order M, A, B
+ok   R11 lift on minimised: haptic
+ok   R11 all minimised: first restored
+ok   R11 all minimised: haptic
+ok   R13 one window: nothing, silent
+ok   every window closed: silent
+ok   opened mid-swipe: Mail ends in front
+ok   opened mid-swipe: order Mail, New, Docs, News
+ok   opened mid-swipe, lift on front: Docs back in front, silent
+ok   later minimised never restored
+ALL PASS

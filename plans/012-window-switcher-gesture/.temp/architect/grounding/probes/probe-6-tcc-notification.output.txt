@@ -1,0 +1,24 @@
+== Probe 6: com.apple.tcc.access.changed on a ScreenCapture reset
+notify_register_dispatch status: 0
+notifications before reset: 0
+  notification received at 2026-10-16 12:32:40 +0000
+  notification received at 2026-10-16 12:32:40 +0000
+  notification received at 2026-10-16 12:32:40 +0000
+  notification received at 2026-10-16 12:32:40 +0000
+  notification received at 2026-10-16 12:32:40 +0000
+  notification received at 2026-10-16 12:32:40 +0000
+  notification received at 2026-10-16 12:32:40 +0000
+  notification received at 2026-10-16 12:32:40 +0000
+  notification received at 2026-10-16 12:32:40 +0000
+  notification received at 2026-10-16 12:32:40 +0000
+tccutil exit: 0 output: Successfully reset ScreenCapture approval status for com.domasgru.TrackpadLauncherApp
+Successfully reset ScreenCapture approval status for com.domasgru.TrackpadLauncherApp
+Successfully reset ScreenCapture approval status for com.domasgru.TrackpadLauncherApp
+Successfully reset ScreenCapture approval status for com.domasgru.TrackpadLauncherApp
+Successfully reset ScreenCapture approval status for com.domasgru.TrackpadLauncherApp
+Successfully reset ScreenCapture approval status for com.domasgru.TrackpadLauncherApp
+Successfully reset ScreenCapture approval status for com.domasgru.TrackpadLauncherApp
+Successfully reset ScreenCapture approval status for com.domasgru.TrackpadLauncherApp
+Successfully reset ScreenCapture approval status for com.domasgru.TrackpadLauncherApp
+Successfully reset ScreenCapture approval status for com.domasgru.TrackpadLauncherApp
+notifications after reset: 10  fired for the reset: true
