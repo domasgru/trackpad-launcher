@@ -17,7 +17,7 @@ import LauncherCore
 
         let history = world.playFrameByFrame(script) {
             (windowSwitcher: world.launcher.windowSwitcher, switcher: world.launcher.switcher,
-             reads: world.system.windows.reads)
+             reads: world.system.windows.reads, answers: world.hardware.windowSwipeAnswers)
         }
 
         let beganAt = perFrame(script.frames).firstIndex { $0.windowSwipe == .began }
@@ -25,6 +25,7 @@ import LauncherCore
         #expect(history.firstIndex { $0.windowSwitcher != nil } == beganAt)
         #expect(history.prefix(beganAt ?? 0).allSatisfy { $0.reads == 0 })
         #expect(beganAt.map { history[$0].reads } == 1)
+        #expect(beganAt.map { history[$0].answers } == [true])
         let shown = world.launcher.windowSwitcher
         #expect(shown?.rows.map(\.title) == ["Docs", "Mail", "News"])
         #expect(shown?.selection.selected == 0)

@@ -2,6 +2,12 @@ import CoreGraphics
 import LauncherCore
 import Synchronization
 
+/// The answer to one window swipe start: the frame time the start was reported on, and whether it is a window swipe.
+struct WindowSwipeAnswer: Sendable {
+    let began: FrameTime
+    let isWindowSwipe: Bool
+}
+
 /// One running trackpad, replaced by every `run`, which resets its blocking flag by construction.
 /// Its recognizer is stepped only by that device's frame callbacks; the Mutex is the compiler's proof of that
 /// and is never contended.
@@ -16,11 +22,18 @@ final class DeviceSession: Sendable {
     private let blockingDockSwipes = Mutex(false)
     /// Installed by the same `run`, if any.
     private let clickTap: ClickTap?
-    private let deliver: @Sendable (TrackpadEvent) -> Void
+    /// Writer: the main actor, through a reply. Reader: this device's frame callback, which hands it to the recognizer
+    /// before each step. Never cleared: the recognizer ignores an answer it has already taken or that names another
+    /// start.
+    private let answer = Mutex<WindowSwipeAnswer?>(nil)
+    private let deliver: @Sendable (TrackpadEvent, _ reply: (@Sendable (Bool) -> Void)?) -> Void
 
+    /// `deliver` carries, for a frame that reported `.windowSwipe(.began)`, the reply for that start: called once on the
+    /// main actor, it records whether the start is a window swipe for the recognizer's next frame. nil for every other
+    /// event.
     init(
         trackpad: TrackpadID, recognizer: GestureRecognizer, pointerCurves: [PointerCurve.Point], clickTap: ClickTap?,
-        deliver: @escaping @Sendable (TrackpadEvent) -> Void
+        deliver: @escaping @Sendable (TrackpadEvent, _ reply: (@Sendable (Bool) -> Void)?) -> Void
     ) {
         self.trackpad = trackpad
         self.recognizer = Mutex(recognizer)
@@ -31,7 +44,9 @@ final class DeviceSession: Sendable {
 
     /// Frame thread.
     func receive(_ frame: TouchFrame) {
+        let answered = answer.withLock { $0 }
         let recognition = recognizer.withLock {
+            if let answered { $0.answerWindowSwipe(began: answered.began, isWindowSwipe: answered.isWindowSwipe) }
             let recognition = $0.step(frame)
             // Each slide follows the cursor's acceleration at the tracking speed set when it starts. Travel is 0 on
             // the frame a slide begins, so the next frame is the first to use it.
@@ -41,7 +56,13 @@ final class DeviceSession: Sendable {
         blocking.withLock { $0 = recognition.blocksClicks }
         blockingDockSwipes.withLock { $0 = recognition.blocksDockSwipes }
         if let event = recognition.event {
-            deliver(TrackpadEvent(event, on: trackpad))
+            var reply: (@Sendable (Bool) -> Void)?
+            if recognition.windowSwipe == .began {
+                reply = { [self] isWindowSwipe in
+                    answer.withLock { $0 = WindowSwipeAnswer(began: frame.time, isWindowSwipe: isWindowSwipe) }
+                }
+            }
+            deliver(TrackpadEvent(event, on: trackpad), reply)
         }
     }
 

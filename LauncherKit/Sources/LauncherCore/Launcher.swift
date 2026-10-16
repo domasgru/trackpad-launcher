@@ -279,6 +279,7 @@ public final class Launcher {
     private func windowSwipe(_ event: SwipeEvent) {
         switch event.phase {
         case .began:
+            hardware.confirmWindowSwipe(on: event.trackpad)
             guard shown == nil, activity.isActive else { return }
             windowSwipesBegun += 1
             let read = system.frontmostWindows()

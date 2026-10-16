@@ -10,7 +10,7 @@ private func slidePhases(_ kind: SlideKind, _ frames: [TouchFrame], slides: Set<
 private func recognitions(_ frames: [TouchFrame]) -> [Recognition] {
     var recognizer = GestureRecognizer(
         handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
-    return frames.map { recognizer.step($0) }
+    return frames.map { recognizer.step($0, answering: true) }
 }
 
 /// Hand frames written for a sideways swipe, turned into the same hand sliding down for a window swipe: the finger
@@ -313,12 +313,15 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
         { (t: TouchScript) in t.wait(.seconds(4)).land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 5))
             .rollThumb(toMM: (40, 10)).slide(byMM: (0, 24)).lift() },
     ] as [@Sendable (TouchScript) -> TouchScript])
-    func clicksAndDockSwipesStayBlockedForTheWholeWindowSwipe(script: @Sendable (TouchScript) -> TouchScript) {
+    func aConfirmedWindowSwipeBlocksClicksAndDockSwipesFromTheFrameAfterItsStartUntilItEnds(
+        script: @Sendable (TouchScript) -> TouchScript
+    ) {
         let frames = script(thumb).frames
         let seen = recognitions(frames)
         let began = seen.firstIndex { $0.windowSwipe == .began }!
         let ended = seen.firstIndex { $0.windowSwipe == .ended }!
-        #expect(seen[began..<ended].allSatisfy { $0.blocksClicks && $0.blocksDockSwipes })
+        #expect(!seen[began].blocksClicks && seen[began].blocksDockSwipes)
+        #expect(seen[(began + 1)..<ended].allSatisfy { $0.blocksClicks && $0.blocksDockSwipes })
         #expect(seen[ended...].allSatisfy { !$0.blocksClicks })
     }
 }

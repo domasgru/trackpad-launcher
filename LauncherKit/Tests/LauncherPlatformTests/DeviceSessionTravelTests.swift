@@ -19,7 +19,10 @@ import Testing
             trackpad: TrackpadID(rawValue: 1),
             recognizer: GestureRecognizer(
                 handMode: .right, surface: Self.surface, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear),
-            pointerCurves: PointerCurve.builtInCurves, clickTap: nil, deliver: { delivered.append($0) })
+            pointerCurves: PointerCurve.builtInCurves, clickTap: nil, deliver: { event, reply in
+                delivered.append(event)
+                reply?(true)
+            })
     }
 
     private func touch(_ id: Int32, _ phase: Touch.Phase, _ x: Double, _ y: Double) -> Touch {

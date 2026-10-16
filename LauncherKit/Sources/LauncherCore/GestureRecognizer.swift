@@ -181,7 +181,7 @@ public struct GestureRecognizer: Sendable {
         }
         let blocksClicks: Bool
         let blocksDockSwipes: Bool
-        if case .swiping = state {
+        if case .swiping(let swipe) = state, swipe.isConfirmed {
             blocksClicks = true
             blocksDockSwipes = true
         } else if case .rest(let rest) = state, rest.isSeries {
@@ -198,6 +198,24 @@ public struct GestureRecognizer: Sendable {
             } ?? false
         }
         return Recognition(event: event, blocksClicks: blocksClicks, blocksDockSwipes: blocksDockSwipes)
+    }
+
+    /// The model's answer to the window swipe start reported on the frame at `began`. true confirms it: from the next
+    /// frame it blocks clicks, scrolling and the system's swipes until both fingers lift. false turns the slide into
+    /// what the window swipe setting off makes of it: `.spoiled` under the slide's thumb, or, once that thumb has gone,
+    /// a rest of every contact down as `restOrIdle` gives it (a thumb that rolled out of the corner counts as one of
+    /// them), so it never becomes a swipe and a thumb tap under it may swap as it would there. Changes nothing
+    /// unless an unconfirmed slide that began at `began` is in progress: an earlier start's answer, an answer after the
+    /// slide ended and a second answer are ignored. (Exactly the setting-off state when it arrives before the next
+    /// frame; a thumb that lifted and landed again before a late false is taken as the slide's thumb.)
+    public mutating func answerWindowSwipe(began: FrameTime, isWindowSwipe: Bool) {
+        guard case .swiping(var swipe) = state, !swipe.isConfirmed, swipe.began == began else { return }
+        if isWindowSwipe {
+            swipe.isConfirmed = true
+            state = .swiping(swipe)
+        } else {
+            state = swipe.thumb.map(State.spoiled) ?? Self.restOrIdle(of: previouslyDown ?? [])
+        }
     }
 
     /// One frame of the fingers-first state. A thumb tap qualifies when its thumb lands and fires when that thumb lifts.
@@ -260,7 +278,8 @@ public struct GestureRecognizer: Sendable {
             return (.spoiled(anchor), nil)
         }
         let fingers = Dictionary(uniqueKeysWithValues: pair.fingers.compactMap { id in down[id].map { (id, $0.position) } })
-        return (.swiping(Swipe(kind: kind, fingers: fingers, lastTime: time, thumb: anchor)), .slide(kind, .began))
+        let swipe = Swipe(kind: kind, began: time, isConfirmed: kind == .swipe, fingers: fingers, lastTime: time, thumb: anchor)
+        return (.swiping(swipe), .slide(kind, .began))
     }
 
     private struct Anchor: Sendable {
@@ -334,6 +353,10 @@ public struct GestureRecognizer: Sendable {
 
     private struct Swipe: Sendable {
         let kind: SlideKind
+        let began: FrameTime
+        /// A window swipe starts unconfirmed: until the model's answer confirms it, it blocks only by the thumb rules,
+        /// as the slide of the setting off would. A swipe starts confirmed.
+        var isConfirmed: Bool
         /// The swipe fingers down now, at most two, with their positions on the last frame.
         var fingers: [TouchID: SurfacePoint]
         var lastTime: FrameTime
@@ -411,9 +434,14 @@ public struct GestureRecognizer: Sendable {
             }
         }
 
-        /// The thumb the blocking rules follow: the anchor, or the thumb under a rest.
+        /// The thumb the blocking rules follow: the anchor, the thumb under a rest, or the thumb under an unconfirmed
+        /// window swipe.
         var thumb: TouchID? {
-            if case .rest(let rest) = self { rest.thumb?.id } else { anchor?.id }
+            switch self {
+            case .rest(let rest): rest.thumb?.id
+            case .swiping(let swipe): swipe.isConfirmed ? nil : swipe.thumb?.id
+            default: anchor?.id
+            }
         }
     }
 

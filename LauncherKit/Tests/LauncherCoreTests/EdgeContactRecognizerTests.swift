@@ -40,7 +40,7 @@ import LauncherCore
     private func recognitions(_ frames: [TouchFrame]) -> [Recognition] {
         var recognizer = GestureRecognizer(
             handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
-        return frames.map { recognizer.step($0) }
+        return frames.map { recognizer.step($0, answering: true) }
     }
 
     private func ms(_ frame: TouchFrame) -> Int {

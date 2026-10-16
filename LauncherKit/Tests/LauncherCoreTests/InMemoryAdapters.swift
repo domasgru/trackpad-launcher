@@ -21,6 +21,9 @@ import LauncherCore
     private var buttonWasDown = false
     private var pressInProgress: PressID?
     private var nextPressNumber: Int64 = 1
+    private let confirmation = WindowSwipeConfirmation()
+    /// The answer to every window swipe start a frame reported, in order.
+    private(set) var windowSwipeAnswers: [Bool] = []
 
     struct Pulse: Equatable {
         let haptic: Haptic
@@ -57,6 +60,8 @@ import LauncherCore
 
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID) { pulses.append(Pulse(haptic: haptic, trackpad: trackpad)) }
 
+    func confirmWindowSwipe(on trackpad: TrackpadID) { confirmation.confirm(on: trackpad) }
+
     func attach(_ trackpad: Trackpad) {
         attached.append(trackpad)
         onEvent?(.trackpadsChanged)
@@ -86,9 +91,12 @@ import LauncherCore
                 press: TouchFrame.Press(holding: clickFilter?.holding, buttonDown: buttonDown))
             guard let recognition = running[id]?.step(sampled) else { return }
             blocking[id] = recognition.blocksClicks
-            if let event = recognition.event {
-                onEvent?(TrackpadEvent(event, on: id))
-            }
+            guard let event = recognition.event,
+                  let answer = confirmation.deliver(TrackpadEvent(event, on: id), to: onEvent) else { continue }
+            windowSwipeAnswers.append(answer)
+            // As the real adapter's reply: taken between frames, before the next one. A `run` inside `onEvent`
+            // replaced the recognizer with one that has no such start, and it ignores the answer.
+            running[id]?.answerWindowSwipe(began: sampled.time, isWindowSwipe: answer)
         }
     }
 
@@ -115,7 +123,7 @@ import LauncherCore
     }
 
     /// An event the frame thread recognised just before activity flipped, delivered regardless of `running`.
-    func inject(_ event: TrackpadEvent) { onEvent?(event) }
+    func inject(_ event: TrackpadEvent) { _ = confirmation.deliver(event, to: onEvent) }
 }
 
 @MainActor final class InMemoryTrackpadPreferences: TrackpadPreferences {

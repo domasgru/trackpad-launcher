@@ -33,6 +33,8 @@ public enum SlideKind: Hashable, Sendable {
 /// A swipe's or a window swipe's progress; the event case says which.
 public enum SwipePhase: Equatable, Sendable {
     /// One of two fingers under an anchored thumb moved past 3 mm. Travel is 0 here: the 3 mm do not count.
+    /// A window swipe's start is a question: it is a window swipe only if the model confirms it while handling this
+    /// phase (`TrackpadHardware.confirmWindowSwipe(on:)`).
     case began
     /// Travel along the slide since `began`, in step millimetres (12 per item), absolute. Sent only when it changed.
     case moved(travelMM: Double)

@@ -71,6 +71,30 @@ import LauncherCore
         #expect(world.system.windows.reads == 1)
     }
 
+    @Test func aPressOnTheFrameAfterALateStartPassesAndCancelsTheWindowSwipeSilently() {
+        let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
+        world.launcher.setAssignment(.app(world.app("Notes")), for: .one)
+        let begin = thumb.wait(.seconds(4)).land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 3.5))
+        let pressed = begin.press().slide(byMM: (0, 12)).lift()
+        let frames = pressed.frames
+        let beganAt = perFrame(frames).firstIndex { $0.windowSwipe == .began }!
+        #expect(frames[beganAt].press == nil && frames[beganAt + 1].press != nil)
+
+        let history = world.playFrameByFrame(pressed) {
+            (windowSwitcher: world.launcher.windowSwitcher, pulses: world.hardware.pulses.count)
+        }
+
+        #expect(history[beganAt].windowSwitcher != nil)
+        #expect(history[(beganAt + 1)...].allSatisfy { $0.windowSwitcher == nil && $0.pulses == 0 })
+        #expect(world.hardware.pressVerdicts == [.pass, .pass])
+        #expect(world.system.windows.raised.isEmpty)
+        #expect(world.system.windows.reads == 1)
+        #expect(world.system.broughtToFront.isEmpty)
+
+        world.play(pressed.tap(fingers: 1))
+        #expect(world.system.broughtToFront == [world.app("Notes")])
+    }
+
     @Test func withAccessibilityAPressDuringTheWindowSwipeIsDroppedAndTheSelectionFollowsOn() {
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
         let hand = world.windowSwipe(3.5, 12, lift: false)

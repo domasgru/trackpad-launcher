@@ -25,7 +25,10 @@ public enum Haptic: Sendable { case gesture, lightTick }
 /// The multitouch hardware.
 @MainActor public protocol TrackpadHardware: AnyObject {
     /// Always called on the main actor, in the order each trackpad's frames produced the events, and never for a session
-    /// that a later `run` replaced.
+    /// that a later `run` replaced. A `.windowSwipe(.began)` asks whether its slide is a window swipe. Once the call
+    /// returns, the adapter answers that start, true only if `confirmWindowSwipe(on:)` was called during it, and the
+    /// trackpad's recognizer takes the answer before its next frame: confirmed, the slide blocks until both fingers
+    /// lift; declined, it goes on as with the window swipe setting off.
     var onEvent: (@MainActor (TrackpadEvent) -> Void)? { get set }
     /// Trackpads connected now. Excludes multitouch devices that are not trackpads (Magic Mouse, Touch Bar).
     func connected() -> [Trackpad]
@@ -37,6 +40,9 @@ public enum Haptic: Sendable { case gesture, lightTick }
     func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, slides: Set<SlideKind>, swaps: Bool)
     /// One pulse of that kind on that trackpad. No-op if it is gone.
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID)
+    /// Only while `onEvent` is handling a `.windowSwipe(.began)` from `trackpad`: makes that slide a window swipe.
+    /// Anywhere else, including an event a test injected, it does nothing.
+    func confirmWindowSwipe(on trackpad: TrackpadID)
 }
 
 /// The two trackpad preference domains.
