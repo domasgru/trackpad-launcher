@@ -31,7 +31,8 @@ final class SwitcherPanel: OverlayPanel {
     /// the panel on `screen`.
     func layoutRow(_ images: [NSImage], layout: SwitcherRowLayout, on screen: NSRect, scale: CGFloat) {
         self.layout = layout
-        let size = CGSize(width: layout.panelSize.width, height: layout.panelSize.height)
+        let panelSize = layout.panelSize
+        let size = CGSize(width: panelSize.width, height: panelSize.height)
         setFrame(
             NSRect(x: screen.midX - size.width / 2, y: screen.midY - size.height / 2, width: size.width, height: size.height),
             display: false)

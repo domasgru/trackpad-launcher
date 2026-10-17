@@ -2,7 +2,9 @@ import Testing
 import LauncherCore
 
 @Suite struct WindowColumnLayoutTests {
-    private func close(_ value: Double, _ expected: Double) -> Bool { abs(value - expected) < 1e-9 }
+    private func close(_ value: Double, _ expected: Double, within tolerance: Double = 1e-9) -> Bool {
+        abs(value - expected) < tolerance
+    }
 
     @Test(arguments: [
         (aspect: 2.0, width: 120.0, height: 60.0),
@@ -50,8 +52,8 @@ import LauncherCore
     @Test func aShrunkColumnNarrowsItsWidthAndTitleColumnByTheRowsFactor() {
         let layout = WindowColumnLayout(rowCount: 10, displayHeight: Self.tenRowsAtFullSizeWithMargins - 1)
         #expect(layout.scale < 1)
-        #expect(abs(layout.panelSize.width - 359.5225) < 0.001)
-        #expect(abs(layout.titleWidth - 199.7347) < 0.001)
+        #expect(close(layout.panelSize.width, 359.5225, within: 0.001))
+        #expect(close(layout.titleWidth, 199.7347, within: 0.001))
     }
 
     @Test func theTitleColumnEndsAtTheRowsInsetAtEveryScale() {
@@ -59,8 +61,8 @@ import LauncherCore
         #expect(full.titleLeading == 138)
         #expect(full.titleLeading + full.titleWidth == 338)
         let shrunk = WindowColumnLayout(rowCount: 10, displayHeight: Self.tenRowsAtFullSizeWithMargins - 1)
-        #expect(abs(shrunk.titleLeading - 137.8170) < 0.001)
-        #expect(abs(shrunk.titleLeading + shrunk.titleWidth - 337.5517) < 0.001)
+        #expect(close(shrunk.titleLeading, 137.8170, within: 0.001))
+        #expect(close(shrunk.titleLeading + shrunk.titleWidth, 337.5517, within: 0.001))
     }
 
     @Test func theLargestPreviewWorthCapturingFillsTheSlotAtTheDisplaysBackingScale() {

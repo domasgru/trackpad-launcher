@@ -21,3 +21,11 @@
 - The record of test changes and the "pass today" claims did not match the table (T3, T6, T9 and T8's extension were missing; no new row compiles today) → one bullet lists every added and changed row; Before and after now says which values "would hold today".
 - The architecture citation for the missing `LauncherUI` test target was not a real quote → cites `LauncherKit/Package.swift` and plans 008 and 012.
 - The first decision read as a mandate to move the window row's badge and text insets into the layout → narrowed to the sizes that place the panel, the rows, the highlight, the icons and the title column.
+
+## Implement
+- Verification skill: none in the repo (no `.claude/skills/verify-*/`) → step skipped.
+- T6 compared the constants only with each other, so any scale from 1 to 1.15 passed → it now pins `selectedIconScale == 1.12` and the 89.6 pt product.
+- The highlight-gap arithmetic was written out in four `SwitcherRowLayoutTests` → one `gaps(_:)` helper.
+- Inline `abs(...) <` tolerances sat beside each file's `close` helper → `close` takes `within:` with the old defaults.
+- `SwitcherPanel.layoutRow` read `layout.panelSize` twice → read once.
+- Not fixed: T1 and T8 stay separate tests rather than extending the existing rows (one logical assertion each); `panelSize` stays a tuple, matching `WindowColumnLayout`.
