@@ -72,17 +72,17 @@ final class ClickTap: Sendable {
         }
         guard let parsed = TapEvent(type, event) else { return .passUnretained(event) }
         // Read once, before either filter lock, so no two locks are held at once.
-        let blocking = anyTrackpadBlocksClicks()
+        let blocking = mergedBlocking()
         switch parsed {
         case .pointer(let pointer):
-            return filter.withLock { $0.decide(pointer, trackpadBlocking: blocking) }.apply(to: event)
+            return filter.withLock { $0.decide(pointer, trackpadBlocking: blocking.blocksClicks) }.apply(to: event)
         case .scroll(let scroll):
-            return scrollFilter.withLock { $0.decide(scroll, trackpadBlocking: blocking) }.apply(to: event)
+            return scrollFilter.withLock { $0.decide(scroll, trackpadBlocking: blocking.blocksClicks) }.apply(to: event)
         case .dockSwipe(let phase):
-            // Its own flag: Dock swipes are blocked for as long as a thumb is anchored, not only inside the window.
-            let blockingDockSwipes = anyTrackpadBlocksDockSwipes()
+            // Dock swipes are blocked for as long as a thumb is anchored with another contact down, not only inside
+            // the click window.
             return dockSwipeFilters.withLock {
-                $0[type.rawValue, default: DockSwipeFilter()].decide(phase, trackpadBlocking: blockingDockSwipes)
+                $0[type.rawValue, default: DockSwipeFilter()].decide(phase, trackpadBlocking: blocking.blocksDockSwipes)
             }.apply(to: event)
         }
     }

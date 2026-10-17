@@ -63,6 +63,7 @@ import Testing
     /// start, with each start's reply.
     private struct Played {
         var blocks: [Bool] = []
+        var levels: [Blocking] = []
         var starts: [Start] = []
         /// Whether every delivered event carried a reply exactly when it was a window swipe start.
         var onlyStartsCarryAReply = true
@@ -86,6 +87,7 @@ import Testing
             }
             answering(index, played.starts)
             played.blocks.append(session.blocksClicks)
+            played.levels.append(session.blocking)
         }
         return played
     }
@@ -117,6 +119,36 @@ import Testing
     @Test func aStartNeverAnsweredNeverBlocksClicks() {
         let played = play { _, _ in }
         #expect(played.blockedFrames.isEmpty)
+    }
+
+    /// The level on every frame that is not a finger frame, which only the thumb is down on.
+    private func thumbOnlyFrames(of played: Played) -> [Blocking] {
+        zip(frames().all, played.levels).filter { $0.0.touches.count == 1 }.map(\.1)
+    }
+
+    @Test func theLevelFollowsTheSlideWhenTheStartIsConfirmedAtOnce() {
+        let played = play { frame, starts in
+            if starts.count == 1, starts[0].frame == frame { starts[0].reply(true) }
+        }
+        let start = played.starts[0].frame
+        #expect(played.blocks == played.levels.map { $0 == .clicks })
+        #expect(played.levels[0] == .possible)
+        #expect(played.levels[1...start].allSatisfy { $0 == .dockSwipes })
+        #expect(played.levels[(start + 1)..<firstLift].allSatisfy { $0 == .clicks })
+        #expect(played.levels[firstLift...(firstLift + 1)].allSatisfy { $0 == .possible })
+    }
+
+    @Test(arguments: [false, true])
+    func aDeclinedOrUnansweredStartNeverReachesClicks(answered: Bool) {
+        let played = play { frame, starts in
+            if answered, starts.count == 1, starts[0].frame == frame { starts[0].reply(false) }
+        }
+        let start = played.starts[0].frame
+        #expect(played.blocks == played.levels.map { $0 == .clicks })
+        #expect(!played.levels.contains(.clicks))
+        #expect(played.levels[1...start].allSatisfy { $0 == .dockSwipes })
+        #expect(played.levels[0] == .possible)
+        #expect(thumbOnlyFrames(of: played).allSatisfy { $0 == .possible })
     }
 
     @Test func aConfirmationOfTheFirstStartArrivingAfterTheSecondStartNeverBlocksClicks() {

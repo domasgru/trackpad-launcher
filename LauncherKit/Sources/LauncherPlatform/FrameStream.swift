@@ -17,9 +17,7 @@ final class DeviceSession: Sendable {
     /// This device's cursor acceleration curves, read once when the session starts.
     private let pointerCurves: [PointerCurve.Point]
     /// Writer: this device's frame callback. Reader: the click tap's thread.
-    private let blocking = Mutex(false)
-    /// Writer: this device's frame callback. Reader: the click tap's thread.
-    private let blockingDockSwipes = Mutex(false)
+    private let level = Mutex(Blocking.none)
     /// Installed by the same `run`, if any.
     private let clickTap: ClickTap?
     /// Writer: the main actor, through a reply. Reader: this device's frame callback, which hands it to the recognizer
@@ -55,8 +53,7 @@ final class DeviceSession: Sendable {
             if recognition.beginsSlide { $0.travel = CursorTravel.travel(curves: pointerCurves) }
             return recognition
         }
-        blocking.withLock { $0 = recognition.blocksClicks }
-        blockingDockSwipes.withLock { $0 = recognition.blocksDockSwipes }
+        level.withLock { $0 = recognition.blocking }
         if let event = recognition.event {
             var reply: (@Sendable (Bool) -> Void)?
             if recognition.windowSwipe == .began {
@@ -72,10 +69,9 @@ final class DeviceSession: Sendable {
     var holding: ClickFilter.Holding? { clickTap?.holding }
 
     /// Click tap thread.
-    var blocksClicks: Bool { blocking.withLock { $0 } }
+    var blocking: Blocking { level.withLock { $0 } }
 
-    /// Click tap thread.
-    var blocksDockSwipes: Bool { blockingDockSwipes.withLock { $0 } }
+    var blocksClicks: Bool { blocking.blocksClicks }
 }
 
 /// The only state shared with the frame thread: written by `run` (main), read by the callback and the click tap.
@@ -95,14 +91,7 @@ func anyMouseButtonDown() -> Bool {
     [CGMouseButton.left, .right, .center].contains { CGEventSource.buttonState(.combinedSessionState, button: $0) }
 }
 
-/// Whether some running trackpad is inside its blocking window, merged across trackpads at the read.
-/// Copies the sessions out first, so no lock is held while another is taken.
-func anyTrackpadBlocksClicks() -> Bool {
-    Array(sessions.withLock { $0.values }).contains { $0.blocksClicks }
-}
-
-/// Whether some running trackpad has a thumb anchored with another contact down, or a swipe on. Merged like
-/// `anyTrackpadBlocksClicks()`.
-func anyTrackpadBlocksDockSwipes() -> Bool {
-    Array(sessions.withLock { $0.values }).contains { $0.blocksDockSwipes }
+/// Tap thread: the highest level of any running trackpad. Copies the sessions out first: never two locks at once.
+func mergedBlocking() -> Blocking {
+    Array(sessions.withLock { $0.values }).map(\.blocking).max() ?? .none
 }
