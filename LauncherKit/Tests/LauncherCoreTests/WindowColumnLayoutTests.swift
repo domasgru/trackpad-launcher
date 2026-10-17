@@ -2,7 +2,9 @@ import Testing
 import LauncherCore
 
 @Suite struct WindowColumnLayoutTests {
-    private func close(_ value: Double, _ expected: Double) -> Bool { abs(value - expected) < 1e-9 }
+    private func close(_ value: Double, _ expected: Double, within tolerance: Double = 1e-9) -> Bool {
+        abs(value - expected) < tolerance
+    }
 
     @Test(arguments: [
         (aspect: 2.0, width: 120.0, height: 60.0),
@@ -13,7 +15,7 @@ import LauncherCore
     func aPreviewIsSixtyPointsTallKeepingItsProportionsAndAtMostOneHundredTwentyWide(
         aspect: Double, width: Double, height: Double
     ) {
-        let size = WindowColumnLayout(rowCount: 3, widestTitle: 200, displayHeight: 900).previewSize(aspect: aspect)
+        let size = WindowColumnLayout(rowCount: 3, displayHeight: 900).previewSize(aspect: aspect)
         #expect(close(size.width, width) && close(size.height, height))
     }
 
@@ -21,7 +23,7 @@ import LauncherCore
     private static let tenRowsAtFullSizeWithMargins = 778.0
 
     @Test func tenRowsKeepTheFullSizeWhenTheyJustFit() {
-        let layout = WindowColumnLayout(rowCount: 10, widestTitle: 200, displayHeight: Self.tenRowsAtFullSizeWithMargins)
+        let layout = WindowColumnLayout(rowCount: 10, displayHeight: Self.tenRowsAtFullSizeWithMargins)
         #expect(layout.scale == 1)
         #expect(layout.pitch == 74)
         #expect(layout.panelSize.height == 754)
@@ -30,8 +32,9 @@ import LauncherCore
     }
 
     @Test func aColumnThatWouldNotFitShrinksByOneFactorUntilItDoes() {
+        // 777 points: one short of the 778 the column needs at full size.
         let height = Self.tenRowsAtFullSizeWithMargins - 1
-        let layout = WindowColumnLayout(rowCount: 10, widestTitle: 200, displayHeight: height)
+        let layout = WindowColumnLayout(rowCount: 10, displayHeight: height)
         let margins = 2 * WindowColumnLayout.margin
         #expect(layout.scale < 1)
         #expect(layout.panelSize.height + margins <= height)
@@ -41,18 +44,29 @@ import LauncherCore
         #expect(close(preview.width, 120 * layout.scale) && close(preview.height, 60 * layout.scale))
     }
 
-    @Test func theColumnIsAsWideAsTheWidestTitleWithinItsBounds() {
-        func width(_ title: Double) -> Double {
-            WindowColumnLayout(rowCount: 2, widestTitle: title, displayHeight: 900).panelSize.width
-        }
-        let around = 2 * 8.0 + 2 * 6.0 + 120 + 12
-        #expect(width(100) == around + 180)
-        #expect(width(250) == around + 250)
-        #expect(width(900) == around + 320)
+    @Test func theColumnIsThreeHundredSixtyPointsWideWhateverTheRowCount() {
+        #expect(WindowColumnLayout(rowCount: 2, displayHeight: 900).panelSize.width == 360)
+        #expect(WindowColumnLayout(rowCount: 10, displayHeight: 900).panelSize.width == 360)
+    }
+
+    @Test func aShrunkColumnNarrowsItsWidthAndTitleColumnByTheRowsFactor() {
+        let layout = WindowColumnLayout(rowCount: 10, displayHeight: Self.tenRowsAtFullSizeWithMargins - 1)
+        #expect(layout.scale < 1)
+        #expect(close(layout.panelSize.width, 359.5225, within: 0.001))
+        #expect(close(layout.titleWidth, 199.7347, within: 0.001))
+    }
+
+    @Test func theTitleColumnEndsAtTheRowsInsetAtEveryScale() {
+        let full = WindowColumnLayout(rowCount: 3, displayHeight: 900)
+        #expect(full.titleLeading == 138)
+        #expect(full.titleLeading + full.titleWidth == 338)
+        let shrunk = WindowColumnLayout(rowCount: 10, displayHeight: Self.tenRowsAtFullSizeWithMargins - 1)
+        #expect(close(shrunk.titleLeading, 137.8170, within: 0.001))
+        #expect(close(shrunk.titleLeading + shrunk.titleWidth, 337.5517, within: 0.001))
     }
 
     @Test func theLargestPreviewWorthCapturingFillsTheSlotAtTheDisplaysBackingScale() {
-        let pixels = WindowColumnLayout(rowCount: 3, widestTitle: 200, displayHeight: 900).previewPixels(scale: 2)
+        let pixels = WindowColumnLayout(rowCount: 3, displayHeight: 900).previewPixels(scale: 2)
         #expect(pixels.width == 240 && pixels.height == 120)
     }
 }

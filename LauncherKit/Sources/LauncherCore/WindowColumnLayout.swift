@@ -7,21 +7,21 @@ import Foundation
 public struct WindowColumnLayout: Equatable, Sendable {
     public static let margin = 12.0, panelPadding = 8.0, rowGap = 2.0, rowInset = 6.0
     public static let previewWidth = 120.0, previewHeight = 60.0, iconSide = 44.0, titleGap = 12.0
-    public static let minTitleWidth = 180.0, maxTitleWidth = 320.0, titleSize = 13.0
+    public static let titleSize = 13.0
+    /// The panel's width at full size, whatever the titles; it shrinks with `scale`.
+    public static let fullPanelWidth = 360.0
     /// A row at full size: the preview slot with its inset above and below.
     public static let fullRowHeight = previewHeight + 2 * rowInset
+    /// What the panel's width leaves beside the preview at full size, ending at the row's inset.
+    private static let fullTitleWidth = fullPanelWidth - 2 * panelPadding - 2 * rowInset - previewWidth - titleGap
 
     public let rowCount: Int
     /// 1 when the column fits at full size, otherwise below 1. A display height that is not positive means no
     /// constraint.
     public let scale: Double
-    /// The title column's width at full size: the widest title, within its bounds.
-    private let fullTitleWidth: Double
 
-    /// `widestTitle`: the widest title measured at full size.
-    public init(rowCount: Int, widestTitle: Double, displayHeight: Double) {
+    public init(rowCount: Int, displayHeight: Double) {
         self.rowCount = rowCount
-        fullTitleWidth = min(max(widestTitle, Self.minTitleWidth), Self.maxTitleWidth)
         let full = Self.fullPanelHeight(rowCount: rowCount)
         scale = displayHeight > 0 && full > 0 ? min(1, (displayHeight - 2 * Self.margin) / full) : 1
     }
@@ -39,12 +39,12 @@ public struct WindowColumnLayout: Equatable, Sendable {
     public var slot: (width: Double, height: Double) { (Self.previewWidth * scale, Self.previewHeight * scale) }
     public var icon: Double { Self.iconSide * scale }
     public var titleLeading: Double { inset + slot.width + Self.titleGap * scale }
-    public var titleWidth: Double { fullTitleWidth * scale }
+    /// The room beside the preview; a longer title is cut short at the end.
+    public var titleWidth: Double { Self.fullTitleWidth * scale }
     public var fontSize: Double { Self.titleSize * scale }
 
     public var panelSize: (width: Double, height: Double) {
-        let width = 2 * Self.panelPadding + 2 * Self.rowInset + Self.previewWidth + Self.titleGap + fullTitleWidth
-        return (width * scale, Self.fullPanelHeight(rowCount: rowCount) * scale)
+        (Self.fullPanelWidth * scale, Self.fullPanelHeight(rowCount: rowCount) * scale)
     }
 
     /// The top of a row, measured down from the panel's top edge, for a position counted in rows.
