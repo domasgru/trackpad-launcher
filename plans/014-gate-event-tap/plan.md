@@ -41,6 +41,9 @@ A tap disabled by the system (timeout or user input) MUST recover as it does tod
 ### R5. Architecture notes match the code
 `docs/architecture.md` MUST describe when the tap receives events after this change, replacing the claim that it sleeps until an event arrives.
 
+### R6. Release builds play the launch animation Debug builds play
+Added during verification, at the human's request: the Release build's launch icon read as much smaller than the one seen in Debug builds, whose animation tuner applies its saved preset ("Preset 2") instead of the shipped tuning. The shipped `LaunchTuning` MUST equal that preset: a 60 pt start side and a 70 pt rise, every other value as already shipped. Plan 005's bounds scale with the start side: a 66–78 pt peak (110–130%), at most 36 pt at the end (60%), at least 20 pt when it becomes invisible (a third), and a 60–80 pt rise.
+
 ## Non-goals
 
 - Fewer redraws in `SwitcherPanel.show` during app switcher swipes: it saves a few milliseconds per swipe and would likely change the icon-grow animation that plan 013 keeps unchanged.
