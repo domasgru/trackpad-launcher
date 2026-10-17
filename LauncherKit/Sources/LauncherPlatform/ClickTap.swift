@@ -15,7 +15,7 @@ final class ClickTap: Sendable {
     /// Writer and reader: the tap thread.
     private let scrollFilter = Mutex(ScrollFilter())
     /// One filter per gesture event type, since a Dock swipe may arrive as both. Writer and reader: the tap thread.
-    private let dockSwipeFilters = Mutex<[UInt32: DockSwipeFilter]>([:])
+    private let dockSwipeFilters = Mutex<[DockSwipeStream: DockSwipeFilter]>([:])
     /// Writer: main (install, remove). The tap thread only re-enables.
     private let port = Mutex<Unchecked<CFMachPort>?>(nil)
     /// Set by the tap thread; main stops it on remove.
@@ -27,7 +27,7 @@ final class ClickTap: Sendable {
         guard
             let machPort = CGEvent.tapCreate(
                 tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
-                eventsOfInterest: TapEvent.tapMask, callback: clickTapCallback,
+                eventsOfInterest: TapEvent.pressMask | TapEvent.gatedMask, callback: clickTapCallback,
                 userInfo: Unmanaged.passUnretained(tap).toOpaque())
         else { return nil }
         tap.port.withLock { $0 = Unchecked(machPort) }
@@ -78,11 +78,11 @@ final class ClickTap: Sendable {
             return filter.withLock { $0.decide(pointer, trackpadBlocking: blocking.blocksClicks) }.apply(to: event)
         case .scroll(let scroll):
             return scrollFilter.withLock { $0.decide(scroll, trackpadBlocking: blocking.blocksClicks) }.apply(to: event)
-        case .dockSwipe(let phase):
+        case .dockSwipe(let phase, let stream):
             // Dock swipes are blocked for as long as a thumb is anchored with another contact down, not only inside
             // the click window.
             return dockSwipeFilters.withLock {
-                $0[type.rawValue, default: DockSwipeFilter()].decide(phase, trackpadBlocking: blocking.blocksDockSwipes)
+                $0[stream, default: DockSwipeFilter()].decide(phase, trackpadBlocking: blocking.blocksDockSwipes)
             }.apply(to: event)
         }
     }
@@ -99,32 +99,33 @@ private let clickTapCallback: CGEventTapCallBack = { _, type, event, userInfo in
     return Unmanaged<ClickTap>.fromOpaque(userInfo).takeUnretainedValue().handle(type, event)
 }
 
-/// Everything the tap is told about, parsed. `PointerEvent` keeps its vocabulary: a press and what belongs to it.
-enum TapEvent: Equatable {
-    case pointer(PointerEvent)
-    case scroll(ScrollEvent)
-    /// The system's own trackpad swipe between desktops, or into Mission Control or App Exposé, on its way to the
-    /// Dock. Every other gesture event (pinch, rotate, an app's swipe) parses as nothing and passes untouched.
-    case dockSwipe(DockSwipePhase)
-
-    /// The tap's whole vocabulary. The mask is built from this list, and a test parses one synthetic event of every
-    /// listed type, so the tap is never sent a type the parser does not read. Type 34 is NSEventTypePressure, which
-    /// has no public CGEventType case but is usable in a mask and as a rewrite target. Types 29 and 30 are the
-    /// system's gesture and Dock control events, also without public cases; a Dock swipe may arrive as either.
-    /// There are no keyboard or plain-move types.
-    static let tapTypes: [CGEventType] = [
+extension TapEvent {
+    /// The tap's whole vocabulary, in two lists. The masks are built from them, and a test parses one synthetic event
+    /// of every listed type, so the tap is never sent a type the parser does not read. Type 34 is
+    /// NSEventTypePressure, which has no public CGEventType case but is usable in a mask and as a rewrite target.
+    /// Types 29 and 30 are the system's gesture and Dock control events, also without public cases; a Dock swipe may
+    /// arrive as either. There are no keyboard or plain-move types.
+    static let pressTypes: [CGEventType] = [
         .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp,
+    ]
+    static let gatedTypes: [CGEventType] = [
         .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, CGEventType(rawValue: 34)!, .scrollWheel,
         CGEventType(rawValue: DockSwipeFields.gestureType)!, CGEventType(rawValue: DockSwipeFields.dockControlType)!,
     ]
-    static var tapMask: CGEventMask { tapTypes.reduce(0) { $0 | (CGEventMask(1) << CGEventMask($1.rawValue)) } }
+    static var pressMask: CGEventMask { mask(pressTypes) }
+    static var gatedMask: CGEventMask { mask(gatedTypes) }
+
+    private static func mask(_ types: [CGEventType]) -> CGEventMask {
+        types.reduce(0) { $0 | (CGEventMask(1) << CGEventMask($1.rawValue)) }
+    }
 
     init?(_ type: CGEventType, _ event: CGEvent) {
         if type == .scrollWheel {
             self = .scroll(ScrollEvent(event))
         } else if type.rawValue == DockSwipeFields.gestureType || type.rawValue == DockSwipeFields.dockControlType {
             guard let phase = DockSwipePhase(event) else { return nil }
-            self = .dockSwipe(phase)
+            let stream: DockSwipeStream = type.rawValue == DockSwipeFields.gestureType ? .gesture : .dockControl
+            self = .dockSwipe(phase, stream)
         } else if let pointer = PointerEvent(type, event) {
             self = .pointer(pointer)
         } else {

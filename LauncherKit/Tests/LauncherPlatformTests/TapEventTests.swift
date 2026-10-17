@@ -5,14 +5,26 @@ import Testing
 @testable import LauncherPlatform
 
 @Suite struct TapEventTests {
-    @Test func maskCoversPressesTheirReleasesDragsPressureScrollAndGesturesOnly() {
-        let bits: [UInt64] = [1, 2, 3, 4, 6, 7, 22, 25, 26, 27, 29, 30, 34]
-        #expect(TapEvent.tapMask == bits.reduce(0) { $0 | (1 << $1) })
+    private func mask(_ bits: [UInt64]) -> CGEventMask { bits.reduce(0) { $0 | (1 << $1) } }
+
+    @Test func theMasksSplitPressesFromDragsPressureScrollsAndGestures() {
+        #expect(TapEvent.pressMask == mask([1, 2, 3, 4, 25, 26]))
+        #expect(TapEvent.gatedMask == mask([6, 7, 22, 27, 29, 30, 34]))
+        #expect(TapEvent.pressMask & TapEvent.gatedMask == 0)
+        #expect(
+            TapEvent.pressMask | TapEvent.gatedMask == mask([1, 2, 3, 4, 6, 7, 22, 25, 26, 27, 29, 30, 34]))
     }
 
-    @Test func everyMaskedTypeParses() throws {
-        for type in TapEvent.tapTypes {
-            #expect(TapEvent(type, try event(type)) != nil, "type \(type.rawValue) is in the mask but not parsed")
+    @Test func theDisabledNoticesAreInNeitherMask() {
+        for raw in [UInt64(0xFFFF_FFFE), 0xFFFF_FFFF] {
+            #expect(raw >= 64 || (TapEvent.pressMask | TapEvent.gatedMask) & (1 << raw) == 0)
+        }
+    }
+
+    @Test func everyListedTypeParsesAndRidesItsPort() throws {
+        for type in TapEvent.pressTypes + TapEvent.gatedTypes {
+            let parsed = try #require(TapEvent(type, try event(type)), "type \(type.rawValue) is listed but not parsed")
+            #expect(parsed.ridesGatedPort == TapEvent.gatedTypes.contains(type), "type \(type.rawValue)")
         }
     }
 
@@ -62,9 +74,12 @@ import Testing
         (Int64(128), DockSwipePhase.mayBegin), (1, .began), (2, .changed), (4, .ended), (8, .cancelled), (0, .changed),
     ])
     func parsesADockSwipeOnEitherGestureTypeWithItsPhase(phase: Int64, expected: DockSwipePhase) throws {
-        for type in [DockSwipeFields.gestureType, DockSwipeFields.dockControlType] {
+        for (type, stream) in [
+            (DockSwipeFields.gestureType, DockSwipeStream.gesture),
+            (DockSwipeFields.dockControlType, .dockControl),
+        ] {
             let event = try gesture(type, phase: phase)
-            #expect(TapEvent(event.type, event) == .dockSwipe(expected))
+            #expect(TapEvent(event.type, event) == .dockSwipe(expected, stream))
         }
     }
 
