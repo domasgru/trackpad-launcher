@@ -42,7 +42,7 @@ import Testing
         #expect(scroll(&filter, .fingers(.began), true) == .drop)
     }
 
-    @Test func resumingWithNothingUnderWayForgetsAPassedCoast() {
+    @Test func resumingKeepsADroppedCoastThroughItsMomentum() {
         var filter = ScrollFilter()
         #expect(scroll(&filter, .fingers(.began), true) == .drop)
         #expect(scroll(&filter, .fingers(.ended), true) == .drop)

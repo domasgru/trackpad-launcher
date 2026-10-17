@@ -199,6 +199,27 @@ import LauncherCore
         #expect(world.hardware.offer(.scroll(.fingers(.mayBegin))) == .decided(.scroll(.drop)))
     }
 
+    @Test func aScrollWhoseStartWentUnsentAndWhoseEndWasDecidedDoesNotLeaveALaterThumbFirstHandUnseen() {
+        let world = world()
+        let resting = TouchScript(.macBook14).land(fingers: 2).wait(.milliseconds(100))
+        world.play(resting)
+        #expect(world.hardware.offer(.scroll(.fingers(.mayBegin))) == .notSent)
+
+        let thumbUnder = resting.thumb(atMM: (10, 10)).wait(.milliseconds(100))
+        world.play(thumbUnder)
+        #expect(world.hardware.isGatedPortOn)
+        #expect(world.hardware.offer(.scroll(.fingers(.ended))) == .decided(.scroll(.passStill)))
+
+        let lifted = thumbUnder.lift().liftThumb()
+        world.play(lifted)
+        #expect(world.hardware.offer(.scroll(.momentum(.ended))) == .decided(.scroll(.passStill)))
+        #expect(!world.hardware.isGatedPortOn)
+
+        let fresh = lifted.thumb(atMM: (10, 10)).wait(.milliseconds(200)).land(fingers: 2)
+        world.play(fresh)
+        #expect(world.hardware.scroll(.fingers(.began)) == .drop)
+    }
+
     @Test func aDroppedSwipeWithNoMomentumLeavesTheGateOpenUntilTheNextScrollEventPasses() {
         let world = world()
         let swipe = thumb.land(fingers: 2).slide(byMM: (10, 0))

@@ -76,6 +76,7 @@ final class ClickTap: Sendable {
 
     /// Frame thread, when its trackpad's `wantsTap` flipped. Never waits; a no-op after removal.
     func wake() {
+        guard ports.withLock({ $0 != nil }) else { return }
         guard let source = wakeUp.withLock({ $0 }) else { return }
         CFRunLoopSourceSignal(source.value)
         if let loop = runLoop.withLock({ $0 }) { CFRunLoopWakeUp(loop.value) }
@@ -96,9 +97,12 @@ final class ClickTap: Sendable {
         runLoop.withLock { $0.map { CFRunLoopStop($0.value) } }
     }
 
+    /// Tap thread: the trackpads as the real tap can see them, read before any of the tap's locks.
+    private func context() -> TapContext { TapContext.estimated(from: mergedBlocking()) }
+
     /// Tap thread, also the wake-up source's perform.
     fileprivate func follow() {
-        let context = TapContext.estimated(from: mergedBlocking())
+        let context = context()
         apply(filters.withLock { $0.follow(context) })
     }
 
@@ -110,7 +114,7 @@ final class ClickTap: Sendable {
                 $0.map { (presses: CGEvent.tapIsEnabled(tap: $0.value.presses), gated: CGEvent.tapIsEnabled(tap: $0.value.gated)) }
             })
         else { return }
-        let context = TapContext.estimated(from: mergedBlocking())
+        let context = context()
         let change = filters.withLock {
             $0.portsWereDisabled(pressPortIsOn: states.presses, gatedPortIsOn: states.gated, in: context)
         }
@@ -134,7 +138,7 @@ final class ClickTap: Sendable {
         }
         guard let parsed = TapEvent(type, event) else { return .passUnretained(event) }
         // Read before the filters' lock, so no two locks are held at once.
-        let context = TapContext.estimated(from: mergedBlocking())
+        let context = context()
         let decision = filters.withLock { $0.decide(parsed, in: context) }
         // Before the verdict returns, so the gate is settled for the next event.
         apply(decision.gate)

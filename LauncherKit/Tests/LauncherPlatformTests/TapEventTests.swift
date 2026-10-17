@@ -15,10 +15,11 @@ import Testing
             TapEvent.pressMask | TapEvent.gatedMask == mask([1, 2, 3, 4, 6, 7, 22, 25, 26, 27, 29, 30, 34]))
     }
 
-    @Test func theDisabledNoticesAreInNeitherMask() {
-        for raw in [UInt64(0xFFFF_FFFE), 0xFFFF_FFFF] {
-            #expect(raw >= 64 || (TapEvent.pressMask | TapEvent.gatedMask) & (1 << raw) == 0)
-        }
+    @Test(arguments: [CGEventType.tapDisabledByTimeout, .tapDisabledByUserInput])
+    func theDisabledNoticesAreNeitherListedNorParsed(notice: CGEventType) throws {
+        #expect(!TapEvent.pressTypes.contains(notice))
+        #expect(!TapEvent.gatedTypes.contains(notice))
+        #expect(TapEvent(notice, try event(notice)) == nil)
     }
 
     @Test func everyListedTypeParsesAndRidesItsPort() throws {

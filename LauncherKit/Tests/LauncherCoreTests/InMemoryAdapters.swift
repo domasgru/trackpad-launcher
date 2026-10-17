@@ -20,7 +20,8 @@ import LauncherCore
     private var isPressPortOn = false
     /// Each running trackpad's latest `Recognition.blocking`.
     private var levels: [TrackpadID: Blocking] = [:]
-    /// What the fake withheld from the gated port: whether a fingers scroll began and its end was never seen.
+    /// Whether the system's current fingers scroll has events the tap was not sent and has not since seen end. Offered
+    /// events update it whether sent or not, and `run` leaves it alone: it describes the system's stream, not the tap.
     private var scrollUnderWayUnseen = false
     /// false: the context is exact, built from what the fake withheld. true: built as the real tap builds it,
     /// `TapContext.estimated(from:)`, so a row can show the divergence.
@@ -149,15 +150,14 @@ import LauncherCore
     /// Never appends to `pressVerdicts` (the frames' presses do).
     func offer(_ event: TapEvent) -> Delivery {
         guard tap != nil else { return .noTap }
-        guard event.ridesGatedPort ? isGatedPortOn : isPressPortOn else {
-            if case .scroll(.fingers(let phase)) = event {
-                switch phase {
-                case .mayBegin, .began, .changed: scrollUnderWayUnseen = true
-                case .ended, .cancelled: scrollUnderWayUnseen = false
-                }
+        let isSent = event.ridesGatedPort ? isGatedPortOn : isPressPortOn
+        if case .scroll(.fingers(let phase)) = event {
+            switch phase {
+            case .mayBegin, .began, .changed: scrollUnderWayUnseen = !isSent
+            case .ended, .cancelled: scrollUnderWayUnseen = false
             }
-            return .notSent
         }
+        guard isSent else { return .notSent }
         let decision = tap!.decide(event, in: context())
         apply(decision.gate)
         return .decided(decision.verdict)
