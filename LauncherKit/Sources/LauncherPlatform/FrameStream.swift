@@ -8,6 +8,15 @@ struct WindowSwipeAnswer: Sendable {
     let isWindowSwipe: Bool
 }
 
+/// What a session needs from the click tap: the press summary and a wake-up.
+protocol TapLink: Sendable {
+    var holding: ClickFilter.Holding { get }
+    /// Never waits.
+    func wake()
+}
+
+extension ClickTap: TapLink {}
+
 /// One running trackpad, replaced by every `run`, which resets its blocking flag by construction.
 /// Its recognizer is stepped only by that device's frame callbacks; the Mutex is the compiler's proof of that
 /// and is never contended.
@@ -19,7 +28,7 @@ final class DeviceSession: Sendable {
     /// Writer: this device's frame callback. Reader: the click tap's thread.
     private let level = Mutex(Blocking.none)
     /// Installed by the same `run`, if any.
-    private let clickTap: ClickTap?
+    private let tap: (any TapLink)?
     /// Writer: the main actor, through a reply. Reader: this device's frame callback, which hands it to the recognizer
     /// before each step. Never cleared: the recognizer ignores an answer it has already taken or that names another
     /// start.
@@ -30,13 +39,14 @@ final class DeviceSession: Sendable {
     /// main actor, it records whether the start is a window swipe for the recognizer's next frame. nil for every other
     /// event.
     init(
-        trackpad: TrackpadID, recognizer: GestureRecognizer, pointerCurves: [PointerCurve.Point], clickTap: ClickTap?,
+        trackpad: TrackpadID, recognizer: GestureRecognizer, pointerCurves: [PointerCurve.Point],
+        tap: (any TapLink)?,
         deliver: @escaping @Sendable (TrackpadEvent, _ reply: (@Sendable (Bool) -> Void)?) -> Void
     ) {
         self.trackpad = trackpad
         self.recognizer = Mutex(recognizer)
         self.pointerCurves = pointerCurves
-        self.clickTap = clickTap
+        self.tap = tap
         self.deliver = deliver
     }
 
@@ -53,7 +63,11 @@ final class DeviceSession: Sendable {
             if recognition.beginsSlide { $0.travel = CursorTravel.travel(curves: pointerCurves) }
             return recognition
         }
-        level.withLock { $0 = recognition.blocking }
+        let flipped = level.withLock { was in
+            defer { was = recognition.blocking }
+            return was.wantsTap != recognition.blocking.wantsTap
+        }
+        if flipped { tap?.wake() }
         if let event = recognition.event {
             var reply: (@Sendable (Bool) -> Void)?
             if recognition.windowSwipe == .began {
@@ -66,7 +80,7 @@ final class DeviceSession: Sendable {
     }
 
     /// Frame thread: the click filter's summary when a tap is live, nil otherwise.
-    var holding: ClickFilter.Holding? { clickTap?.holding }
+    var holding: ClickFilter.Holding? { tap?.holding }
 
     /// Click tap thread.
     var blocking: Blocking { level.withLock { $0 } }

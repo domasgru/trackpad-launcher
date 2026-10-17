@@ -16,12 +16,20 @@ import Testing
         var all: [(event: TrackpadEvent, reply: (@Sendable (Bool) -> Void)?)] { events.withLock { $0 } }
     }
 
-    private func session(_ delivered: Delivered) -> DeviceSession {
+    /// A tap that records every wake-up and answers a fixed press summary.
+    private final class StubTap: TapLink {
+        private let counted = Mutex(0)
+        var wakes: Int { counted.withLock { $0 } }
+        var holding: ClickFilter.Holding { .withheld }
+        func wake() { counted.withLock { $0 += 1 } }
+    }
+
+    private func session(_ delivered: Delivered, tap: (any TapLink)? = nil) -> DeviceSession {
         DeviceSession(
             trackpad: TrackpadID(rawValue: 1),
             recognizer: GestureRecognizer(
                 handMode: .right, surface: Self.surface, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear),
-            pointerCurves: PointerCurve.builtInCurves, clickTap: nil, deliver: { delivered.append($0, $1) })
+            pointerCurves: PointerCurve.builtInCurves, tap: tap, deliver: { delivered.append($0, $1) })
     }
 
     private func touch(_ id: Int32, _ phase: Touch.Phase, _ x: Double, _ y: Double) -> Touch {
@@ -90,6 +98,33 @@ import Testing
             played.levels.append(session.blocking)
         }
         return played
+    }
+
+    @Test func theTapIsWokenOnlyWhenTheTrackpadStartsOrStopsWantingIt() {
+        let tap = StubTap()
+        let delivered = Delivered()
+        let session = session(delivered, tap: tap)
+        var answered = 0
+        var wakes: [Int] = []
+        for frame in frames().all {
+            let before = tap.wakes
+            session.receive(frame)
+            for case (_, let reply?) in delivered.all.dropFirst(answered) { reply(true) }
+            answered = delivered.all.count
+            wakes.append(tap.wakes - before)
+        }
+        let before = tap.wakes
+        session.receive(TouchFrame(time: FrameTime(seconds: 9), touches: [], press: nil))
+        wakes.append(tap.wakes - before)
+        #expect(wakes.first == 1)
+        #expect(wakes.last == 1)
+        #expect(wakes.dropFirst().dropLast().allSatisfy { $0 == 0 })
+        #expect(tap.wakes == 2)
+    }
+
+    @Test func aSessionReadsItsTapsPressSummaryAndNoneWithoutATap() {
+        #expect(session(Delivered(), tap: StubTap()).holding == .withheld)
+        #expect(session(Delivered()).holding == nil)
     }
 
     /// The frame the first slide's fingers lift on.
