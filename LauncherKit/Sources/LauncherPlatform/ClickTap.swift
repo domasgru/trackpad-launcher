@@ -43,11 +43,7 @@ final class ClickTap: Sendable {
         CGEvent.tapEnable(tap: gated, enable: false)
         var context = CFRunLoopSourceContext(
             version: 0, info: userInfo, retain: nil, release: nil, copyDescription: nil, equal: nil, hash: nil,
-            schedule: nil, cancel: nil,
-            perform: { info in
-                guard let info else { return }
-                Unmanaged<ClickTap>.fromOpaque(info).takeUnretainedValue().follow()
-            })
+            schedule: nil, cancel: nil, perform: wakeUpPerform)
         let source = CFRunLoopSourceCreate(nil, 0, &context)
         tap.ports.withLock { $0 = Unchecked((presses, gated)) }
         tap.wakeUp.withLock { $0 = source.map(Unchecked.init) }
@@ -155,6 +151,14 @@ private struct Unchecked<Value>: @unchecked Sendable {
 private let clickTapCallback: CGEventTapCallBack = { _, type, event, userInfo in
     guard let userInfo else { return .passUnretained(event) }
     return Unmanaged<ClickTap>.fromOpaque(userInfo).takeUnretainedValue().handle(type, event)
+}
+
+/// The wake-up source's perform, on the tap thread. At file scope, like `clickTapCallback`: a closure written inside
+/// the main-actor `install` would be main-actor isolated, and Swift's runtime isolation check traps when the tap
+/// thread calls it.
+private let wakeUpPerform: @convention(c) (UnsafeMutableRawPointer?) -> Void = { info in
+    guard let info else { return }
+    Unmanaged<ClickTap>.fromOpaque(info).takeUnretainedValue().follow()
 }
 
 extension TapEvent {

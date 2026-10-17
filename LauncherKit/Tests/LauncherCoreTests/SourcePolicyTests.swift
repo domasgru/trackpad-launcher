@@ -51,6 +51,9 @@ import Testing
         Entry(token: "CGEventPost", rule: "R9 never synthesise"),
         Entry(token: "postToPid", rule: "R9 never synthesise"),
         Entry(token: "nonisolated(unsafe)", rule: "one writer per field"),
+        Entry(
+            token: "perform: {",
+            rule: "a run-loop source's perform is a file-scope constant: written inside main-actor code it traps off main"),
         Entry(token: "AXUIElementSetAttributeValue", rule: "the window switcher only raises a window"),
         Entry(token: "kAXPressAction", rule: "the window switcher only raises a window"),
         Entry(token: "SCStream(", rule: "previews are pictures, never a stream"),
