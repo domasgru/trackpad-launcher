@@ -1,7 +1,8 @@
 import Foundation
 import LauncherCore
 
-/// Real recognizer, real click filter, scripted frames, synchronous main-actor delivery.
+/// Real recognizer, real `TapFilters`, scripted frames, synchronous main-actor delivery. Models the window server's side
+/// of the tap's two ports; every gate, routing and notice rule is the real `TapFilters`'.
 @MainActor final class InMemoryTrackpads: TrackpadHardware {
     var onEvent: (@MainActor (TrackpadEvent) -> Void)?
     private(set) var attached: [Trackpad]
@@ -9,15 +10,25 @@ import LauncherCore
     private(set) var deaf: Set<TrackpadID> = []
     /// Every haptic pulse, in order.
     private(set) var pulses: [Pulse] = []
-    /// The fake click tap: armed iff the last `run` asked for it with trackpads.
-    private var clickFilter: ClickFilter?
-    var isBlockingClicks: Bool { clickFilter != nil }
-    /// Armed and disarmed with `clickFilter`: one tap decides both.
-    private var scrollFilter: ScrollFilter?
+    /// The fake tap: armed iff the last `run` asked for click blocking with trackpads.
+    private var tap: TapFilters?
+    var isBlockingClicks: Bool { tap != nil }
     /// What the fake tap did with each scripted press and release, in order.
     private(set) var pressVerdicts: [PointerVerdict] = []
-    /// Each running trackpad's latest `Recognition.blocksClicks`.
-    private var blocking: [TrackpadID: Bool] = [:]
+    /// Whether the gated port is on (false with no tap).
+    private(set) var isGatedPortOn = false
+    private var isPressPortOn = false
+    /// Each running trackpad's latest `Recognition.blocking`.
+    private var levels: [TrackpadID: Blocking] = [:]
+    /// What the fake withheld from the gated port: whether a fingers scroll began and its end was never seen.
+    private var scrollUnderWayUnseen = false
+    /// false: the context is exact, built from what the fake withheld. true: built as the real tap builds it,
+    /// `TapContext.estimated(from:)`, so a row can show the divergence.
+    var usesEstimatedContext = false
+    private enum Turn { case wake, notice }
+    private var pendingTurns: [Turn] = []
+    private var holdsTurns = false
+    private var isDraining = false
     private var buttonWasDown = false
     private var pressInProgress: PressID?
     private var nextPressNumber: Int64 = 1
@@ -51,11 +62,19 @@ import LauncherCore
                 ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, slides: slides, swaps: swaps, travel: .linear))
             })
         deaf = []
-        blocking = [:]
+        levels = [:]
         buttonWasDown = false
         pressInProgress = nil
-        clickFilter = blockClicks && !trackpads.isEmpty ? ClickFilter() : nil
-        scrollFilter = clickFilter == nil ? nil : ScrollFilter()
+        pendingTurns = []
+        isGatedPortOn = false
+        if blockClicks && !trackpads.isEmpty {
+            tap = TapFilters()
+            isPressPortOn = true
+            queue(.wake)
+        } else {
+            tap = nil
+            isPressPortOn = false
+        }
     }
 
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID) { pulses.append(Pulse(haptic: haptic, trackpad: trackpad)) }
@@ -78,9 +97,9 @@ import LauncherCore
     func wake() { onEvent?(.trackpadsChanged) }
 
     /// Scripted frames carry the physical press as any non-nil `press`. Per frame, as on hardware: a press edge
-    /// reaches the tap between frames, so it is decided on the flags the previous frame left, merged across
-    /// trackpads; then the frame's press is re-sampled through the filter's `holding`, as the frame callback does.
-    /// Frames on a trackpad that is not running, or deaf since `sleep()`, are dropped like stopped hardware.
+    /// reaches the tap between frames, so it is decided on the level the previous frame left, merged across
+    /// trackpads; then the frame's press is re-sampled through the filters' `holding`, as the frame callback does.
+    /// A trackpad whose `wantsTap` flipped wakes the tap's thread. Frames on a trackpad that is not running, or deaf since `sleep()`, are dropped like stopped hardware.
     func touch(_ frames: [TouchFrame], on id: TrackpadID) {
         for frame in frames {
             guard !deaf.contains(id), running[id] != nil else { return }
@@ -88,9 +107,11 @@ import LauncherCore
             deliverPressEdge(buttonDown: buttonDown)
             let sampled = TouchFrame(
                 time: frame.time, touches: frame.touches,
-                press: TouchFrame.Press(holding: clickFilter?.holding, buttonDown: buttonDown))
+                press: TouchFrame.Press(holding: tap?.holding, buttonDown: buttonDown))
             guard let recognition = running[id]?.step(sampled) else { return }
-            blocking[id] = recognition.blocksClicks
+            let previous = levels[id] ?? .none
+            levels[id] = recognition.blocking
+            if previous.wantsTap != recognition.blocking.wantsTap { queue(.wake) }
             guard let event = recognition.event,
                   let answer = confirmation.deliver(TrackpadEvent(event, on: id), to: onEvent) else { continue }
             windowSwipeAnswers.append(answer)
@@ -102,24 +123,119 @@ import LauncherCore
 
     private func deliverPressEdge(buttonDown: Bool) {
         defer { buttonWasDown = buttonDown }
-        guard clickFilter != nil, buttonDown != buttonWasDown else { return }
+        guard tap != nil, buttonDown != buttonWasDown else { return }
+        let event: PointerEvent
         if buttonDown {
             let press = PressID(button: 0, number: nextPressNumber)
             nextPressNumber += 1
             pressInProgress = press
-            let verdict = clickFilter!.decide(.press(press), trackpadBlocking: blocking.values.contains(true))
-            pressVerdicts.append(verdict)
+            event = .press(press)
         } else if let press = pressInProgress {
             pressInProgress = nil
-            let verdict = clickFilter!.decide(.release(press), trackpadBlocking: blocking.values.contains(true))
-            pressVerdicts.append(verdict)
+            event = .release(press)
+        } else {
+            return
+        }
+        switch offer(.pointer(event)) {
+        case .decided(.pointer(let verdict)): pressVerdicts.append(verdict)
+        default: pressVerdicts.append(.pass)
         }
     }
 
-    /// A scroll event reaching the fake tap on the flags the frames so far left, merged across trackpads.
-    /// nil when no tap is armed, so the event reaches apps untouched.
+    enum Delivery: Equatable { case noTap, notSent, decided(TapVerdict) }
+    enum Port: Hashable { case presses, gated }
+
+    /// An event as the window server would hand it: `.noTap` with no tap; `.notSent` while its port is off.
+    /// Never appends to `pressVerdicts` (the frames' presses do).
+    func offer(_ event: TapEvent) -> Delivery {
+        guard tap != nil else { return .noTap }
+        guard event.ridesGatedPort ? isGatedPortOn : isPressPortOn else {
+            if case .scroll(.fingers(let phase)) = event {
+                switch phase {
+                case .mayBegin, .began, .changed: scrollUnderWayUnseen = true
+                case .ended, .cancelled: scrollUnderWayUnseen = false
+                }
+            }
+            return .notSent
+        }
+        let decision = tap!.decide(event, in: context())
+        apply(decision.gate)
+        return .decided(decision.verdict)
+    }
+
+    /// A scroll event reaching the fake tap, as the apps see it. nil when no tap is armed, so the event reaches apps
+    /// untouched.
     func scroll(_ event: ScrollEvent) -> ScrollVerdict? {
-        scrollFilter?.decide(event, trackpadBlocking: blocking.values.contains(true))
+        switch offer(.scroll(event)) {
+        case .noTap: nil
+        case .notSent: .pass
+        case .decided(.scroll(let verdict)): verdict
+        case .decided: preconditionFailure("a scroll event is decided as a scroll verdict")
+        }
+    }
+
+    /// Wakes and notices queue while `body` runs, then run in order: the open latency, made visible.
+    func withLateWakes(_ body: () -> Void) {
+        let outer = holdsTurns
+        holdsTurns = true
+        body()
+        holdsTurns = outer
+        if !outer { drain() }
+    }
+
+    /// The system's disable of one or both ports: each goes off and its notice is queued.
+    func systemDisables(_ ports: Set<Port> = [.presses, .gated]) {
+        guard tap != nil else { return }
+        if ports.contains(.presses) {
+            isPressPortOn = false
+            queue(.notice)
+        }
+        if ports.contains(.gated) {
+            isGatedPortOn = false
+            queue(.notice)
+        }
+    }
+
+    private func context() -> TapContext {
+        let merged = levels.values.max() ?? .none
+        return usesEstimatedContext
+            ? TapContext.estimated(from: merged)
+            : TapContext(blocking: merged, scrollMayBeUnderWay: scrollUnderWayUnseen)
+    }
+
+    private func apply(_ change: GateChange?) {
+        switch change {
+        case .open: isGatedPortOn = true
+        case .close:
+            isGatedPortOn = false
+            queue(.notice)
+        case nil: break
+        }
+    }
+
+    private func queue(_ turn: Turn) {
+        pendingTurns.append(turn)
+        if !holdsTurns { drain() }
+    }
+
+    private func drain() {
+        guard !isDraining else { return }
+        isDraining = true
+        defer { isDraining = false }
+        while !pendingTurns.isEmpty {
+            let turn = pendingTurns.removeFirst()
+            guard tap != nil else { continue }
+            switch turn {
+            case .wake:
+                apply(tap!.follow(context()))
+            case .notice:
+                let pressesWereOff = !isPressPortOn
+                apply(
+                    tap!.portsWereDisabled(
+                        pressPortIsOn: isPressPortOn, gatedPortIsOn: isGatedPortOn, in: context()))
+                if pressesWereOff { isPressPortOn = true }
+            }
+        }
     }
 
     /// An event the frame thread recognised just before activity flipped, delivered regardless of `running`.
