@@ -1,0 +1,2 @@
+I ten disable/enable cycles from a foreign thread, nothing posted: out-of-band callbacks by type = ["ffffffff:10"] (empty expected if our own toggles deliver nothing); real scroll events seen meanwhile = 0; other types = [:]
+done; nothing left installed
