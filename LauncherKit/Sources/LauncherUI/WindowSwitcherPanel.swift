@@ -23,7 +23,7 @@ final class WindowSwitcherPanel: OverlayPanel {
     private let content = NSView()
     private let highlight = NSGlassEffectView()
     private let rowViews: [WindowRowView]
-    private var layout = WindowColumnLayout(rowCount: 0, widestTitle: 0, displayHeight: 0)
+    private var layout = WindowColumnLayout(rowCount: 0, displayHeight: 0)
     private var shownRows = 0
 
     init(look: WindowSwitcherLook = .shipped) {
@@ -38,12 +38,6 @@ final class WindowSwitcherPanel: OverlayPanel {
     }
 
     private var titleFont: NSFont { .systemFont(ofSize: WindowColumnLayout.titleSize, weight: look.titleWeight) }
-
-    /// The widest title at full size, measured with the row font.
-    func widestTitle(_ rows: [WindowSwitcher.Row]) -> Double {
-        let attributes: [NSAttributedString.Key: Any] = [.font: titleFont]
-        return rows.map { Double(($0.title as NSString).size(withAttributes: attributes).width.rounded(.up)) }.max() ?? 0
-    }
 
     /// Sizes the panel to `layout` with its top-left corner at `topLeft` and fills one row per entry of `rows`, each
     /// showing `icon` in its preview slot.

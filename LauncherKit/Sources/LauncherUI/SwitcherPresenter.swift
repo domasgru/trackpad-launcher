@@ -119,9 +119,7 @@ final class SwitcherPresenter {
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         if !panel.isPresented || switcher.row != laidOutRow { open(switcher.row) }
         let selection = switcher.selection
-        panel.show(
-            position: CGFloat(selection.position), selected: selection.selected, name: switcher.selectedApp.name,
-            animatesSize: !reduceMotion)
+        panel.show(position: CGFloat(selection.position), selected: selection.selected, animatesSize: !reduceMotion)
         if selection.stretch != lastStretch, selection.stretch != 0, !reduceMotion {
             panel.springHighlight(from: CGFloat(selection.stretch) * layout.pitch)
         }

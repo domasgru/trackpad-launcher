@@ -16,7 +16,7 @@ final class WindowSwitcherPresenter {
     private var capture: Task<Void, Never>?
     /// The window swipe whose switcher is laid out, so each window swipe lays out once.
     private var shownSerial: Int?
-    private var layout = WindowColumnLayout(rowCount: 0, widestTitle: 0, displayHeight: 0)
+    private var layout = WindowColumnLayout(rowCount: 0, displayHeight: 0)
     private var lastStretch = 0.0
 
     init(launcher: Launcher) {
@@ -59,8 +59,7 @@ final class WindowSwitcherPresenter {
         let screen = Displays.screen(under: NSEvent.mouseLocation)
         let visible = screen?.visibleFrame ?? .zero
         let rows = switcher.rows
-        layout = WindowColumnLayout(
-            rowCount: rows.count, widestTitle: panel.widestTitle(rows), displayHeight: Double(visible.height))
+        layout = WindowColumnLayout(rowCount: rows.count, displayHeight: Double(visible.height))
         panel.lay(
             out: rows, icon: icons.icon(forSwitcher: switcher.app), layout: layout,
             topLeft: NSPoint(x: visible.minX + WindowColumnLayout.margin, y: visible.maxY - WindowColumnLayout.margin))
