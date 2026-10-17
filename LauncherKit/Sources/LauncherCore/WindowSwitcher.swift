@@ -51,7 +51,7 @@ public struct WindowSwitcher: Equatable, Sendable {
     }
 
     public enum Row: Equatable, Sendable {
-        /// Its preview, or the app icon until the preview is ready, and its title.
+        /// Its preview, or the app icon when it has none, and its title.
         case visible(WindowID, title: String)
         /// Dimmed, with the app icon, its title and the "Minimised" badge.
         case minimised(WindowID, title: String)

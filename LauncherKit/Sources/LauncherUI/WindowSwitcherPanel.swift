@@ -8,7 +8,7 @@ import QuartzCore
 struct WindowSwitcherLook: Sendable {
     /// The highlight's radius is the panel's less its padding, so the two corners are concentric.
     var panelRadius = 22.0, highlightRadius = 14.0
-    var previewRadius = 6.0, previewCrossfade = 0.15, minimisedAlpha = 0.55, badgeSize = 10.0
+    var previewRadius = 6.0, previewFade = 0.08, minimisedAlpha = 0.55, badgeSize = 10.0
     var titleWeight = NSFont.Weight.medium
     var appearDuration = 0.1, appearScale = 0.96
     var springStiffness = 420.0, springDamping = 22.0
@@ -67,14 +67,23 @@ final class WindowSwitcherPanel: OverlayPanel {
         invalidateShadow()
     }
 
-    /// Crossfades the row's slot from the icon to the picture, sized by `layout.previewSize(aspect:)`; at once unless
-    /// `animated`.
+    /// Empties the slots of `rows`, whose pictures are being taken: a picture then appears in an empty slot rather than
+    /// replacing the icon a moment after it showed, which reads as a flicker.
+    func awaitPreviews(rows: [Int]) {
+        for row in rows where row < shownRows { rowViews[row].awaitPreview() }
+    }
+
+    /// Fades the picture into the row's slot, sized by `layout.previewSize(aspect:)`; at once unless `animated`.
     func setPreview(_ picture: CGImage, row: Int, animated: Bool) {
         guard row < shownRows, picture.height > 0 else { return }
         let size = layout.previewSize(aspect: Double(picture.width) / Double(picture.height))
         rowViews[row].showPreview(
-            picture, size: CGSize(width: size.width, height: size.height),
-            duration: animated ? look.previewCrossfade : 0)
+            picture, size: CGSize(width: size.width, height: size.height), duration: animated ? look.previewFade : 0)
+    }
+
+    /// The capture is over: every slot still empty fades back to the icon; at once unless `animated`.
+    func showIconsWithoutPreview(animated: Bool) {
+        for view in rowViews.prefix(shownRows) { view.showIconIfEmpty(duration: animated ? look.previewFade : 0) }
     }
 
     /// The panel is out: every picture goes.
@@ -158,7 +167,12 @@ private final class WindowRowView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
-    /// `picture` centred in the slot at `size`, fading in over `duration` while the icon fades out.
+    /// An empty slot, waiting for its picture.
+    func awaitPreview() {
+        iconView.alphaValue = 0
+    }
+
+    /// `picture` centred in the slot at `size` in place of the icon, fading in over `duration`.
     func showPreview(_ picture: CGImage, size: CGSize, duration: CFTimeInterval) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -168,21 +182,20 @@ private final class WindowRowView: NSView {
             x: (slot.bounds.width - size.width) / 2, y: (slot.bounds.height - size.height) / 2,
             width: size.width, height: size.height)
         CATransaction.commit()
-        guard duration > 0 else {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            preview.opacity = 1
-            CATransaction.commit()
-            iconView.alphaValue = 0
-            return
-        }
+        iconView.alphaValue = 0
         CATransaction.begin()
+        CATransaction.setDisableActions(duration == 0)
         CATransaction.setAnimationDuration(duration)
         preview.opacity = 1
         CATransaction.commit()
+    }
+
+    /// The icon fades back in over `duration` when the slot holds no picture.
+    func showIconIfEmpty(duration: CFTimeInterval) {
+        guard preview.contents == nil, iconView.alphaValue == 0 else { return }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = duration
-            iconView.animator().alphaValue = 0
+            iconView.animator().alphaValue = 1
         }
     }
 

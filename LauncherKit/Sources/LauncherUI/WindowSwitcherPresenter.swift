@@ -54,35 +54,47 @@ final class WindowSwitcherPresenter {
     }
 
     /// The column sits in the top-left corner of the pointer's display, a margin inside its visible frame: below the
-    /// menu bar and clear of a Dock on the left, in both hand modes.
+    /// menu bar and clear of a Dock on the left, in both hand modes. The capture starts first, so it runs off the main
+    /// actor while the panel is laid out and shown; its pictures land after `open` returns, into slots left empty.
     private func open(_ switcher: WindowSwitcher) {
         let screen = Displays.screen(under: NSEvent.mouseLocation)
         let visible = screen?.visibleFrame ?? .zero
         let rows = switcher.rows
         layout = WindowColumnLayout(rowCount: rows.count, displayHeight: Double(visible.height))
+        shownSerial = switcher.serial
+        lastStretch = 0
+        capture(switcher, rows: rows, scale: Double(screen?.backingScaleFactor ?? 2))
         panel.lay(
             out: rows, icon: icons.icon(forSwitcher: switcher.app), layout: layout,
             topLeft: NSPoint(x: visible.minX + WindowColumnLayout.margin, y: visible.maxY - WindowColumnLayout.margin))
-        shownSerial = switcher.serial
-        lastStretch = 0
+        let previewWindows = Set(switcher.previewWindows)
+        panel.awaitPreviews(rows: rows.indices.filter { previewWindows.contains(rows[$0].window) })
         panel.present(
             appear: reduceMotion
                 ? nil
                 : OverlayAppear(
                     duration: look.appearDuration, fromScale: look.appearScale, stiffness: look.springStiffness,
                     damping: look.springDamping))
+    }
+
+    /// Replaces any earlier window swipe's capture with this one's, whose pictures go into the panel's rows. A row
+    /// whose window yielded no picture gets the icon back once the capture is over.
+    private func capture(_ switcher: WindowSwitcher, rows: [WindowSwitcher.Row], scale: Double) {
         capture?.cancel()
         capture = nil
         let windows = switcher.previewWindows
         guard !windows.isEmpty else { return }
         let serial = switcher.serial
-        let pixels = layout.previewPixels(scale: Double(screen?.backingScaleFactor ?? 2))
+        let pictures = PreviewCapture.pictures(of: windows, fitting: layout.previewPixels(scale: scale))
         capture = Task { [weak self] in
-            for await (window, picture) in PreviewCapture.pictures(of: windows, fitting: pixels) {
-                guard let self, shownSerial == serial, let row = rows.firstIndex(where: { $0.window == window })
-                else { return }
-                panel.setPreview(picture, row: row, animated: !reduceMotion)
+            for await (window, picture) in pictures {
+                guard let self, shownSerial == serial else { return }
+                if let row = rows.firstIndex(where: { $0.window == window }) {
+                    panel.setPreview(picture, row: row, animated: !reduceMotion)
+                }
             }
+            guard let self, !Task.isCancelled, shownSerial == serial else { return }
+            panel.showIconsWithoutPreview(animated: !reduceMotion)
         }
     }
 }
