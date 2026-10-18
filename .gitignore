@@ -4,3 +4,4 @@
 TrackpadLauncher.xcodeproj/
 TrackpadLauncher/Info.plist
 DerivedData/
+build/
