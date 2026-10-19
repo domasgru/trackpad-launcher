@@ -65,3 +65,4 @@
 - Review findings not taken: the Debug tuner panel's `acceptsMouseMovedEvents` (the plan's design, so the preview follows over the tuner); the one-bounce and report-once rules held in several layers (deliberate defence in depth); `LaunchWatch`'s window-list filter vs `FrontmostAppWindows`' (different filters); `ScreenRead` split into pointer and displays in two signatures (the plan's); `theCapIsTenSeconds` (pins a spec number).
 - Gate after fixes: `Scripts/test.sh` green, 659 tests in 79 suites, no probe left running.
 - Human, after implementation: the real-app tests (throwaway probe apps) took the suite from 6.4 s to 92 s → removed with the probe target; the pure look and deadline tests moved to LaunchWatchLookTests.swift; the suite runs 629 tests in about 6.6 s.
+- Human: the tuner's 3 s preview button → a toggle that bounces without end and restarts on every tuning change; R18 reworded.

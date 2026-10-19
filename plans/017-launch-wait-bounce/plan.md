@@ -201,12 +201,12 @@ The bounce's feel cannot be pinned down in numbers up front, so the debug tuner 
 - **THEN** Figma's icon bounces higher above the pointer
 
 ### R18. The tuner previews the bounce
-The tuner's launch bounce section MUST have a preview button. It MUST bounce Finder's icon at the pointer for 3 seconds, then end it as a window showing would.
+The tuner's launch bounce section MUST have a preview toggle. While it is on, Finder's icon MUST bounce at the pointer without end, restarting at once with every tuning change. Turning it off MUST end the bounce as a window showing would.
 
 #### Scenario: Previewing the bounce
 - **GIVEN** the tuner is open in a Debug build
-- **WHEN** the user presses the preview button
-- **THEN** Finder's icon bounces above the pointer for 3 seconds, then floats away
+- **WHEN** the user turns the preview on, drags the jump height slider, then turns the preview off
+- **THEN** Finder's icon bounces above the pointer, bounces higher as soon as the slider moves, and floats away when the preview is turned off
 
 ### R19. Presets carry the bounce knobs
 Tunings and presets MUST save and load the bounce knobs together with the existing ones.

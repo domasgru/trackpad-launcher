@@ -110,7 +110,7 @@ import ServiceManagement
                 url: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"))
             tuner = AnimationTuner(
                 preview: { [overlay] in overlay.play(for: finder) },
-                previewBounce: { [bounces] in bounces.preview(finder, for: .seconds(3)) })
+                previewBounce: { [bounces] isOn in isOn ? bounces.preview(finder) : bounces.stopPreview(finder) })
         }
         tuner?.show()
     }

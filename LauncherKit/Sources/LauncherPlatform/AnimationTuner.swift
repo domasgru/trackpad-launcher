@@ -14,7 +14,7 @@ let tunerOverride = Mutex(LaunchTuning.shipped)
 @MainActor final class AnimationTuner {
     private let panel: NSPanel
 
-    init(preview: @escaping @MainActor () -> Void, previewBounce: @escaping @MainActor () -> Void) {
+    init(preview: @escaping @MainActor () -> Void, previewBounce: @escaping @MainActor (Bool) -> Void) {
         let model = TunerModel()
         let content = NSHostingView(
             rootView: TunerView(model: model, preview: preview, previewBounce: previewBounce))
@@ -158,7 +158,9 @@ struct TuningPreset: Codable, Identifiable, Equatable {
 struct TunerView: View {
     @Bindable var model: TunerModel
     let preview: @MainActor () -> Void
-    let previewBounce: @MainActor () -> Void
+    /// On: bounces Finder's icon at the pointer, or restarts it with the current tuning. Off: ends it.
+    let previewBounce: @MainActor (Bool) -> Void
+    @State private var isPreviewingBounce = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -237,11 +239,14 @@ struct TunerView: View {
             knob("Slide", \.bounce.slide, 0.05...1, step: 0.01, unit: "s", hint: "others closing up when one ends")
             knob("Pulse low", \.bounce.pulseLow, 0...1, step: 0.01, hint: "Reduce motion: dimmest opacity")
             knob("Pulse period", \.bounce.pulsePeriod, 0.3...4, step: 0.05, unit: "s", hint: "Reduce motion")
-            Button("Preview bounce") { previewBounce() }
+            Toggle("Preview bounce", isOn: $isPreviewingBounce)
+                .onChange(of: isPreviewingBounce) { _, isOn in previewBounce(isOn) }
+                .onChange(of: model.tuning) { if isPreviewingBounce { previewBounce(true) } }
+                .onDisappear { if isPreviewingBounce { previewBounce(false) } }
         } header: {
             Text("Launch bounce")
         } footer: {
-            Text("Applies from the next bounce. Preview bounces Finder's icon for 3 s, then floats it away.")
+            Text("Applies from the next bounce. Preview keeps Finder's icon bouncing at the pointer, restarting it on every change, and floats it away when turned off.")
         }
     }
 

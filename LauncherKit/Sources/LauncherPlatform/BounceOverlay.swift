@@ -146,9 +146,28 @@ import QuartzCore
     }
 
     #if DEBUG
-    /// Bounces `app` at the pointer for `duration`, then ends it as a window showing would.
-    func preview(_ app: AppEntry, for duration: Duration) {
-        start(app, cap: duration) { [weak self] in self?.end(app.bundleID, with: .launchAnimation) }
+    /// Bounces `app` at the pointer until `stopPreview`. Called again while it bounces, it restarts the bounce with the
+    /// tuning now current, in place, with no ending.
+    func preview(_ app: AppEntry) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if let index = row.firstIndex(where: { $0.app.bundleID == app.bundleID }) {
+            let bouncing = row.remove(at: index)
+            bouncing.deadlines.forEach { $0.isCancelled = true }
+            bouncing.slot.removeFromSuperlayer()
+        }
+        start(app, cap: .seconds(24 * 60 * 60)) { [weak self] in self?.end(app.bundleID, with: .launchAnimation) }
+        if row.isEmpty {
+            unfollow()
+            stage?.panel.close()
+            stage = nil
+        }
+        CATransaction.commit()
+    }
+
+    /// Ends the preview of `app` as a window showing would.
+    func stopPreview(_ app: AppEntry) {
+        end(app.bundleID, with: .launchAnimation)
     }
     #endif
 
