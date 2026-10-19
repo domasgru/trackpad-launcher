@@ -140,6 +140,7 @@ import LauncherCore
         #expect(world.hardware.lightTicks == [trackpad.id, trackpad.id, trackpad.id])
         #expect(world.hardware.feedback.isEmpty)
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
     }
 
     @Test func oneFrameCrossingTwoRowsTicksTwice() {

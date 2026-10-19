@@ -21,8 +21,10 @@ import Testing
     @Test func aBundleWithoutItsExecutableIsRefused() async {
         await ProbeBundles.withProbes { probes in
             let bundle = probes.makeWithoutExecutable()
-            let opened = try? await NSWorkspace.shared.openApplication(
-                at: bundle.url, configuration: NSWorkspace.OpenConfiguration())
+            // No "damaged or incomplete" alert on the user's screen: the refusal is all this row needs.
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.promptsUserIfNeeded = false
+            let opened = try? await NSWorkspace.shared.openApplication(at: bundle.url, configuration: configuration)
             #expect(opened == nil, "macOS refuses to open a bundle with no executable")
         }
     }

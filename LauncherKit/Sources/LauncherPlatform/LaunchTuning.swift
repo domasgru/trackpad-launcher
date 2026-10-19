@@ -1,7 +1,7 @@
 import Foundation
 import LauncherCore
 
-/// Every number that shapes a launch flight, plus the switcher's swipe acceleration, which the same tuner tweaks. `shipped` is the animation release builds play; Debug builds can
+/// Every number that shapes a launch flight and a launch bounce, plus the switcher's swipe acceleration, which the same tuner tweaks. `shipped` is the animation release builds play; Debug builds can
 /// override it live from the animation tuner (AnimationTuner.swift).
 struct LaunchTuning: Equatable, Sendable {
     /// The icon's start side, in points.
@@ -43,6 +43,9 @@ struct LaunchTuning: Equatable, Sendable {
     /// The tracking speed swipes use, 0...3; −1 uses System Settings' value.
     var swipeTrackingSpeed = -1.0
 
+    /// The launch bounce's numbers.
+    var bounce = Bounce()
+
     static let shipped = LaunchTuning()
 
     #if DEBUG
@@ -83,4 +86,35 @@ extension LaunchTuning: Codable {
         swipeTrackingSpeed = try value(.swipeTrackingSpeed, s.swipeTrackingSpeed)
     }
 }
+
+extension LaunchTuning.Bounce: Codable {}
 #endif
+
+extension LaunchTuning {
+    /// Every number that shapes a launch bounce. The defaults are the shipped bounce.
+    struct Bounce: Equatable, Sendable {
+        /// Points the icon jumps: about half the icon.
+        var height: Double = 30
+        var timeUp: Double = 0.30
+        var timeDown: Double = 0.30
+        /// Seconds on the ground between jumps.
+        var rest: Double = 0.10
+        /// Share of its height the icon loses on landing, widening to keep its area. 0 = none.
+        var squash: Double = 0
+        /// Points between the pointer's tip and the icons' bottoms at rest.
+        var gap: Double = 8
+        /// Sideways from the tip to the row's centre.
+        var offset: Double = 0
+        /// Seconds the row takes to catch up with the pointer. 0 = glued to it.
+        var trailing: Double = 0
+        /// Points between icons in the row.
+        var spacing: Double = 12
+        /// Seconds of the quiet fade.
+        var fadeOut: Double = 0.2
+        /// Seconds the others take to slide when one ends.
+        var slide: Double = 0.2
+        /// Reduce motion: the pulse's dimmest opacity, and its period in seconds.
+        var pulseLow: Double = 0.5
+        var pulsePeriod: Double = 1.4
+    }
+}

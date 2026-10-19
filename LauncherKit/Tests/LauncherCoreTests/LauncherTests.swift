@@ -11,6 +11,7 @@ extension Launcher {
         let world = World(apps: ["Figma"])
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
+        world.startProcess("Figma")
         world.launcher.openWindow()
         var broughtToFrontWhenAnimationRequested: [AppEntry]?
         world.system.onPlayLaunchAnimation = { [system = world.system] in
@@ -41,12 +42,14 @@ extension Launcher {
         #expect(world.system.broughtToFront == [world.app("Arc")])
         #expect(!world.launcher.isWindowOpen)
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
     }
 
     @Test func theSwitchAppliesToTheNextGestureWithoutARestart() {
         let world = World(apps: ["Arc"])
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.startProcess("Arc")
 
         world.tap(1)
         #expect(world.system.launchAnimations == [world.app("Arc")])
@@ -71,6 +74,7 @@ extension Launcher {
 
         #expect(world.system.preparedLaunchAnimations == [world.app("Arc")])
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
     }
 
     @Test func repeatedTapsWhileTheThumbStaysAnchoredFireEachTime() {
@@ -78,6 +82,8 @@ extension Launcher {
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
         world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
+        world.startProcess("Arc")
+        world.startProcess("Figma")
 
         let frames = TouchScript(.macBook14).thumb(atMM: (10, 10)).tap(fingers: 1).tap(fingers: 2).frames
         world.hardware.touch(frames, on: Trackpad.macBook14.id)
@@ -97,6 +103,7 @@ extension Launcher {
         #expect(world.hardware.feedback.isEmpty)
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
         #expect(world.launcher.isWindowOpen)
     }
 
@@ -111,6 +118,7 @@ extension Launcher {
         #expect(world.hardware.feedback.isEmpty)
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
     }
 
     @Test func withNothingAssignedNoLaunchAnimationIsPrepared() {

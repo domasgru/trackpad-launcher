@@ -7,7 +7,7 @@ import LauncherCore
     private func rest() -> TouchScript { TouchScript(.macBook14).land(fingers: 2).wait(.milliseconds(150)) }
 
     private func nothingHappened(_ world: World) -> Bool {
-        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty
+        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty && world.system.bounces.isEmpty
             && world.launcher.switcher == nil
     }
 

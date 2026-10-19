@@ -295,6 +295,55 @@ import LauncherCore
         launchAnimations.append(app)
         onPlayLaunchAnimation?()
     }
+
+    /// Processes ⌘-Tab does not show: menu bar apps, apps still starting from the Dock.
+    var processes: Set<BundleID> = []
+    /// The bounces playing, in start order: the row, newest last. Every `bringToFrontBouncing` call appends, a repeated
+    /// one too, so a second start shows; the fake does not copy the adapter's one-bounce-per-app guard.
+    private(set) var bounces: [Bounce] = []
+    /// Every `endLaunchBounce` call, in order, so a double end shows.
+    private(set) var bounceEndings: [BounceEnd] = []
+    var onLaunchProgress: (@MainActor (BundleID, LaunchProgress) -> Void)?
+    /// Runs inside `bringToFrontBouncing`, like `onPlayLaunchAnimation`, so a test can see the other effects then.
+    var onBringToFrontBouncing: (() -> Void)?
+
+    struct Bounce: Equatable {
+        let app: AppEntry
+        let cap: Duration
+        /// Every limit the model set, in order. Recorded, not applied: which deadline passes first is the adapter's.
+        var limits: [Duration] = []
+    }
+
+    struct BounceEnd: Equatable {
+        let app: BundleID
+        let ending: LaunchBounceEnding
+    }
+
+    /// Derived, never synced: a ⌘-Tab app and the frontmost app have a process too.
+    func hasProcess(_ app: BundleID) -> Bool {
+        processes.contains(app) || frontmost?.bundleID == app || running.contains { $0.bundleID == app }
+    }
+
+    /// Records the bring to front, then the bounce, in that order.
+    func bringToFrontBouncing(_ app: AppEntry, cap: Duration) {
+        broughtToFront.append(app)
+        bounces.append(Bounce(app: app, cap: cap))
+        onBringToFrontBouncing?()
+    }
+
+    func limitLaunchBounce(of app: BundleID, to limit: Duration) {
+        guard let index = bounces.firstIndex(where: { $0.app.bundleID == app }) else { return }
+        bounces[index].limits.append(limit)
+    }
+
+    func endLaunchBounce(of app: BundleID, with ending: LaunchBounceEnding) {
+        bounceEndings.append(BounceEnd(app: app, ending: ending))
+        bounces.removeAll { $0.app.bundleID == app }
+    }
+
+    /// The launch reports `progress` inline, as the real adapter pushes it on the main actor. A test withholds a report
+    /// by not calling this, delivers one late by calling it after the end, and passes time with `.ranOut`.
+    func report(_ progress: LaunchProgress, for app: BundleID) { onLaunchProgress?(app, progress) }
 }
 
 /// The frontmost app's window stack, by name: one fixed `WindowID` per name for the life of the test. A window's title is

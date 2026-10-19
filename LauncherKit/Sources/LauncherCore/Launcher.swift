@@ -3,8 +3,9 @@ import Observation
 
 /// The running Trackpad Launcher. Owns every decision; adapters sense and act, the shell and views render.
 /// `activity` is derived, never stored; `rows` derive from settings plus the catalog; `fire` is the only path
-/// that pulses, launches, plays the launch animation or closes the window from a gesture. `fire` plays the launch
-/// animation only while its setting is on.
+/// that pulses, launches, plays the launch animation or the launch bounce, or closes the window from a gesture. `fire`
+/// shows either only while the launch animation setting is on: the bounce for an app with no process, the animation for
+/// one with a process.
 @MainActor @Observable
 public final class Launcher {
     public private(set) var rows: [GestureRow] = []
@@ -53,6 +54,9 @@ public final class Launcher {
 
     private var shown: ShownSwitcher?
     @ObservationIgnored private var windowSwipesBegun = 0
+    /// The launches whose bounce plays. Written only by `fire` and `progress(_:of:)`: the one record of which bounces
+    /// are live; the adapter's row follows its commands.
+    @ObservationIgnored private var bounces: [BundleID: LaunchBounce] = [:]
     private var settings: Settings
     private var connected: [Trackpad] = []
     private var preferenceValues: [TrackpadKind: TrackpadPreferenceValues] = [:]
@@ -94,6 +98,7 @@ public final class Launcher {
             case .trackpadsChanged: reconcile(restart: true)
             }
         }
+        system.onLaunchProgress = { [unowned self] app, progress in self.progress(progress, of: app) }
         scanner.onScan = { [unowned self] in installedApps = $0 }
         scanner.scan()
         preferences.onChange = { [unowned self] in reconcile() }
@@ -230,6 +235,16 @@ public final class Launcher {
         hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, slides: run.slides, swaps: run.swaps)
     }
 
+    private enum Visual { case launchBounce, launchAnimation, none }
+
+    /// Reads `hasProcess` only when it decides something.
+    private func visual(for app: AppEntry) -> Visual {
+        guard settings.isLaunchAnimationOn else { return .none }
+        // The app's bounce still plays: it keeps the one bounce.
+        if bounces[app.bundleID] != nil { return .none }
+        return system.hasProcess(app.bundleID) ? .launchAnimation : .launchBounce
+    }
+
     /// Every silent case decided here and only here: inactive, unassigned, missing.
     private func fire(_ event: GestureEvent) {
         guard activity.isActive,
@@ -237,10 +252,33 @@ public final class Launcher {
               let app = catalog.locate(assigned)
         else { return }
         hardware.playFeedback(.gesture, on: event.trackpad)
-        system.bringToFront(app)
-        // After bring to front, so whatever the animation costs lands on the icon, never on the app.
-        if settings.isLaunchAnimationOn { system.playLaunchAnimation(for: app) }
+        switch visual(for: app) {
+        case .launchBounce:
+            bounces[app.bundleID] = .startingUp
+            // Opens the app first, inside the call.
+            system.bringToFrontBouncing(app, cap: LaunchBounce.cap)
+        case .launchAnimation:
+            system.bringToFront(app)
+            // After bring to front, so whatever the animation costs lands on the icon, never on the app.
+            system.playLaunchAnimation(for: app)
+        case .none:
+            system.bringToFront(app)
+        }
         window = .closed
+    }
+
+    /// A report for an app whose bounce ended finds no record: a late window plays nothing.
+    private func progress(_ progress: LaunchProgress, of app: BundleID) {
+        guard let bounce = bounces[app] else { return }
+        switch bounce.next(after: progress) {
+        case .carryOn: break
+        case .startUp(let limit):
+            bounces[app] = .startedUp
+            system.limitLaunchBounce(of: app, to: limit)
+        case .end(let ending):
+            bounces[app] = nil
+            system.endLaunchBounce(of: app, with: ending)
+        }
     }
 
     /// The one place a swipe becomes effects.

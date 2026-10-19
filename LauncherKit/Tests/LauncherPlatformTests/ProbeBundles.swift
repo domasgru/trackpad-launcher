@@ -13,7 +13,8 @@ import Foundation
     /// The `ProbeScript` Info.plist dictionary; see the probe's own header for the keys.
     typealias Script = [String: Any]
 
-    static func withProbes<T>(_ body: (ProbeBundles) async throws -> T) async rethrows -> T {
+    @discardableResult
+    static func withProbes<T>(_ body: @MainActor (ProbeBundles) async throws -> T) async rethrows -> T {
         let probes = ProbeBundles()
         do {
             let result = try await body(probes)
@@ -97,6 +98,39 @@ import Foundation
     /// True when `app` is finished launching before `bound`.
     static func finishedLaunching(_ app: NSRunningApplication, within bound: Duration) async -> Bool {
         await value(of: app, \.isFinishedLaunching, within: bound)
+    }
+
+    /// The running process of the bundle once macOS lists it. The workspace's list pushes (key-value observation, off
+    /// the main thread) and its launch notification wake the lookup, which is made on the main actor: a lookup made
+    /// inside the push can miss a process the push announces.
+    static func listed(_ bundle: Bundle, within bound: Duration) async -> NSRunningApplication? {
+        let id = bundle.id
+        let wakes = AsyncStream<Void>.makeStream()
+        let observation = NSWorkspace.shared.observe(\.runningApplications, options: [.new]) { _, _ in
+            wakes.continuation.yield()
+        }
+        let launched = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: nil
+        ) { _ in wakes.continuation.yield() }
+        let timeout = Task {
+            try await Task.sleep(for: bound)
+            wakes.continuation.finish()
+        }
+        defer {
+            timeout.cancel()
+            observation.invalidate()
+            NSWorkspace.shared.notificationCenter.removeObserver(launched)
+        }
+        if let app = process(of: bundle) { return app }
+        for await _ in wakes.stream {
+            if let app = process(of: bundle) { return app }
+        }
+        return nil
+    }
+
+    /// The bundle's process now, if macOS lists one.
+    static func process(of bundle: Bundle) -> NSRunningApplication? {
+        NSRunningApplication.runningApplications(withBundleIdentifier: bundle.id).first { !$0.isTerminated }
     }
 
     private static func value(

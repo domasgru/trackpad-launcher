@@ -70,6 +70,7 @@ import LauncherCore
         #expect(stack(world) == ["News", "Docs", "Mail"])
         #expect(world.hardware.pulses.map(\.haptic) == [.lightTick, .lightTick, .gesture])
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
         #expect(!world.launcher.isWindowOpen)
 
         world.play(lifted.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 3.5)))

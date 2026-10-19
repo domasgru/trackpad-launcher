@@ -3,7 +3,7 @@ import QuartzCore
 
 /// A connected display as the launch animation sees it: its frame in global screen coordinates (y up) and its
 /// backing scale.
-struct LaunchDisplay {
+struct LaunchDisplay: Equatable {
     let frame: CGRect
     let scale: CGFloat
 }

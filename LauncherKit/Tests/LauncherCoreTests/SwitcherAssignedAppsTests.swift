@@ -90,6 +90,7 @@ import LauncherCore
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.hardware.pulses.isEmpty)
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
         #expect(world.launcher.switcher == nil)
         #expect(world.launcher.isWindowOpen)
     }
@@ -124,6 +125,7 @@ import LauncherCore
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.hardware.pulses.isEmpty)
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
         #expect(world.launcher.switcher == nil)
         #expect(world.hardware.scroll(.fingers(.ended)) == .drop)
         #expect(world.hardware.scroll(.fingers(.began)) == .pass)
@@ -155,6 +157,7 @@ import LauncherCore
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.hardware.pulses.isEmpty)
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
         #expect(world.launcher.switcher == nil)
     }
 
