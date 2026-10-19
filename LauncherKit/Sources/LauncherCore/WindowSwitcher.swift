@@ -91,7 +91,7 @@ public struct WindowSwitcher: Equatable, Sendable {
     public var app: AppEntry { content.app }
 
     /// Top to bottom, two to ten. A window titled "" reads as the app's name followed by " — Window N", N its 1-based
-    /// row.
+    /// row; any other title reads as the app's title rule words it (`WindowTitleRule`), which never sees the fallback.
     public var rows: [Row] { Self.rows(of: content) }
 
     private static func rows(of content: Content) -> [Row] {
@@ -106,7 +106,9 @@ public struct WindowSwitcher: Equatable, Sendable {
             minimised = [first] + rest
         }
         func title(_ window: AppWindow, at index: Int) -> String {
-            window.title.isEmpty ? Copy.untitledWindow(of: content.app.name, position: index + 1) : window.title
+            window.title.isEmpty
+                ? Copy.untitledWindow(of: content.app.name, position: index + 1)
+                : WindowTitleRule.displayTitle(window.title, of: content.app.bundleID)
         }
         let visibleRows = visible.enumerated().map { Row.visible($1.id, title: title($1, at: $0)) }
         let minimisedRows = minimised.enumerated().map {
