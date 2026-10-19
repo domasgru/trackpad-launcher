@@ -35,8 +35,11 @@ private func row(
         sourceLocation: sourceLocation)
 }
 
+/// The jump style's motion, whatever style ships: these rows pin the jump, which the tuner can still switch to.
 private func motion(_ tuning: LaunchTuning.Bounce = shipped, reduceMotion: Bool = false) -> BounceMotion {
-    BounceMotion(tuning: tuning, reduceMotion: reduceMotion)
+    var jump = tuning
+    jump.style = .jump
+    return BounceMotion(tuning: jump, reduceMotion: reduceMotion)
 }
 
 private func samples(_ motion: BounceMotion, sourceLocation: SourceLocation = #_sourceLocation) throws -> [Sample] {

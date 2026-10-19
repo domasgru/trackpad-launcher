@@ -69,3 +69,4 @@
 - Human: a second waiting animation to compare in the tuner → `Bounce.style` (jump or inflate) with inflate knobs (start size, inflate time and curve, keep growing, growing time); Debug tuner only, no tests, shipped style stays jump.
 - Human: inflate paused between reaching the icon size and growing on, with no knob for it → one seamless curve whose speed falls as (1 + t/τ)^−easing, τ solved so it passes the icon size at the inflate time; "Easing" knob shapes it.
 - Human: an inflated icon shrank before floating away → the launch animation plays scaled to the icon's side at the hand-off, so it swells on from there; icon bitmaps get the creep's headroom while inflate is the style, so neither blurs.
+- Human chose the inflate: shipped as the default with the human's Preset 2 values (24 pt start, 0.4 s, easing 2, +0.4 over 5 s); R5 and R8 and the glossary rewritten for it; the jump stays a tuner option, its tests pinned to it.

@@ -62,7 +62,7 @@ The bouncing icon MUST be the target app's own icon, the one Finder shows for it
 - **THEN** a 60-point Figma icon bounces, sharp at every height
 
 ### R5. The icon rests just above the pointer
-This applies to a single bouncing icon, except as the edge-of-display rule (R6) and the row rule (R13) say. At rest, between jumps, the icon MUST sit centred horizontally on the pointer's tip, its bottom edge 8 points above the tip. It MUST jump upward from there and never cover the pointer.
+This applies to a single bouncing icon, except as the edge-of-display rule (R6) and the row rule (R13) say. At rest, between jumps, the icon MUST sit centred horizontally on the pointer's tip, its bottom edge 8 points above the tip. It MUST grow upward from there and never cover the pointer.
 
 #### Scenario: Resting spot
 - **GIVEN** the pointer's tip is at the middle of the display
@@ -90,13 +90,15 @@ While it bounces, the icon MUST move with the pointer on every frame, with no la
 - **WHEN** the user moves the pointer across the screen and onto a second display
 - **THEN** the icon stays just above the pointer the whole way, and keeps bouncing on the second display
 
-### R8. The bounce feels like the Dock's
-Each bounce MUST rise quickly to about half the icon's height, slow at the top, and fall back with gravity, about 0.7 seconds per bounce, repeated until the bounce ends. With the shipped tuning the icon MUST keep its size and shape while it bounces; the tuner may set squash for experiments.
+### R8. The icon inflates like a balloon
+*Changed after implementation, at the human's choice: the inflate replaced the Dock-like jump as the shipped motion. The jump stays in the Debug tuner.*
 
-#### Scenario: Side by side with the Dock
+The icon MUST appear at 24 points, swell to the launch animation's 60 points within 0.4 seconds, and keep swelling ever more slowly, with no pause at 60 points, to 84 points 5 seconds after that, where it holds. It MUST grow upward from its resting spot, its bottom edge fixed. The launch animation that ends it MUST play at the size the icon has reached, so the icon swells on and never shrinks before it floats away.
+
+#### Scenario: Window shows while inflated
 - **GIVEN** the 2-finger gesture is assigned to Figma, which is not running
-- **WHEN** the user makes the gesture, and then opens a second app that is not running from the Dock
-- **THEN** both icons bounce at a similar height and rhythm
+- **WHEN** the user makes the gesture, and Figma's window shows 2 seconds later
+- **THEN** Figma's icon has swelled past 60 points by then, puffs up bigger still, then floats away without shrinking first
 
 ### R9. The bounce ends when the app's window shows
 When a window of the launching app first shows on screen, on any display, the bounce MUST end within 50 milliseconds. A splash screen counts as a window. The icon MUST then play the launch animation, starting from wherever it is at that moment, even mid-jump. From then on it no longer follows the pointer. Two exceptions: without the Accessibility permission, or when the app does not answer Accessibility while it starts up, a window that shows only after the app finished starting up ends the bounce through R10's 2-second rule instead.

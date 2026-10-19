@@ -130,7 +130,7 @@ extension LaunchTuning {
             case inflate
         }
 
-        var style: Style = .jump
+        var style: Style = .inflate
         /// Points the icon jumps: about half the icon.
         var height: Double = 30
         var timeUp: Double = 0.30
@@ -155,15 +155,15 @@ extension LaunchTuning {
         var pulseLow: Double = 0.5
         var pulsePeriod: Double = 1.4
         /// Inflate: the icon's side when it appears, in points.
-        var inflateFrom: Double = 20
+        var inflateFrom: Double = 24
         /// Inflate: seconds to grow to the icon's side.
-        var inflateTime: Double = 0.5
+        var inflateTime: Double = 0.4
         /// Inflate: the easing. The growth's speed falls as (1 + t/τ)^−inflateCurve, smoothly, with no stop at the icon's
         /// side. Low: a quick puff, then a long slow swell. High: rounder, and it settles sooner.
-        var inflateCurve: Double = 2.5
+        var inflateCurve: Double = 2
         /// Inflate: the share of its side the icon has grown by past the icon's side when it stops.
-        var creep: Double = 0.15
+        var creep: Double = 0.4
         /// Inflate: seconds from reaching the icon's side to stopping; the icon then holds its size.
-        var creepTime: Double = 8
+        var creepTime: Double = 5
     }
 }
