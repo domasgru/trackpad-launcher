@@ -67,3 +67,4 @@
 - Human, after implementation: the real-app tests (throwaway probe apps) took the suite from 6.4 s to 92 s → removed with the probe target; the pure look and deadline tests moved to LaunchWatchLookTests.swift; the suite runs 629 tests in about 6.6 s.
 - Human: the tuner's 3 s preview button → a toggle that bounces without end and restarts on every tuning change; R18 reworded.
 - Human: a second waiting animation to compare in the tuner → `Bounce.style` (jump or inflate) with inflate knobs (start size, inflate time and curve, keep growing, growing time); Debug tuner only, no tests, shipped style stays jump.
+- Human: inflate paused between reaching the icon size and growing on, with no knob for it → one seamless curve whose speed falls as (1 + t/τ)^−easing, τ solved so it passes the icon size at the inflate time; "Easing" knob shapes it.

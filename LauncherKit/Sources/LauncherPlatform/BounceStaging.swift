@@ -100,28 +100,22 @@ struct BounceMotion {
         return [animation]
     }
 
-    /// The inflate style: a scale about the icon's bottom centre from `inflateFrom` up to the icon's side, easing out,
-    /// then on by `creep` over `creepTime`, slowing to a stop, where it holds. Plays once.
+    /// The inflate style: a scale about the icon's bottom centre that plays once and holds. One curve, with no seam:
+    /// its speed falls smoothly from the first frame, as `(1 + t/τ)^−inflateCurve`. It passes the icon's side at
+    /// `inflateTime` and reaches `1 + creep` at `inflateTime + creepTime`; τ is solved so it does both.
     private func inflation() -> CAKeyframeAnimation {
-        let start = iconSide > 0 ? tuning.inflateFrom / iconSide : 1
-        let grow = max(tuning.inflateTime, 0.01)
-        let creepTime = max(tuning.creepTime, 0.01)
-        let duration = grow + creepTime
-        let steps = max(10, Int((duration * 240).rounded()))
+        let curve = InflateCurve(
+            start: iconSide > 0 ? min(tuning.inflateFrom / iconSide, 0.95) : 0.95, end: 1 + max(tuning.creep, 0.01),
+            full: max(tuning.inflateTime, 0.01), duration: max(tuning.inflateTime, 0.01) + max(tuning.creepTime, 0.01),
+            exponent: max(tuning.inflateCurve, 1.05))
+        let steps = max(10, Int((curve.duration * 240).rounded()))
         let animation = CAKeyframeAnimation(keyPath: "transform")
         animation.keyTimes = (0...steps).map { NSNumber(value: Double($0) / Double(steps)) }
         animation.values = (0...steps).map { i in
-            let t = Double(i) / Double(steps) * duration
-            let scale: Double
-            if t < grow {
-                scale = start + (1 - start) * (1 - pow(1 - t / grow, tuning.inflateCurve))
-            } else {
-                let v = min((t - grow) / creepTime, 1)
-                scale = 1 + tuning.creep * (1 - (1 - v) * (1 - v))
-            }
+            let scale = curve.scale(at: Double(i) / Double(steps) * curve.duration)
             return NSValue(caTransform3D: CATransform3DMakeScale(scale, scale, 1))
         }
-        animation.duration = duration
+        animation.duration = curve.duration
         animation.calculationMode = .linear
         animation.fillMode = .forwards
         animation.isRemovedOnCompletion = false
@@ -136,5 +130,43 @@ struct BounceMotion {
         animation.duration = tuning.fadeOut
         animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
         return animation
+    }
+}
+
+/// The inflate style's scale over time: `start + (end − start) × F(t)/F(duration)`, with
+/// `F(t) = 1 − (1 + t/τ)^(1 − exponent)`, whose speed falls as `(1 + t/τ)^−exponent`. τ is solved by bisection so the
+/// scale is exactly 1 at `full`.
+private struct InflateCurve {
+    let start: Double
+    let end: Double
+    let duration: Double
+    let exponent: Double
+    private let tau: Double
+
+    init(start: Double, end: Double, full: Double, duration: Double, exponent: Double) {
+        self.start = start
+        self.end = end
+        self.duration = duration
+        self.exponent = exponent
+        // The share of the growth done at `full`. It falls from 1 towards full/duration as τ grows.
+        let target = (1 - start) / (end - start)
+        func done(_ tau: Double) -> Double {
+            Self.f(full, tau, exponent) / Self.f(duration, tau, exponent)
+        }
+        var low = log(1e-5)
+        var high = log(1e5)
+        for _ in 0..<80 {
+            let mid = (low + high) / 2
+            if done(exp(mid)) > target { low = mid } else { high = mid }
+        }
+        tau = exp((low + high) / 2)
+    }
+
+    func scale(at t: Double) -> Double {
+        start + (end - start) * Self.f(min(t, duration), tau, exponent) / Self.f(duration, tau, exponent)
+    }
+
+    private static func f(_ t: Double, _ tau: Double, _ exponent: Double) -> Double {
+        1 - pow(1 + t / tau, 1 - exponent)
     }
 }

@@ -158,11 +158,12 @@ extension LaunchTuning {
         var inflateFrom: Double = 20
         /// Inflate: seconds to grow to the icon's side.
         var inflateTime: Double = 0.5
-        /// Inflate: growth = 1 − (1 − t)^inflateCurve. 1 is steady, higher slows down sooner.
-        var inflateCurve: Double = 3
-        /// Inflate: the share of its side the icon keeps growing by after that, ever slower.
+        /// Inflate: the easing. The growth's speed falls as (1 + t/τ)^−inflateCurve, smoothly, with no stop at the icon's
+        /// side. Low: a quick puff, then a long slow swell. High: rounder, and it settles sooner.
+        var inflateCurve: Double = 2.5
+        /// Inflate: the share of its side the icon has grown by past the icon's side when it stops.
         var creep: Double = 0.15
-        /// Inflate: seconds that slow growth lasts; the icon then holds its size.
+        /// Inflate: seconds from reaching the icon's side to stopping; the icon then holds its size.
         var creepTime: Double = 8
     }
 }
