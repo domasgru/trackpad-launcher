@@ -126,7 +126,11 @@ import QuartzCore
         CATransaction.setDisableActions(true)
         switch ending {
         case .launchAnimation:
-            launchOverlay.play(for: bouncing.app, from: CGPoint(x: frame.midX, y: frame.midY), among: read.displays)
+            // The icon's side now, as a share of the usual: an inflated icon swells on from it. A squash keeps the
+            // icon's area, so it counts as 1.
+            let size = (frame.width * frame.height).squareRoot() / side
+            launchOverlay.play(
+                for: bouncing.app, from: CGPoint(x: frame.midX, y: frame.midY), among: read.displays, size: size)
         case .quietFade:
             if let display {
                 fade(bouncing, from: frame, rest: rest, transform: icon.transform, opacity: opacity, on: display)

@@ -38,10 +38,11 @@ import Synchronization
 
     /// As `play(for:)`, staged at `start` among `displays` instead of at the pointer among the connected screens: a
     /// bounce's ending, from wherever its icon is, among the displays the bounce read, so one `ScreenRead` places both.
-    func play(for app: AppEntry, from start: CGPoint, among displays: [LaunchDisplay]) {
+    /// `size` is the icon's side then, as a share of the usual: the whole flight plays at that size.
+    func play(for app: AppEntry, from start: CGPoint, among displays: [LaunchDisplay], size: CGFloat = 1) {
         let reduceMotion =
             NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || LaunchTuning.current.forceReduceMotion
-        let flight = flights.next(draw: .random(in: -1...1), reduceMotion: reduceMotion)
+        let flight = flights.next(draw: .random(in: -1...1), reduceMotion: reduceMotion).sized(size)
         guard let stage = flight.staged(at: start, among: displays),
               case let (panel, host)? = Self.makePanel(frame: stage.frame)
         else { return }
@@ -97,9 +98,12 @@ import Synchronization
         NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
     }
 
-    /// The icon's side at the pop's peak, in pixels at `scale`.
+    /// The icon's largest side, in pixels at `scale`: the pop's peak, grown on by the inflate style's creep when that is
+    /// the bounce's style, since an inflated icon's flight swells from its inflated side.
     private static func pixels(at scale: CGFloat) -> Int {
-        Int((LaunchFlight.peakSide * scale).rounded())
+        let bounce = LaunchTuning.current.bounce
+        let inflated = bounce.style == .inflate ? 1 + max(bounce.creep, 0) : 1
+        return Int((LaunchFlight.peakSide * inflated * scale).rounded())
     }
 
     /// The icon Finder shows for the app, as a bitmap of the icon's peak size in pixels at `scale`, so it never

@@ -82,9 +82,19 @@ struct LaunchFlight {
     }
 
     private let motion: Motion
+    /// Every side of the flight, as a share of the icon's side: 1 from the pointer; a bounce's ending passes its icon's
+    /// side then, so an inflated icon swells on from where it is instead of snapping back first.
+    private var size: CGFloat = 1
 
     fileprivate init(motion: Motion) {
         self.motion = motion
+    }
+
+    /// This flight with every side scaled by `size`.
+    func sized(_ size: CGFloat) -> LaunchFlight {
+        var flight = self
+        flight.size = size
+        return flight
     }
 
     /// The numbers come from `LaunchTuning`, so the Debug-only tuner can change them live.
@@ -108,6 +118,12 @@ struct LaunchFlight {
 
     /// `u` is elapsed time over the duration, 0...1.
     fileprivate func pose(at u: CGFloat) -> Pose {
+        var pose = unsizedPose(at: u)
+        pose.side *= size
+        return pose
+    }
+
+    private func unsizedPose(at u: CGFloat) -> Pose {
         let tuning = LaunchTuning.current
         switch motion {
         case .fadeInPlace:

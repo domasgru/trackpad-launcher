@@ -245,7 +245,7 @@ struct TunerView: View {
                 knob("Easing", \.bounce.inflateCurve, 1.2...6, step: 0.1,
                      hint: "low: quick puff, long slow swell; high: rounder, settles sooner")
                 knob("Keep growing", \.bounce.creep, 0.01...0.5, step: 0.01,
-                     hint: "share of the icon size added after that; above 0.2 blurs")
+                     hint: "share of the icon size added after that")
                 knob("Growing time", \.bounce.creepTime, 0.5...20, step: 0.1, unit: "s",
                      hint: "from the icon size until it stops; no pause between")
             }
