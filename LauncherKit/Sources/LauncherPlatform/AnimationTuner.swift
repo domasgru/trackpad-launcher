@@ -8,19 +8,20 @@ import Synchronization
 /// The tuning Debug builds' flights read. Starts as the shipped one; the tuner writes it.
 let tunerOverride = Mutex(LaunchTuning.shipped)
 
-/// Debug builds only: a floating window with a slider per `LaunchTuning` knob, for polishing the launch animation.
-/// Changes apply to the next gesture at once. The current tuning and named presets persist in user defaults. To
+/// Debug builds only: a floating window with a slider per `LaunchTuning` knob, for polishing the launch animation and
+/// the launch bounce. Changes apply to the next gesture or bounce at once. The current tuning and named presets persist in user defaults. To
 /// ship a tuning, copy its values into `LaunchTuning`'s defaults.
 @MainActor final class AnimationTuner {
     private let panel: NSPanel
 
-    init(preview: @escaping @MainActor () -> Void) {
+    init(preview: @escaping @MainActor () -> Void, previewBounce: @escaping @MainActor (Bool) -> Void) {
         let model = TunerModel()
-        let content = NSHostingView(rootView: TunerView(model: model, preview: preview))
+        let content = NSHostingView(
+            rootView: TunerView(model: model, preview: preview, previewBounce: previewBounce))
         panel = TunerPanel(
             contentRect: CGRect(x: 0, y: 0, width: 420, height: 760),
             styleMask: [.titled, .resizable, .utilityWindow, .miniaturizable], backing: .buffered, defer: false)
-        panel.title = "Launch animation tuner"
+        panel.title = "Launch animation & bounce tuner"
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
@@ -42,6 +43,14 @@ let tunerOverride = Mutex(LaunchTuning.shipped)
 private final class TunerPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    override init(
+        contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing backingStoreType: NSWindow.BackingStoreType,
+        defer flag: Bool
+    ) {
+        super.init(contentRect: contentRect, styleMask: style, backing: backingStoreType, defer: flag)
+        acceptsMouseMovedEvents = true
+    }
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown {
@@ -149,6 +158,9 @@ struct TuningPreset: Codable, Identifiable, Equatable {
 struct TunerView: View {
     @Bindable var model: TunerModel
     let preview: @MainActor () -> Void
+    /// On: bounces Finder's icon at the pointer, or restarts it with the current tuning. Off: ends it.
+    let previewBounce: @MainActor (Bool) -> Void
+    @State private var isPreviewingBounce = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -195,6 +207,7 @@ struct TunerView: View {
                 } footer: {
                     Text("Applies from the next swipe. Off: 12 mm of finger per icon, no acceleration.")
                 }
+                bounceSection
                 presetsSection
             }
             .formStyle(.grouped)
@@ -208,6 +221,52 @@ struct TunerView: View {
             .padding(12)
         }
         .frame(minWidth: 380, minHeight: 500)
+    }
+
+    private var bounceSection: some View {
+        Section {
+            Picker("Animation", selection: $model.tuning.bounce.style) {
+                Text("Jump").tag(LaunchTuning.Bounce.Style.jump)
+                Text("Inflate").tag(LaunchTuning.Bounce.Style.inflate)
+            }
+            .pickerStyle(.segmented)
+            switch model.tuning.bounce.style {
+            case .jump:
+                knob("Jump height", \.bounce.height, 0...80, step: 1, unit: "pt")
+                knob("Time up", \.bounce.timeUp, 0.05...1, step: 0.01, unit: "s")
+                knob("Time down", \.bounce.timeDown, 0.05...1, step: 0.01, unit: "s")
+                knob("Rest", \.bounce.rest, 0...1, step: 0.01, unit: "s", hint: "on the ground between jumps")
+                knob("Squash", \.bounce.squash, 0...0.5, step: 0.01, hint: "height lost on landing; 0 = none")
+            case .inflate:
+                knob("Start size", \.bounce.inflateFrom, 1...56, step: 1, unit: "pt",
+                     hint: "the icon's side when it appears")
+                knob("Inflate time", \.bounce.inflateTime, 0.05...3, step: 0.01, unit: "s",
+                     hint: "to the icon size, without slowing to a stop")
+                knob("Easing", \.bounce.inflateCurve, 1.2...6, step: 0.1,
+                     hint: "low: quick puff, long slow swell; high: rounder, settles sooner")
+                knob("Keep growing", \.bounce.creep, 0.01...0.5, step: 0.01,
+                     hint: "share of the icon size added after that")
+                knob("Growing time", \.bounce.creepTime, 0.5...20, step: 0.1, unit: "s",
+                     hint: "from the icon size until it stops; no pause between")
+            }
+            knob("Gap", \.bounce.gap, 0...60, step: 1, unit: "pt", hint: "between the pointer tip and the icons")
+            knob("Offset", \.bounce.offset, -100...100, step: 1, unit: "pt", hint: "sideways from the tip")
+            knob("Trailing", \.bounce.trailing, 0...1, step: 0.01, unit: "s",
+                 hint: "time to catch up with the pointer; 0 = glued")
+            knob("Spacing", \.bounce.spacing, 0...40, step: 1, unit: "pt", hint: "between icons")
+            knob("Fade out", \.bounce.fadeOut, 0.05...1, step: 0.01, unit: "s", hint: "a quiet end")
+            knob("Slide", \.bounce.slide, 0.05...1, step: 0.01, unit: "s", hint: "others closing up when one ends")
+            knob("Pulse low", \.bounce.pulseLow, 0...1, step: 0.01, hint: "Reduce motion: dimmest opacity")
+            knob("Pulse period", \.bounce.pulsePeriod, 0.3...4, step: 0.05, unit: "s", hint: "Reduce motion")
+            Toggle("Preview bounce", isOn: $isPreviewingBounce)
+                .onChange(of: isPreviewingBounce) { _, isOn in previewBounce(isOn) }
+                .onChange(of: model.tuning) { if isPreviewingBounce { previewBounce(true) } }
+                .onDisappear { if isPreviewingBounce { previewBounce(false) } }
+        } header: {
+            Text("Launch bounce")
+        } footer: {
+            Text("Applies from the next bounce. Preview keeps Finder's icon bouncing at the pointer, restarting it on every change, and floats it away when turned off.")
+        }
     }
 
     private var presetsSection: some View {

@@ -71,6 +71,7 @@ import LauncherCore
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.hardware.feedback.isEmpty)
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
 
         world.launcher.setAssignment(.app(world.app("Arc")), for: .two)
         #expect(world.launcher.app(for: .two) == .present(world.app("Arc")))

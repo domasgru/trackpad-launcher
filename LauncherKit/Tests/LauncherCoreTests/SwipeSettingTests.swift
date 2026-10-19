@@ -6,7 +6,7 @@ import LauncherCore
     private let swipeOffHint = Copy.gestureHint(for: .right, swipe: false)
 
     private func nothingHappened(_ world: World) -> Bool {
-        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty
+        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty && world.system.bounces.isEmpty
     }
 
     @Test func turningTheSwipeOffShowsNoSwitcherAndTheHintFollowsAtOnceInBothDirections() {

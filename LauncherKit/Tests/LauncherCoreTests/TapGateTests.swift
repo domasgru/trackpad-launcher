@@ -319,6 +319,7 @@ import LauncherCore
         #expect(!world.hardware.isGatedPortOn)
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
         #expect(world.system.windows.raised.isEmpty)
         #expect(world.hardware.pulses.isEmpty)
         #expect(world.hardware.windowSwipeAnswers.isEmpty)

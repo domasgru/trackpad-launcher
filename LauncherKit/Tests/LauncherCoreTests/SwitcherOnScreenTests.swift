@@ -10,7 +10,7 @@ import LauncherCore
     private func names(_ switcher: Switcher?) -> [String]? { switcher?.row.map(\.name) }
 
     private func nothingHappened(_ world: World) -> Bool {
-        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty
+        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty && world.system.bounces.isEmpty
     }
 
     // MARK: Drift through the app
@@ -205,6 +205,7 @@ import LauncherCore
             ])
         #expect(world.hardware.feedback == [trackpad.id])
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
         #expect(world.launcher.switcher == nil)
         #expect(!world.launcher.isWindowOpen)
     }
@@ -418,6 +419,7 @@ import LauncherCore
                 .init(haptic: .lightTick, trackpad: trackpad.id), .init(haptic: .gesture, trackpad: trackpad.id),
             ])
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
         #expect(world.launcher.switcher == nil)
         #expect(!world.launcher.isWindowOpen)
     }

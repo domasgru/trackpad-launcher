@@ -8,7 +8,7 @@ import LauncherCore
     private func rest() -> TouchScript { TouchScript(.macBook14).land(fingers: 2).wait(.milliseconds(150)) }
 
     private func nothingHappened(_ world: World) -> Bool {
-        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty
+        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty && world.system.bounces.isEmpty
             && world.launcher.switcher == nil
     }
 
@@ -26,6 +26,7 @@ import LauncherCore
         #expect(world.system.broughtToFront == [world.app("Mail")])
         #expect(world.hardware.pulses == [.init(haptic: .gesture, trackpad: trackpad.id)])
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
         #expect(world.launcher.switcher == nil)
         #expect(!world.launcher.isWindowOpen)
 

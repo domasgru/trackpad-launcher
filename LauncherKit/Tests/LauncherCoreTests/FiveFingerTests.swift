@@ -10,6 +10,7 @@ import LauncherCore
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Slack")), for: .five)
         world.launcher.setAssignment(.app(world.app("Spotify")), for: .four)
+        world.startProcess("Slack")
 
         let frames = thumb.tap(fingers: 5, stagger: .milliseconds(40), hold: .milliseconds(100)).frames
         world.hardware.touch(frames, on: trackpad.id)
@@ -32,6 +33,7 @@ import LauncherCore
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.hardware.feedback.isEmpty)
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
     }
 
     @Test func aFreshInstallHasFiveUnassignedRowsOneToFiveInOrder() {

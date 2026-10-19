@@ -179,6 +179,7 @@ import LauncherCore
         #expect(!relaunched.isLaunchAnimationOn)
         #expect(world.hardware.feedback.count == 1)
         #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.bounces.isEmpty)
     }
 
     @Test func turningTheSwipeOffSurvivesARelaunchAndAnOlderRecordLoadsWithTheSwipeOn() {

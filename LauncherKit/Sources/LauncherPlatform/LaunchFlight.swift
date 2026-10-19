@@ -3,9 +3,36 @@ import QuartzCore
 
 /// A connected display as the launch animation sees it: its frame in global screen coordinates (y up) and its
 /// backing scale.
-struct LaunchDisplay {
+struct LaunchDisplay: Equatable {
     let frame: CGRect
     let scale: CGFloat
+}
+
+extension LaunchDisplay {
+    /// AppKit's own rule for which display holds the point; the nearest display when none does.
+    static func containing(_ point: CGPoint, among displays: [LaunchDisplay]) -> LaunchDisplay? {
+        displays.first { NSMouseInRect(point, $0.frame, false) }
+            ?? displays.min { distance(from: point, to: $0.frame) < distance(from: point, to: $1.frame) }
+    }
+
+    private static func distance(from point: CGPoint, to rect: CGRect) -> CGFloat {
+        let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
+        let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
+        return (dx * dx + dy * dy).squareRoot()
+    }
+}
+
+/// Where the pointer is and which displays exist, read now: what a bounce reads when it starts and on every move.
+struct ScreenRead {
+    let pointer: CGPoint
+    let displays: [LaunchDisplay]
+
+    /// `NSEvent.mouseLocation` and `NSScreen.screens`.
+    @MainActor static func now() -> ScreenRead {
+        ScreenRead(
+            pointer: NSEvent.mouseLocation,
+            displays: NSScreen.screens.map { LaunchDisplay(frame: $0.frame, scale: $0.backingScaleFactor) })
+    }
 }
 
 /// Draws launch flights, and remembers the sides of the last two moving ones so the same side never comes up three
@@ -55,9 +82,19 @@ struct LaunchFlight {
     }
 
     private let motion: Motion
+    /// Every side of the flight, as a share of the icon's side: 1 from the pointer; a bounce's ending passes its icon's
+    /// side then, so an inflated icon swells on from where it is instead of snapping back first.
+    private var size: CGFloat = 1
 
     fileprivate init(motion: Motion) {
         self.motion = motion
+    }
+
+    /// This flight with every side scaled by `size`.
+    func sized(_ size: CGFloat) -> LaunchFlight {
+        var flight = self
+        flight.size = size
+        return flight
     }
 
     /// The numbers come from `LaunchTuning`, so the Debug-only tuner can change them live.
@@ -81,6 +118,12 @@ struct LaunchFlight {
 
     /// `u` is elapsed time over the duration, 0...1.
     fileprivate func pose(at u: CGFloat) -> Pose {
+        var pose = unsizedPose(at: u)
+        pose.side *= size
+        return pose
+    }
+
+    private func unsizedPose(at u: CGFloat) -> Pose {
         let tuning = LaunchTuning.current
         switch motion {
         case .fadeInPlace:
@@ -114,7 +157,7 @@ struct LaunchFlight {
     /// Where and how the icon moves for a pointer at `pointer`, in global screen coordinates (y up).
     /// Nil when there is no display, or nothing of the flight's reach is left on the pointer's display.
     func staged(at pointer: CGPoint, among displays: [LaunchDisplay]) -> LaunchStage? {
-        guard let display = Self.display(for: pointer, among: displays) else { return nil }
+        guard let display = LaunchDisplay.containing(pointer, among: displays) else { return nil }
         let start = CGPoint(
             x: (pointer.x * display.scale).rounded() / display.scale,
             y: (pointer.y * display.scale).rounded() / display.scale)
@@ -126,18 +169,6 @@ struct LaunchFlight {
         return LaunchStage(
             frame: frame, scale: display.scale, iconSide: Self.iconSide, iconCentre: centre,
             animations: Self.animations(poses, from: centre))
-    }
-
-    /// AppKit's own rule for which display holds the pointer; the nearest display when none does.
-    private static func display(for pointer: CGPoint, among displays: [LaunchDisplay]) -> LaunchDisplay? {
-        displays.first { NSMouseInRect(pointer, $0.frame, false) }
-            ?? displays.min { distance(from: pointer, to: $0.frame) < distance(from: pointer, to: $1.frame) }
-    }
-
-    private static func distance(from point: CGPoint, to rect: CGRect) -> CGFloat {
-        let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
-        let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
-        return (dx * dx + dy * dy).squareRoot()
     }
 
     /// The box holding a pose's square, rotated.

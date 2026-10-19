@@ -195,6 +195,16 @@ extension World {
         system.frontmost = name.map { app($0) }
     }
 
+    /// The launch of `name` reports `progress`, as the adapter pushes it.
+    func report(_ progress: LaunchProgress, for name: String) {
+        system.report(progress, for: Self.bundleID(name))
+    }
+
+    /// macOS lists a process for `name` that ⌘-Tab does not show: a menu bar app, or an app still launching.
+    func startProcess(_ name: String) {
+        system.processes.insert(Self.bundleID(name))
+    }
+
     /// What the next swipe reads as the ⌘-Tab apps, in order. Entries need not be in the catalog's roots.
     func makeRunning(_ entries: [AppEntry]) {
         system.running = entries
