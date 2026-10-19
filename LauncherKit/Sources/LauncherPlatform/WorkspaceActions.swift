@@ -101,14 +101,16 @@ import ServiceManagement
     #if DEBUG
     private var tuner: AnimationTuner?
 
-    /// Debug builds only. Opens the launch animation tuner; its previews play Finder's icon at the pointer.
+    /// Debug builds only. Opens the launch animation and bounce tuner; its previews play Finder's icon at the pointer.
 
     public func showAnimationTuner() {
         if tuner == nil {
             let finder = AppEntry(
                 bundleID: BundleID(rawValue: "com.apple.finder"), name: "Finder",
                 url: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"))
-            tuner = AnimationTuner { [overlay] in overlay.play(for: finder) }
+            tuner = AnimationTuner(
+                preview: { [overlay] in overlay.play(for: finder) },
+                previewBounce: { [bounces] in bounces.preview(finder, for: .seconds(3)) })
         }
         tuner?.show()
     }

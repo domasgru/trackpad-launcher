@@ -84,10 +84,33 @@ extension LaunchTuning: Codable {
         swipeFollowsCursor = try value(.swipeFollowsCursor, s.swipeFollowsCursor)
         swipePointsPerStep = try value(.swipePointsPerStep, s.swipePointsPerStep)
         swipeTrackingSpeed = try value(.swipeTrackingSpeed, s.swipeTrackingSpeed)
+        bounce = try value(.bounce, s.bounce)
     }
 }
 
-extension LaunchTuning.Bounce: Codable {}
+extension LaunchTuning.Bounce: Codable {
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func value(_ key: CodingKeys, _ fallback: Double) throws -> Double {
+            try c.decodeIfPresent(Double.self, forKey: key) ?? fallback
+        }
+        let s = LaunchTuning.Bounce()
+        self.init()
+        height = try value(.height, s.height)
+        timeUp = try value(.timeUp, s.timeUp)
+        timeDown = try value(.timeDown, s.timeDown)
+        rest = try value(.rest, s.rest)
+        squash = try value(.squash, s.squash)
+        gap = try value(.gap, s.gap)
+        offset = try value(.offset, s.offset)
+        trailing = try value(.trailing, s.trailing)
+        spacing = try value(.spacing, s.spacing)
+        fadeOut = try value(.fadeOut, s.fadeOut)
+        slide = try value(.slide, s.slide)
+        pulseLow = try value(.pulseLow, s.pulseLow)
+        pulsePeriod = try value(.pulsePeriod, s.pulsePeriod)
+    }
+}
 #endif
 
 extension LaunchTuning {
