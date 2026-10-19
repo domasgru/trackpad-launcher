@@ -235,13 +235,13 @@ public final class Launcher {
         hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, slides: run.slides, swaps: run.swaps)
     }
 
-    private enum Visual { case launchBounce, launchAnimation, none }
+    private enum Visual { case launchBounce, launchAnimation, bringToFrontOnly }
 
     /// Reads `hasProcess` only when it decides something.
     private func visual(for app: AppEntry) -> Visual {
-        guard settings.isLaunchAnimationOn else { return .none }
+        guard settings.isLaunchAnimationOn else { return .bringToFrontOnly }
         // The app's bounce still plays: it keeps the one bounce.
-        if bounces[app.bundleID] != nil { return .none }
+        if bounces[app.bundleID] != nil { return .bringToFrontOnly }
         return system.hasProcess(app.bundleID) ? .launchAnimation : .launchBounce
     }
 
@@ -261,7 +261,7 @@ public final class Launcher {
             system.bringToFront(app)
             // After bring to front, so whatever the animation costs lands on the icon, never on the app.
             system.playLaunchAnimation(for: app)
-        case .none:
+        case .bringToFrontOnly:
             system.bringToFront(app)
         }
         window = .closed

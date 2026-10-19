@@ -121,14 +121,14 @@ private func opacities(_ motion: BounceMotion, sourceLocation: SourceLocation = 
 
     @Test func theSlideStartsAtTheOldRestAndEndsAtTheNewOneEasingOut() throws {
         let slide = try #require(
-            BounceRow.slide(from: CGPoint(x: 664, y: 408), to: CGPoint(x: 700, y: 408), over: 0.2))
+            BounceRow.slide(from: CGPoint(x: 664, y: 408), to: CGPoint(x: 700, y: 408), tuning: shipped))
         #expect(slide.keyPath == "position")
         #expect(slide.isAdditive)
         #expect((slide.fromValue as? NSValue)?.pointValue == CGPoint(x: -36, y: 0))
         #expect((slide.toValue as? NSValue)?.pointValue == .zero)
         #expect(slide.duration == 0.2)
         #expect(slide.timingFunction?.easesOut == true)
-        #expect(BounceRow.slide(from: CGPoint(x: 700, y: 408), to: CGPoint(x: 700, y: 408), over: 0.2) == nil)
+        #expect(BounceRow.slide(from: CGPoint(x: 700, y: 408), to: CGPoint(x: 700, y: 408), tuning: shipped) == nil)
     }
 
     @Test func gapOffsetAndSpacingMoveTheRowAndNothingElse() throws {
@@ -257,7 +257,9 @@ private func opacities(_ motion: BounceMotion, sourceLocation: SourceLocation = 
     }
 
     @Test func slideSetsTheSlidesLength() throws {
-        let slide = try #require(BounceRow.slide(from: .zero, to: CGPoint(x: 1, y: 0), over: 0.4))
+        var tuning = shipped
+        tuning.slide = 0.4
+        let slide = try #require(BounceRow.slide(from: .zero, to: CGPoint(x: 1, y: 0), tuning: tuning))
         #expect(slide.duration == 0.4)
     }
 }

@@ -27,15 +27,15 @@ struct BounceRow: Equatable {
         }
     }
 
-    /// The re-flow: an additive position animation from `old − new` to zero over `duration`, easing out; nil when the
+    /// The re-flow: an additive position animation from `old − new` to zero over `tuning.slide`, easing out; nil when the
     /// rest did not move. Additive, so pointer moves during the slide compose with it.
-    static func slide(from old: CGPoint, to new: CGPoint, over duration: CFTimeInterval) -> CABasicAnimation? {
+    static func slide(from old: CGPoint, to new: CGPoint, tuning: LaunchTuning.Bounce) -> CABasicAnimation? {
         guard old != new else { return nil }
         let animation = CABasicAnimation(keyPath: "position")
         animation.isAdditive = true
         animation.fromValue = NSValue(point: CGPoint(x: old.x - new.x, y: old.y - new.y))
         animation.toValue = NSValue(point: .zero)
-        animation.duration = duration
+        animation.duration = tuning.slide
         animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
         return animation
     }

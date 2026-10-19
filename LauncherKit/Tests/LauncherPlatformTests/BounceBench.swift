@@ -68,10 +68,7 @@ import Testing
         self.pointer = pointer
         actions = WorkspaceActions(
             screen: {
-                ScreenRead(
-                    pointer: pointer.location,
-                    displays: pointer.displays
-                        ?? NSScreen.screens.map { LaunchDisplay(frame: $0.frame, scale: $0.backingScaleFactor) })
+                ScreenRead(pointer: pointer.location, displays: pointer.displays ?? ScreenRead.now().displays)
             }, promptsUser: false)
         log = ProgressLog(actions)
     }
@@ -89,7 +86,7 @@ import Testing
 
     /// The display holding `point`, as the system's screens answer.
     static func display(holding point: CGPoint) -> CGRect {
-        (NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) } ?? NSScreen.screens[0]).frame
+        LaunchDisplay.containing(point, among: ScreenRead.now().displays)?.frame ?? .zero
     }
 
     func entry(_ bundle: ProbeBundles.Bundle) -> AppEntry {
@@ -137,10 +134,12 @@ func elapsed(from start: ContinuousClock.Instant, to end: ContinuousClock.Instan
     (end - start).seconds
 }
 
-/// Opens a bundle the way the Dock would and answers its process once macOS lists it.
-@MainActor func openLikeTheDock(_ bundle: ProbeBundles.Bundle) async -> NSRunningApplication? {
+/// Opens a bundle the way the Dock would and answers its process once macOS lists it, nil if that takes over `bound`.
+@MainActor func openLikeTheDock(
+    _ bundle: ProbeBundles.Bundle, within bound: Duration = .seconds(5)
+) async -> NSRunningApplication? {
     let configuration = NSWorkspace.OpenConfiguration()
     configuration.promptsUserIfNeeded = false
     NSWorkspace.shared.openApplication(at: bundle.url, configuration: configuration, completionHandler: nil)
-    return await ProbeBundles.listed(bundle, within: .seconds(5))
+    return await ProbeBundles.listed(bundle, within: bound)
 }

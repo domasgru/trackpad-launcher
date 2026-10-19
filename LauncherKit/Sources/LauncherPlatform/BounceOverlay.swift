@@ -8,18 +8,24 @@ import QuartzCore
 /// the icon out of the row into its own panel. Once the row is empty and the last ending's completion has run, nothing
 /// of ours runs.
 @MainActor final class BounceOverlay {
-    private let flights: LaunchOverlay
+    private let launchOverlay: LaunchOverlay
     /// The pointer and the displays, read at each start. `ScreenRead.now` in the app.
     private let screen: @MainActor () -> ScreenRead
     /// Oldest first: the row's order, newest on the right.
     private var row: [Bouncing] = []
     /// The row's panel and the display it covers; nil while the row is empty.
-    private var stage: (panel: NSPanel, host: CALayer, display: LaunchDisplay)?
+    private var stage: RowStage?
     /// Quiet-fade panels, kept until their fade's completion (AppKit keeps closed panels in its window list).
     private var fading: Set<NSPanel> = []
     private var deadlineCount = 0
     /// The pointer-move monitors, which exist only while the row is not empty.
     private var monitors: [Any] = []
+
+    private struct RowStage {
+        let panel: NSPanel
+        let host: CALayer
+        let display: LaunchDisplay
+    }
 
     private struct Bouncing {
         let app: AppEntry
@@ -37,8 +43,8 @@ import QuartzCore
         var ranOut: (@MainActor () -> Void)?
     }
 
-    init(flights: LaunchOverlay, screen: @escaping @MainActor () -> ScreenRead) {
-        self.flights = flights
+    init(launchOverlay: LaunchOverlay, screen: @escaping @MainActor () -> ScreenRead) {
+        self.launchOverlay = launchOverlay
         self.screen = screen
     }
 
@@ -49,8 +55,7 @@ import QuartzCore
         let read = screen()
         let side = CGFloat(tuning.iconSide)
         let before = stage?.display
-        guard let layout = BounceRow(
-                count: row.count + 1, pointer: read.pointer, among: read.displays, side: side, tuning: tuning.bounce),
+        guard let layout = Self.layout(count: row.count + 1, read, tuning),
               let stage = stage(on: layout.display)
         else {
             Task { @MainActor in ranOut() }
@@ -63,15 +68,10 @@ import QuartzCore
         let rest = layout.rests[layout.rests.count - 1]
 
         let slot = CALayer()
-        slot.position = CGPoint(x: rest.x - origin.x, y: rest.y - origin.y)
-        let icon = CALayer()
-        icon.bounds = CGRect(x: 0, y: 0, width: side, height: side)
-        icon.anchorPoint = CGPoint(x: 0.5, y: 0)
-        icon.position = .zero
-        icon.contents = flights.bitmap(for: app, scale: layout.display.scale)
-        icon.contentsScale = layout.display.scale
-        icon.minificationFilter = .trilinear
-        icon.allowsEdgeAntialiasing = true
+        slot.position = Self.position(of: rest, from: origin)
+        let icon = Self.iconLayer(
+            side: side, contents: launchOverlay.bitmap(for: app, scale: layout.display.scale),
+            scale: layout.display.scale)
         for animation in BounceMotion(tuning: tuning.bounce, reduceMotion: reduceMotion).animations() {
             guard let keyPath = animation.keyPath else { continue }
             icon.add(animation, forKey: keyPath)
@@ -89,7 +89,7 @@ import QuartzCore
         let others = row
         row.append(bouncing)
         if row.count == 1 { follow() }
-        flow(others, to: Array(layout.rests.dropLast()), on: layout.display, from: before, slides: tuning.bounce.slide)
+        settle(others, to: Array(layout.rests.dropLast()), on: layout.display, from: before, tuning: tuning.bounce)
         CATransaction.commit()
     }
 
@@ -125,7 +125,7 @@ import QuartzCore
         CATransaction.setDisableActions(true)
         switch ending {
         case .launchAnimation:
-            flights.play(for: bouncing.app, from: CGPoint(x: frame.midX, y: frame.midY), among: read.displays)
+            launchOverlay.play(for: bouncing.app, from: CGPoint(x: frame.midX, y: frame.midY), among: read.displays)
         case .quietFade:
             if let display {
                 fade(bouncing, from: frame, rest: rest, transform: icon.transform, opacity: opacity, on: display)
@@ -133,11 +133,9 @@ import QuartzCore
         }
         bouncing.slot.removeFromSuperlayer()
         if let last = row.last,
-           let layout = BounceRow(
-            count: row.count, pointer: read.pointer, among: read.displays, side: CGFloat(last.tuning.iconSide),
-            tuning: last.tuning.bounce),
+           let layout = Self.layout(count: row.count, read, last.tuning),
            let moved = self.stage(on: layout.display) {
-            flow(row, to: layout.rests, on: moved.display, from: display, slides: last.tuning.bounce.slide)
+            settle(row, to: layout.rests, on: moved.display, from: display, tuning: last.tuning.bounce)
         }
         if row.isEmpty {
             unfollow()
@@ -184,9 +182,7 @@ import QuartzCore
     private func moved() {
         guard let last = row.last else { return }
         let read = screen()
-        guard let layout = BounceRow(
-                count: row.count, pointer: read.pointer, among: read.displays, side: CGFloat(last.tuning.iconSide),
-                tuning: last.tuning.bounce),
+        guard let layout = Self.layout(count: row.count, read, last.tuning),
               let before = stage?.display
         else { return }
 
@@ -200,12 +196,8 @@ import QuartzCore
         let origin = layout.display.frame.origin
         let trailing = last.tuning.bounce.trailing
         for (item, rest) in zip(row, layout.rests) {
-            let new = CGPoint(x: rest.x - origin.x, y: rest.y - origin.y)
-            if changed {
-                item.icon.contentsScale = layout.display.scale
-                item.icon.contents = flights.bitmap(for: item.app, scale: layout.display.scale)
-                item.slot.removeAnimation(forKey: "trail")
-            }
+            let new = Self.position(of: rest, from: origin)
+            if changed { item.slot.removeAnimation(forKey: "trail") }
             if trailing > 0, !changed, item.slot.position != new {
                 let from = item.slot.presentation()?.position ?? item.slot.position
                 item.slot.position = new
@@ -223,32 +215,61 @@ import QuartzCore
         CATransaction.commit()
     }
 
-    /// The row's panel on `display`: made and ordered in when the row has none, re-framed when it is on another display.
-    private func stage(on display: LaunchDisplay) -> (panel: NSPanel, host: CALayer, display: LaunchDisplay)? {
+    /// Where the row rests for this read, from the newest bounce's tuning.
+    private static func layout(count: Int, _ read: ScreenRead, _ tuning: LaunchTuning) -> BounceRow? {
+        BounceRow(
+            count: count, pointer: read.pointer, among: read.displays, side: CGFloat(tuning.iconSide),
+            tuning: tuning.bounce)
+    }
+
+    /// A global rest in the coordinates of a panel whose frame starts at `origin`.
+    private static func position(of rest: CGPoint, from origin: CGPoint) -> CGPoint {
+        CGPoint(x: rest.x - origin.x, y: rest.y - origin.y)
+    }
+
+    /// An icon's layer, anchored at its bottom centre.
+    private static func iconLayer(side: CGFloat, contents: Any?, scale: CGFloat) -> CALayer {
+        let layer = CALayer()
+        layer.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+        layer.anchorPoint = CGPoint(x: 0.5, y: 0)
+        layer.contents = contents
+        layer.contentsScale = scale
+        layer.minificationFilter = .trilinear
+        layer.allowsEdgeAntialiasing = true
+        return layer
+    }
+
+    /// The row's panel on `display`: made and ordered in when the row has none. When it is on another display it is
+    /// re-framed and every icon in the row takes that display's scale and bitmap.
+    private func stage(on display: LaunchDisplay) -> RowStage? {
         if let current = stage {
             guard current.display != display else { return current }
             current.panel.setFrame(display.frame, display: false)
-            stage = (current.panel, current.host, display)
+            for item in row {
+                item.icon.contentsScale = display.scale
+                item.icon.contents = launchOverlay.bitmap(for: item.app, scale: display.scale)
+            }
+            stage = RowStage(panel: current.panel, host: current.host, display: display)
             return stage
         }
         guard case let (panel, host)? = LaunchOverlay.makePanel(frame: display.frame) else { return nil }
         panel.orderFrontRegardless()
-        stage = (panel, host, display)
+        stage = RowStage(panel: panel, host: host, display: display)
         return stage
     }
 
     /// Moves each icon of `bouncing` to its new rest. Those that move on the same display slide there; a display
     /// change has no slide, because the panel itself moved.
-    private func flow(
+    private func settle(
         _ bouncing: [Bouncing], to rests: [CGPoint], on display: LaunchDisplay, from before: LaunchDisplay?,
-        slides duration: Double
+        tuning: LaunchTuning.Bounce
     ) {
         let origin = display.frame.origin
         for (item, rest) in zip(bouncing, rests) {
-            let new = CGPoint(x: rest.x - origin.x, y: rest.y - origin.y)
+            let new = Self.position(of: rest, from: origin)
             let old = item.slot.position
             item.slot.position = new
-            guard before == display, let slide = BounceRow.slide(from: old, to: new, over: duration) else { continue }
+            guard before == display, let slide = BounceRow.slide(from: old, to: new, tuning: tuning) else { continue }
             item.slot.add(slide, forKey: "slide")
         }
     }
@@ -263,16 +284,10 @@ import QuartzCore
         panel.orderFrontRegardless()
 
         let side = CGFloat(bouncing.tuning.iconSide)
-        let frozen = CALayer()
-        frozen.bounds = CGRect(x: 0, y: 0, width: side, height: side)
-        frozen.anchorPoint = CGPoint(x: 0.5, y: 0)
-        frozen.position = CGPoint(x: rest.x - visible.minX, y: rest.y - visible.minY)
+        let frozen = Self.iconLayer(side: side, contents: bouncing.icon.contents, scale: display.scale)
+        frozen.position = Self.position(of: rest, from: visible.origin)
         frozen.transform = transform
         frozen.opacity = 0
-        frozen.contents = bouncing.icon.contents
-        frozen.contentsScale = display.scale
-        frozen.minificationFilter = .trilinear
-        frozen.allowsEdgeAntialiasing = true
         host.addSublayer(frozen)
 
         CATransaction.begin()

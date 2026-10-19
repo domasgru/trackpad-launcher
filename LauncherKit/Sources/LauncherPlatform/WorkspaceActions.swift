@@ -23,7 +23,7 @@ import ServiceManagement
     /// macOS shows for a bundle it refuses to open.
     init(screen: @escaping @MainActor () -> ScreenRead, promptsUser: Bool = true) {
         overlay = LaunchOverlay()
-        bounces = BounceOverlay(flights: overlay, screen: screen)
+        bounces = BounceOverlay(launchOverlay: overlay, screen: screen)
         self.promptsUser = promptsUser
         // The first lookup in a process costs 1.65 ms, later ones under 0.1 ms: pay it now, not at a gesture.
         _ = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder")

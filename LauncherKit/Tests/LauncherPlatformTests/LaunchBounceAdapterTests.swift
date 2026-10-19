@@ -18,9 +18,9 @@ extension RealAppTests {
                 let id = BundleID(rawValue: slow.id)
                 #expect(!bench.actions.hasProcess(id), "a bundle never launched")
 
-                let app = await openLikeTheDock(slow)
+                let app = await openLikeTheDock(slow, within: .milliseconds(500))
 
-                #expect(app != nil, "macOS lists the process within 5 s")
+                #expect(app != nil, "macOS lists the process within 0.5 s")
                 #expect(bench.actions.hasProcess(id), "listed while it is still starting")
                 #expect(app?.isFinishedLaunching == false)
 

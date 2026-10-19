@@ -14,16 +14,36 @@ struct TunerCodingTests {
         "iconSide":60,"riseCurve":1.8,"popTime":0.075}}]
         """
 
+    /// The fixture's values, written out: 14 numbers and the reduce-motion flag make the 15 flight keys.
+    private static let flights: [(name: String, numbers: [String: Double])] = [
+        ("Preset 1", [
+            "duration": 0.34, "rise": 70, "shrinkCurve": 1.4000000000000001, "fadeCurve": 4, "minimumSway": 0.1,
+            "tiltCurve": 1, "maximumSway": 0.4, "swayCurve": 1.8, "shrink": 0.55, "maximumTilt": 4, "popSize": 0,
+            "iconSide": 60, "riseCurve": 1.8, "popTime": 0.04,
+        ]),
+        ("Preset 2", [
+            "duration": 0.34, "rise": 70, "shrinkCurve": 1.4000000000000001, "fadeCurve": 4, "minimumSway": 0.1,
+            "tiltCurve": 1, "maximumSway": 0.26, "swayCurve": 1.8, "shrink": 0.55, "maximumTilt": 4, "popSize": 0.2,
+            "iconSide": 60, "riseCurve": 1.8, "popTime": 0.075,
+        ]),
+    ]
+
     @Test func `a preset saved before the bounce keeps its flight and gets the shipped bounce`() throws {
         let presets = try JSONDecoder().decode([TuningPreset].self, from: Data(Self.presetsBeforeBounce.utf8))
 
         #expect(presets.map(\.name) == ["Preset 1", "Preset 2"])
-        #expect(presets[0].tuning.maximumSway == 0.4)
-        #expect(presets[0].tuning.popSize == 0)
-        #expect(presets[0].tuning.popTime == 0.04)
-        #expect(presets[1].tuning.maximumSway == 0.26)
-        #expect(presets[1].tuning.popTime == 0.075)
-        #expect(presets[1].tuning.rise == 70)
+        for (index, expected) in Self.flights.enumerated() {
+            let tuning = presets[index].tuning
+            let actual: [String: Double] = [
+                "duration": tuning.duration, "rise": tuning.rise, "shrinkCurve": tuning.shrinkCurve,
+                "fadeCurve": tuning.fadeCurve, "minimumSway": tuning.minimumSway, "tiltCurve": tuning.tiltCurve,
+                "maximumSway": tuning.maximumSway, "swayCurve": tuning.swayCurve, "shrink": tuning.shrink,
+                "maximumTilt": tuning.maximumTilt, "popSize": tuning.popSize, "iconSide": tuning.iconSide,
+                "riseCurve": tuning.riseCurve, "popTime": tuning.popTime,
+            ]
+            #expect(actual == expected.numbers, "\(expected.name)")
+            #expect(tuning.forceReduceMotion == false, "\(expected.name)")
+        }
         #expect(presets.allSatisfy { $0.tuning.bounce == LaunchTuning.Bounce() })
     }
 

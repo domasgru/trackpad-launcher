@@ -49,3 +49,18 @@
 - Finalize: the slices asked implementers to write doc changes that planning had already made → those slice items now check the code against the updated `docs/domain-model.md` and `docs/architecture.md`.
 - No runner dropped out.
 - Human review of the design: D2 signed off; D1 accepted for later features; O1/O7 accepted with R9 amended, no AX retry; R12 reads "about 10 seconds"; D3/O4 accepted pending manual checks.
+
+## Implement
+- S1–S5 implemented, one commit each. S2 was built in two dispatches (S2a pure parts, S2b wiring) and committed as one; a crash killed the S2b implementer mid-run, and a second one finished it from the working tree. No verification skill in the repo, so that step was skipped. The local `main` ref is stale, so the review used origin/main `eb90f96` as its fixed point.
+- The human saw "can't open … damaged or incomplete" alerts from a test opening a probe bundle with no executable → tests open with `promptsUserIfNeeded = false`; `WorkspaceActions(screen:promptsUser:)` is the test seam, the app keeps macOS's default.
+- S2b's three red platform rows were test-side: a racy off-main lookup in `ProbeBundles.listed`, a slow start too short under load (now `blockInWillFinish`), and a row panel expected at 132 pt wide instead of the display's frame.
+- After S4 the gate was red: probes leaked past their tests and showed up in `RunningAppsReaderTests`' read → separate commit: cleanup deletes the bundles first, kills every process under the probe directory and awaits each exit; every real-launch suite and the running-apps readers sit in one serialized parent suite `RealAppTests`. Three green runs.
+- S4: the test process runs no application loop, so `LaunchBounceFollowTests` runs `NSApplication.run()` briefly, stopped by its own timer and a wake event.
+- Review: BounceOverlay duplicated the icon-layer setup, the rest-to-panel conversion and the row layout, and spelled its stage tuple twice → private helpers and a `RowStage` struct.
+- Review: the Bounce decoder copied LaunchTuning's fallback helper → one Debug `KeyedDecodingContainer.decode(_:or:)`.
+- Review: mysterious names → `Visual.none` is `.bringToFrontOnly`, `flights` is `launchOverlay`, `flow` is `settle`.
+- Review: icons kept their old `contentsScale` when start or end moved the row to another display → `stage(on:)` is the one re-frame and re-scales every icon.
+- Review: `LaunchWatch` passed itself unretained to the AX observer with no cleanup if freed unstopped → `isolated deinit { stop() }`.
+- Review: T23 bypassed the `slide` knob → `BounceRow.slide(from:to:tuning:)` reads it, and the test sets it. T8 used a made-up app and checked too little → an assigned, never-tapped app and every history. T2's string kinds → an exhaustive enum. T26 checked 4 of 15 flight keys → all. T29 allowed 5 s → the plan's 0.5 s. Test helpers re-implemented `ScreenRead.now` and `LaunchDisplay.containing` → use them.
+- Review findings not taken: the Debug tuner panel's `acceptsMouseMovedEvents` (the plan's design, so the preview follows over the tuner); the one-bounce and report-once rules held in several layers (deliberate defence in depth); `LaunchWatch`'s window-list filter vs `FrontmostAppWindows`' (different filters); `ScreenRead` split into pointer and displays in two signatures (the plan's); `theCapIsTenSeconds` (pins a spec number).
+- Gate after fixes: `Scripts/test.sh` green, 659 tests in 79 suites, no probe left running.

@@ -57,58 +57,58 @@ struct LaunchTuning: Equatable, Sendable {
 }
 
 #if DEBUG
+extension KeyedDecodingContainer {
+    func decode<T: Decodable>(_ key: Key, or fallback: T) throws -> T {
+        try decodeIfPresent(T.self, forKey: key) ?? fallback
+    }
+}
+
 /// The tuner saves tunings as JSON. Keys missing from an older save keep their shipped values.
 extension LaunchTuning: Codable {
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        func value<T: Decodable>(_ key: CodingKeys, _ fallback: T) throws -> T {
-            try c.decodeIfPresent(T.self, forKey: key) ?? fallback
-        }
         let s = LaunchTuning.shipped
         self.init()
-        iconSide = try value(.iconSide, s.iconSide)
-        duration = try value(.duration, s.duration)
-        popSize = try value(.popSize, s.popSize)
-        popTime = try value(.popTime, s.popTime)
-        rise = try value(.rise, s.rise)
-        riseCurve = try value(.riseCurve, s.riseCurve)
-        shrink = try value(.shrink, s.shrink)
-        shrinkCurve = try value(.shrinkCurve, s.shrinkCurve)
-        fadeCurve = try value(.fadeCurve, s.fadeCurve)
-        maximumSway = try value(.maximumSway, s.maximumSway)
-        minimumSway = try value(.minimumSway, s.minimumSway)
-        swayCurve = try value(.swayCurve, s.swayCurve)
-        maximumTilt = try value(.maximumTilt, s.maximumTilt)
-        tiltCurve = try value(.tiltCurve, s.tiltCurve)
-        forceReduceMotion = try value(.forceReduceMotion, s.forceReduceMotion)
-        swipeFollowsCursor = try value(.swipeFollowsCursor, s.swipeFollowsCursor)
-        swipePointsPerStep = try value(.swipePointsPerStep, s.swipePointsPerStep)
-        swipeTrackingSpeed = try value(.swipeTrackingSpeed, s.swipeTrackingSpeed)
-        bounce = try value(.bounce, s.bounce)
+        iconSide = try c.decode(.iconSide, or: s.iconSide)
+        duration = try c.decode(.duration, or: s.duration)
+        popSize = try c.decode(.popSize, or: s.popSize)
+        popTime = try c.decode(.popTime, or: s.popTime)
+        rise = try c.decode(.rise, or: s.rise)
+        riseCurve = try c.decode(.riseCurve, or: s.riseCurve)
+        shrink = try c.decode(.shrink, or: s.shrink)
+        shrinkCurve = try c.decode(.shrinkCurve, or: s.shrinkCurve)
+        fadeCurve = try c.decode(.fadeCurve, or: s.fadeCurve)
+        maximumSway = try c.decode(.maximumSway, or: s.maximumSway)
+        minimumSway = try c.decode(.minimumSway, or: s.minimumSway)
+        swayCurve = try c.decode(.swayCurve, or: s.swayCurve)
+        maximumTilt = try c.decode(.maximumTilt, or: s.maximumTilt)
+        tiltCurve = try c.decode(.tiltCurve, or: s.tiltCurve)
+        forceReduceMotion = try c.decode(.forceReduceMotion, or: s.forceReduceMotion)
+        swipeFollowsCursor = try c.decode(.swipeFollowsCursor, or: s.swipeFollowsCursor)
+        swipePointsPerStep = try c.decode(.swipePointsPerStep, or: s.swipePointsPerStep)
+        swipeTrackingSpeed = try c.decode(.swipeTrackingSpeed, or: s.swipeTrackingSpeed)
+        bounce = try c.decode(.bounce, or: s.bounce)
     }
 }
 
 extension LaunchTuning.Bounce: Codable {
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        func value(_ key: CodingKeys, _ fallback: Double) throws -> Double {
-            try c.decodeIfPresent(Double.self, forKey: key) ?? fallback
-        }
         let s = LaunchTuning.Bounce()
         self.init()
-        height = try value(.height, s.height)
-        timeUp = try value(.timeUp, s.timeUp)
-        timeDown = try value(.timeDown, s.timeDown)
-        rest = try value(.rest, s.rest)
-        squash = try value(.squash, s.squash)
-        gap = try value(.gap, s.gap)
-        offset = try value(.offset, s.offset)
-        trailing = try value(.trailing, s.trailing)
-        spacing = try value(.spacing, s.spacing)
-        fadeOut = try value(.fadeOut, s.fadeOut)
-        slide = try value(.slide, s.slide)
-        pulseLow = try value(.pulseLow, s.pulseLow)
-        pulsePeriod = try value(.pulsePeriod, s.pulsePeriod)
+        height = try c.decode(.height, or: s.height)
+        timeUp = try c.decode(.timeUp, or: s.timeUp)
+        timeDown = try c.decode(.timeDown, or: s.timeDown)
+        rest = try c.decode(.rest, or: s.rest)
+        squash = try c.decode(.squash, or: s.squash)
+        gap = try c.decode(.gap, or: s.gap)
+        offset = try c.decode(.offset, or: s.offset)
+        trailing = try c.decode(.trailing, or: s.trailing)
+        spacing = try c.decode(.spacing, or: s.spacing)
+        fadeOut = try c.decode(.fadeOut, or: s.fadeOut)
+        slide = try c.decode(.slide, or: s.slide)
+        pulseLow = try c.decode(.pulseLow, or: s.pulseLow)
+        pulsePeriod = try c.decode(.pulsePeriod, or: s.pulsePeriod)
     }
 }
 #endif

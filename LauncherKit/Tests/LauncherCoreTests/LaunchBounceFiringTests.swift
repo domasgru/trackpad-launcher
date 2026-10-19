@@ -32,13 +32,18 @@ import LauncherCore
         #expect(feedbackWhenBouncing == [Trackpad.macBook14.id], "the pulse comes first, in the same turn")
     }
 
-    @Test(arguments: ["listed", "frontmost", "menuBar", "launchingFromTheDock"])
-    func aGestureForAnAppWithAProcessFloatsWhateverKindOfProcessItIs(kind: String) {
+    enum ProcessKind: CaseIterable {
+        case commandTab, frontmostOnly, menuBar, launchingFromTheDock
+    }
+
+    @Test(arguments: ProcessKind.allCases)
+    func aGestureForAnAppWithAProcessFloatsWhateverKindOfProcessItIs(kind: ProcessKind) {
         let world = world([("Arc", .one)], others: ["Mail"])
         switch kind {
-        case "listed": world.makeRunning(["Arc"])
-        case "frontmost": world.makeFrontmost("Arc")
-        default: world.startProcess("Arc")
+        case .commandTab: world.makeRunning(["Arc"])
+        case .frontmostOnly: world.makeFrontmost("Arc")
+        // Both are a process macOS lists that the ⌘-Tab list does not show.
+        case .menuBar, .launchingFromTheDock: world.startProcess("Arc")
         }
 
         world.tap(1)
@@ -120,7 +125,7 @@ import LauncherCore
     }
 
     @Test func everyBounceCarriesTheTenSecondCapAndAWindowAfterTheEndPlaysNothing() {
-        let world = world([("Xcode", .one), ("Slack", .two)])
+        let world = world([("Xcode", .one), ("Slack", .two), ("Mail", .three)])
         world.tap(1)
         world.tap(2)
         #expect(world.system.bounces.map(\.cap) == [tenSeconds, tenSeconds])
@@ -129,11 +134,16 @@ import LauncherCore
         world.report(.ranOut, for: "Xcode")
         #expect(world.system.bounceEndings == [.init(app: World.bundleID("Xcode"), ending: .launchAnimation)])
 
-        let before = world.system.bounceEndings
+        let bounces = world.system.bounces
+        let endings = world.system.bounceEndings
+        let launchAnimations = world.system.launchAnimations
+        let broughtToFront = world.system.broughtToFront
         world.report(.windowShown, for: "Xcode")
-        world.report(.windowShown, for: "Slack-never-bounced")
-        #expect(world.system.bounceEndings == before)
-        #expect(world.system.launchAnimations.isEmpty)
+        world.report(.windowShown, for: "Mail")
+        #expect(world.system.bounces == bounces)
+        #expect(world.system.bounceEndings == endings)
+        #expect(world.system.launchAnimations == launchAnimations)
+        #expect(world.system.broughtToFront == broughtToFront)
     }
 
     @Test(arguments: [LaunchProgress.windowShown, .wentNowhere, .ranOut])

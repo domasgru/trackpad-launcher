@@ -21,6 +21,8 @@ import LauncherCore
 
     init(report: @escaping @MainActor (LaunchProgress) -> Void) { self.report = report }
 
+    isolated deinit { stop() }
+
     /// macOS's answer, from any thread. Hops to the main actor with only the pid.
     nonisolated func opened(_ pid: pid_t?) {
         Task { @MainActor [weak self] in self?.adopt(pid) }
