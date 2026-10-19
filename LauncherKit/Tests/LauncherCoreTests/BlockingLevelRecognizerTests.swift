@@ -8,8 +8,7 @@ import LauncherCore
 
     /// Every frame's level from a fresh recognizer, checking on each that the two Bools follow the level.
     private func levels(_ frames: [TouchFrame], answering: Bool? = true) -> [Blocking] {
-        var recognizer = GestureRecognizer(
-            handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
+        var recognizer = makeRecognizer()
         return frames.map {
             let recognition = recognizer.step($0, answering: answering)
             #expect(recognition.blocksClicks == (recognition.blocking == .clicks))
@@ -18,8 +17,20 @@ import LauncherCore
         }
     }
 
+    private func makeRecognizer() -> GestureRecognizer {
+        GestureRecognizer(
+            handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
+    }
+
+    private static let thumbID = 100
+
     private func thumbIsGone(_ frame: TouchFrame) -> Bool {
-        !frame.touches.contains { $0.id.rawValue == 100 }
+        !frame.touches.contains { $0.id.rawValue == Self.thumbID }
+    }
+
+    /// The thumb is beyond the anchor corner (24.96 mm) plus the 2 mm release margin.
+    private func thumbIsPastTheRelease(_ frame: TouchFrame) -> Bool {
+        frame.touches.contains { $0.id.rawValue == Self.thumbID && $0.position.x * SurfaceSize.macBook14.widthMM > 26.96 }
     }
 
     @Test func noTouchesAreNone() {
@@ -161,8 +172,7 @@ import LauncherCore
         let script = thumb.land(fingers: 2).slide(byMM: (10, 0)).rollThumb(toMM: (40, 10)).lift()
             .land(fingers: 2).slide(byMM: (20, 0)).lift().liftThumb()
         let frames = script.frames
-        var recognizer = GestureRecognizer(
-            handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
+        var recognizer = makeRecognizer()
         let recognitions = frames.map { recognizer.step($0, answering: true) }
 
         let swipe = recognitions.compactMap(\.swipe)
@@ -190,21 +200,20 @@ import LauncherCore
         let script = thumb.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 5)).rollThumb(toMM: (40, 10))
             .wait(.milliseconds(100)).lift().liftThumb()
         let frames = script.frames
-        var recognizer = GestureRecognizer(
-            handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
+        var recognizer = makeRecognizer()
         let recognitions = frames.map { recognizer.step($0, answering: nil) }
 
         #expect(recognitions.compactMap(\.windowSwipe).filter { $0 == .began }.count == 1)
-        let rolled = frames.firstIndex { frame in
-            frame.touches.contains { $0.id.rawValue == 100 && $0.position.x * 124.8 > 28 }
-        }!
+        let rolled = frames.firstIndex(where: thumbIsPastTheRelease)!
         for (index, (frame, recognition)) in zip(frames, recognitions).enumerated() {
-            #expect(recognition.blocking != .clicks || index < rolled)
-            if frame.touches.count >= 3 && index >= rolled { #expect(recognition.blocking == .dockSwipes) }
+            if index >= rolled { #expect(recognition.blocking != .clicks, "clicks at frame \(index)") }
+            if frame.touches.count >= 3 {
+                #expect(recognition.blocking == (index < rolled ? .clicks : .dockSwipes), "frame \(index)")
+            }
             if frame.touches.count == 1 { #expect(recognition.blocking == .possible) }
             if frame.touches.isEmpty { #expect(recognition.blocking == .none) }
         }
-        #expect(recognitions[..<rolled].contains { $0.blocking == .clicks })
+        #expect(recognitions.compactMap(\.windowSwipe).filter { $0 == .began }.count == 1)
     }
 
     @Test func aThumbBlippingBackInsideTheReleaseMarginStillBlocksDockSwipes() {
@@ -216,8 +225,7 @@ import LauncherCore
             h.frame(atMS: 130, [h.contact(1, atMM: 62, 45), h.contact(2, atMM: 70, 45), h.contact(9, atMM: 26, 10)]),
             h.frame(atMS: 140),
         ]
-        var recognizer = GestureRecognizer(
-            handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
+        var recognizer = makeRecognizer()
         let recognitions = frames.map { recognizer.step($0, answering: true) }
         #expect(recognitions.map(\.blocking) == [.possible, .clicks, .dockSwipes, .dockSwipes, .dockSwipes, .none])
         #expect(recognitions.map(\.blocksClicks) == [false, true, false, false, false, false])
@@ -226,8 +234,7 @@ import LauncherCore
     @Test func aTouchWithNoThumbAfterAThumbTouchHasEndedIsNotBlocked() {
         let script = thumb.land(fingers: 2).slide(byMM: (10, 0)).lift().liftThumb()
             .land(fingers: 3, atMM: (50, 45)).slide(byMM: (40, 0), over: .milliseconds(300)).lift()
-        var recognizer = GestureRecognizer(
-            handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
+        var recognizer = makeRecognizer()
         let recognitions = script.frames.map { (touches: $0.touches.count, recognition: recognizer.step($0, answering: true)) }
         let emptied = recognitions.firstIndex { $0.touches == 0 }!
         #expect(recognitions[emptied...].contains { $0.touches == 3 })

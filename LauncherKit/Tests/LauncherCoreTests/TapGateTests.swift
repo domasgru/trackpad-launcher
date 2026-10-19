@@ -5,6 +5,10 @@ import LauncherCore
     private let trackpad = Trackpad.macBook14
     private let h = HandFrames()
     private var thumb: TouchScript { TouchScript(.macBook14).thumb(atMM: (10, 10)) }
+    private var rolledThumbAndFingersLandingAgain: TouchScript {
+        thumb.land(fingers: 2).slide(byMM: (10, 0)).rollThumb(toMM: (40, 10)).lift()
+            .land(fingers: 2).wait(.milliseconds(50))
+    }
 
     private func world() -> World { World.switcherWorld(accessGranted: true) }
 
@@ -278,16 +282,14 @@ import LauncherCore
 
     @Test func theGateStaysOpenThroughARolledThumbAndTheFingersLiftsUntilThePadIsEmpty() {
         let world = world()
-        let hand = thumb.land(fingers: 2).slide(byMM: (10, 0)).rollThumb(toMM: (40, 10)).lift()
-            .land(fingers: 2).wait(.milliseconds(50))
+        let hand = rolledThumbAndFingersLandingAgain
         let observed = world.playFrameByFrame(hand) { world.hardware.isGatedPortOn }
         #expect(observed.allSatisfy { $0 })
     }
 
     @Test func aDockSwipeOpeningAfterTheThumbRolledOutIsDroppedWholeAndHoldsTheGateToItsEnd() {
         let world = world()
-        let hand = thumb.land(fingers: 2).slide(byMM: (10, 0)).rollThumb(toMM: (40, 10)).lift()
-            .land(fingers: 2).wait(.milliseconds(50))
+        let hand = rolledThumbAndFingersLandingAgain
         world.play(hand)
         var offers = [world.hardware.offer(.dockSwipe(.mayBegin, .gesture))]
         let slid = hand.slide(byMM: (20, 0))
@@ -316,5 +318,11 @@ import LauncherCore
         #expect(world.hardware.offer(.dockSwipe(.ended, .gesture)) == .decided(.dockSwipe(.drop)))
         #expect(!world.hardware.isGatedPortOn)
         #expect(world.system.broughtToFront.isEmpty)
+        #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.windows.raised.isEmpty)
+        #expect(world.hardware.pulses.isEmpty)
+        #expect(world.hardware.windowSwipeAnswers.isEmpty)
+        #expect(world.hardware.pressVerdicts.isEmpty)
+        #expect(world.launcher.switcher == nil)
     }
 }

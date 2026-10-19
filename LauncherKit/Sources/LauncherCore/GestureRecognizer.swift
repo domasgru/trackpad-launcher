@@ -48,8 +48,8 @@ public enum Blocking: Int, Comparable, Sendable {
     /// blocked, but a verdict can appear on the next frame with none between, so the gated port must already be
     /// receiving events.
     case possible
-    /// A thumb with another contact down, its 3 s over or its landing unknown, or two or more contacts down in a thumb
-    /// touch: the system's swipes are blocked.
+    /// A thumb with another contact down, its 3 s over or its landing unknown, or two or more contacts down in a
+    /// thumb touch: the system's swipes are blocked.
     case dockSwipes
     /// Inside the blocking window, a confirmed swipe or window swipe, or a swap series: everything is blocked.
     case clicks
@@ -202,28 +202,28 @@ public struct GestureRecognizer: Sendable {
                 state = .swiping(swipe)
             }
         }
-        let rules: Blocking
+        let stateLevel: Blocking
         if case .swiping(let swipe) = state, swipe.isConfirmed {
-            rules = .clicks
+            stateLevel = .clicks
         } else if case .rest(let rest) = state, rest.isSeries {
-            rules = .clicks
+            stateLevel = .clicks
         } else if let thumb = state.thumb {
             if down.keys.contains(where: { $0 != thumb }) {
                 let isInWindow = book.landingTime(of: thumb).map {
                     frame.time - $0 < GestureRules.clickBlockingWindow
                 } ?? false
-                rules = isInWindow ? .clicks : .dockSwipes
+                stateLevel = isInWindow ? .clicks : .dockSwipes
             } else {
-                rules = .possible
+                stateLevel = .possible
             }
         } else if case .swiping = state {
-            rules = .possible
+            stateLevel = .possible
         } else {
-            rules = .none
+            stateLevel = .none
         }
-        isInThumbTouch = !down.isEmpty && (isInThumbTouch || rules >= .possible)
-        let floor: Blocking = !isInThumbTouch ? .none : down.count >= 2 ? .dockSwipes : .possible
-        return Recognition(event: event, blocking: max(rules, floor))
+        isInThumbTouch = !down.isEmpty && (isInThumbTouch || stateLevel >= .possible)
+        let thumbTouchLevel: Blocking = !isInThumbTouch ? .none : down.count >= 2 ? .dockSwipes : .possible
+        return Recognition(event: event, blocking: max(stateLevel, thumbTouchLevel))
     }
 
     /// The model's answer to the window swipe start reported on the frame at `began`. true confirms it: from the next
