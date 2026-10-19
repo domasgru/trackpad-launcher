@@ -34,7 +34,7 @@ private enum WindowClock {
 /// Windows ending a launch bounce, through real probe apps. The rows that need Accessibility are skipped without it.
 /// They extend the adapter suite so that they run one at a time with its rows: concurrent probes steal focus and
 /// slow each other's startup.
-extension LaunchBounceAdapterTests {
+extension RealAppTests.LaunchBounceAdapterTests {
     @MainActor private final class Reports {
         var seen: [LaunchProgress] = []
         var times: [ContinuousClock.Instant] = []

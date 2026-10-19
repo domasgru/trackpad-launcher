@@ -8,7 +8,7 @@ import Testing
 /// The row follows the pointer, driven by zero-motion moves posted at the pointer's own location while the injected
 /// read says where the tip is. Posting needs Accessibility, so the rows are skipped without it. They extend the
 /// adapter suite so that they run one at a time with its rows.
-extension LaunchBounceAdapterTests {
+extension RealAppTests.LaunchBounceAdapterTests {
     nonisolated private static var canPost: Bool { AXIsProcessTrusted() }
 
     private func postMove() {

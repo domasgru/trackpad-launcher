@@ -74,20 +74,55 @@ import Foundation
         return bundle
     }
 
+    /// Leaves no probe process, listed or not. The bundles go first, so a launch still on its way to being spawned has
+    /// nothing to spawn; then every process running from the probe directory is killed, whether or not macOS lists it
+    /// yet (one still starting up, or blocked in will-finish, is not), and its exit is awaited.
     private func cleanUp() async {
         for bundle in built {
-            for app in NSRunningApplication.runningApplications(withBundleIdentifier: bundle.id) {
-                app.terminate()
-                if await !Self.terminated(app, within: .seconds(2)) {
-                    app.forceTerminate()
-                    _ = await Self.terminated(app, within: .seconds(5))
-                }
-            }
             run(
                 "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
                 ["-u", bundle.url.path])
         }
         try? FileManager.default.removeItem(at: directory)
+        let listed = built.flatMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0.id) }
+        for _ in 0..<3 {
+            let pids = probeProcesses()
+            if pids.isEmpty { break }
+            for pid in pids { kill(pid, SIGKILL) }
+            for pid in pids { await Self.exited(pid, within: .seconds(5)) }
+        }
+        for app in listed { _ = await Self.terminated(app, within: .seconds(5)) }
+    }
+
+    /// The pids of processes whose command line is inside the probe directory.
+    private func probeProcesses() -> [pid_t] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        process.arguments = ["-f", directory.path]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return [] }
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return String(decoding: data, as: UTF8.self).split(separator: "\n").compactMap { pid_t($0) }
+    }
+
+    /// Returns once `pid` is gone or `bound` passes; the exit is a dispatch-source push.
+    nonisolated private static func exited(_ pid: pid_t, within bound: Duration) async {
+        let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .global())
+        let gone = AsyncStream<Void>.makeStream()
+        source.setEventHandler { gone.continuation.yield() }
+        source.resume()
+        if kill(pid, 0) != 0 { gone.continuation.yield() }
+        let timeout = Task {
+            try await Task.sleep(for: bound)
+            gone.continuation.yield()
+        }
+        var iterator = gone.stream.makeAsyncIterator()
+        _ = await iterator.next()
+        timeout.cancel()
+        source.cancel()
     }
 
     /// True when `app` exits before `bound`; the exit is awaited as a KVO push, never polled.
