@@ -3,40 +3,62 @@ import Foundation
 import LauncherCore
 import Synchronization
 
-/// The app's one event tap: an active session tap over mouse buttons, drags, pressure, scrolling and the system's
-/// gesture events, of which it acts only on Dock swipes.
+/// The app's event taps: two active session taps on one `userInteractive` thread. The press port listens for the
+/// tap's whole life; the gated port, over drags, pressure, scrolling and the system's gesture events (of which only
+/// Dock swipes are acted on), only while `TapFilters` says so, so ordinary pointing and scrolling never reach the app.
 /// It exists from the `run` that armed click blocking until the next `run`.
-/// Threads: installed and removed on main. Its callback runs on the tap's own `userInteractive` thread, whose run loop
-/// holds only this tap's source and ends when the tap is removed. That thread retains the ClickTap, so no callback
-/// outlives the object behind its `userInfo`.
+/// Threads: installed and removed on main. The callback, `follow()` and `recover()` run on the tap thread, the only
+/// caller of `tapEnable` on the gated port once running. Frame threads only read `holding` and call `wake()`. The
+/// thread retains the ClickTap, so no callback outlives the object behind its `userInfo`.
 final class ClickTap: Sendable {
-    /// Writer: the tap thread. Reader: frame threads.
-    private let filter = Mutex(ClickFilter())
-    /// Writer and reader: the tap thread.
-    private let scrollFilter = Mutex(ScrollFilter())
-    /// One filter per gesture event type, since a Dock swipe may arrive as both. Writer and reader: the tap thread.
-    private let dockSwipeFilters = Mutex<[UInt32: DockSwipeFilter]>([:])
-    /// Writer: main (install, remove). The tap thread only re-enables.
-    private let port = Mutex<Unchecked<CFMachPort>?>(nil)
-    /// Set by the tap thread; main stops it on remove.
+    /// Writer: the tap thread. Reader: frame threads (`holding`).
+    private let filters = Mutex(TapFilters())
+    /// Writer: main (install, remove). The tap thread switches `gated` and re-enables `presses`, under this lock.
+    private let ports = Mutex<Unchecked<(presses: CFMachPort, gated: CFMachPort)>?>(nil)
+    /// Writer: the tap thread, once, before its first turn. Readers: main (remove), frame threads (`wake`).
     private let runLoop = Mutex<Unchecked<CFRunLoop>?>(nil)
+    /// A source whose perform is `follow()`, signalled by frame threads. Signals coalesce; one before the loop runs is
+    /// honoured by the first `follow()`. Writer: main, once in `install`, before any frame thread can see the tap.
+    private let wakeUp = Mutex<Unchecked<CFRunLoopSource>?>(nil)
 
-    /// nil when the system refuses the tap (no Accessibility).
+    private init() {}
+
+    /// nil when the system refuses either tap (no Accessibility).
     @MainActor static func install() -> ClickTap? {
         let tap = ClickTap()
+        let userInfo = Unmanaged.passUnretained(tap).toOpaque()
         guard
-            let machPort = CGEvent.tapCreate(
+            let presses = CGEvent.tapCreate(
                 tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
-                eventsOfInterest: TapEvent.tapMask, callback: clickTapCallback,
-                userInfo: Unmanaged.passUnretained(tap).toOpaque())
+                eventsOfInterest: TapEvent.pressMask, callback: clickTapCallback, userInfo: userInfo)
         else { return nil }
-        tap.port.withLock { $0 = Unchecked(machPort) }
+        guard
+            let gated = CGEvent.tapCreate(
+                tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
+                eventsOfInterest: TapEvent.gatedMask, callback: clickTapCallback, userInfo: userInfo)
+        else {
+            CFMachPortInvalidate(presses)
+            return nil
+        }
+        CGEvent.tapEnable(tap: gated, enable: false)
+        var context = CFRunLoopSourceContext(
+            version: 0, info: userInfo, retain: nil, release: nil, copyDescription: nil, equal: nil, hash: nil,
+            schedule: nil, cancel: nil, perform: wakeUpPerform)
+        let source = CFRunLoopSourceCreate(nil, 0, &context)
+        tap.ports.withLock { $0 = Unchecked((presses, gated)) }
+        tap.wakeUp.withLock { $0 = source.map(Unchecked.init) }
         let thread = Thread { [tap] in
             let loop: CFRunLoop = CFRunLoopGetCurrent()
-            let source = tap.port.withLock { $0.map { CFMachPortCreateRunLoopSource(nil, $0.value, 0) } }
-            if let source { CFRunLoopAddSource(loop, source, .commonModes) }
+            let sources = tap.ports.withLock {
+                $0.map { ports in
+                    [ports.value.presses, ports.value.gated].map { CFMachPortCreateRunLoopSource(nil, $0, 0) }
+                }
+            }
+            for case let source? in sources ?? [] { CFRunLoopAddSource(loop, source, .commonModes) }
+            if let wakeUp = tap.wakeUp.withLock({ $0 }) { CFRunLoopAddSource(loop, wakeUp.value, .commonModes) }
             tap.runLoop.withLock { $0 = Unchecked(loop) }
-            // Without a source (removed before this thread started) the run loop returns at once.
+            tap.follow()
+            // Without a valid source (removed before this thread started) the run loop returns at once.
             CFRunLoopRun()
         }
         thread.name = "ClickTap"
@@ -46,45 +68,77 @@ final class ClickTap: Sendable {
     }
 
     /// Frame thread.
-    var holding: ClickFilter.Holding { filter.withLock { $0.holding } }
+    var holding: ClickFilter.Holding { filters.withLock { $0.holding } }
+
+    /// Frame thread, when its trackpad's `wantsTap` flipped. Never waits; a no-op after removal.
+    func wake() {
+        guard ports.withLock({ $0 != nil }) else { return }
+        guard let source = wakeUp.withLock({ $0 }) else { return }
+        CFRunLoopSourceSignal(source.value)
+        if let loop = runLoop.withLock({ $0 }) { CFRunLoopWakeUp(loop.value) }
+    }
 
     /// Main. Idempotent. Never relies on macOS to stop delivery after a revoke.
     @MainActor func remove() {
-        port.withLock {
-            if let port = $0?.value {
-                CGEvent.tapEnable(tap: port, enable: false)
-                CFMachPortInvalidate(port)
+        ports.withLock {
+            if let ports = $0?.value {
+                for port in [ports.presses, ports.gated] {
+                    CGEvent.tapEnable(tap: port, enable: false)
+                    CFMachPortInvalidate(port)
+                }
             }
             $0 = nil
         }
+        wakeUp.withLock { $0.map { CFRunLoopSourceInvalidate($0.value) } }
         runLoop.withLock { $0.map { CFRunLoopStop($0.value) } }
+    }
+
+    /// Tap thread: the trackpads as the real tap can see them, read before any of the tap's locks.
+    private func context() -> TapContext { TapContext.estimated(from: mergedBlocking()) }
+
+    /// Tap thread, also the wake-up source's perform.
+    fileprivate func follow() {
+        let context = context()
+        apply(filters.withLock { $0.follow(context) })
+    }
+
+    /// Tap thread, on a disabled notice, whether the system's or the echo of our own close: the notice only prompts a
+    /// reconcile against what the ports read now. Nothing when the ports are gone.
+    private func recover() {
+        guard
+            let states = ports.withLock({
+                $0.map { (presses: CGEvent.tapIsEnabled(tap: $0.value.presses), gated: CGEvent.tapIsEnabled(tap: $0.value.gated)) }
+            })
+        else { return }
+        let context = context()
+        let change = filters.withLock {
+            $0.portsWereDisabled(pressPortIsOn: states.presses, gatedPortIsOn: states.gated, in: context)
+        }
+        if !states.presses {
+            ports.withLock { $0.map { CGEvent.tapEnable(tap: $0.value.presses, enable: true) } }
+        }
+        apply(change)
+    }
+
+    /// Tap thread, after the filters' lock is released.
+    private func apply(_ change: GateChange?) {
+        guard let change else { return }
+        ports.withLock { $0.map { CGEvent.tapEnable(tap: $0.value.gated, enable: change == .open) } }
     }
 
     /// Tap thread.
     fileprivate func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            // Releases and scroll phases may have passed while the tap was disabled.
-            filter.withLock { $0.forgetHeldPresses() }
-            scrollFilter.withLock { $0.forgetGesture() }
-            dockSwipeFilters.withLock { $0 = [:] }
-            port.withLock { $0.map { CGEvent.tapEnable(tap: $0.value, enable: true) } }
+            recover()
             return .passUnretained(event)
         }
         guard let parsed = TapEvent(type, event) else { return .passUnretained(event) }
-        // Read once, before either filter lock, so no two locks are held at once.
-        let blocking = anyTrackpadBlocksClicks()
-        switch parsed {
-        case .pointer(let pointer):
-            return filter.withLock { $0.decide(pointer, trackpadBlocking: blocking) }.apply(to: event)
-        case .scroll(let scroll):
-            return scrollFilter.withLock { $0.decide(scroll, trackpadBlocking: blocking) }.apply(to: event)
-        case .dockSwipe(let phase):
-            // Its own flag: Dock swipes are blocked for as long as a thumb is anchored, not only inside the window.
-            let blockingDockSwipes = anyTrackpadBlocksDockSwipes()
-            return dockSwipeFilters.withLock {
-                $0[type.rawValue, default: DockSwipeFilter()].decide(phase, trackpadBlocking: blockingDockSwipes)
-            }.apply(to: event)
-        }
+        // Read before the filters' lock, so no two locks are held at once.
+        let context = context()
+        let decision = filters.withLock { $0.decide(parsed, in: context) }
+        // Before the verdict returns, so the gate is settled for the next event.
+        apply(decision.gate)
+        return decision.verdict.apply(to: event)
     }
 }
 
@@ -99,32 +153,41 @@ private let clickTapCallback: CGEventTapCallBack = { _, type, event, userInfo in
     return Unmanaged<ClickTap>.fromOpaque(userInfo).takeUnretainedValue().handle(type, event)
 }
 
-/// Everything the tap is told about, parsed. `PointerEvent` keeps its vocabulary: a press and what belongs to it.
-enum TapEvent: Equatable {
-    case pointer(PointerEvent)
-    case scroll(ScrollEvent)
-    /// The system's own trackpad swipe between desktops, or into Mission Control or App Exposé, on its way to the
-    /// Dock. Every other gesture event (pinch, rotate, an app's swipe) parses as nothing and passes untouched.
-    case dockSwipe(DockSwipePhase)
+/// The wake-up source's perform, on the tap thread. At file scope, like `clickTapCallback`: a closure written inside
+/// the main-actor `install` would be main-actor isolated, and Swift's runtime isolation check traps when the tap
+/// thread calls it.
+private let wakeUpPerform: @convention(c) (UnsafeMutableRawPointer?) -> Void = { info in
+    guard let info else { return }
+    Unmanaged<ClickTap>.fromOpaque(info).takeUnretainedValue().follow()
+}
 
-    /// The tap's whole vocabulary. The mask is built from this list, and a test parses one synthetic event of every
-    /// listed type, so the tap is never sent a type the parser does not read. Type 34 is NSEventTypePressure, which
-    /// has no public CGEventType case but is usable in a mask and as a rewrite target. Types 29 and 30 are the
-    /// system's gesture and Dock control events, also without public cases; a Dock swipe may arrive as either.
-    /// There are no keyboard or plain-move types.
-    static let tapTypes: [CGEventType] = [
+extension TapEvent {
+    /// The tap's whole vocabulary, in two lists. The masks are built from them, and a test parses one synthetic event
+    /// of every listed type, so the tap is never sent a type the parser does not read. Type 34 is
+    /// NSEventTypePressure, which has no public CGEventType case but is usable in a mask and as a rewrite target.
+    /// Types 29 and 30 are the system's gesture and Dock control events, also without public cases; a Dock swipe may
+    /// arrive as either. There are no keyboard or plain-move types.
+    static let pressTypes: [CGEventType] = [
         .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp,
+    ]
+    static let gatedTypes: [CGEventType] = [
         .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, CGEventType(rawValue: 34)!, .scrollWheel,
         CGEventType(rawValue: DockSwipeFields.gestureType)!, CGEventType(rawValue: DockSwipeFields.dockControlType)!,
     ]
-    static var tapMask: CGEventMask { tapTypes.reduce(0) { $0 | (CGEventMask(1) << CGEventMask($1.rawValue)) } }
+    static var pressMask: CGEventMask { mask(pressTypes) }
+    static var gatedMask: CGEventMask { mask(gatedTypes) }
+
+    private static func mask(_ types: [CGEventType]) -> CGEventMask {
+        types.reduce(0) { $0 | (CGEventMask(1) << CGEventMask($1.rawValue)) }
+    }
 
     init?(_ type: CGEventType, _ event: CGEvent) {
         if type == .scrollWheel {
             self = .scroll(ScrollEvent(event))
         } else if type.rawValue == DockSwipeFields.gestureType || type.rawValue == DockSwipeFields.dockControlType {
             guard let phase = DockSwipePhase(event) else { return nil }
-            self = .dockSwipe(phase)
+            let stream: DockSwipeStream = type.rawValue == DockSwipeFields.gestureType ? .gesture : .dockControl
+            self = .dockSwipe(phase, stream)
         } else if let pointer = PointerEvent(type, event) {
             self = .pointer(pointer)
         } else {
@@ -206,6 +269,16 @@ extension ScrollEvent {
         case (0, 2): self = .momentum(.changed)
         case (0, 3): self = .momentum(.ended)
         default: self = .unphased
+        }
+    }
+}
+
+extension TapVerdict {
+    func apply(to event: CGEvent) -> Unmanaged<CGEvent>? {
+        switch self {
+        case .pointer(let verdict): verdict.apply(to: event)
+        case .scroll(let verdict): verdict.apply(to: event)
+        case .dockSwipe(let verdict): verdict.apply(to: event)
         }
     }
 }

@@ -16,12 +16,20 @@ import Testing
         var all: [(event: TrackpadEvent, reply: (@Sendable (Bool) -> Void)?)] { events.withLock { $0 } }
     }
 
-    private func session(_ delivered: Delivered) -> DeviceSession {
+    /// A tap that records every wake-up and answers a fixed press summary.
+    private final class StubTap: TapLink {
+        private let counted = Mutex(0)
+        var wakes: Int { counted.withLock { $0 } }
+        var holding: ClickFilter.Holding { .withheld }
+        func wake() { counted.withLock { $0 += 1 } }
+    }
+
+    private func session(_ delivered: Delivered, tap: (any TapLink)? = nil) -> DeviceSession {
         DeviceSession(
             trackpad: TrackpadID(rawValue: 1),
             recognizer: GestureRecognizer(
                 handMode: .right, surface: Self.surface, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear),
-            pointerCurves: PointerCurve.builtInCurves, clickTap: nil, deliver: { delivered.append($0, $1) })
+            pointerCurves: PointerCurve.builtInCurves, tap: tap, deliver: { delivered.append($0, $1) })
     }
 
     private func touch(_ id: Int32, _ phase: Touch.Phase, _ x: Double, _ y: Double) -> Touch {
@@ -63,6 +71,7 @@ import Testing
     /// start, with each start's reply.
     private struct Played {
         var blocks: [Bool] = []
+        var levels: [Blocking] = []
         var starts: [Start] = []
         /// Whether every delivered event carried a reply exactly when it was a window swipe start.
         var onlyStartsCarryAReply = true
@@ -86,8 +95,36 @@ import Testing
             }
             answering(index, played.starts)
             played.blocks.append(session.blocksClicks)
+            played.levels.append(session.blocking)
         }
         return played
+    }
+
+    @Test func theTapIsWokenOnlyWhenTheTrackpadStartsOrStopsWantingIt() {
+        let tap = StubTap()
+        let delivered = Delivered()
+        let session = session(delivered, tap: tap)
+        var answered = 0
+        var wakes: [Int] = []
+        for frame in frames().all {
+            let before = tap.wakes
+            session.receive(frame)
+            for case (_, let reply?) in delivered.all.dropFirst(answered) { reply(true) }
+            answered = delivered.all.count
+            wakes.append(tap.wakes - before)
+        }
+        let before = tap.wakes
+        session.receive(TouchFrame(time: FrameTime(seconds: 9), touches: [], press: nil))
+        wakes.append(tap.wakes - before)
+        #expect(wakes.first == 1)
+        #expect(wakes.last == 1)
+        #expect(wakes.dropFirst().dropLast().allSatisfy { $0 == 0 })
+        #expect(tap.wakes == 2)
+    }
+
+    @Test func aSessionReadsItsTapsPressSummaryAndNoneWithoutATap() {
+        #expect(session(Delivered(), tap: StubTap()).holding == .withheld)
+        #expect(session(Delivered()).holding == nil)
     }
 
     /// The frame the first slide's fingers lift on.
@@ -117,6 +154,36 @@ import Testing
     @Test func aStartNeverAnsweredNeverBlocksClicks() {
         let played = play { _, _ in }
         #expect(played.blockedFrames.isEmpty)
+    }
+
+    /// The level on every frame that is not a finger frame, which only the thumb is down on.
+    private func thumbOnlyFrames(of played: Played) -> [Blocking] {
+        zip(frames().all, played.levels).filter { $0.0.touches.count == 1 }.map(\.1)
+    }
+
+    @Test func theLevelFollowsTheSlideWhenTheStartIsConfirmedAtOnce() {
+        let played = play { frame, starts in
+            if starts.count == 1, starts[0].frame == frame { starts[0].reply(true) }
+        }
+        let start = played.starts[0].frame
+        #expect(played.blocks == played.levels.map { $0 == .clicks })
+        #expect(played.levels[0] == .possible)
+        #expect(played.levels[1...start].allSatisfy { $0 == .dockSwipes })
+        #expect(played.levels[(start + 1)..<firstLift].allSatisfy { $0 == .clicks })
+        #expect(played.levels[firstLift...(firstLift + 1)].allSatisfy { $0 == .possible })
+    }
+
+    @Test(arguments: [false, true])
+    func aDeclinedOrUnansweredStartNeverReachesClicks(answered: Bool) {
+        let played = play { frame, starts in
+            if answered, starts.count == 1, starts[0].frame == frame { starts[0].reply(false) }
+        }
+        let start = played.starts[0].frame
+        #expect(played.blocks == played.levels.map { $0 == .clicks })
+        #expect(!played.levels.contains(.clicks))
+        #expect(played.levels[1...start].allSatisfy { $0 == .dockSwipes })
+        #expect(played.levels[0] == .possible)
+        #expect(thumbOnlyFrames(of: played).allSatisfy { $0 == .possible })
     }
 
     @Test func aConfirmationOfTheFirstStartArrivingAfterTheSecondStartNeverBlocksClicks() {

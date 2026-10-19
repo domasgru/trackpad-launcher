@@ -91,7 +91,7 @@ import LauncherCore
                 trackpad: trackpad.id,
                 recognizer: GestureRecognizer(handMode: handMode, surface: trackpad.surface, slides: slides, swaps: swaps, travel: .linear),
                 pointerCurves: CursorTravel.curves(of: framework.getService(ref)),
-                clickTap: clickTap,
+                tap: clickTap,
                 deliver: { [weak self] event, reply in
                     // The main queue is FIFO from one frame thread, so events keep their frame order. An event
                     // from a replaced session is dropped, reply and all: a stale swipe start could never be ended.

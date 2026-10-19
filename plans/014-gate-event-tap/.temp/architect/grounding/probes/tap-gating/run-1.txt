@@ -1,0 +1,12 @@
+AXIsProcessTrusted: true
+A no tap: process CPU for posting 2000 events = 0.350 ms (0.2 us/event)
+tap installed; enabled = true
+B enabled: callbacks = 2000 of 2000; tap thread CPU = 43.629 ms (21.8 us/event); process CPU = 1.717 ms; last type = 22
+C after disable from foreign thread: tapIsEnabled = false
+C disabled: callbacks = 0 of 2000; tap thread CPU = 0.000 ms; process CPU = 0.474 ms
+D re-enabled from foreign thread in 127 us; event posted right after: callbacks = 1 (1 expected); tapIsEnabled = true
+F toggle storm: 2000 toggles in 143.16 ms = 71.6 us per toggle; callbacks during storm = 2079; final tapIsEnabled = 0 (false expected: last toggle was disable)
+F after storm, enabled again: 10 posted, callbacks = 10
+E press-only mask, enabled: callbacks = 0 of 2000 scroll events; tap thread CPU = 0.000 ms; process CPU = 0.653 ms
+G no tap (again): process CPU for posting 2000 events = 0.424 ms
+done; nothing left installed
