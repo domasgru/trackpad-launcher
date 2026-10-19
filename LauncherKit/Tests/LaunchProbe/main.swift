@@ -6,7 +6,7 @@
 //   blockInWillFinish   block the main thread inside applicationWillFinishLaunching
 //   windowWillFinish    show a window in applicationWillFinishLaunching
 //   windowDidFinish     show a window in applicationDidFinishLaunching
-//   windowAfter         show a window this long after applicationDidFinishLaunching
+//   windowAfter         show a window this long after applicationDidFinishLaunching; a list shows one at each offset
 //   splash              show a borderless splash window at did-finish (with windowAfter, the main window comes later)
 //   markerThenBlock     { marker: path, seconds: S }: on the first main-run-loop turn after finishing, write the
 //                       marker file, block the main thread for S, then show a window
@@ -41,7 +41,8 @@ if let crashAfter = seconds("crashAfter") {
         if flag("windowDidFinish") { show(titled: true) }
         if flag("splash") { show(titled: false) }
         if flag("statusLevelWindow") { show(titled: true, level: .statusBar) }
-        if let after = seconds("windowAfter") {
+        let offsets = (script["windowAfter"] as? [NSNumber])?.map(\.doubleValue) ?? seconds("windowAfter").map { [$0] } ?? []
+        for after in offsets {
             DispatchQueue.main.asyncAfter(deadline: .now() + after) { MainActor.assumeIsolated { self.show(titled: true) } }
         }
         if let held = script["markerThenBlock"] as? [String: Any],
