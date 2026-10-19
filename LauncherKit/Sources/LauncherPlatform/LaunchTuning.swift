@@ -109,6 +109,12 @@ extension LaunchTuning.Bounce: Codable {
         slide = try c.decode(.slide, or: s.slide)
         pulseLow = try c.decode(.pulseLow, or: s.pulseLow)
         pulsePeriod = try c.decode(.pulsePeriod, or: s.pulsePeriod)
+        style = try c.decode(.style, or: s.style)
+        inflateFrom = try c.decode(.inflateFrom, or: s.inflateFrom)
+        inflateTime = try c.decode(.inflateTime, or: s.inflateTime)
+        inflateCurve = try c.decode(.inflateCurve, or: s.inflateCurve)
+        creep = try c.decode(.creep, or: s.creep)
+        creepTime = try c.decode(.creepTime, or: s.creepTime)
     }
 }
 #endif
@@ -116,6 +122,15 @@ extension LaunchTuning.Bounce: Codable {
 extension LaunchTuning {
     /// Every number that shapes a launch bounce. The defaults are the shipped bounce.
     struct Bounce: Equatable, Sendable {
+        /// The motion while the app starts up. The tuner switches between them, to pick one to ship.
+        enum Style: String, CaseIterable, Codable, Sendable {
+            /// A Dock-like jump, over and over.
+            case jump
+            /// A balloon inflating: from small to the icon's side, then on, ever slower.
+            case inflate
+        }
+
+        var style: Style = .jump
         /// Points the icon jumps: about half the icon.
         var height: Double = 30
         var timeUp: Double = 0.30
@@ -139,5 +154,15 @@ extension LaunchTuning {
         /// Reduce motion: the pulse's dimmest opacity, and its period in seconds.
         var pulseLow: Double = 0.5
         var pulsePeriod: Double = 1.4
+        /// Inflate: the icon's side when it appears, in points.
+        var inflateFrom: Double = 20
+        /// Inflate: seconds to grow to the icon's side.
+        var inflateTime: Double = 0.5
+        /// Inflate: growth = 1 − (1 − t)^inflateCurve. 1 is steady, higher slows down sooner.
+        var inflateCurve: Double = 3
+        /// Inflate: the share of its side the icon keeps growing by after that, ever slower.
+        var creep: Double = 0.15
+        /// Inflate: seconds that slow growth lasts; the icon then holds its size.
+        var creepTime: Double = 8
     }
 }

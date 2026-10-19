@@ -72,7 +72,8 @@ import QuartzCore
         let icon = Self.iconLayer(
             side: side, contents: launchOverlay.bitmap(for: app, scale: layout.display.scale),
             scale: layout.display.scale)
-        for animation in BounceMotion(tuning: tuning.bounce, reduceMotion: reduceMotion).animations() {
+        let motion = BounceMotion(tuning: tuning.bounce, reduceMotion: reduceMotion, iconSide: tuning.iconSide)
+        for animation in motion.animations() {
             guard let keyPath = animation.keyPath else { continue }
             icon.add(animation, forKey: keyPath)
         }

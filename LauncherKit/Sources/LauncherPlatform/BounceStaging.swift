@@ -46,10 +46,13 @@ struct BounceRow: Equatable {
 struct BounceMotion {
     private let tuning: LaunchTuning.Bounce
     private let reduceMotion: Bool
+    /// The icon's side in points, which the inflate style grows to.
+    private let iconSide: Double
 
-    init(tuning: LaunchTuning.Bounce, reduceMotion: Bool) {
+    init(tuning: LaunchTuning.Bounce, reduceMotion: Bool, iconSide: Double = LaunchTuning.shipped.iconSide) {
         self.tuning = tuning
         self.reduceMotion = reduceMotion
+        self.iconSide = iconSide
     }
 
     /// timeUp + timeDown + rest, or the pulse period.
@@ -76,6 +79,7 @@ struct BounceMotion {
 
     /// `repeatCount = .infinity`, `calculationMode = .linear`, easing baked into the samples, as in `LaunchFlight`.
     func animations() -> [CAKeyframeAnimation] {
+        if !reduceMotion && tuning.style == .inflate { return [inflation()] }
         let steps = steps
         let animation = CAKeyframeAnimation(keyPath: reduceMotion ? "opacity" : "transform")
         animation.keyTimes = (0...steps).map { NSNumber(value: Double($0) / Double(steps)) }
@@ -94,6 +98,34 @@ struct BounceMotion {
         animation.repeatCount = .infinity
         animation.calculationMode = .linear
         return [animation]
+    }
+
+    /// The inflate style: a scale about the icon's bottom centre from `inflateFrom` up to the icon's side, easing out,
+    /// then on by `creep` over `creepTime`, slowing to a stop, where it holds. Plays once.
+    private func inflation() -> CAKeyframeAnimation {
+        let start = iconSide > 0 ? tuning.inflateFrom / iconSide : 1
+        let grow = max(tuning.inflateTime, 0.01)
+        let creepTime = max(tuning.creepTime, 0.01)
+        let duration = grow + creepTime
+        let steps = max(10, Int((duration * 240).rounded()))
+        let animation = CAKeyframeAnimation(keyPath: "transform")
+        animation.keyTimes = (0...steps).map { NSNumber(value: Double($0) / Double(steps)) }
+        animation.values = (0...steps).map { i in
+            let t = Double(i) / Double(steps) * duration
+            let scale: Double
+            if t < grow {
+                scale = start + (1 - start) * (1 - pow(1 - t / grow, tuning.inflateCurve))
+            } else {
+                let v = min((t - grow) / creepTime, 1)
+                scale = 1 + tuning.creep * (1 - (1 - v) * (1 - v))
+            }
+            return NSValue(caTransform3D: CATransform3DMakeScale(scale, scale, 1))
+        }
+        animation.duration = duration
+        animation.calculationMode = .linear
+        animation.fillMode = .forwards
+        animation.isRemovedOnCompletion = false
+        return animation
     }
 
     /// The quiet end: opacity from `opacity` to 0 over `tuning.fadeOut`, easing out.

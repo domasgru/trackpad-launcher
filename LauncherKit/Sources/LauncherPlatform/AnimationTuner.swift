@@ -225,11 +225,26 @@ struct TunerView: View {
 
     private var bounceSection: some View {
         Section {
-            knob("Jump height", \.bounce.height, 0...80, step: 1, unit: "pt")
-            knob("Time up", \.bounce.timeUp, 0.05...1, step: 0.01, unit: "s")
-            knob("Time down", \.bounce.timeDown, 0.05...1, step: 0.01, unit: "s")
-            knob("Rest", \.bounce.rest, 0...1, step: 0.01, unit: "s", hint: "on the ground between jumps")
-            knob("Squash", \.bounce.squash, 0...0.5, step: 0.01, hint: "height lost on landing; 0 = none")
+            Picker("Animation", selection: $model.tuning.bounce.style) {
+                Text("Jump").tag(LaunchTuning.Bounce.Style.jump)
+                Text("Inflate").tag(LaunchTuning.Bounce.Style.inflate)
+            }
+            .pickerStyle(.segmented)
+            switch model.tuning.bounce.style {
+            case .jump:
+                knob("Jump height", \.bounce.height, 0...80, step: 1, unit: "pt")
+                knob("Time up", \.bounce.timeUp, 0.05...1, step: 0.01, unit: "s")
+                knob("Time down", \.bounce.timeDown, 0.05...1, step: 0.01, unit: "s")
+                knob("Rest", \.bounce.rest, 0...1, step: 0.01, unit: "s", hint: "on the ground between jumps")
+                knob("Squash", \.bounce.squash, 0...0.5, step: 0.01, hint: "height lost on landing; 0 = none")
+            case .inflate:
+                knob("Start size", \.bounce.inflateFrom, 1...128, step: 1, unit: "pt", hint: "the icon's side when it appears")
+                knob("Inflate time", \.bounce.inflateTime, 0.05...3, step: 0.01, unit: "s", hint: "to the icon size")
+                knob("Inflate curve", \.bounce.inflateCurve, 1...8, step: 0.1, hint: "1 = steady, higher slows sooner")
+                knob("Keep growing", \.bounce.creep, 0...0.5, step: 0.01,
+                     hint: "share of the icon size added after that; above 0.2 blurs")
+                knob("Growing time", \.bounce.creepTime, 0.5...20, step: 0.1, unit: "s", hint: "ever slower, then holds")
+            }
             knob("Gap", \.bounce.gap, 0...60, step: 1, unit: "pt", hint: "between the pointer tip and the icons")
             knob("Offset", \.bounce.offset, -100...100, step: 1, unit: "pt", hint: "sideways from the tip")
             knob("Trailing", \.bounce.trailing, 0...1, step: 0.01, unit: "s",
