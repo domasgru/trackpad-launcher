@@ -1216,6 +1216,8 @@ Then S2 begins with the launch bounce vocabulary, the `SystemActions` members an
 
 ## Testing Decisions
 
+> **Changed after implementation, at the human's request:** every test that launches a real throwaway app was removed (the `LaunchProbe` target and the adapter, window, follow and watch suites). They took the suite from about 6 s to about 92 s, too much for this feature. The bounce's rules stay covered by the model (`World`), staging, gate, look and deadline tests. What the removed rows checked against real apps is now part of the manual checks.
+
 ### Strategy
 
 The design has one seam that matters, the `SystemActions` port. Its two adapters give the two sides the tests cross it from.

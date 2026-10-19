@@ -17,10 +17,8 @@ let package = Package(
             dependencies: ["LauncherCore"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
-        // Test-only: the app the platform tests launch. Not a product, and outside the scanned source roots.
-        .executableTarget(name: "LaunchProbe", path: "Tests/LaunchProbe"),
         .testTarget(name: "LauncherCoreTests", dependencies: ["LauncherCore"]),
-        .testTarget(name: "LauncherPlatformTests", dependencies: ["LauncherPlatform", "LauncherCore", "LaunchProbe"]),
+        .testTarget(name: "LauncherPlatformTests", dependencies: ["LauncherPlatform", "LauncherCore"]),
     ],
     swiftLanguageModes: [.v6]
 )
