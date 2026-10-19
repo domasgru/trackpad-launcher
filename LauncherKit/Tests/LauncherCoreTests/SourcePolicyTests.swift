@@ -84,6 +84,15 @@ import Testing
         Confined(token: "CGEventTapCreate", onlyIn: ["ClickTap.swift"], rule: "the click tap's event taps, one file"),
         Confined(token: "tapEnable", onlyIn: ["ClickTap.swift"], rule: "the click tap's event taps, one file"),
         Confined(token: "tapIsEnabled", onlyIn: ["ClickTap.swift"], rule: "the click tap's event taps, one file"),
+        Confined(
+            token: "mouseMoved", onlyIn: ["BounceOverlay.swift", "ClickTap.swift"],
+            rule: "pointer moves are read only while a launch bounce shows; the click tap only rewrites to one"),
+        Confined(
+            token: "addGlobalMonitorForEvents", onlyIn: ["MenuBarShell.swift", "BounceOverlay.swift"],
+            rule: "pointer moves are read only while a launch bounce shows"),
+        Confined(
+            token: "addLocalMonitorForEvents", onlyIn: ["BounceOverlay.swift"],
+            rule: "pointer moves are read only while a launch bounce shows"),
         Confined(token: "scrollWheel", onlyIn: ["ClickTap.swift"], rule: "scrolling is read only by the click tap's event taps"),
         Confined(
             token: "_LSCopyApplicationArrayInFrontToBackOrder", onlyIn: ["LaunchServicesOrder.swift"],

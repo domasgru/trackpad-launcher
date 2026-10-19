@@ -18,6 +18,8 @@ import QuartzCore
     /// Quiet-fade panels, kept until their fade's completion (AppKit keeps closed panels in its window list).
     private var fading: Set<NSPanel> = []
     private var deadlineCount = 0
+    /// The pointer-move monitors, which exist only while the row is not empty.
+    private var monitors: [Any] = []
 
     private struct Bouncing {
         let app: AppEntry
@@ -86,6 +88,7 @@ import QuartzCore
         stage.host.addSublayer(slot)
         let others = row
         row.append(bouncing)
+        if row.count == 1 { follow() }
         flow(others, to: Array(layout.rests.dropLast()), on: layout.display, from: before, slides: tuning.bounce.slide)
         CATransaction.commit()
     }
@@ -137,6 +140,7 @@ import QuartzCore
             flow(row, to: layout.rests, on: moved.display, from: display, slides: last.tuning.bounce.slide)
         }
         if row.isEmpty {
+            unfollow()
             stage?.panel.close()
             stage = nil
         }
@@ -154,6 +158,69 @@ import QuartzCore
         guard let index = row.firstIndex(where: { $0.app.bundleID == app }), let ranOut = row[index].ranOut else { return }
         row[index].ranOut = nil
         ranOut()
+    }
+
+    /// Keeps the row above the pointer: passive monitors of moves and drags, read only while a bounce shows. The global
+    /// one does not see events sent to our own windows, so the local one covers those.
+    private func follow() {
+        guard monitors.isEmpty else { return }
+        let kinds: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
+        let global = NSEvent.addGlobalMonitorForEvents(matching: kinds) { [weak self] _ in
+            MainActor.assumeIsolated { self?.moved() }
+        }
+        let local = NSEvent.addLocalMonitorForEvents(matching: kinds) { [weak self] event in
+            MainActor.assumeIsolated { self?.moved() }
+            return event
+        }
+        monitors = [global, local].compactMap { $0 }
+    }
+
+    private func unfollow() {
+        monitors.forEach { NSEvent.removeMonitor($0) }
+        monitors = []
+    }
+
+    /// Re-places the row under the pointer, on the pointer's display. Ended icons are in their own panels and stay out.
+    private func moved() {
+        guard let last = row.last else { return }
+        let read = screen()
+        guard let layout = BounceRow(
+                count: row.count, pointer: read.pointer, among: read.displays, side: CGFloat(last.tuning.iconSide),
+                tuning: last.tuning.bounce),
+              let before = stage?.display
+        else { return }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        guard stage(on: layout.display) != nil else {
+            CATransaction.commit()
+            return
+        }
+        let changed = before != layout.display
+        let origin = layout.display.frame.origin
+        let trailing = last.tuning.bounce.trailing
+        for (item, rest) in zip(row, layout.rests) {
+            let new = CGPoint(x: rest.x - origin.x, y: rest.y - origin.y)
+            if changed {
+                item.icon.contentsScale = layout.display.scale
+                item.icon.contents = flights.bitmap(for: item.app, scale: layout.display.scale)
+                item.slot.removeAnimation(forKey: "trail")
+            }
+            if trailing > 0, !changed, item.slot.position != new {
+                let from = item.slot.presentation()?.position ?? item.slot.position
+                item.slot.position = new
+                let trail = CABasicAnimation(keyPath: "position")
+                trail.fromValue = NSValue(point: from)
+                trail.toValue = NSValue(point: new)
+                trail.duration = trailing
+                trail.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                item.slot.add(trail, forKey: "trail")
+            } else {
+                item.slot.position = new
+                if trailing == 0 { item.slot.removeAnimation(forKey: "trail") }
+            }
+        }
+        CATransaction.commit()
     }
 
     /// The row's panel on `display`: made and ordered in when the row has none, re-framed when it is on another display.

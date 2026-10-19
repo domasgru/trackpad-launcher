@@ -43,6 +43,14 @@ private final class TunerPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
+    override init(
+        contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing backingStoreType: NSWindow.BackingStoreType,
+        defer flag: Bool
+    ) {
+        super.init(contentRect: contentRect, styleMask: style, backing: backingStoreType, defer: flag)
+        acceptsMouseMovedEvents = true
+    }
+
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown {
             NSApp.activate()

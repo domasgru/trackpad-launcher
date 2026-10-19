@@ -81,6 +81,9 @@ import Testing
         set { pointer.location = newValue }
     }
 
+    /// Replaces the system's displays with these, which need not exist.
+    func setDisplays(_ displays: [LaunchDisplay]) { pointer.displays = displays }
+
     /// Reads as no display at all.
     func disconnectDisplays() { pointer.displays = [] }
 
