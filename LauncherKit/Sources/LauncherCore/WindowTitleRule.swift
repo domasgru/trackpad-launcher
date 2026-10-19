@@ -8,9 +8,12 @@ enum WindowTitleRule: Sendable {
     /// fewer than two parts is left alone, and no part's text changes.
     case leadWithSecondPart(separator: String)
 
+    /// VS Code titles the file first and the project second, separated by " — ": the project leads.
+    private static let vsCode: WindowTitleRule = .leadWithSecondPart(separator: " — ")
+
     private static let rules: [BundleID: WindowTitleRule] = [
-        BundleID(rawValue: "com.microsoft.VSCode"): .leadWithSecondPart(separator: " — "),
-        BundleID(rawValue: "com.microsoft.VSCodeInsiders"): .leadWithSecondPart(separator: " — "),
+        BundleID(rawValue: "com.microsoft.VSCode"): vsCode,
+        BundleID(rawValue: "com.microsoft.VSCodeInsiders"): vsCode,
     ]
 
     /// `title` as the window switcher shows it for a window of `app`: reworded by the app's rule when it has one,

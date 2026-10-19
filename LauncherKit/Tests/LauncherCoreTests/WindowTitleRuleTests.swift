@@ -1,45 +1,43 @@
 import Testing
 import LauncherCore
 
-@MainActor @Suite struct WindowTitleRuleTests {
-    private func frontmostApp(_ world: World, name: String, bundleID: String, path: String) {
-        world.system.frontmost = AppEntry(
-            bundleID: BundleID(rawValue: bundleID), name: name, url: AppEntry.location(ofBundleAtPath: path))
-    }
+private let vsCode = AppEntry(
+    bundleID: BundleID(rawValue: "com.microsoft.VSCode"), name: "Code",
+    url: AppEntry.location(ofBundleAtPath: "/Applications/Visual Studio Code.app"))
+private let vsCodeInsiders = AppEntry(
+    bundleID: BundleID(rawValue: "com.microsoft.VSCodeInsiders"), name: "Code - Insiders",
+    url: AppEntry.location(ofBundleAtPath: "/Applications/Visual Studio Code - Insiders.app"))
 
+@MainActor @Suite struct WindowTitleRuleTests {
     private func vsCodeWorld(
         visible: [String], minimised: [String] = [], untitled: Set<String> = []
     ) -> World {
         let world = World.windowWorld(visible: visible, minimised: minimised, untitled: untitled)
-        frontmostApp(
-            world, name: "Code", bundleID: "com.microsoft.VSCode", path: "/Applications/Visual Studio Code.app")
+        world.system.frontmost = vsCode
         return world
     }
 
     private func titles(_ world: World) -> [String]? { world.launcher.windowSwitcher?.rows.map(\.title) }
 
     @Test(arguments: [
-        (name: "Code", bundleID: "com.microsoft.VSCode", path: "/Applications/Visual Studio Code.app",
+        (frontmost: vsCode as AppEntry?,
          raw: ["product-overview.md — trackpad-launcher", "how-explorer.md — skills"],
          shown: ["trackpad-launcher — product-overview.md", "skills — how-explorer.md"]),
-        (name: "Code - Insiders", bundleID: "com.microsoft.VSCodeInsiders",
-         path: "/Applications/Visual Studio Code - Insiders.app",
+        (frontmost: vsCodeInsiders as AppEntry?,
          raw: ["main.swift — trackpad-launcher", "how-explorer.md — skills"],
          shown: ["trackpad-launcher — main.swift", "skills — how-explorer.md"]),
-        (name: "Safari", bundleID: "com.test.safari", path: "/Applications/Safari.app",
+        (frontmost: nil as AppEntry?,
          raw: ["Apple — Start Page", "how-explorer.md — skills"],
          shown: ["Apple — Start Page", "how-explorer.md — skills"]),
     ])
-    func eachAppsRowsReadAsItsTitleRuleWordsThem(
-        name: String, bundleID: String, path: String, raw: [String], shown: [String]
-    ) {
+    func eachAppsRowsReadAsItsTitleRuleWordsThem(frontmost: AppEntry?, raw: [String], shown: [String]) {
         let world = World.windowWorld(visible: raw)
-        frontmostApp(world, name: name, bundleID: bundleID, path: path)
+        if let frontmost { world.system.frontmost = frontmost }
 
         world.windowSwipe(3.5, lift: false)
 
         let switcher = world.launcher.windowSwitcher
-        #expect(switcher?.rows.map(\.title) == shown)
+        #expect(titles(world) == shown)
         #expect(switcher?.selection.selected == 0)
         #expect(switcher?.rows.map(\.window) == raw.map { world.window($0) })
     }
