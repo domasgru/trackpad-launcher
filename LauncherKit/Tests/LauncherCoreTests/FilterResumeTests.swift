@@ -76,32 +76,4 @@ import Testing
         filter.resume(scrollMayBeUnderWay: false)
         #expect(scroll(&filter, .fingers(.changed), false) == .drop)
     }
-
-    @Test func aPassingDockSwipeIsForgottenOnResume() {
-        var filter = DockSwipeFilter()
-        #expect(filter.decide(.began, trackpadBlocking: false) == .pass)
-        filter.resume()
-        #expect(filter.decide(.began, trackpadBlocking: true) == .drop)
-    }
-
-    @Test func aDroppedDockSwipeSurvivesResume() {
-        var filter = DockSwipeFilter()
-        #expect(filter.decide(.began, trackpadBlocking: true) == .drop)
-        filter.resume()
-        #expect(filter.decide(.changed, trackpadBlocking: false) == .drop)
-    }
-
-    @Test func aDockSwipeIsDroppingOnlyFromADroppedOpeningToItsEnd() {
-        var filter = DockSwipeFilter()
-        #expect(!filter.isDropping)
-        _ = filter.decide(.began, trackpadBlocking: true)
-        #expect(filter.isDropping)
-        _ = filter.decide(.changed, trackpadBlocking: false)
-        #expect(filter.isDropping)
-        _ = filter.decide(.ended, trackpadBlocking: false)
-        #expect(!filter.isDropping)
-        _ = filter.decide(.began, trackpadBlocking: true)
-        _ = filter.decide(.cancelled, trackpadBlocking: true)
-        #expect(!filter.isDropping)
-    }
 }

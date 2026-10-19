@@ -49,16 +49,22 @@ import LauncherCore
             .liftThumb().wait(.milliseconds(100))
             .thumb(atMM: (10, 10)).tap(fingers: 1)
         var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
-        let recognitions = script.frames.map { (time: $0.time.seconds - 1.0, recognition: recognizer.step($0)) }
-
-        for (time, recognition) in recognitions where time >= 0.2 && time < 0.4 {
-            #expect(recognition.blocksClicks && recognition.blocksDockSwipes, "held thumb at \(time)")
+        let recognitions = script.frames.map {
+            (ms: Int((($0.time.seconds - 1.0) * 1000).rounded()), contacts: $0.touches.count, recognition: recognizer.step($0))
         }
-        for (time, recognition) in recognitions where time >= 0.44 && time < 1.6 {
-            #expect(!recognition.blocksClicks && !recognition.blocksDockSwipes, "rolled thumb at \(time)")
+
+        for (ms, _, recognition) in recognitions where ms >= 200 && ms < 400 {
+            #expect(recognition.blocksClicks && recognition.blocksDockSwipes, "held thumb at \(ms) ms")
+        }
+        for (ms, contacts, recognition) in recognitions where ms >= 440 && ms < 1420 {
+            #expect(!recognition.blocksClicks && recognition.blocking.wantsTap, "rolled thumb at \(ms) ms")
+            #expect(recognition.blocksDockSwipes == (contacts >= 2), "rolled thumb at \(ms) ms with \(contacts) contacts")
+        }
+        for (ms, _, recognition) in recognitions where ms >= 1420 && ms < 1570 {
+            #expect(recognition.blocking == .none, "after the thumb lifted at \(ms) ms")
         }
         #expect(recognitions.compactMap(\.recognition.event) == [.fired(.one)])
-        #expect(recognitions.last { $0.recognition.event != nil }!.time > 1.6)
+        #expect(recognitions.last { $0.recognition.event != nil }!.ms > 1600)
     }
 
     @Test func aThumbThatRolledOutOfTheCornerAndLiftedDoesNotSpoilTheNextThumbTapUnderTheSameFingers() {

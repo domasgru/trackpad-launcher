@@ -5,6 +5,10 @@ import LauncherCore
     private let trackpad = Trackpad.macBook14
     private let h = HandFrames()
     private var thumb: TouchScript { TouchScript(.macBook14).thumb(atMM: (10, 10)) }
+    private var rolledThumbAndFingersLandingAgain: TouchScript {
+        thumb.land(fingers: 2).slide(byMM: (10, 0)).rollThumb(toMM: (40, 10)).lift()
+            .land(fingers: 2).wait(.milliseconds(50))
+    }
 
     private func world() -> World { World.switcherWorld(accessGranted: true) }
 
@@ -159,8 +163,9 @@ import LauncherCore
         #expect([100, 110, 200, 250].allSatisfy { gated[$0] == true })
         #expect(between == [.decided(.pointer(.passAsMove)), .decided(.pointer(.drop))])
         #expect(world.hardware.pressVerdicts == [.drop, .drop])
-        #expect(gated[300] == false)
-        #expect(after == .notSent)
+        #expect(gated[300] == true)
+        #expect(after == .decided(.pointer(.pass)))
+        #expect(gated[350] == false)
     }
 
     @Test func aDockSwipeDroppedAtItsStartStaysDroppedUntilItsOwnStreamEnds() {
@@ -273,5 +278,51 @@ import LauncherCore
             ], on: trackpad.id)
         #expect(bounced.system.broughtToFront.isEmpty)
         #expect(bounced.hardware.pressVerdicts == [.pass, .pass])
+    }
+
+    @Test func theGateStaysOpenThroughARolledThumbAndTheFingersLiftsUntilThePadIsEmpty() {
+        let world = world()
+        let hand = rolledThumbAndFingersLandingAgain
+        let observed = world.playFrameByFrame(hand) { world.hardware.isGatedPortOn }
+        #expect(observed.allSatisfy { $0 })
+    }
+
+    @Test func aDockSwipeOpeningAfterTheThumbRolledOutIsDroppedWholeAndHoldsTheGateToItsEnd() {
+        let world = world()
+        let hand = rolledThumbAndFingersLandingAgain
+        world.play(hand)
+        var offers = [world.hardware.offer(.dockSwipe(.mayBegin, .gesture))]
+        let slid = hand.slide(byMM: (20, 0))
+        world.play(slid)
+        offers.append(world.hardware.offer(.dockSwipe(.began, .gesture)))
+        offers.append(world.hardware.offer(.dockSwipe(.changed, .gesture)))
+        world.play(slid.lift().liftThumb())
+        #expect(world.hardware.isGatedPortOn)
+        offers.append(world.hardware.offer(.dockSwipe(.ended, .gesture)))
+        #expect(offers == Array(repeating: .decided(.dockSwipe(.drop)), count: 4))
+        #expect(!world.hardware.isGatedPortOn)
+    }
+
+    @Test func aDockSwipeWarningThatSlippedThroughIsDroppedFromItsBeganOnceTheFingersAreDown() {
+        let world = world()
+        world.play(thumb.wait(.milliseconds(100)))
+        #expect(world.hardware.offer(.dockSwipe(.mayBegin, .gesture)) == .decided(.dockSwipe(.pass)))
+
+        let hand = thumb.wait(.milliseconds(100)).land(fingers: 2).wait(.milliseconds(500))
+        world.play(hand)
+        #expect(world.hardware.offer(.dockSwipe(.began, .gesture)) == .decided(.dockSwipe(.drop)))
+        #expect(world.hardware.offer(.dockSwipe(.changed, .gesture)) == .decided(.dockSwipe(.drop)))
+
+        world.play(hand.lift().liftThumb())
+        #expect(world.hardware.isGatedPortOn)
+        #expect(world.hardware.offer(.dockSwipe(.ended, .gesture)) == .decided(.dockSwipe(.drop)))
+        #expect(!world.hardware.isGatedPortOn)
+        #expect(world.system.broughtToFront.isEmpty)
+        #expect(world.system.launchAnimations.isEmpty)
+        #expect(world.system.windows.raised.isEmpty)
+        #expect(world.hardware.pulses.isEmpty)
+        #expect(world.hardware.windowSwipeAnswers.isEmpty)
+        #expect(world.hardware.pressVerdicts.isEmpty)
+        #expect(world.launcher.switcher == nil)
     }
 }

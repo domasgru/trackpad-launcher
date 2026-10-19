@@ -17,10 +17,11 @@ public struct Recognition: Equatable, Sendable {
     /// recognizer saw land less than 3 s ago is still anchored and another finger is down. Whether a press is really
     /// blocked also needs the click filter armed (access granted, gestures active), which the recognizer never knows.
     public var blocksClicks: Bool { blocking.blocksClicks }
-    /// This trackpad's half of Dock swipe blocking: true for the whole of a swipe or a window swipe, and while any
-    /// thumb is anchored and another finger is down, with no time limit. macOS may count the anchored thumb as a
-    /// finger, so thumb plus two sliding fingers can read as its three-finger swipe between desktops. Like
-    /// `blocksClicks`, it only matters while the tap is armed.
+    /// This trackpad's half of Dock swipe blocking: true for the whole of a confirmed swipe or window swipe or a swap
+    /// series, and on every frame of a thumb touch (from a thumb in the anchor corner until the pad is empty) with two
+    /// or more contacts down, with no time limit. macOS counts every contact, a drifted or re-landed thumb included,
+    /// so thumb plus two sliding fingers can read as its three-finger swipe between desktops. Like `blocksClicks`, it
+    /// only matters while the tap is armed.
     public var blocksDockSwipes: Bool { blocking.blocksDockSwipes }
 
     public var fired: Gesture? { if case .fired(let gesture)? = event { gesture } else { nil } }
@@ -40,12 +41,15 @@ public struct Recognition: Equatable, Sendable {
 /// How far one trackpad's blocking reaches after a frame. Ordered: each level includes those below it, so
 /// `blocksClicks ⇒ blocksDockSwipes ⇒ wantsTap` holds by construction.
 public enum Blocking: Int, Comparable, Sendable {
-    /// No thumb in the corner, no slide, no swap series: nothing on this trackpad can block before its next frame.
+    /// No thumb in the corner, no slide, no swap series and no thumb touch: nothing on this trackpad can block before
+    /// its next frame.
     case none
-    /// A thumb anchored alone, or a slide awaiting its confirmation: nothing is blocked, but a verdict can appear on
-    /// the next frame with none between, so the gated port must already be receiving events.
+    /// A thumb anchored alone, a slide awaiting its confirmation, or one contact down in a thumb touch: nothing is
+    /// blocked, but a verdict can appear on the next frame with none between, so the gated port must already be
+    /// receiving events.
     case possible
-    /// A thumb with another contact down, its 3 s over or its landing unknown: the system's swipes are blocked.
+    /// A thumb with another contact down, its 3 s over or its landing unknown, or two or more contacts down in a
+    /// thumb touch: the system's swipes are blocked.
     case dockSwipes
     /// Inside the blocking window, a confirmed swipe or window swipe, or a swap series: everything is blocked.
     case clicks
@@ -198,26 +202,28 @@ public struct GestureRecognizer: Sendable {
                 state = .swiping(swipe)
             }
         }
-        let blocking: Blocking
+        let stateLevel: Blocking
         if case .swiping(let swipe) = state, swipe.isConfirmed {
-            blocking = .clicks
+            stateLevel = .clicks
         } else if case .rest(let rest) = state, rest.isSeries {
-            blocking = .clicks
+            stateLevel = .clicks
         } else if let thumb = state.thumb {
             if down.keys.contains(where: { $0 != thumb }) {
                 let isInWindow = book.landingTime(of: thumb).map {
                     frame.time - $0 < GestureRules.clickBlockingWindow
                 } ?? false
-                blocking = isInWindow ? .clicks : .dockSwipes
+                stateLevel = isInWindow ? .clicks : .dockSwipes
             } else {
-                blocking = .possible
+                stateLevel = .possible
             }
         } else if case .swiping = state {
-            blocking = .possible
+            stateLevel = .possible
         } else {
-            blocking = .none
+            stateLevel = .none
         }
-        return Recognition(event: event, blocking: blocking)
+        isInThumbTouch = !down.isEmpty && (isInThumbTouch || stateLevel >= .possible)
+        let thumbTouchLevel: Blocking = !isInThumbTouch ? .none : down.count >= 2 ? .dockSwipes : .possible
+        return Recognition(event: event, blocking: max(stateLevel, thumbTouchLevel))
     }
 
     /// The model's answer to the window swipe start reported on the frame at `began`. true confirms it: from the next
@@ -374,8 +380,9 @@ public struct GestureRecognizer: Sendable {
     private struct Swipe: Sendable {
         let kind: SlideKind
         let began: FrameTime
-        /// A window swipe starts unconfirmed: until the model's answer confirms it, it blocks only by the thumb rules,
-        /// as the slide of the setting off would. A swipe starts confirmed.
+        /// A window swipe starts unconfirmed: until the model's answer confirms it, it blocks clicks and scrolling only
+        /// by the thumb rules, as the slide of the setting off would, and Dock swipes as any thumb touch does. A swipe
+        /// starts confirmed.
         var isConfirmed: Bool
         /// The swipe fingers down now, at most two, with their positions on the last frame.
         var fingers: [TouchID: SurfacePoint]
@@ -471,6 +478,9 @@ public struct GestureRecognizer: Sendable {
     private let swaps: Bool
     private var edgeContacts: EdgeContacts
     private var state: State = .idle
+    /// A thumb touch is on: from a frame with a thumb in the anchor corner until the first frame with no contact down.
+    /// macOS counts every contact, so whatever the thumb does meanwhile, two or more contacts can read as its swipe.
+    private var isInThumbTouch = false
     private var book = ContactBook()
     /// Contacts down on the previous frame. nil until the first frame.
     private var previouslyDown: Set<TouchID>?
