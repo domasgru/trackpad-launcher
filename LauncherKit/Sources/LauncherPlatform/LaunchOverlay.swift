@@ -32,12 +32,17 @@ import Synchronization
     }
 
     func play(for app: AppEntry) {
-        let pointer = NSEvent.mouseLocation
-        let displays = NSScreen.screens.map { LaunchDisplay(frame: $0.frame, scale: $0.backingScaleFactor) }
+        let read = ScreenRead.now()
+        play(for: app, from: read.pointer, among: read.displays)
+    }
+
+    /// As `play(for:)`, staged at `start` among `displays` instead of at the pointer among the connected screens: a
+    /// bounce's ending, from wherever its icon is, among the displays the bounce read, so one `ScreenRead` places both.
+    func play(for app: AppEntry, from start: CGPoint, among displays: [LaunchDisplay]) {
         let reduceMotion =
             NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || LaunchTuning.current.forceReduceMotion
         let flight = flights.next(draw: .random(in: -1...1), reduceMotion: reduceMotion)
-        guard let stage = flight.staged(at: pointer, among: displays),
+        guard let stage = flight.staged(at: start, among: displays),
               case let (panel, host)? = Self.makePanel(frame: stage.frame)
         else { return }
         playingPanels.insert(panel)
@@ -70,7 +75,7 @@ import Synchronization
 
     /// The app's icon with at least `scale` pixels per point, from the cache when it holds one that sharp. Otherwise,
     /// because the app moved or a sharper display was connected since the last prepare, it is rendered and cached now.
-    private func bitmap(for app: AppEntry, scale: CGFloat) -> CGImage? {
+    func bitmap(for app: AppEntry, scale: CGFloat) -> CGImage? {
         let pixels = Self.pixels(at: scale)
         if let cached = icons[app.url], cached.width >= pixels { return cached }
         let rendered = Self.renderIcon(of: app.url, pixels: pixels)
@@ -117,7 +122,7 @@ import Synchronization
     /// the launcher window and full-screen apps; it shows on every Space and holds still while Spaces slide. Its
     /// content view is plain, non-flipped and layer-backed, so the staged y-up keyframes apply to its sublayers as
     /// they are. Nil when the content view gets no layer, which is known before any window exists.
-    private static func makePanel(frame: CGRect) -> (panel: NSPanel, host: CALayer)? {
+    static func makePanel(frame: CGRect) -> (panel: NSPanel, host: CALayer)? {
         let content = NSView(frame: CGRect(origin: .zero, size: frame.size))
         content.wantsLayer = true
         guard let host = content.layer else { return nil }

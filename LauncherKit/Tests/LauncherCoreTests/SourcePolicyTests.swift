@@ -66,32 +66,33 @@ import Testing
     /// Each permission API lives in exactly one file, the adapter that owns it. Any other hit fails.
     struct Confined: Sendable, CustomTestStringConvertible {
         let token: String
-        let onlyIn: String
+        let onlyIn: Set<String>
         let rule: String
-        var testDescription: String { "\(token) only in \(onlyIn) (\(rule))" }
+        var files: String { onlyIn.sorted().joined(separator: ", ") }
+        var testDescription: String { "\(token) only in \(files) (\(rule))" }
     }
 
     static let confined: [Confined] = [
-        Confined(token: "AXIsProcessTrusted", onlyIn: "SystemPermissions.swift", rule: "R9 one permission, one adapter"),
-        Confined(token: "notify_register", onlyIn: "SystemPermissions.swift", rule: "R7 the trust push"),
+        Confined(token: "AXIsProcessTrusted", onlyIn: ["SystemPermissions.swift"], rule: "R9 one permission, one adapter"),
+        Confined(token: "notify_register", onlyIn: ["SystemPermissions.swift"], rule: "R7 the trust push"),
         Confined(
-            token: "ScreenCaptureAccess", onlyIn: "SystemPermissions.swift", rule: "one permission check, one adapter"),
-        Confined(token: "ScreenCaptureKit", onlyIn: "PreviewCapture.swift", rule: "one file captures the screen"),
-        Confined(token: "SCShareableContent", onlyIn: "PreviewCapture.swift", rule: "one file captures the screen"),
-        Confined(token: "SCScreenshotManager", onlyIn: "PreviewCapture.swift", rule: "one file captures the screen"),
-        Confined(token: "tapCreate", onlyIn: "ClickTap.swift", rule: "the click tap's event taps, one file"),
-        Confined(token: "CGEventTapCreate", onlyIn: "ClickTap.swift", rule: "the click tap's event taps, one file"),
-        Confined(token: "tapEnable", onlyIn: "ClickTap.swift", rule: "the click tap's event taps, one file"),
-        Confined(token: "tapIsEnabled", onlyIn: "ClickTap.swift", rule: "the click tap's event taps, one file"),
-        Confined(token: "scrollWheel", onlyIn: "ClickTap.swift", rule: "scrolling is read only by the click tap's event taps"),
+            token: "ScreenCaptureAccess", onlyIn: ["SystemPermissions.swift"], rule: "one permission check, one adapter"),
+        Confined(token: "ScreenCaptureKit", onlyIn: ["PreviewCapture.swift"], rule: "one file captures the screen"),
+        Confined(token: "SCShareableContent", onlyIn: ["PreviewCapture.swift"], rule: "one file captures the screen"),
+        Confined(token: "SCScreenshotManager", onlyIn: ["PreviewCapture.swift"], rule: "one file captures the screen"),
+        Confined(token: "tapCreate", onlyIn: ["ClickTap.swift"], rule: "the click tap's event taps, one file"),
+        Confined(token: "CGEventTapCreate", onlyIn: ["ClickTap.swift"], rule: "the click tap's event taps, one file"),
+        Confined(token: "tapEnable", onlyIn: ["ClickTap.swift"], rule: "the click tap's event taps, one file"),
+        Confined(token: "tapIsEnabled", onlyIn: ["ClickTap.swift"], rule: "the click tap's event taps, one file"),
+        Confined(token: "scrollWheel", onlyIn: ["ClickTap.swift"], rule: "scrolling is read only by the click tap's event taps"),
         Confined(
-            token: "_LSCopyApplicationArrayInFrontToBackOrder", onlyIn: "LaunchServicesOrder.swift",
+            token: "_LSCopyApplicationArrayInFrontToBackOrder", onlyIn: ["LaunchServicesOrder.swift"],
             rule: "the private ⌘-Tab order has one reader"),
         Confined(
-            token: "_LSCopyApplicationInformation", onlyIn: "LaunchServicesOrder.swift",
+            token: "_LSCopyApplicationInformation", onlyIn: ["LaunchServicesOrder.swift"],
             rule: "the private ⌘-Tab order has one reader"),
-        Confined(token: "AXUIElement", onlyIn: "FrontmostAppWindows.swift", rule: "the window read has one reader"),
-        Confined(token: "CGWindowList", onlyIn: "FrontmostAppWindows.swift", rule: "the window read has one reader"),
+        Confined(token: "AXUIElement", onlyIn: ["FrontmostAppWindows.swift"], rule: "the window read has one reader"),
+        Confined(token: "CGWindowList", onlyIn: ["FrontmostAppWindows.swift"], rule: "the window read has one reader"),
     ]
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.
@@ -115,7 +116,7 @@ import Testing
     @Test(arguments: confined)
     func onlyItsAdapterUses(_ entry: Confined) throws {
         let hits = try Self.scannedRoots.flatMap { try Self.scan($0, for: entry.token, outside: entry.onlyIn) }
-        #expect(hits.isEmpty, "\(entry.token) belongs only in \(entry.onlyIn) (\(entry.rule)): \(hits)")
+        #expect(hits.isEmpty, "\(entry.token) belongs only in \(entry.files) (\(entry.rule)): \(hits)")
     }
 
     @Test func confinedScanFindsAUseOutsideItsFile() throws {
@@ -126,9 +127,21 @@ import Testing
         try source.write(to: dir.appending(path: "SystemPermissions.swift"))
         try source.write(to: dir.appending(path: "Other.swift"))
 
-        let hits = try Self.scan(dir, for: "AXIsProcessTrusted", outside: "SystemPermissions.swift")
+        let hits = try Self.scan(dir, for: "AXIsProcessTrusted", outside: ["SystemPermissions.swift"])
 
         #expect(hits == ["Other.swift:1: AXIsProcessTrusted"])
+    }
+
+    @Test func confinedScanFindsAUseOutsideEveryFileItIsAllowedIn() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-confined-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = Data("func f() { _ = AXIsProcessTrusted() }\n".utf8)
+        for name in ["First.swift", "Second.swift", "Third.swift"] { try source.write(to: dir.appending(path: name)) }
+
+        let hits = try Self.scan(dir, for: "AXIsProcessTrusted", outside: ["First.swift", "Second.swift"])
+
+        #expect(hits == ["Third.swift:1: AXIsProcessTrusted"])
     }
 
     @Test func scannerFindsAPlantedHit() throws {
@@ -194,9 +207,9 @@ import Testing
         return enumerator.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 
-    /// One "<file>:<line>: <token>" string per line containing `token`, skipping the file named `allowedFile`.
-    private static func scan(_ root: URL, for token: String, outside allowedFile: String? = nil) throws -> [String] {
-        try swiftFiles(under: root).filter { $0.lastPathComponent != allowedFile }.flatMap { file -> [String] in
+    /// One "<file>:<line>: <token>" string per line containing `token`, skipping every file named in `allowedFiles`.
+    private static func scan(_ root: URL, for token: String, outside allowedFiles: Set<String> = []) throws -> [String] {
+        try swiftFiles(under: root).filter { !allowedFiles.contains($0.lastPathComponent) }.flatMap { file -> [String] in
             let text = try String(contentsOf: file, encoding: .utf8)
             return text.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
                 .filter { $0.element.contains(token) }
