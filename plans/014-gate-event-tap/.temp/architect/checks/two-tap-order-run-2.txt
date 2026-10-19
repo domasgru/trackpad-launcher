@@ -1,0 +1,4 @@
+two-tap order: 328 moved, 336 scroll callbacks of 300 each; strictly alternating = false
+  first 80: MSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS; runs of a repeated tag: 611
+tapIsEnabled: 19705 ns per call (1000 calls)
+done; nothing left installed

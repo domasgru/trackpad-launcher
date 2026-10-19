@@ -30,8 +30,8 @@ public enum PointerVerdict: Equatable, Sendable {
 }
 
 /// Click blocking for one event stream, as a pure state machine. One filter per click tap, fed every event in order.
-/// It knows no clock and no device. `trackpadBlocking` is "some running trackpad's latest
-/// `Recognition.blocksClicks` is true", read when the event arrives.
+/// It knows no clock and no device. `trackpadBlocking` is the merged level's `blocksClicks`,
+/// read when the event arrives.
 public struct ClickFilter: Sendable {
     /// What a frame needs to know about the press in progress. `.withheld` wins when buttons disagree.
     public enum Holding: Equatable, Sendable { case nothing, withheld, passed }
@@ -79,4 +79,9 @@ public struct ClickFilter: Sendable {
     }
 
     private var held: [Int: Held] = [:]
+}
+
+extension ClickFilter {
+    /// A press is dropped and its release not yet seen.
+    package var isWithholding: Bool { holding == .withheld }
 }
