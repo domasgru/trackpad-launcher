@@ -17,3 +17,35 @@
 - The tuner requirement bundled five → split into R17 (knobs), R18 (preview), R19 (presets); the tuner's purpose stated.
 - Rejected: "gestures inactive" is undefined (it is in the glossary); dropping the squash and trailing knobs (the user asked for them); dropping the 2 s grace after start-up (the user confirmed it); fading the icon when the setting turns off mid-bounce (the setting applies to the next gesture, as the glossary says).
 - User review: the icon always stays above the pointer → R6 drops the below-the-pointer mode; at the top edge the icon is cut off by the edge instead.
+
+## Plan
+- Red-flag screen: candidate 2 had the model call `bringToFront` (now returning launched/activated) and then `showLaunchBounce`, which the adapter had to pair behind its back (callers coordinating two calls for one operation) → base on candidate 1's `hasProcess` query plus one command per visual; `bringToFrontBouncing` opens the app first by construction.
+- Red-flag screen: candidate 2's two `after(_:for:)` overloads, and the lifecycle's retries riding the overlay's clock, were pass-throughs that leaked the clock into two modules → not grafted.
+- Cross-judge picked candidate 1, 28 to 24, agreeing with the criterion-by-criterion scoring → candidate 1 is the base.
+- Cross-judge: candidate 1's `LaunchStage` collided with `LaunchStage` in `LaunchFlight.swift` → the model's value is `LaunchBounce` with a nested `Step` (candidate 2's naming).
+- Cross-judge: the fake re-implemented "the earliest limit wins" → it records every limit as a list.
+- Cross-judge: the window-list look at finishing was called reliable → reworded as racy (F15, F19).
+- Cross-judge: the display-sized row panel's memory was unmeasured, and candidate 2 claimed about 24 MB → measured (`checks/p6-panel-memory.md`) at about 0.8 MB in our process; kept the display-sized panel.
+- Cross-judge grafts taken from candidate 2:
+  - icons re-scale when the row crosses displays;
+  - `addGlobalMonitorForEvents` is confined too;
+  - the design states that plan 004's non-goals are reversed, and names the Dock-launch window and the hand-off swell.
+- Cross-judge proposed grafting candidate 2's AX retry ticks → rejected. P1 shows registration was possible before the finishing push in all seven runs; grounding F16 understated this. A retry would bend the polling rule for a case no probe produced, so it is kept as open question O7.
+- Verify: a deadline in a row cut off entirely by the top edge was untested → check P5 (`checks/p5-offscreen-clock.md`): a committed animation completes when its panel is off-screen, empty, moved off or ordered out, 15–57 ms late.
+- Verify: the design claimed `FrontmostAppWindows` relies on `apiDisabled` → corrected; it treats any failed call as "no windows".
+- Verify: the architecture doc's icon-drawing exception did not cover the bounce → added to the doc changes.
+- Verify: candidate 1 read the process list before the pulse → moved after it, so `fire`'s effect order is exactly today's.
+- Verify: the window list was read only after a failed registration → it is read on every look (`look(_:axWindows:listedWindows:)`).
+- Test planner, pass 1:
+  - `Deadline` was private (T25) → internal.
+  - The no-display fallback could not be produced (T44) → `ScreenRead` injected through `WorkspaceActions(screen:)`.
+  - The 0.2 s AX timeout was another class's side effect (T47) → `LaunchWatch` sets it on its own element.
+  - The window-list count was inline (T48) → `LaunchWatch.listedWindows(of:)`.
+  - The push contract was not enforced → a per-bounce `LaunchReportGate`, and the observer is dropped once it has reported (T39, T51, T52).
+- Test planner, pass 1: R9 is not met without Accessibility (O1) or under AX lag (O7) → both open questions say so, and S3 waits on the human's answer. R12 slips (deadlines up to about 0.1 s late, longer across display sleep) → added to tradeoffs and as an open question.
+- Test planner, pass 1: the fake must record a repeated start and offer an `onBringToFrontBouncing` hook (T1, T11) → added.
+- Test planner, pass 1, rejected: a test-only time scale on the row's host layer. Scaled caps and limits with bounded waits already serve, and the slow suite can be skipped. The manual-only items (R18's preview, the mid-jump hand-off, R4, R7, R16) stay manual.
+- Test planner, pass 2: the hand-off flight read the displays itself, not the bounce's `ScreenRead` → `play(for:from:among:)` takes the bounce's displays.
+- Finalize: the slices asked implementers to write doc changes that planning had already made → those slice items now check the code against the updated `docs/domain-model.md` and `docs/architecture.md`.
+- No runner dropped out.
+- Human review of the design: D2 signed off; D1 accepted for later features; O1/O7 accepted with R9 amended, no AX retry; R12 reads "about 10 seconds"; D3/O4 accepted pending manual checks.
