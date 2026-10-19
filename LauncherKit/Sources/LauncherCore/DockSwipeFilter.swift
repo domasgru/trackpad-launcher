@@ -8,36 +8,27 @@ public enum DockSwipeVerdict: Equatable, Sendable { case pass, drop }
 
 /// Dock swipe blocking for one event stream, as a pure state machine. Like `ScrollFilter`, it knows no clock and no
 /// device; `trackpadBlocking` is the merged level's `blocksDockSwipes`, read when the event arrives.
-/// A Dock swipe is judged once, on its opening event, and kept whole: dropping one already under way could leave the
-/// Dock stranded between two desktops. So a swipe first seen mid-way always passes.
+/// A Dock swipe is kept whole once dropped. Each opening event (`mayBegin`, `began`) is judged on its own and only a
+/// drop is remembered: a passed `mayBegin` commits nothing, since nothing visible has happened at `mayBegin`, and a
+/// `began` under blocking drops the rest of the swipe. A swipe first seen mid-way, or one that passed its `began`,
+/// passes whole, since dropping one already under way could leave the Dock stranded between two desktops.
 public struct DockSwipeFilter: Sendable {
     public init() {}
 
     public mutating func decide(_ phase: DockSwipePhase, trackpadBlocking: Bool) -> DockSwipeVerdict {
-        let verdict: DockSwipeVerdict
-        if let current {
-            verdict = current
-        } else if phase == .mayBegin || phase == .began {
-            verdict = trackpadBlocking ? .drop : .pass
-        } else {
-            verdict = .pass
+        let ends = phase == .ended || phase == .cancelled
+        if isDropping {
+            if ends { isDropping = false }
+            return .drop
         }
-        current = phase == .ended || phase == .cancelled ? nil : verdict
-        return verdict
+        guard (phase == .mayBegin || phase == .began) && trackpadBlocking else { return .pass }
+        isDropping = true
+        return .drop
     }
 
     /// The system disabled the tap; events may have passed unseen. Forget the swipe in progress (under-blocking).
-    public mutating func forgetSwipe() { current = nil }
+    public mutating func forgetSwipe() { isDropping = false }
 
     /// A dropped swipe is being held back until its end.
-    package var isDropping: Bool { current == .drop }
-
-    /// Keeps a dropped swipe; forgets a passing one (a missed `ended` must not pass the next swipe under the flag).
-    /// TODO(D2): if real Dock swipes send `mayBegin`, take the scroll's hint so a `began` after a no-warning open passes.
-    public mutating func resume() {
-        if current == .pass { current = nil }
-    }
-
-    /// The verdict of the Dock swipe in progress; nil between swipes.
-    private var current: DockSwipeVerdict?
+    package private(set) var isDropping = false
 }

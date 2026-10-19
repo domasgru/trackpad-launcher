@@ -67,7 +67,6 @@ public struct TapFilters: Sendable {
             || dock.values.contains { $0.isDropping }
         if wanted && !gateIsOpen {
             scroll.resume(scrollMayBeUnderWay: context.scrollMayBeUnderWay)
-            for stream in dock.keys { dock[stream]?.resume() }
             gateIsOpen = true
         } else if !wanted && gateIsOpen {
             gateIsOpen = false
