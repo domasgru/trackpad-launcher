@@ -104,6 +104,17 @@ import QuartzCore
         CATransaction.commit()
     }
 
+    /// Calls `passed` once `wait` has passed on the bounce's clock, unless the bounce has ended by then. Nothing when
+    /// the app has no bounce.
+    func after(_ wait: Duration, in app: BundleID, _ passed: @escaping @MainActor () -> Void) {
+        guard let index = row.firstIndex(where: { $0.app.bundleID == app }) else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let added = deadline(on: row[index].clock, after: wait, passed: passed)
+        row[index].deadlines.append(added)
+        CATransaction.commit()
+    }
+
     func end(_ app: BundleID, with ending: LaunchBounceEnding) {
         guard let index = row.firstIndex(where: { $0.app.bundleID == app }) else { return }
         let bouncing = row.remove(at: index)

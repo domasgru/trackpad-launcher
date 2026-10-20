@@ -5,13 +5,19 @@ import LauncherCore
 
 /// Watches one launch a gesture started, from macOS's answer to `openApplication` until `stop()`: the process's
 /// finishing and ending by key-value observation, which macOS pushes for every kind of app, then one look at its
-/// windows and, with Accessibility, its first window created later. Reports each fact at most once, nothing after
-/// `stop()`, and holds nothing once stopped. Every Accessibility call goes to the app element it creates, whose
-/// messaging timeout it sets to `messagingTimeout` itself.
+/// windows and, with Accessibility, its first window created later. When it cannot be told of that window (no
+/// Accessibility, or the app's Accessibility server not answering yet, as Things' is at finishing), it looks at the
+/// window list again every `relookInterval` on the bounce's clock instead, until a window shows or `stop()`. Reports
+/// each fact at most once, nothing after `stop()`, and holds nothing once stopped. Every Accessibility call goes to the
+/// app element it creates, whose messaging timeout it sets to `messagingTimeout` itself.
 @MainActor final class LaunchWatch {
     static let messagingTimeout: Float = 0.2
+    /// R9's 50 ms. A window-list read takes about a millisecond and needs no permission.
+    static let relookInterval = Duration.milliseconds(50)
 
     private let report: @MainActor (LaunchProgress) -> Void
+    /// Calls back once the given time has passed on the bounce's clock; never once the bounce has ended.
+    private let wait: @MainActor (Duration, @escaping @MainActor () -> Void) -> Void
     private var process: NSRunningApplication?
     private var observations: [NSKeyValueObservation] = []
     private var windowObserver: AXObserver?
@@ -19,7 +25,13 @@ import LauncherCore
     private var hasGoneNowhere = false
     private var isStopped = false
 
-    init(report: @escaping @MainActor (LaunchProgress) -> Void) { self.report = report }
+    init(
+        report: @escaping @MainActor (LaunchProgress) -> Void,
+        wait: @escaping @MainActor (Duration, @escaping @MainActor () -> Void) -> Void
+    ) {
+        self.report = report
+        self.wait = wait
+    }
 
     isolated deinit { stop() }
 
@@ -76,8 +88,20 @@ import LauncherCore
             dropWindowObserver()
             report(.windowShown)
         case .watching: break
-        case .blind: dropWindowObserver()
+        case .relooking:
+            dropWindowObserver()
+            relookLater(pid)
         }
+    }
+
+    private func relookLater(_ pid: pid_t) {
+        wait(Self.relookInterval) { [weak self] in self?.relook(pid) }
+    }
+
+    private func relook(_ pid: pid_t) {
+        guard !isStopped else { return }
+        guard Self.listedWindows(of: pid) > 0 else { return relookLater(pid) }
+        report(.windowShown)
     }
 
     /// Tries once to be told of the app's next window. Without the Accessibility permission this fails with
@@ -124,13 +148,13 @@ import LauncherCore
     }
 
     enum Registration: Equatable { case registered, notAnswering, noAccess }
-    enum Look: Equatable { case shown, watching, blind }
+    enum Look: Equatable { case shown, watching, relooking }
 
     /// One look at a launching app's windows when it finished launching. Pure: any window, by either count, is
-    /// `.shown`; none while registered is `.watching`; none otherwise is `.blind`.
+    /// `.shown`; none while registered is `.watching`; none otherwise is `.relooking`.
     nonisolated static func look(_ registration: Registration, axWindows: Int, listedWindows: Int) -> Look {
         if axWindows > 0 || listedWindows > 0 { return .shown }
-        return registration == .registered ? .watching : .blind
+        return registration == .registered ? .watching : .relooking
     }
 }
 

@@ -46,7 +46,7 @@ import ServiceManagement
         let id = app.bundleID
         guard launches[id] == nil else { return bringToFront(app) }
         let report: @MainActor (LaunchProgress) -> Void = { [weak self] in self?.report($0, of: id) }
-        let watch = LaunchWatch(report: report)
+        let watch = LaunchWatch(report: report) { [bounces] wait, passed in bounces.after(wait, in: id, passed) }
         launches[id] = Launch(watch: watch)
         // The app first: nothing below can delay it.
         open(app, then: watch.opened)
