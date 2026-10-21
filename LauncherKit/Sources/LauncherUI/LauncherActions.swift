@@ -29,5 +29,4 @@ struct LauncherActions {
     let chooseOtherApp: (@escaping (URL) -> Void) -> Void
     /// Closes the window explicitly (System Settings takes focus; a held window must not sit over it), then opens the pane.
     let openSettings: (SettingsPane) -> Void
-    let quit: () -> Void
 }

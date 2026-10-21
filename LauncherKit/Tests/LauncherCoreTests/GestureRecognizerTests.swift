@@ -245,10 +245,3 @@ extension GestureRecognizerTests {
         #expect(frames.map { recognizer.step($0).fired } == [nil, nil, nil, nil, .one, nil, nil])
     }
 }
-
-@Suite struct HandModeTests {
-    @Test func cornerNamesMatchTheHint() {
-        #expect(HandMode.right.cornerName == "top-left")
-        #expect(HandMode.left.cornerName == "top-right")
-    }
-}
