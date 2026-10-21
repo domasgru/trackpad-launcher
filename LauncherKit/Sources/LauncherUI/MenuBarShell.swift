@@ -136,7 +136,8 @@ public final class MenuBarShell: NSObject {
         panel.orderOut(nil)
     }
 
-    /// Below the icon, centred on it, clamped into the screen; the top edge stays put when the content grows.
+    /// Right under the menu bar with no gap, like other menu bar windows, centred on the icon, clamped into the screen;
+    /// the top edge stays put when the content grows.
     /// The status item's window sits off-screen until the menu bar lays it out, so until it has a real frame
     /// the panel goes to the top-right corner, and it moves under the icon when the frame arrives.
     private func refit() {
@@ -148,7 +149,7 @@ public final class MenuBarShell: NSObject {
         var topEdge = visible.maxY
         if let frame = statusWindow?.frame, frame.width > 0, frame.maxY > screen.frame.maxY - 60 {
             anchorX = frame.midX
-            topEdge = min(frame.minY - 6, visible.maxY)
+            topEdge = min(frame.minY, visible.maxY)
         }
         panel.fitToContent(centeredOn: anchorX, topEdge: topEdge, within: visible)
     }

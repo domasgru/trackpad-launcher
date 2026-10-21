@@ -27,7 +27,7 @@ final class LauncherPanel: NSPanel {
         hidesOnDeactivate = false
     }
 
-    private static let cornerRadius: CGFloat = 26
+    private static let cornerRadius: CGFloat = 12
     private static let screenEdgeInset: CGFloat = 8
 
     override var canBecomeKey: Bool { true }
