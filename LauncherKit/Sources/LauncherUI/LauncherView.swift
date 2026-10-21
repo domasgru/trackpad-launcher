@@ -4,56 +4,46 @@ import SwiftUI
 
 /// Five gesture rows, the switcher section, the hand toggle, the Launch animation switch, a divider, then the hint
 /// while gestures are active or the trackpad settings notice while they are not, the Accessibility and screen recording
-/// hints while each applies, and a bottom bar holding Quit.
+/// hints while each applies. Quit lives in the status item's right-click menu.
 struct LauncherView: View {
     let launcher: Launcher
     let actions: LauncherActions
 
     var body: some View {
-        VStack(spacing: 12) {
-            VStack(spacing: 16) {
-                ForEach(launcher.rows) { row in
-                    GestureRowView(row: row, launcher: launcher, actions: actions)
-                }
-                SwitcherSection(launcher: launcher)
-                HandModeToggle(launcher: launcher)
-                    .padding(.top, 16)
-                LaunchAnimationSwitch(launcher: launcher)
-                Divider()
-                switch launcher.activity {
-                case .active:
-                    HintText(hint: launcher.gestureHint)
-                case .inactive(let cause):
-                    SettingsNotice(
-                        message: Copy.inactiveNotice(for: cause), button: "Trackpad settings…",
-                        open: { actions.openSettings(.trackpad) })
-                }
-                if !launcher.isAccessibilityGranted {
-                    SettingsNotice(
-                        message: Copy.accessibilityHint,
-                        button: "Grant access…", open: { actions.openSettings(.accessibility) })
-                }
-                if let hint = launcher.screenRecordingHint {
-                    SettingsNotice(message: Copy.screenRecordingHint, button: Copy.screenRecordingButton(hint)) {
-                        switch hint {
-                        case .ask: launcher.askForScreenRecording()
-                        case .openSettings: actions.openSettings(.screenRecording)
-                        }
+        VStack(spacing: 16) {
+            ForEach(launcher.rows) { row in
+                GestureRowView(row: row, launcher: launcher, actions: actions)
+            }
+            SwitcherSection(launcher: launcher)
+            HandModeToggle(launcher: launcher)
+                .padding(.top, 16)
+            LaunchAnimationSwitch(launcher: launcher)
+            Divider()
+            switch launcher.activity {
+            case .active:
+                HintText(hint: launcher.gestureHint)
+            case .inactive(let cause):
+                SettingsNotice(
+                    message: Copy.inactiveNotice(for: cause), button: "Trackpad settings…",
+                    open: { actions.openSettings(.trackpad) })
+            }
+            if !launcher.isAccessibilityGranted {
+                SettingsNotice(
+                    message: Copy.accessibilityHint,
+                    button: "Grant access…", open: { actions.openSettings(.accessibility) })
+            }
+            if let hint = launcher.screenRecordingHint {
+                SettingsNotice(message: Copy.screenRecordingHint, button: Copy.screenRecordingButton(hint)) {
+                    switch hint {
+                    case .ask: launcher.askForScreenRecording()
+                    case .openSettings: actions.openSettings(.screenRecording)
                     }
                 }
             }
-            .padding(16)
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.quaternary))
-
-            HStack {
-                Spacer()
-                Button("Quit", action: actions.quit)
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.capsule)
-                    .controlSize(.large)
-            }
         }
+        .padding(16)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.quaternary))
         .padding(12)
         .frame(width: 266)
         .fixedSize(horizontal: true, vertical: false)

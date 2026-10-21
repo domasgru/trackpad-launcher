@@ -78,7 +78,7 @@ The app assigned to the gesture that just fired.
 What a gesture does to its target app: launch it if it is not running; otherwise unhide, restore minimised windows or open a new window as needed, and make it the active app. A gesture that launches its app shows the launch bounce while the app starts up.
 
 ## Launcher window
-The window that opens from the menu bar icon: five gesture rows, the switcher section (the swipe illustration, its title and the swipe setting's switch, then the thumb tap illustration, its title and the swap setting's switch, then the window swipe illustration, its title and the window swipe setting's switch), the hand-mode toggle, the launch animation switch, the hint, the Accessibility hint and the screen recording hint while they apply, and Quit.
+The window that opens from the menu bar icon: five gesture rows, the switcher section (the swipe illustration, its title and the swipe setting's switch, then the thumb tap illustration, its title and the swap setting's switch, then the window swipe illustration, its title and the window swipe setting's switch), the hand-mode toggle, the launch animation switch, the hint, and the Accessibility hint and the screen recording hint while they apply. Quit is in the menu that a right-click (or Control-click) on the menu bar icon opens.
 
 ## Gesture row
 One line in the launcher window: a gesture illustration and the app picker for that gesture.

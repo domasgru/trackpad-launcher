@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 /// The thin AppKit shell: maps AppKit signals to `Launcher` intents and renders `Launcher` state.
 /// Create it before `Launcher.start()`: a first-launch window needs the status item as its anchor.
 ///
+/// A right-click (or Control-click) on the icon opens a menu holding Quit instead of toggling the window.
+///
 /// Dismissal: an icon click toggles; the panel resigning key dismisses it, except for a mouse-down on the status
 /// item's own button (that click is the toggle, and closing here would reopen it); a mouse-down monitor
 /// exists only while the window is open and dismisses; Escape closes; a fired gesture closes it through the model.
@@ -32,7 +34,8 @@ public final class MenuBarShell: NSObject {
 
         statusItem.button?.image = StatusIcon.image(active: launcher.activity.isActive)
         statusItem.button?.target = self
-        statusItem.button?.action = #selector(toggleWindow)
+        statusItem.button?.action = #selector(statusItemClicked)
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         panel.onCancel = { [launcher] in launcher.closeWindow() }
         panel.onResignKey = { [unowned self] in resignedKey() }
 
@@ -77,8 +80,26 @@ public final class MenuBarShell: NSObject {
         if let statusWindowMoved { NotificationCenter.default.removeObserver(statusWindowMoved) }
     }
 
-    @objc private func toggleWindow() {
-        if launcher.isWindowOpen { launcher.closeWindow() } else { launcher.openWindow() }
+    @objc private func statusItemClicked() {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            showContextMenu()
+        } else if launcher.isWindowOpen {
+            launcher.closeWindow()
+        } else {
+            launcher.openWindow()
+        }
+    }
+
+    /// Set only for the click, so a left click still reaches `statusItemClicked` instead of opening the menu.
+    private func showContextMenu() {
+        launcher.closeWindow()
+        let menu = NSMenu()
+        menu.addItem(
+            withTitle: "Quit Trackpad Launcher", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
     }
 
     private func resignedKey() {
@@ -154,7 +175,6 @@ public final class MenuBarShell: NSObject {
             openSettings: { pane in
                 launcher.closeWindow()
                 NSWorkspace.shared.open(pane.url)
-            },
-            quit: { NSApp.terminate(nil) })
+            })
     }
 }
