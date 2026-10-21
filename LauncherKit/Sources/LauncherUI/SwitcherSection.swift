@@ -36,7 +36,8 @@ struct SettingRow: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Toggle(title, isOn: isOn)
-                .toggleStyle(PillSwitchStyle())
+                .toggleStyle(.switch)
+                .labelsHidden()
         }
     }
 }

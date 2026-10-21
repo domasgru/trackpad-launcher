@@ -115,44 +115,19 @@ enum TemplateImage {
     }
 }
 
-/// Two capsule segments in a capsule track; the selected one is filled with the accent colour. The right hand anchors
-/// its thumb on the left, so *Left thumb* is `.right`.
+/// The right hand anchors its thumb on the left, so *Left thumb* is `.right`.
 struct ThumbPicker: View {
     let launcher: Launcher
-    @Namespace private var selection
 
     var body: some View {
-        HStack(spacing: 0) {
-            segment("Left thumb", .right)
-            segment("Right thumb", .left)
+        Picker("Thumb", selection: Binding(get: { launcher.handMode }, set: { launcher.setHandMode($0) })) {
+            Text("Left thumb").tag(HandMode.right)
+            Text("Right thumb").tag(HandMode.left)
         }
-        .frame(height: 28)
-        .background(Color.primary.opacity(0.08), in: Capsule())
-        .accessibilityRepresentation {
-            Picker("Thumb", selection: Binding(get: { launcher.handMode }, set: { launcher.setHandMode($0) })) {
-                Text("Left thumb").tag(HandMode.right)
-                Text("Right thumb").tag(HandMode.left)
-            }
-            .pickerStyle(.segmented)
-        }
-    }
-
-    private func segment(_ title: String, _ handMode: HandMode) -> some View {
-        let isSelected = launcher.handMode == handMode
-        return Button {
-            withAnimation(.snappy(duration: 0.25)) { launcher.setHandMode(handMode) }
-        } label: {
-            Text(title)
-                .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background {
-                    if isSelected {
-                        Capsule().fill(Color.accentColor).matchedGeometryEffect(id: "selection", in: selection)
-                    }
-                }
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.large)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -167,30 +142,9 @@ struct LaunchAnimationSwitch: View {
                 "Launch animations",
                 isOn: Binding(get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
             )
-            .toggleStyle(PillSwitchStyle())
+            .toggleStyle(.switch)
+            .labelsHidden()
         }
-    }
-}
-
-/// The window's switch: a 54×24 capsule, accent-filled while on, with a 32×20 white capsule knob 2 pt inside it.
-struct PillSwitchStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        Capsule()
-            .fill(configuration.isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.primary.opacity(0.12)))
-            .frame(width: 54, height: 24)
-            .overlay(alignment: configuration.isOn ? .trailing : .leading) {
-                Capsule()
-                    .fill(.white)
-                    .shadow(color: .black.opacity(0.15), radius: 1, y: 0.5)
-                    .frame(width: 32, height: 20)
-                    .padding(2)
-            }
-            .animation(.snappy(duration: 0.2), value: configuration.isOn)
-            .contentShape(Capsule())
-            .onTapGesture { configuration.isOn.toggle() }
-            .accessibilityRepresentation {
-                Toggle(isOn: configuration.$isOn) { configuration.label }
-            }
     }
 }
 
