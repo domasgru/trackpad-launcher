@@ -115,19 +115,41 @@ enum TemplateImage {
     }
 }
 
-/// The right hand anchors its thumb on the left, so *Left thumb* is `.right`.
-struct ThumbPicker: View {
+/// The system segmented control, filling the window's width in two equal segments: SwiftUI's segmented picker keeps
+/// its fitting width on macOS, so this wraps `NSSegmentedControl`. The right hand anchors its thumb on the left, so
+/// *Left thumb* is `.right`.
+struct ThumbPicker: NSViewRepresentable {
     let launcher: Launcher
 
-    var body: some View {
-        Picker("Thumb", selection: Binding(get: { launcher.handMode }, set: { launcher.setHandMode($0) })) {
-            Text("Left thumb").tag(HandMode.right)
-            Text("Right thumb").tag(HandMode.left)
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.large)
-        .frame(maxWidth: .infinity)
+    private static let segments: [(title: String, handMode: HandMode)] = [
+        ("Left thumb", .right), ("Right thumb", .left),
+    ]
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSSegmentedControl {
+        let control = NSSegmentedControl(
+            labels: Self.segments.map(\.title), trackingMode: .selectOne,
+            target: context.coordinator, action: #selector(Coordinator.changed(_:)))
+        control.segmentDistribution = .fillEqually
+        control.controlSize = .large
+        control.setAccessibilityLabel("Thumb")
+        return control
+    }
+
+    func updateNSView(_ control: NSSegmentedControl, context: Context) {
+        context.coordinator.choose = { [launcher] in launcher.setHandMode(Self.segments[$0].handMode) }
+        control.selectedSegment = Self.segments.firstIndex { $0.handMode == launcher.handMode } ?? 0
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView control: NSSegmentedControl, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? control.fittingSize.width, height: control.fittingSize.height)
+    }
+
+    @MainActor final class Coordinator: NSObject {
+        var choose: (Int) -> Void = { _ in }
+
+        @objc func changed(_ control: NSSegmentedControl) { choose(control.selectedSegment) }
     }
 }
 
