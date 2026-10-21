@@ -8,6 +8,8 @@ import QuartzCore
 struct WindowSwitcherLook: Sendable {
     /// The highlight's radius is the panel's less its padding, so the two corners are concentric.
     var panelRadius = 22.0, highlightRadius = 14.0
+    /// A faint wash of the label colour over the highlight's clear glass, so it stays visible over any backdrop.
+    var highlightTint = 0.08
     var previewRadius = 6.0, previewFade = 0.08, minimisedAlpha = 0.55, badgeSize = 10.0
     var titleWeight = NSFont.Weight.medium
     var appearDuration = 0.1, appearScale = 0.96
@@ -32,6 +34,7 @@ final class WindowSwitcherPanel: OverlayPanel {
         super.init(cornerRadius: look.panelRadius, content: content)
         content.wantsLayer = true
         highlight.style = .clear
+        highlight.tintColor = .labelColor.withAlphaComponent(look.highlightTint)
         highlight.wantsLayer = true
         content.addSubview(highlight)
         rowViews.forEach(content.addSubview)
