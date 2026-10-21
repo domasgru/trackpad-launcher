@@ -105,9 +105,12 @@ enum TemplateImage {
         return image
     }
 
-    @ViewBuilder static func view(_ name: String) -> some View {
+    /// At the SVG's own size unless `size` is given; an SVG scales without blurring.
+    @ViewBuilder static func view(_ name: String, size: CGFloat? = nil) -> some View {
         if let image = nsImage(name) {
-            Image(nsImage: image).renderingMode(.template).foregroundStyle(.primary)
+            Image(nsImage: image).renderingMode(.template).resizable()
+                .frame(width: size ?? image.size.width, height: size ?? image.size.height)
+                .foregroundStyle(.primary)
         }
     }
 }
@@ -191,16 +194,16 @@ struct PillSwitchStyle: ToggleStyle {
     }
 }
 
-/// What the two marks in the illustrations mean.
+/// What the two marks in the illustrations mean, drawn larger than in the illustrations.
 struct Legend: View {
     var body: some View {
         HStack(spacing: 24) {
             HStack(spacing: 7) {
-                TemplateImage.view("thumb-mark")
+                TemplateImage.view("thumb-mark", size: 11)
                 Text("Hold")
             }
             HStack(spacing: 7) {
-                TemplateImage.view("other-finger-mark")
+                TemplateImage.view("other-finger-mark", size: 14)
                 Text("Tap")
             }
         }
