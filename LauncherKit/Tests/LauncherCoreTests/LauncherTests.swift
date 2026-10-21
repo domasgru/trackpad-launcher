@@ -29,6 +29,21 @@ extension Launcher {
             "the app is brought to front before the animation is requested, so the animation cannot delay it")
     }
 
+    @Test func aTapUnderAContactLandingInTheCornerStripBringsNothingToFront() {
+        let world = World(apps: ["Figma", "Arc"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
+        world.startProcess("Figma")
+        world.startProcess("Arc")
+        world.launcher.openWindow()
+
+        world.tap(2, thumbAtMM: (10, 1))
+
+        #expect(world.system.broughtToFront == [])
+        #expect(world.hardware.feedback == [])
+    }
+
     @Test func withTheLaunchAnimationOffAGesturePulsesBringsToFrontAndClosesTheWindowWithoutAnIcon() {
         let world = World(apps: ["Arc"])
         world.launcher.start()

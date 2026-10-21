@@ -2,7 +2,9 @@ import Testing
 import LauncherCore
 
 /// A contact landing at the bottom edge or the lower part of the hand-side edge is a resting hand, not a finger, for as
-/// long as it stays down. Anywhere else on the pad, the edges included, it is a finger.
+/// long as it stays down. So is a contact landing in the anchor corner within 3 mm of the top edge or the thumb-side
+/// edge (the corner strip): a thumb sitting partly off the pad. Anywhere else on the pad, the edges included, it is a
+/// finger.
 @Suite struct EdgeContactRecognizerTests {
     private let h = HandFrames()
 
@@ -218,15 +220,6 @@ import LauncherCore
     }
 
     @Test(arguments: [
-        (HandMode.right, 1.0),
-        (.left, 123.8),
-    ])
-    func aThumbAtTheVeryCornerStillAnchors(handMode: HandMode, thumbX: Double) {
-        let script = TouchScript(.macBook14).thumb(atMM: (thumbX, 1)).tap(fingers: 1)
-        #expect(fired(script.frames, handMode: handMode) == [.one])
-    }
-
-    @Test(arguments: [
         (SurfaceSize.macBook14, 122.3, 45.0, false),
         (.macBook14, 121.3, 45.0, true),
         (.macBook14, 120.8, 45.0, true),
@@ -355,5 +348,110 @@ import LauncherCore
         #expect(events.at == [110, 120, 130, 140, 150])
         #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]), "phases were \(events.phases)")
         #expect(fired(all) == [])
+    }
+
+    private func everyFrameIsQuiet(_ recognitions: [Recognition]) -> Bool {
+        recognitions.allSatisfy { $0.event == nil && $0.blocking == .none }
+    }
+
+    @Test(arguments: [(10.0, 1.0), (2.0, 10.0), (1.0, 1.0)])
+    func aContactLandingInTheCornerStripNeverAnchors(x: Double, y: Double) {
+        let script = TouchScript(.macBook14).thumb(atMM: (x, y)).tap(fingers: 2)
+        #expect(fired(script.frames) == [])
+    }
+
+    @Test(arguments: [(2.0, 10.0, 20.0, 0.0), (10.0, 1.0, 0.0, -20.0)])
+    func fingersSlidingUnderAContactInTheCornerStripAreNoSwipeOrWindowSwipe(x: Double, y: Double, dx: Double, dy: Double) {
+        let script = TouchScript(.macBook14).thumb(atMM: (x, y)).land(fingers: 2).slide(byMM: (dx, dy)).lift()
+        let all = recognitions(script.frames)
+        #expect(all.allSatisfy { $0.swipe == nil && $0.windowSwipe == nil && $0.fired == nil && $0.blocking == .none })
+    }
+
+    @Test func aContactInTheCornerStripIsNoThumbTapUnderTwoRestingFingers() {
+        let script = TouchScript(.macBook14).land(fingers: 2).wait(.milliseconds(150)).thumbTap(atMM: (10, 1)).lift()
+        let all = recognitions(script.frames)
+        #expect(swaps(script.frames) == [])
+        #expect(fired(script.frames) == [])
+        #expect(everyFrameIsQuiet(all))
+    }
+
+    @Test func aContactInTheCornerStripDoesNotAddToATapUnderAnAnchoredThumb() {
+        let script = TouchScript(.macBook14).thumb(atMM: (10, 10))
+            .land(fingers: 1, atMM: (10, 1)).wait(.milliseconds(50)).tap(fingers: 1)
+        #expect(fired(script.frames) == [.one])
+    }
+
+    @Test(arguments: [
+        TouchScript(.macBook14).thumb(atMM: (10, 1)).tap(fingers: 1, click: .firm).wait(.milliseconds(100)),
+        TouchScript(.macBook14).thumb(atMM: (10, 1)).land(fingers: 3, atMM: (50, 45))
+            .slide(byMM: (40, 0), over: .milliseconds(300)).lift(),
+    ])
+    func aContactInTheCornerStripBlocksNothingAndTheFingersBesideItAreFree(script: TouchScript) {
+        #expect(everyFrameIsQuiet(recognitions(script.frames)))
+    }
+
+    @Test func aContactInTheCornerStripAlreadyDownDoesNotStopTheThumbArming() {
+        let script = TouchScript(.macBook14).land(fingers: 1, atMM: (10, 1)).wait(.milliseconds(50))
+            .thumb(atMM: (8, 8)).tap(fingers: 2)
+        #expect(fired(script.frames) == [.two])
+    }
+
+    @Test func aContactInTheCornerStripAlreadyDownDoesNotStopASwap() {
+        let script = TouchScript(.macBook14).land(fingers: 1, atMM: (10, 1)).wait(.milliseconds(50))
+            .land(fingers: 2).wait(.milliseconds(150)).thumbTap(atMM: (8, 8)).lift()
+        #expect(swaps(script.frames) == [true])
+    }
+
+    @Test func aContactInTheCornerStripAloneDoesNotKeepBlockingAfterTheThumbLifts() {
+        let script = TouchScript(.macBook14).thumb(atMM: (8, 8)).land(fingers: 1, atMM: (10, 1))
+            .wait(.milliseconds(50)).liftThumb().tap(fingers: 1)
+        let frames = script.frames
+        let afterLift = frames.drop { frame in !frame.touches.contains { $0.id.rawValue == 100 } || frame.touches.count < 2 }
+            .drop { frame in frame.touches.contains { $0.id.rawValue == 100 } }
+        #expect(!afterLift.isEmpty)
+        #expect(fired(frames) == [])
+        #expect(recognitions(Array(afterLift)).allSatisfy { $0.blocking == .none })
+    }
+
+    @Test func aContactRollingOutOfTheCornerStripStaysAnEdgeContact() {
+        let script = TouchScript(.macBook14).thumb(atMM: (1, 10)).rollThumb(toMM: (11, 10)).tap(fingers: 2)
+        #expect(fired(script.frames) == [])
+    }
+
+    @Test func aFingerLandingAgainOutsideTheCornerStripIsJudgedByItsNewLanding() {
+        let script = TouchScript(.macBook14).thumbTap(atMM: (10, 1)).thumb(atMM: (8, 8)).tap(fingers: 2)
+        #expect(fired(script.frames) == [.two])
+    }
+
+    @Test func aThumbAnchoredOutsideTheCornerStripStaysAnchoredWhenItMovesIntoIt() {
+        let script = TouchScript(.macBook14).thumb(atMM: (6, 6)).rollThumb(toMM: (6, 1)).tap(fingers: 3)
+        #expect(fired(script.frames) == [.three])
+    }
+
+    @Test(arguments: [
+        (3.0, 3.0, [Gesture.one]),
+        (10.0, 2.9, []),
+        (2.9, 10.0, []),
+    ])
+    func theCornerStripEndsExactlyThreeMillimetresFromTheEdges(x: Double, y: Double, expected: [Gesture]) {
+        let script = TouchScript(.macBook14).thumb(atMM: (x, y)).tap(fingers: 1)
+        #expect(fired(script.frames) == expected)
+    }
+
+    @Test(arguments: [(123.8, 10.0), (114.8, 1.0), (123.8, 1.0)])
+    func theCornerStripRunsAlongTheTopAndRightEdgesInLeftHandMode(x: Double, y: Double) {
+        let script = TouchScript(.macBook14).thumb(atMM: (x, y)).tap(fingers: 2)
+        #expect(fired(script.frames, handMode: .left) == [])
+    }
+
+    @Test(arguments: [
+        (SurfaceSize.macBook14, 10.0, 2.0, [Gesture]()),
+        (.magicTrackpad, 10.0, 2.0, []),
+        (.magicTrackpad, 10.0, 4.0, [.two]),
+        (.magicTrackpad, 3.5, 10.0, [.two]),
+    ])
+    func theCornerStripIsThreeMillimetresOnEverySize(surface: SurfaceSize, x: Double, y: Double, expected: [Gesture]) {
+        let script = TouchScript(surface).thumb(atMM: (x, y)).tap(fingers: 2)
+        #expect(fired(script.frames, surface: surface) == expected)
     }
 }
