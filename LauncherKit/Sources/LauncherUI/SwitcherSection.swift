@@ -2,26 +2,26 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// Three setting rows: the swipe, the thumb tap, then the window swipe.
+/// Three setting rows: the swipe, the window swipe, then the thumb tap.
 struct SwitcherSection: View {
     let launcher: Launcher
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             SettingRow(
-                illustration: "swipe", title: "Swipe to switch apps", handMode: launcher.handMode,
+                illustration: "swipe", title: "Switch recent apps", handMode: launcher.handMode,
                 isOn: Binding(get: { launcher.isSwipeOn }, set: { launcher.setSwipe(on: $0) }))
             SettingRow(
-                illustration: "thumb-tap", title: "Thumb tap to swap apps", handMode: launcher.handMode,
-                isOn: Binding(get: { launcher.isSwapOn }, set: { launcher.setSwap(on: $0) }))
-            SettingRow(
-                illustration: "window-swipe", title: "Swipe up or down to switch windows", handMode: launcher.handMode,
+                illustration: "window-swipe", title: "Switch app windows", handMode: launcher.handMode,
                 isOn: Binding(get: { launcher.isWindowSwipeOn }, set: { launcher.setWindowSwipe(on: $0) }))
+            SettingRow(
+                illustration: "thumb-tap", title: "Toggle recent apps", handMode: launcher.handMode,
+                isOn: Binding(get: { launcher.isSwapOn }, set: { launcher.setSwap(on: $0) }))
         }
     }
 }
 
-/// One switch with its illustration (mirrored in left-hand mode) and its title.
+/// One switch with its illustration (the inverse copy in left-hand mode) and its title, which wraps to two lines.
 struct SettingRow: View {
     let illustration: String
     let title: String
@@ -29,16 +29,14 @@ struct SettingRow: View {
     let isOn: Binding<Bool>
 
     var body: some View {
-        HStack {
-            TemplateImage.view(illustration)
-                .scaleEffect(x: handMode == .left ? -1 : 1, y: 1)
+        HStack(spacing: 12) {
+            TemplateImage.view(handMode.illustration(illustration))
                 .accessibilityHidden(true)
             Text(title)
-                .font(.body)
-            Spacer(minLength: 8)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Toggle(title, isOn: isOn)
-                .toggleStyle(.switch)
-                .labelsHidden()
+                .toggleStyle(PillSwitchStyle())
         }
     }
 }

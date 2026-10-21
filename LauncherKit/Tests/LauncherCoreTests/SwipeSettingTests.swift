@@ -2,21 +2,16 @@ import Testing
 import LauncherCore
 
 @MainActor @Suite struct SwipeSettingTests {
-    private let swipeOnHint = Copy.gestureHint(for: .right, swipe: true)
-    private let swipeOffHint = Copy.gestureHint(for: .right, swipe: false)
-
     private func nothingHappened(_ world: World) -> Bool {
         world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty && world.system.bounces.isEmpty
     }
 
-    @Test func turningTheSwipeOffShowsNoSwitcherAndTheHintFollowsAtOnceInBothDirections() {
+    @Test func turningTheSwipeOffShowsNoSwitcherAndKeepsTheWindowOpen() {
         let world = World.switcherWorld()
         world.launcher.openWindow()
-        #expect(world.launcher.gestureHint == swipeOnHint)
 
         world.launcher.setSwipe(on: false)
         #expect(!world.launcher.isSwipeOn)
-        #expect(world.launcher.gestureHint == swipeOffHint)
         #expect(world.launcher.isWindowOpen)
 
         let script = world.swipe(3.5, 12, lift: false)
@@ -25,7 +20,7 @@ import LauncherCore
         #expect(nothingHappened(world))
 
         world.launcher.setSwipe(on: true)
-        #expect(world.launcher.gestureHint == swipeOnHint)
+        #expect(world.launcher.isSwipeOn)
     }
 
     @Test func afterTurningTheSwipeBackOnTheNextSwipeShowsTheRowAndOpensTheSelection() {

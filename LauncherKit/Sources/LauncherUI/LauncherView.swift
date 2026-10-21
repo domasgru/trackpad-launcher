@@ -2,50 +2,55 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// Five gesture rows, the switcher section, the hand toggle, the Launch animation switch, a divider, then the hint
-/// while gestures are active or the trackpad settings notice while they are not, the Accessibility and screen recording
-/// hints while each applies. Quit lives in the status item's right-click menu.
+/// Five gesture rows, the switcher section, the Launch animations switch, the thumb picker, a divider, then the legend
+/// while gestures are active or the trackpad settings notice while they are not, and the Accessibility and screen
+/// recording hints while each applies. Quit lives in the status item's right-click menu.
 struct LauncherView: View {
     let launcher: Launcher
     let actions: LauncherActions
 
     var body: some View {
-        VStack(spacing: 16) {
-            ForEach(launcher.rows) { row in
-                GestureRowView(row: row, launcher: launcher, actions: actions)
+        VStack(spacing: 0) {
+            VStack(spacing: 12) {
+                ForEach(launcher.rows) { row in
+                    GestureRowView(row: row, launcher: launcher, actions: actions)
+                }
             }
             SwitcherSection(launcher: launcher)
-            HandModeToggle(launcher: launcher)
-                .padding(.top, 16)
+                .padding(.top, 24)
             LaunchAnimationSwitch(launcher: launcher)
+                .padding(.top, 24)
+            ThumbPicker(launcher: launcher)
+                .padding(.top, 24)
             Divider()
-            switch launcher.activity {
-            case .active:
-                HintText(hint: launcher.gestureHint)
-            case .inactive(let cause):
-                SettingsNotice(
-                    message: Copy.inactiveNotice(for: cause), button: "Trackpad settings…",
-                    open: { actions.openSettings(.trackpad) })
-            }
-            if !launcher.isAccessibilityGranted {
-                SettingsNotice(
-                    message: Copy.accessibilityHint,
-                    button: "Grant access…", open: { actions.openSettings(.accessibility) })
-            }
-            if let hint = launcher.screenRecordingHint {
-                SettingsNotice(message: Copy.screenRecordingHint, button: Copy.screenRecordingButton(hint)) {
-                    switch hint {
-                    case .ask: launcher.askForScreenRecording()
-                    case .openSettings: actions.openSettings(.screenRecording)
+                .padding(.top, 20)
+            VStack(spacing: 16) {
+                switch launcher.activity {
+                case .active:
+                    Legend()
+                case .inactive(let cause):
+                    SettingsNotice(
+                        message: Copy.inactiveNotice(for: cause), button: "Trackpad settings…",
+                        open: { actions.openSettings(.trackpad) })
+                }
+                if !launcher.isAccessibilityGranted {
+                    SettingsNotice(
+                        message: Copy.accessibilityHint,
+                        button: "Grant access…", open: { actions.openSettings(.accessibility) })
+                }
+                if let hint = launcher.screenRecordingHint {
+                    SettingsNotice(message: Copy.screenRecordingHint, button: Copy.screenRecordingButton(hint)) {
+                        switch hint {
+                        case .ask: launcher.askForScreenRecording()
+                        case .openSettings: actions.openSettings(.screenRecording)
+                        }
                     }
                 }
             }
+            .padding(.top, 12)
         }
-        .padding(16)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.quaternary))
-        .padding(12)
-        .frame(width: 266)
+        .padding(EdgeInsets(top: 12, leading: 14, bottom: 16, trailing: 14))
+        .frame(width: 252)
         .fixedSize(horizontal: true, vertical: false)
     }
 }
@@ -57,9 +62,9 @@ struct GestureRowView: View {
     let actions: LauncherActions
 
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
             GestureIllustration(gesture: row.gesture, handMode: launcher.handMode)
-            Spacer(minLength: 8)
+            Spacer(minLength: 0)
             AppMenuButton(
                 current: row.app,
                 installedApps: launcher.installedApps,
@@ -73,16 +78,21 @@ struct GestureRowView: View {
 }
 
 /// The illustrations are the repo's SVGs, shipped as bundle resources and drawn as template images so they
-/// follow the label colour in light and dark. Left hand mirrors them horizontally.
+/// follow the label colour in light and dark.
 struct GestureIllustration: View {
     let gesture: LauncherCore.Gesture
     let handMode: HandMode
 
     var body: some View {
-        TemplateImage.view("gesture-\(gesture.fingerCount)")
-            .scaleEffect(x: handMode == .left ? -1 : 1, y: 1)
+        TemplateImage.view(handMode.illustration("gesture-\(gesture.fingerCount)"))
             .accessibilityLabel("\(gesture.fingerCount)-finger gesture")
     }
+}
+
+extension HandMode {
+    /// The illustrations draw the thumb in the top-left corner; the left hand's copies, with the thumb top-right,
+    /// are drawn separately as `-inverse`.
+    func illustration(_ name: String) -> String { self == .left ? name + "-inverse" : name }
 }
 
 enum TemplateImage {
@@ -102,19 +112,44 @@ enum TemplateImage {
     }
 }
 
-struct HandModeToggle: View {
+/// Two capsule segments in a capsule track; the selected one is filled with the accent colour. The right hand anchors
+/// its thumb on the left, so *Left thumb* is `.right`.
+struct ThumbPicker: View {
     let launcher: Launcher
+    @Namespace private var selection
 
     var body: some View {
-        Picker(
-            "Hand mode",
-            selection: Binding(get: { launcher.handMode }, set: { launcher.setHandMode($0) })
-        ) {
-            Text("Left hand").tag(HandMode.left)
-            Text("Right hand").tag(HandMode.right)
+        HStack(spacing: 0) {
+            segment("Left thumb", .right)
+            segment("Right thumb", .left)
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        .frame(height: 28)
+        .background(Color.primary.opacity(0.08), in: Capsule())
+        .accessibilityRepresentation {
+            Picker("Thumb", selection: Binding(get: { launcher.handMode }, set: { launcher.setHandMode($0) })) {
+                Text("Left thumb").tag(HandMode.right)
+                Text("Right thumb").tag(HandMode.left)
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+
+    private func segment(_ title: String, _ handMode: HandMode) -> some View {
+        let isSelected = launcher.handMode == handMode
+        return Button {
+            withAnimation(.snappy(duration: 0.25)) { launcher.setHandMode(handMode) }
+        } label: {
+            Text(title)
+                .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background {
+                    if isSelected {
+                        Capsule().fill(Color.accentColor).matchedGeometryEffect(id: "selection", in: selection)
+                    }
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -122,37 +157,54 @@ struct LaunchAnimationSwitch: View {
     let launcher: Launcher
 
     var body: some View {
-        HStack {
-            Text("Launch animation")
-            Spacer(minLength: 8)
+        HStack(spacing: 12) {
+            Text("Launch animations")
+            Spacer(minLength: 0)
             Toggle(
-                "Launch animation",
+                "Launch animations",
                 isOn: Binding(get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
             )
-            .toggleStyle(.switch)
-            .labelsHidden()
+            .toggleStyle(PillSwitchStyle())
         }
     }
 }
 
-struct HintText: View {
-    let hint: String
+/// The window's switch: a 54×24 capsule, accent-filled while on, with a 32×20 white capsule knob 2 pt inside it.
+struct PillSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Capsule()
+            .fill(configuration.isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.primary.opacity(0.12)))
+            .frame(width: 54, height: 24)
+            .overlay(alignment: configuration.isOn ? .trailing : .leading) {
+                Capsule()
+                    .fill(.white)
+                    .shadow(color: .black.opacity(0.15), radius: 1, y: 0.5)
+                    .frame(width: 32, height: 20)
+                    .padding(2)
+            }
+            .animation(.snappy(duration: 0.2), value: configuration.isOn)
+            .contentShape(Capsule())
+            .onTapGesture { configuration.isOn.toggle() }
+            .accessibilityRepresentation {
+                Toggle(isOn: configuration.$isOn) { configuration.label }
+            }
+    }
+}
 
+/// What the two marks in the illustrations mean.
+struct Legend: View {
     var body: some View {
-        // The copy lives in core with `●` and `◉` standing for the two marks, which are drawn as images here.
-        let parts = hint.components(separatedBy: ["●", "◉"])
-        Group {
-            if parts.count == 3 {
-                Text("\(mark("thumb-mark"))\(parts[1])\(mark("other-finger-mark"))\(parts[2])")
-            } else {
-                Text(hint)
+        HStack(spacing: 24) {
+            HStack(spacing: 7) {
+                TemplateImage.view("thumb-mark")
+                Text("Hold")
+            }
+            HStack(spacing: 7) {
+                TemplateImage.view("other-finger-mark")
+                Text("Tap")
             }
         }
-        .hintStyle()
-    }
-
-    private func mark(_ name: String) -> Image {
-        Image(nsImage: TemplateImage.nsImage(name) ?? NSImage()).renderingMode(.template)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

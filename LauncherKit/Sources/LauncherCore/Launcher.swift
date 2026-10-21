@@ -25,8 +25,6 @@ public final class Launcher {
     public var isSwipeOn: Bool { settings.isSwipeOn }
     public var isSwapOn: Bool { settings.isSwapOn }
     public var isWindowSwipeOn: Bool { settings.isWindowSwipeOn }
-    /// The window's hint, which mentions swiping only while the swipe is on.
-    public var gestureHint: String { Copy.gestureHint(for: settings.handMode, swipe: settings.isSwipeOn) }
     /// One derivation, read by the icon, the notice and the fire guard.
     public var activity: GestureActivity {
         GestureActivity(connected: Set(connected.map(\.kind)), values: preferenceValues)
