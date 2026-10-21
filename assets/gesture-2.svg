@@ -1,8 +1,8 @@
 <svg width="48" height="31" viewBox="0 0 48 31" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect x="0.5" y="0.5" width="47" height="30" rx="3.5" stroke="#232323"/>
-<circle cx="8" cy="8" r="4" fill="#232323"/>
-<circle cx="21" cy="17" r="4.75" stroke="#232323" stroke-width="0.5"/>
-<circle cx="21" cy="17" r="2.75" fill="#232323" stroke="#232323" stroke-width="0.5"/>
-<circle cx="27" cy="14" r="4.75" stroke="#232323" stroke-width="0.5"/>
-<circle cx="27" cy="14" r="2.75" fill="#232323" stroke="#232323" stroke-width="0.5"/>
+<rect x="0.5" y="0.5" width="47" height="30" rx="3.5" stroke="black"/>
+<circle cx="8" cy="8" r="4" fill="black"/>
+<path d="M26.75 18C26.75 20.6234 24.6234 22.75 22 22.75C19.3766 22.75 17.25 20.6234 17.25 18C17.25 15.3766 19.3766 13.25 22 13.25C24.6234 13.25 26.75 15.3766 26.75 18Z" stroke-width="0.5" stroke="black"/>
+<path d="M24.75 18C24.75 19.5188 23.5188 20.75 22 20.75C20.4812 20.75 19.25 19.5188 19.25 18C19.25 16.4812 20.4812 15.25 22 15.25C23.5188 15.25 24.75 16.4812 24.75 18Z" fill="black" stroke-width="0.5" stroke="black"/>
+<path d="M30.75 13C30.75 15.6234 28.6234 17.75 26 17.75C23.3766 17.75 21.25 15.6234 21.25 13C21.25 10.3766 23.3766 8.25 26 8.25C28.6234 8.25 30.75 10.3766 30.75 13Z" stroke-width="0.5" stroke="black"/>
+<path d="M28.75 13C28.75 14.5188 27.5188 15.75 26 15.75C24.4812 15.75 23.25 14.5188 23.25 13C23.25 11.4812 24.4812 10.25 26 10.25C27.5188 10.25 28.75 11.4812 28.75 13Z" fill="black" stroke-width="0.5" stroke="black"/>
 </svg>
