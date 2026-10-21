@@ -406,11 +406,15 @@ import LauncherCore
         let script = TouchScript(.macBook14).thumb(atMM: (8, 8)).land(fingers: 1, atMM: (10, 1))
             .wait(.milliseconds(50)).liftThumb().tap(fingers: 1)
         let frames = script.frames
-        let afterLift = frames.drop { frame in !frame.touches.contains { $0.id.rawValue == 100 } || frame.touches.count < 2 }
-            .drop { frame in frame.touches.contains { $0.id.rawValue == 100 } }
-        #expect(!afterLift.isEmpty)
+        let results = recognitions(frames)
+        let thumbWasDown = frames.firstIndex { frame in frame.touches.contains { $0.id.rawValue == TouchScript.thumbID } }
+        let liftIndex = thumbWasDown.flatMap { start in
+            frames[start...].firstIndex { frame in !frame.touches.contains { $0.id.rawValue == TouchScript.thumbID } }
+        }
         #expect(fired(frames) == [])
-        #expect(recognitions(Array(afterLift)).allSatisfy { $0.blocking == .none })
+        let afterLift = liftIndex.map { Array(results[$0...]) } ?? []
+        #expect(!afterLift.isEmpty)
+        #expect(afterLift.allSatisfy { $0.blocking == .none })
     }
 
     @Test func aContactRollingOutOfTheCornerStripStaysAnEdgeContact() {

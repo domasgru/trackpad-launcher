@@ -2,15 +2,16 @@ import Foundation
 
 /// Every fixed number in gesture recognition and click blocking, in one place. Not user-tunable.
 package enum GestureRules {
-    /// Fraction of the surface width, measured from the anchor-side edge.
+    /// Fraction of the surface width, measured from the thumb-side edge.
     static let cornerWidth = 0.20
     /// Fraction of the surface height, measured from the top edge.
     static let cornerHeight = 0.25
     /// An anchored thumb may roll this far past the zone edge before it stops being the anchor.
     static let anchorReleaseMarginMM = 2.0
-    /// A contact landing closer than this to a guarded edge is an edge contact, not a finger: a resting palm or a thumb
-    /// partly off the pad. The guarded edges are the whole bottom edge, the hand-side edge below the `edgeBandTop`
-    /// line, and the top edge and thumb-side edge inside the anchor corner (the corner strip). Strictly less is inside.
+    /// A contact landing in one of the three bands is an edge contact, not a finger: a resting palm or a thumb
+    /// partly off the pad. The bands are closer than this to the bottom edge, to the hand-side edge below the
+    /// `edgeBandTop` line, or, in the anchor corner's corner strip, to the top edge or the thumb-side edge. Strictly
+    /// less is inside the band.
     static let edgeBandMM = 3.0
     /// Fraction of the surface height, measured from the top edge, below which the hand-side edge is in the band. A
     /// share of the height, not millimetres: the palm rests at the same share of the pad on every trackpad size.

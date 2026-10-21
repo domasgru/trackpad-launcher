@@ -26,3 +26,9 @@
 - Review: `.none` proves only what the app controls, and macOS may count a resting graze among the contacts of its own swipes → the Strategy says so, and the optional hardware check now covers a click, a two-finger scroll and a three-finger desktop swipe under a resting graze, with the outcome to be recorded in Further Notes.
 
 ## Implement
+- S1 implemented in one commit; every red-first row (T1-T10, T14, the "no gesture" cases of T13 and T15) was confirmed failing before the change. Full gate green.
+- No verification skill in the repo, so no verification upkeep.
+- Review: T9 recognised only the frames after the thumb's lift with a fresh recognizer, so it never checked that a strip contact does not keep the thumb touch alive → it now recognises the whole script and checks every frame from the lift on; it was confirmed red with the strip check removed.
+- Review: T9 hard-coded `TouchScript`'s thumb ID (100) → `TouchScript.thumbID` is no longer private, and the test uses it.
+- Review: production code used off-glossary words → `isInStrip` is now `isInCornerStrip` and `fromEdge` is now `fractionFromThumbSideEdge`; "anchor-side edge" is now "thumb-side edge", "half-off thumb" is now "a thumb that sits partly off the pad", and "guarded edges" is now band wording in the `GestureRules` docs.
+- Not fixed (judgement calls): the handMode/surface data clump, a shared band-distance helper, and the R2 row's three assertions that nothing happens.

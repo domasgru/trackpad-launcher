@@ -44,7 +44,8 @@ struct TouchScript {
     }
 
     private static let frameIntervalMS = 10
-    private static let thumbID: Int32 = 100
+    /// The touch ID every thumb in a script lands with.
+    static let thumbID: Int32 = 100
 
     private let surface: SurfaceSize
     private var contacts: [Contact] = []
