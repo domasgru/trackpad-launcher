@@ -2,56 +2,71 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// Five gesture rows, the switcher section, the Launch animations switch, the thumb picker, a divider, then the legend
-/// while gestures are active or the trackpad settings notice while they are not, and the Accessibility and screen
-/// recording hints while each applies. Quit lives in the status item's right-click menu.
+/// One column of 28 pt rows 12 pt apart: five gesture rows, the switcher section, the Launch animations switch and the
+/// thumb picker. The illustrations are 28 pt tall; the system switch and segmented control, 24 pt at the regular size,
+/// are padded out to 28. Below them, while any applies, the trackpad settings notice, the Accessibility hint and the
+/// screen recording hint. The guide naming the two marks sits over the first illustration while the first gesture has
+/// no app (its short picker leaves the guide room), and only in right-hand mode, where its arrows meet the thumb. Quit
+/// lives in the status item's right-click menu.
 struct LauncherView: View {
     let launcher: Launcher
     let actions: LauncherActions
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 16) {
             VStack(spacing: 12) {
                 ForEach(launcher.rows) { row in
                     GestureRowView(row: row, launcher: launcher, actions: actions)
                 }
+                SwitcherSection(launcher: launcher)
+                LaunchAnimationSwitch(launcher: launcher)
+                    .padding(.vertical, 2)
+                ThumbPicker(launcher: launcher)
+                    .padding(.vertical, 2)
             }
-            SwitcherSection(launcher: launcher)
-                .padding(.top, 24)
-            LaunchAnimationSwitch(launcher: launcher)
-                .padding(.top, 24)
-            ThumbPicker(launcher: launcher)
-                .padding(.top, 24)
-            Divider()
-                .padding(.top, 20)
-            VStack(spacing: 16) {
-                switch launcher.activity {
-                case .active:
-                    Legend()
-                case .inactive(let cause):
-                    SettingsNotice(
-                        message: Copy.inactiveNotice(for: cause), button: "Trackpad settings…",
-                        open: { actions.openSettings(.trackpad) })
-                }
-                if !launcher.isAccessibilityGranted {
-                    SettingsNotice(
-                        message: Copy.accessibilityHint,
-                        button: "Grant access…", open: { actions.openSettings(.accessibility) })
-                }
-                if let hint = launcher.screenRecordingHint {
-                    SettingsNotice(message: Copy.screenRecordingHint, button: Copy.screenRecordingButton(hint)) {
-                        switch hint {
-                        case .ask: launcher.askForScreenRecording()
-                        case .openSettings: actions.openSettings(.screenRecording)
+            // The labels only: the controls keep the system's own fonts.
+            .font(.system(size: 13, weight: .medium))
+            if hasNotices {
+                VStack(spacing: 16) {
+                    if case .inactive(let cause) = launcher.activity {
+                        SettingsNotice(
+                            message: Copy.inactiveNotice(for: cause), button: "Trackpad settings…",
+                            open: { actions.openSettings(.trackpad) })
+                    }
+                    if !launcher.isAccessibilityGranted {
+                        SettingsNotice(
+                            message: Copy.accessibilityHint,
+                            button: "Grant access…", open: { actions.openSettings(.accessibility) })
+                    }
+                    if let hint = launcher.screenRecordingHint {
+                        SettingsNotice(message: Copy.screenRecordingHint, button: Copy.screenRecordingButton(hint)) {
+                            switch hint {
+                            case .ask: launcher.askForScreenRecording()
+                            case .openSettings: actions.openSettings(.screenRecording)
+                            }
                         }
                     }
                 }
             }
-            .padding(.top, 12)
         }
-        .padding(EdgeInsets(top: 12, leading: 14, bottom: 16, trailing: 14))
+        .padding(EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14))
+        .overlay(alignment: .topLeading) {
+            if showsGuide {
+                Guide()
+                    .offset(x: 26, y: 7.63)
+            }
+        }
         .frame(width: 252)
         .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var showsGuide: Bool {
+        launcher.handMode == .right && launcher.rows.first?.app == .unassigned
+    }
+
+    private var hasNotices: Bool {
+        if case .inactive = launcher.activity { return true }
+        return !launcher.isAccessibilityGranted || launcher.screenRecordingHint != nil
     }
 }
 
@@ -77,15 +92,31 @@ struct GestureRowView: View {
     }
 }
 
-/// The illustrations are the repo's SVGs, shipped as bundle resources and drawn as template images so they
-/// follow the label colour in light and dark.
 struct GestureIllustration: View {
     let gesture: LauncherCore.Gesture
     let handMode: HandMode
 
     var body: some View {
-        TemplateImage.view(handMode.illustration("gesture-\(gesture.fingerCount)"))
+        Illustration(name: "gesture-\(gesture.fingerCount)", handMode: handMode)
             .accessibilityLabel("\(gesture.fingerCount)-finger gesture")
+    }
+}
+
+/// The paper card with a gesture's marks on it. Both are the repo's bundle resources, which
+/// `Scripts/illustrations.mjs` splits out of the Figma exports: the card is one bitmap shared by every illustration,
+/// the marks are SVGs drawn in their own black on it, in light and dark.
+struct Illustration: View {
+    let name: String
+    let handMode: HandMode
+
+    private static let size = CGSize(width: 45, height: 28)
+
+    var body: some View {
+        ZStack {
+            BundleImage.view("illustration-surface", type: "png", size: Self.size)
+            BundleImage.view(handMode.illustration(name), size: Self.size)
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
     }
 }
 
@@ -95,29 +126,38 @@ extension HandMode {
     func illustration(_ name: String) -> String { self == .left ? name + "-inverse" : name }
 }
 
-enum TemplateImage {
+enum BundleImage {
     /// A missing resource draws nothing rather than failing: the window stays usable.
-    static func nsImage(_ name: String) -> NSImage? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "svg"),
-            let image = NSImage(contentsOf: url)
-        else { return nil }
-        image.isTemplate = true
-        return image
+    static func nsImage(_ name: String, type: String = "svg") -> NSImage? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: type) else { return nil }
+        return NSImage(contentsOf: url)
     }
 
-    /// At the SVG's own size unless `size` is given; an SVG scales without blurring.
-    @ViewBuilder static func view(_ name: String, size: CGFloat? = nil) -> some View {
-        if let image = nsImage(name) {
-            Image(nsImage: image).renderingMode(.template).resizable()
-                .frame(width: size ?? image.size.width, height: size ?? image.size.height)
-                .foregroundStyle(.primary)
+    /// At the image's own size unless `size` is given; an SVG scales without blurring. A template image takes the
+    /// foreground style.
+    @ViewBuilder static func view(
+        _ name: String, type: String = "svg", size: CGSize? = nil, template: Bool = false
+    ) -> some View {
+        if let image = nsImage(name, type: type) {
+            Image(nsImage: image).renderingMode(template ? .template : .original).resizable()
+                .frame(width: (size ?? image.size).width, height: (size ?? image.size).height)
         }
     }
 }
 
-/// The system segmented control, filling the window's width in two equal segments: SwiftUI's segmented picker keeps
-/// its fitting width on macOS, so this wraps `NSSegmentedControl`. The right hand anchors its thumb on the left, so
-/// *Left thumb* is `.right`.
+/// Handwritten *Hold* and *Tap* with arrows to the thumb and the tapping finger of the first illustration.
+struct Guide: View {
+    var body: some View {
+        BundleImage.view("guide", template: true)
+            .foregroundStyle(.primary)
+            .allowsHitTesting(false)
+            .accessibilityLabel("The filled dot is the thumb you hold, the ringed dots are fingers that tap")
+    }
+}
+
+/// The system segmented control at the regular size (24 pt), filling the window's width in two equal segments:
+/// SwiftUI's segmented picker keeps its fitting width on macOS, so this wraps `NSSegmentedControl`. The right hand
+/// anchors its thumb on the left, so *Left thumb* is `.right`.
 struct ThumbPicker: NSViewRepresentable {
     let launcher: Launcher
 
@@ -132,7 +172,7 @@ struct ThumbPicker: NSViewRepresentable {
             labels: Self.segments.map(\.title), trackingMode: .selectOne,
             target: context.coordinator, action: #selector(Coordinator.changed(_:)))
         control.segmentDistribution = .fillEqually
-        control.controlSize = .large
+        control.controlSize = .regular
         control.setAccessibilityLabel("Thumb")
         return control
     }
@@ -167,23 +207,6 @@ struct LaunchAnimationSwitch: View {
             .toggleStyle(.switch)
             .labelsHidden()
         }
-    }
-}
-
-/// What the two marks in the illustrations mean, drawn larger than in the illustrations.
-struct Legend: View {
-    var body: some View {
-        HStack(spacing: 24) {
-            HStack(spacing: 7) {
-                TemplateImage.view("thumb-mark", size: 11)
-                Text("Hold")
-            }
-            HStack(spacing: 7) {
-                TemplateImage.view("other-finger-mark", size: 14)
-                Text("Tap")
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

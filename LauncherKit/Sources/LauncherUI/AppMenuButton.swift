@@ -2,9 +2,10 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// An `NSPopUpButton` whose delegate rebuilds the items from the launcher's list every time the menu opens. That is
-/// only building items from values already in memory: no disk, Spotlight or icon drawing runs on the click path.
-/// Between openings the menu holds only what the button shows.
+/// The system pop-up button with the system's Liquid Glass bezel at the regular size (a 24 pt capsule), whose delegate
+/// rebuilds the items from the launcher's list every time the menu opens. That is only building items from values
+/// already in memory: no disk, Spotlight or icon drawing runs on the click path. Between openings the menu holds only
+/// what the button shows.
 struct AppMenuButton: NSViewRepresentable {
     /// A gesture row's picker: shows the row's app and checks it in the menu; the menu ends in None.
     let current: RowApp
@@ -19,8 +20,8 @@ struct AppMenuButton: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSPopUpButton {
         let button = NSPopUpButton(frame: .zero, pullsDown: false)
-        button.isBordered = false
-        button.font = .systemFont(ofSize: 13)
+        button.bezelStyle = .glass
+        button.controlSize = .regular
         button.menu?.autoenablesItems = false
         button.menu?.delegate = context.coordinator
         context.coordinator.button = button
@@ -108,8 +109,8 @@ struct AppMenuButton: NSViewRepresentable {
             item.attributedTitle = NSAttributedString(
                 string: title,
                 attributes: [
-                    .foregroundColor: symbol == nil ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor,
-                    .font: NSFont.systemFont(ofSize: 13),
+                    .foregroundColor: symbol == nil ? NSColor.systemGray : NSColor.tertiaryLabelColor,
+                    .font: button?.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize(for: .regular)),
                 ])
             if let symbol { item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) }
             return item
