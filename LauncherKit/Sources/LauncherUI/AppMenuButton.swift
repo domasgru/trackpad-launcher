@@ -2,10 +2,10 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// The system pop-up button, bordered at the regular size (macOS's 24 pt glass capsule), whose delegate rebuilds the
-/// items from the launcher's list every time the menu opens. That is only building items from values already in memory:
-/// no disk, Spotlight or icon drawing runs on the click path. Between openings the menu holds only what the button
-/// shows.
+/// The system pop-up button with the system's Liquid Glass bezel at the regular size (a 24 pt capsule), whose delegate
+/// rebuilds the items from the launcher's list every time the menu opens. That is only building items from values
+/// already in memory: no disk, Spotlight or icon drawing runs on the click path. Between openings the menu holds only
+/// what the button shows.
 struct AppMenuButton: NSViewRepresentable {
     /// A gesture row's picker: shows the row's app and checks it in the menu; the menu ends in None.
     let current: RowApp
@@ -20,6 +20,7 @@ struct AppMenuButton: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSPopUpButton {
         let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        button.bezelStyle = .glass
         button.controlSize = .regular
         button.menu?.autoenablesItems = false
         button.menu?.delegate = context.coordinator
