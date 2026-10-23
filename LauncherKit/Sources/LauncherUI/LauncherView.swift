@@ -3,11 +3,11 @@ import LauncherCore
 import SwiftUI
 
 /// One column of 28 pt rows 12 pt apart: five gesture rows, the switcher section, the Launch animations switch and the
-/// thumb picker. The illustrations are 28 pt tall; the 24 pt switch and segmented control are padded out to 28. Below
-/// them, while any applies, the trackpad settings notice, the Accessibility hint and the screen recording hint. The
-/// guide naming the two marks sits over the first illustration while the first gesture has no app (its short picker
-/// leaves the guide room), and only in right-hand mode, where its arrows meet the thumb. Quit lives in the status
-/// item's right-click menu.
+/// thumb picker. The illustrations are 28 pt tall; the system switch and segmented control, 24 pt at the regular size,
+/// are padded out to 28. Below them, while any applies, the trackpad settings notice, the Accessibility hint and the
+/// screen recording hint. The guide naming the two marks sits over the first illustration while the first gesture has
+/// no app (its short picker leaves the guide room), and only in right-hand mode, where its arrows meet the thumb. Quit
+/// lives in the status item's right-click menu.
 struct LauncherView: View {
     let launcher: Launcher
     let actions: LauncherActions
@@ -24,6 +24,8 @@ struct LauncherView: View {
                 ThumbPicker(launcher: launcher)
                     .padding(.vertical, 2)
             }
+            // The labels only: the controls keep the system's own fonts.
+            .font(.system(size: 13, weight: .medium))
             if hasNotices {
                 VStack(spacing: 16) {
                     if case .inactive(let cause) = launcher.activity {
@@ -47,7 +49,6 @@ struct LauncherView: View {
                 }
             }
         }
-        .font(.system(size: 13, weight: .medium))
         .padding(EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14))
         .overlay(alignment: .topLeading) {
             if showsGuide {
@@ -154,17 +155,15 @@ struct Guide: View {
     }
 }
 
-/// The system segmented control, 24 pt tall and filling the window's width in two equal segments: SwiftUI's segmented
-/// picker keeps its fitting width on macOS, so this wraps `NSSegmentedControl`. The right hand anchors its thumb on the
-/// left, so *Left thumb* is `.right`.
+/// The system segmented control at the regular size (24 pt), filling the window's width in two equal segments:
+/// SwiftUI's segmented picker keeps its fitting width on macOS, so this wraps `NSSegmentedControl`. The right hand
+/// anchors its thumb on the left, so *Left thumb* is `.right`.
 struct ThumbPicker: NSViewRepresentable {
     let launcher: Launcher
 
     private static let segments: [(title: String, handMode: HandMode)] = [
         ("Left thumb", .right), ("Right thumb", .left),
     ]
-
-    private static let height: CGFloat = 24
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -174,7 +173,6 @@ struct ThumbPicker: NSViewRepresentable {
             target: context.coordinator, action: #selector(Coordinator.changed(_:)))
         control.segmentDistribution = .fillEqually
         control.controlSize = .regular
-        control.font = .systemFont(ofSize: 13, weight: .medium)
         control.setAccessibilityLabel("Thumb")
         return control
     }
@@ -185,7 +183,7 @@ struct ThumbPicker: NSViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView control: NSSegmentedControl, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? control.fittingSize.width, height: Self.height)
+        CGSize(width: proposal.width ?? control.fittingSize.width, height: control.fittingSize.height)
     }
 
     @MainActor final class Coordinator: NSObject {
