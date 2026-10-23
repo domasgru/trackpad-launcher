@@ -2,9 +2,9 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// An `NSPopUpButton` whose delegate rebuilds the items from the launcher's list every time the menu opens. That is
-/// only building items from values already in memory: no disk, Spotlight or icon drawing runs on the click path.
-/// Between openings the menu holds only what the button shows.
+/// A bordered `NSPopUpButton`, the 24 pt glass capsule, whose delegate rebuilds the items from the launcher's list
+/// every time the menu opens. That is only building items from values already in memory: no disk, Spotlight or icon
+/// drawing runs on the click path. Between openings the menu holds only what the button shows.
 struct AppMenuButton: NSViewRepresentable {
     /// A gesture row's picker: shows the row's app and checks it in the menu; the menu ends in None.
     let current: RowApp
@@ -15,12 +15,15 @@ struct AppMenuButton: NSViewRepresentable {
     let choose: (AppChoice?) -> Void
     let chooseOther: () -> Void
 
+    static let font = NSFont.systemFont(ofSize: 13, weight: .medium)
+    private static let height: CGFloat = 24
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSPopUpButton {
         let button = NSPopUpButton(frame: .zero, pullsDown: false)
-        button.isBordered = false
-        button.font = .systemFont(ofSize: 13)
+        button.controlSize = .regular
+        button.font = Self.font
         button.menu?.autoenablesItems = false
         button.menu?.delegate = context.coordinator
         context.coordinator.button = button
@@ -37,6 +40,10 @@ struct AppMenuButton: NSViewRepresentable {
         coordinator.chooseOther = chooseOther
         guard !coordinator.isMenuOpen else { return }
         coordinator.showCurrentOnly()
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView button: NSPopUpButton, context: Context) -> CGSize? {
+        CGSize(width: button.fittingSize.width, height: Self.height)
     }
 
     @MainActor final class Coordinator: NSObject, NSMenuDelegate {
@@ -108,8 +115,8 @@ struct AppMenuButton: NSViewRepresentable {
             item.attributedTitle = NSAttributedString(
                 string: title,
                 attributes: [
-                    .foregroundColor: symbol == nil ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor,
-                    .font: NSFont.systemFont(ofSize: 13),
+                    .foregroundColor: symbol == nil ? NSColor.systemGray : NSColor.tertiaryLabelColor,
+                    .font: AppMenuButton.font,
                 ])
             if let symbol { item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) }
             return item
