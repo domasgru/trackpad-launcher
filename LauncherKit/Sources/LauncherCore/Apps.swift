@@ -53,7 +53,7 @@ public struct RunningApps: Equatable, Sendable {
 public struct AssignedApp: Codable, Hashable, Sendable {
     /// Identity.
     public let bundleID: BundleID
-    /// Shown greyed with "not found".
+    /// Shown greyed, marked not found.
     public let name: String
     /// Fast path only; never authoritative, never rewritten.
     public let lastKnownURL: URL
