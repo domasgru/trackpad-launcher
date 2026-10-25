@@ -2,12 +2,12 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// One column of 28 pt rows 12 pt apart: five gesture rows, the switcher section, the Launch animations switch and the
-/// thumb picker. The illustrations are 28 pt tall; the system switch and segmented control, 24 pt at the regular size,
-/// are padded out to 28. Below them, while any applies, the trackpad settings notice, the Accessibility hint and the
-/// screen recording hint. The guide naming the two marks sits over the first illustration while the first gesture has
-/// no app (its short picker leaves the guide room), and only in right-hand mode, where its arrows meet the thumb. Quit
-/// lives in the status item's right-click menu.
+/// One 270 pt column of 28 pt rows 12 pt apart: five gesture rows, the switcher section, the Launch animations switch
+/// and the thumb picker. The illustrations are 28 pt tall; the system switch and segmented control, 24 pt at the
+/// regular size, are padded out to 28. Below them, while any applies, the trackpad settings notice, the Accessibility
+/// hint and the screen recording hint. The guide naming the two marks sits over the first illustration while the first
+/// gesture has no app, between it and the 132 pt picker, and only in right-hand mode, where its arrows meet the thumb.
+/// Quit lives in the status item's right-click menu.
 struct LauncherView: View {
     let launcher: Launcher
     let actions: LauncherActions
@@ -56,7 +56,7 @@ struct LauncherView: View {
                     .offset(x: 26, y: 7.63)
             }
         }
-        .frame(width: 252)
+        .frame(width: 270)
         .fixedSize(horizontal: true, vertical: false)
     }
 
@@ -80,14 +80,13 @@ struct GestureRowView: View {
         HStack(spacing: 8) {
             GestureIllustration(gesture: row.gesture, handMode: launcher.handMode)
             Spacer(minLength: 0)
-            AppMenuButton(
+            AppPicker(
                 current: row.app,
                 installedApps: launcher.installedApps,
                 cachedIcon: actions.cachedIcon,
                 icon: actions.icon,
                 choose: { launcher.setAssignment($0, for: row.gesture) },
                 chooseOther: { actions.chooseOtherApp { launcher.setAssignment(.appBundle(at: $0), for: row.gesture) } })
-                .fixedSize()
         }
     }
 }
