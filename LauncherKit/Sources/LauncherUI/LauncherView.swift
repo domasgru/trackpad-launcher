@@ -50,18 +50,8 @@ struct LauncherView: View {
             }
         }
         .padding(EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14))
-        .overlay(alignment: .topLeading) {
-            if showsGuide {
-                Guide()
-                    .offset(x: 26, y: 7.63)
-            }
-        }
         .frame(width: 270)
         .fixedSize(horizontal: true, vertical: false)
-    }
-
-    private var showsGuide: Bool {
-        launcher.handMode == .right && launcher.rows.first?.app == .unassigned
     }
 
     private var hasNotices: Bool {
@@ -79,6 +69,12 @@ struct GestureRowView: View {
     var body: some View {
         HStack(spacing: 8) {
             GestureIllustration(gesture: row.gesture, handMode: launcher.handMode)
+                .overlay(alignment: .topLeading) {
+                    if showsGuide {
+                        // Where the arrows end on the thumb and the tapping finger.
+                        Guide().offset(x: 12, y: -4.37)
+                    }
+                }
             Spacer(minLength: 0)
             AppPicker(
                 current: row.app,
@@ -88,6 +84,10 @@ struct GestureRowView: View {
                 choose: { launcher.setAssignment($0, for: row.gesture) },
                 chooseOther: { actions.chooseOtherApp { launcher.setAssignment(.appBundle(at: $0), for: row.gesture) } })
         }
+    }
+
+    private var showsGuide: Bool {
+        row.gesture == .one && row.app == .unassigned && launcher.handMode == .right
     }
 }
 
@@ -126,10 +126,18 @@ extension HandMode {
 }
 
 enum BundleImage {
+    /// Read from disk once per resource, not on every redraw of the rows.
+    private static var loaded: [String: NSImage] = [:]
+
     /// A missing resource draws nothing rather than failing: the window stays usable.
     static func nsImage(_ name: String, type: String = "svg") -> NSImage? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: type) else { return nil }
-        return NSImage(contentsOf: url)
+        let key = "\(name).\(type)"
+        if let image = loaded[key] { return image }
+        guard let url = Bundle.main.url(forResource: name, withExtension: type),
+              let image = NSImage(contentsOf: url)
+        else { return nil }
+        loaded[key] = image
+        return image
     }
 
     /// At the image's own size unless `size` is given; an SVG scales without blurring. A template image takes the

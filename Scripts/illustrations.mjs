@@ -60,7 +60,8 @@ function marks(svg) {
       throw new Error(`unexpected element: ${line}`)
     }
   }
-  return out
+  // The Figma frames sometimes stack two identical marks.
+  return [...new Set(out)]
 }
 
 const document = (body, transform) =>
