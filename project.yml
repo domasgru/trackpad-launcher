@@ -20,7 +20,7 @@ targets:
       - path: TrackpadLauncher
         excludes: ["Info.plist"]
       - path: assets
-        includes: ["*.svg"]
+        includes: ["*.svg", "*.png"]
         buildPhase: resources
     dependencies:
       - package: LauncherKit
