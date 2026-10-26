@@ -101,9 +101,7 @@ struct GestureIllustration: View {
     }
 }
 
-/// The paper card with a gesture's marks on it. Both are the repo's bundle resources, which
-/// `Scripts/illustrations.mjs` splits out of the Figma exports: the card is one bitmap shared by every illustration,
-/// the marks are SVGs drawn in their own black on it, in light and dark.
+/// The paper card with a gesture's marks on it: one @2x PNG from the Figma export, the same in light and dark.
 struct Illustration: View {
     let name: String
     let handMode: HandMode
@@ -111,17 +109,13 @@ struct Illustration: View {
     private static let size = CGSize(width: 45, height: 28)
 
     var body: some View {
-        ZStack {
-            BundleImage.view("illustration-surface", type: "png", size: Self.size)
-            BundleImage.view(handMode.illustration(name), size: Self.size)
-        }
-        .frame(width: Self.size.width, height: Self.size.height)
+        BundleImage.view(handMode.illustration(name), type: "png", size: Self.size)
     }
 }
 
 extension HandMode {
     /// The illustrations draw the thumb in the top-left corner; the left hand's copies, with the thumb top-right,
-    /// are drawn separately as `-inverse`.
+    /// are `-inverse`, which `Scripts/inverse-illustrations.swift` draws from them.
     func illustration(_ name: String) -> String { self == .left ? name + "-inverse" : name }
 }
 
