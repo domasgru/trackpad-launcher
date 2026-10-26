@@ -2,7 +2,7 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// One 270 pt column of 28 pt rows 12 pt apart: five gesture rows, the switcher section, the Launch animations switch
+/// One 266 pt column of 28 pt rows 12 pt apart: five gesture rows, the switcher section, the Launch animations switch
 /// and the thumb picker. The illustrations are 28 pt tall; the system switch and segmented control, 24 pt at the
 /// regular size, are padded out to 28. Below them, while any applies, the trackpad settings notice, the Accessibility
 /// hint and the screen recording hint. The guide naming the two marks sits over the first illustration while the first
@@ -50,7 +50,7 @@ struct LauncherView: View {
             }
         }
         .padding(EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14))
-        .frame(width: 270)
+        .frame(width: 266)
         .fixedSize(horizontal: true, vertical: false)
     }
 
