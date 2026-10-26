@@ -122,15 +122,15 @@ import LauncherCore
         let press = PressID(button: button, number: 7)
 
         var blocked = ClickFilter()
-        #expect(blocked.decide(.press(press), trackpadBlocking: true) == .drop)
+        #expect(blocked.decide(.press(press), trackpadBlocking: true, trackpadBlocksDrags: false) == .drop)
         #expect(blocked.holding == .withheld)
-        #expect(blocked.decide(.release(press), trackpadBlocking: false) == .drop)
+        #expect(blocked.decide(.release(press), trackpadBlocking: false, trackpadBlocksDrags: false) == .drop)
         #expect(blocked.holding == .nothing)
 
         var passed = ClickFilter()
-        #expect(passed.decide(.press(press), trackpadBlocking: false) == .pass)
+        #expect(passed.decide(.press(press), trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
         #expect(passed.holding == .passed)
-        #expect(passed.decide(.release(press), trackpadBlocking: true) == .pass)
+        #expect(passed.decide(.release(press), trackpadBlocking: true, trackpadBlocksDrags: false) == .pass)
         #expect(passed.holding == .nothing)
     }
 
@@ -138,57 +138,82 @@ import LauncherCore
         var filter = ClickFilter()
         let p1 = PressID(button: 0, number: 1), p2 = PressID(button: 0, number: 2)
         let p3 = PressID(button: 0, number: 3), p4 = PressID(button: 0, number: 4)
-        #expect(filter.decide(.press(p1), trackpadBlocking: false) == .pass)
-        #expect(filter.decide(.press(p2), trackpadBlocking: true) == .drop)
+        #expect(filter.decide(.press(p1), trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
+        #expect(filter.decide(.press(p2), trackpadBlocking: true, trackpadBlocksDrags: false) == .drop)
         #expect(filter.holding == .withheld)
-        #expect(filter.decide(.release(p2), trackpadBlocking: false) == .drop)
+        #expect(filter.decide(.release(p2), trackpadBlocking: false, trackpadBlocksDrags: false) == .drop)
         #expect(filter.holding == .nothing)
 
-        #expect(filter.decide(.press(p3), trackpadBlocking: true) == .drop)
-        #expect(filter.decide(.release(p4), trackpadBlocking: false) == .pass)
+        #expect(filter.decide(.press(p3), trackpadBlocking: true, trackpadBlocksDrags: false) == .drop)
+        #expect(filter.decide(.release(p4), trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
         #expect(filter.holding == .nothing)
     }
 
     @Test func dragsBecomeMovesOnlyDuringAWithheldPressOfTheSameButton() {
         var filter = ClickFilter()
         let r0 = PressID(button: 1, number: 9)
-        #expect(filter.decide(.drag(button: 0), trackpadBlocking: false) == .pass)
+        #expect(filter.decide(.drag(button: 0), trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
 
-        _ = filter.decide(.press(p), trackpadBlocking: true)
-        #expect(filter.decide(.drag(button: 0), trackpadBlocking: false) == .passAsMove)
-        #expect(filter.decide(.drag(button: 1), trackpadBlocking: false) == .pass)
+        _ = filter.decide(.press(p), trackpadBlocking: true, trackpadBlocksDrags: false)
+        #expect(filter.decide(.drag(button: 0), trackpadBlocking: false, trackpadBlocksDrags: false) == .passAsMove)
+        #expect(filter.decide(.drag(button: 1), trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
 
-        _ = filter.decide(.press(r0), trackpadBlocking: false)
-        #expect(filter.decide(.drag(button: 1), trackpadBlocking: false) == .pass)
+        _ = filter.decide(.press(r0), trackpadBlocking: false, trackpadBlocksDrags: false)
+        #expect(filter.decide(.drag(button: 1), trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
 
-        _ = filter.decide(.release(p), trackpadBlocking: false)
-        #expect(filter.decide(.drag(button: 0), trackpadBlocking: false) == .pass)
+        _ = filter.decide(.release(p), trackpadBlocking: false, trackpadBlocksDrags: false)
+        #expect(filter.decide(.drag(button: 0), trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
+    }
+
+    @Test func aWithheldPressDragsAreDroppedOnlyWhileTheTrackpadBlocksDrags() {
+        var fresh = ClickFilter()
+        #expect(fresh.decide(.drag(button: 0), trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
+        #expect(fresh.decide(.drag(button: 0), trackpadBlocking: true, trackpadBlocksDrags: true) == .pass)
+
+        var filter = ClickFilter()
+        #expect(filter.decide(.press(p), trackpadBlocking: true, trackpadBlocksDrags: false) == .drop)
+        #expect(filter.holding == .withheld)
+        #expect(filter.decide(.drag(button: 0), trackpadBlocking: true, trackpadBlocksDrags: true) == .drop)
+        #expect(filter.decide(.drag(button: 0), trackpadBlocking: true, trackpadBlocksDrags: false) == .passAsMove)
+        #expect(filter.decide(.drag(button: 0), trackpadBlocking: false, trackpadBlocksDrags: false) == .passAsMove)
+        #expect(filter.decide(.drag(button: 1), trackpadBlocking: true, trackpadBlocksDrags: true) == .pass)
+        #expect(filter.decide(.pressure, trackpadBlocking: true, trackpadBlocksDrags: true) == .drop)
+        #expect(filter.decide(.release(p), trackpadBlocking: false, trackpadBlocksDrags: false) == .drop)
+        #expect(filter.holding == .nothing)
+        #expect(filter.decide(.drag(button: 0), trackpadBlocking: true, trackpadBlocksDrags: true) == .pass)
+
+        let q = PressID(button: 0, number: 2)
+        var passed = ClickFilter()
+        #expect(passed.decide(.press(q), trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
+        #expect(passed.holding == .passed)
+        #expect(passed.decide(.drag(button: 0), trackpadBlocking: true, trackpadBlocksDrags: true) == .pass)
+        #expect(passed.decide(.release(q), trackpadBlocking: true, trackpadBlocksDrags: true) == .pass)
     }
 
     @Test func pressureIsDroppedOnlyWhileAPressIsWithheld() {
         var filter = ClickFilter()
-        #expect(filter.decide(.pressure, trackpadBlocking: false) == .pass)
+        #expect(filter.decide(.pressure, trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
 
-        _ = filter.decide(.press(p), trackpadBlocking: true)
-        #expect(filter.decide(.pressure, trackpadBlocking: false) == .drop)
+        _ = filter.decide(.press(p), trackpadBlocking: true, trackpadBlocksDrags: false)
+        #expect(filter.decide(.pressure, trackpadBlocking: false, trackpadBlocksDrags: false) == .drop)
 
-        _ = filter.decide(.release(p), trackpadBlocking: false)
-        #expect(filter.decide(.pressure, trackpadBlocking: false) == .pass)
+        _ = filter.decide(.release(p), trackpadBlocking: false, trackpadBlocksDrags: false)
+        #expect(filter.decide(.pressure, trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
 
-        _ = filter.decide(.press(PressID(button: 0, number: 2)), trackpadBlocking: false)
-        #expect(filter.decide(.pressure, trackpadBlocking: true) == .pass)
+        _ = filter.decide(.press(PressID(button: 0, number: 2)), trackpadBlocking: false, trackpadBlocksDrags: false)
+        #expect(filter.decide(.pressure, trackpadBlocking: true, trackpadBlocksDrags: false) == .pass)
     }
 
     @Test func forgettingHeldPressesLetsALostReleasePassAndClearsHolding() {
         var withheld = ClickFilter()
-        _ = withheld.decide(.press(p), trackpadBlocking: true)
+        _ = withheld.decide(.press(p), trackpadBlocking: true, trackpadBlocksDrags: false)
         withheld.forgetHeldPresses()
         #expect(withheld.holding == .nothing)
-        #expect(withheld.decide(.pressure, trackpadBlocking: false) == .pass)
-        #expect(withheld.decide(.release(p), trackpadBlocking: false) == .pass)
+        #expect(withheld.decide(.pressure, trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
+        #expect(withheld.decide(.release(p), trackpadBlocking: false, trackpadBlocksDrags: false) == .pass)
 
         var passed = ClickFilter()
-        _ = passed.decide(.press(PressID(button: 0, number: 2)), trackpadBlocking: false)
+        _ = passed.decide(.press(PressID(button: 0, number: 2)), trackpadBlocking: false, trackpadBlocksDrags: false)
         passed.forgetHeldPresses()
         #expect(passed.holding == .nothing)
     }
@@ -196,12 +221,12 @@ import LauncherCore
     @Test func aWithheldPressWinsOverAPassedOneAndHoldingFollowsTheReleases() {
         var filter = ClickFilter()
         let r0 = PressID(button: 1, number: 5)
-        _ = filter.decide(.press(p), trackpadBlocking: false)
-        _ = filter.decide(.press(r0), trackpadBlocking: true)
+        _ = filter.decide(.press(p), trackpadBlocking: false, trackpadBlocksDrags: false)
+        _ = filter.decide(.press(r0), trackpadBlocking: true, trackpadBlocksDrags: false)
         #expect(filter.holding == .withheld)
-        _ = filter.decide(.release(r0), trackpadBlocking: false)
+        _ = filter.decide(.release(r0), trackpadBlocking: false, trackpadBlocksDrags: false)
         #expect(filter.holding == .passed)
-        _ = filter.decide(.release(p), trackpadBlocking: false)
+        _ = filter.decide(.release(p), trackpadBlocking: false, trackpadBlocksDrags: false)
         #expect(filter.holding == .nothing)
     }
 }

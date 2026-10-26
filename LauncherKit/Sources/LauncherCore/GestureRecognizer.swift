@@ -13,7 +13,8 @@ public struct Recognition: Equatable, Sendable {
 
     public let event: Event?
     public let blocking: Blocking
-    /// This trackpad's half of click blocking: true for the whole of a swipe or a window swipe; otherwise a thumb this
+    /// This trackpad's half of click blocking: true for the whole of a swipe or a window swipe, which read
+    /// `.pressDrags`: that blocks clicks and drops a withheld press's drags too; otherwise a thumb this
     /// recognizer saw land less than 3 s ago is still anchored and another finger is down. Whether a press is really
     /// blocked also needs the click filter armed (access granted, gestures active), which the recognizer never knows.
     public var blocksClicks: Bool { blocking.blocksClicks }
@@ -39,7 +40,7 @@ public struct Recognition: Equatable, Sendable {
 }
 
 /// How far one trackpad's blocking reaches after a frame. Ordered: each level includes those below it, so
-/// `blocksClicks ⇒ blocksDockSwipes ⇒ wantsTap` holds by construction.
+/// `blocksPressDrags ⇒ blocksClicks ⇒ blocksDockSwipes ⇒ wantsTap` holds by construction.
 public enum Blocking: Int, Comparable, Sendable {
     /// No thumb in the corner, no slide, no swap series and no thumb touch: nothing on this trackpad can block before
     /// its next frame.
@@ -51,13 +52,18 @@ public enum Blocking: Int, Comparable, Sendable {
     /// A thumb with another contact down, its 3 s over or its landing unknown, or two or more contacts down in a
     /// thumb touch: the system's swipes are blocked.
     case dockSwipes
-    /// Inside the blocking window, a confirmed swipe or window swipe, or a swap series: everything is blocked.
+    /// Inside the blocking window or a swap series: clicks, scrolling and the system's swipes are blocked; a
+    /// withheld press's drags pass as plain pointer moves.
     case clicks
+    /// Inside a confirmed swipe or window swipe: everything `.clicks` blocks, and a withheld press's drags are dropped
+    /// instead of passed as pointer moves.
+    case pressDrags
 
     public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
     public var wantsTap: Bool { self >= .possible }
     public var blocksDockSwipes: Bool { self >= .dockSwipes }
-    public var blocksClicks: Bool { self == .clicks }
+    public var blocksClicks: Bool { self >= .clicks }
+    public var blocksPressDrags: Bool { self == .pressDrags }
 }
 
 extension Recognition.Event {
@@ -204,7 +210,7 @@ public struct GestureRecognizer: Sendable {
         }
         let stateLevel: Blocking
         if case .swiping(let swipe) = state, swipe.isConfirmed {
-            stateLevel = .clicks
+            stateLevel = .pressDrags
         } else if case .rest(let rest) = state, rest.isSeries {
             stateLevel = .clicks
         } else if let thumb = state.thumb {
@@ -227,7 +233,8 @@ public struct GestureRecognizer: Sendable {
     }
 
     /// The model's answer to the window swipe start reported on the frame at `began`. true confirms it: from the next
-    /// frame it blocks clicks, scrolling and the system's swipes until both fingers lift. false turns the slide into
+    /// frame it blocks clicks, scrolling and the system's swipes, and drops a withheld press's drags, until both
+    /// fingers lift. false turns the slide into
     /// what the window swipe setting off makes of it: `.spoiled` under the slide's thumb, or, once that thumb has gone,
     /// a rest of every contact down as `restOrIdle` gives it (a thumb that rolled out of the corner counts as one of
     /// them), so it never becomes a swipe and a thumb tap under it may swap as it would there. Changes nothing
@@ -381,7 +388,8 @@ public struct GestureRecognizer: Sendable {
         let kind: SlideKind
         let began: FrameTime
         /// A window swipe starts unconfirmed: until the model's answer confirms it, it blocks clicks and scrolling only
-        /// by the thumb rules, as the slide of the setting off would, and Dock swipes as any thumb touch does. A swipe
+        /// by the thumb rules, as the slide of the setting off would, and Dock swipes as any thumb touch does.
+        /// Confirmation adds, to clicks, scrolling and the system's swipes, dropping a withheld press's drags. A swipe
         /// starts confirmed.
         var isConfirmed: Bool
         /// The swipe fingers down now, at most two, with their positions on the last frame.

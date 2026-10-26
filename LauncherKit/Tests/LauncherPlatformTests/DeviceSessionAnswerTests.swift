@@ -166,10 +166,10 @@ import Testing
             if starts.count == 1, starts[0].frame == frame { starts[0].reply(true) }
         }
         let start = played.starts[0].frame
-        #expect(played.blocks == played.levels.map { $0 == .clicks })
+        #expect(played.blocks == played.levels.map { $0 >= .clicks })
         #expect(played.levels[0] == .possible)
         #expect(played.levels[1...start].allSatisfy { $0 == .dockSwipes })
-        #expect(played.levels[(start + 1)..<firstLift].allSatisfy { $0 == .clicks })
+        #expect(played.levels[(start + 1)..<firstLift].allSatisfy { $0 == .pressDrags })
         #expect(played.levels[firstLift...(firstLift + 1)].allSatisfy { $0 == .possible })
     }
 
@@ -179,8 +179,8 @@ import Testing
             if answered, starts.count == 1, starts[0].frame == frame { starts[0].reply(false) }
         }
         let start = played.starts[0].frame
-        #expect(played.blocks == played.levels.map { $0 == .clicks })
-        #expect(!played.levels.contains(.clicks))
+        #expect(played.blocks == played.levels.map { $0 >= .clicks })
+        #expect(played.levels.allSatisfy { $0 < .clicks })
         #expect(played.levels[1...start].allSatisfy { $0 == .dockSwipes })
         #expect(played.levels[0] == .possible)
         #expect(thumbOnlyFrames(of: played).allSatisfy { $0 == .possible })

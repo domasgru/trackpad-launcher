@@ -11,8 +11,12 @@ import LauncherCore
         var recognizer = makeRecognizer()
         return frames.map {
             let recognition = recognizer.step($0, answering: answering)
-            #expect(recognition.blocksClicks == (recognition.blocking == .clicks))
+            #expect(recognition.blocksClicks == (recognition.blocking >= .clicks))
             #expect(recognition.blocksDockSwipes == (recognition.blocking >= .dockSwipes))
+            #expect(recognition.blocking.blocksPressDrags == (recognition.blocking == .pressDrags))
+            #expect(!recognition.blocking.blocksPressDrags || recognition.blocksClicks)
+            #expect(!recognition.blocksClicks || recognition.blocksDockSwipes)
+            #expect(!recognition.blocksDockSwipes || recognition.blocking.wantsTap)
             return recognition.blocking
         }
     }
@@ -97,7 +101,7 @@ import LauncherCore
         #expect(result[4] == .none)
     }
 
-    @Test func aConfirmedSwipeStaysClicksAfterTheThumbLifted() {
+    @Test func aConfirmedSwipeReadsDragsFromItsFirstFrameAndAfterTheThumbLifted() {
         let frames = [
             h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)]),
             h.frame(atMS: 10, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]),
@@ -106,7 +110,34 @@ import LauncherCore
             h.frame(atMS: 4000, [h.contact(1, atMM: 80, 45), h.contact(2, atMM: 88, 45)]),
             h.frame(atMS: 4010, []),
         ]
-        #expect(levels(frames) == [.possible, .clicks, .clicks, .clicks, .clicks, .none])
+        #expect(levels(frames) == [.possible, .clicks, .pressDrags, .pressDrags, .pressDrags, .none])
+    }
+
+    @Test func aConfirmedWindowSwipeReadsDragsFromTheFrameAfterItsConfirmationUntilItEnds() {
+        let frames = thumb.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 10)).lift().liftThumb().frames
+        var recognizer = makeRecognizer()
+        let recognitions = frames.map { recognizer.step($0, answering: true) }
+        let began = recognitions.firstIndex { $0.windowSwipe == .began }!
+        let ended = recognitions.firstIndex { $0.windowSwipe == .ended }!
+        #expect(recognitions[began].blocking == .clicks)
+        #expect(recognitions[(began + 1)..<ended].allSatisfy { $0.blocking == .pressDrags })
+        #expect(recognitions[ended].blocking == .possible)
+        let thumbAlone = frames.indices.filter { $0 > ended && frames[$0].touches.count == 1 }
+        #expect(!thumbAlone.isEmpty)
+        #expect(thumbAlone.allSatisfy { recognitions[$0].blocking == .possible })
+        let gone = frames.indices.filter { $0 > ended && frames[$0].touches.isEmpty }
+        #expect(!gone.isEmpty)
+        #expect(gone.allSatisfy { recognitions[$0].blocking == .none })
+    }
+
+    @Test(arguments: [nil, false] as [Bool?])
+    func aWindowSwipeNobodyConfirmedNeverReadsDrags(answer: Bool?) {
+        let frames = thumb.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 10)).lift().liftThumb().frames
+        let result = levels(frames, answering: answer)
+        #expect(!result.contains(.pressDrags))
+        for (frame, level) in zip(frames, result) where frame.touches.count == 3 {
+            #expect(level == .clicks)
+        }
     }
 
     @Test func anUnconfirmedWindowSwipeWhoseThumbLiftedIsDockSwipes() {

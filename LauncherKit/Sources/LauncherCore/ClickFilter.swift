@@ -24,21 +24,25 @@ public enum PointerEvent: Equatable, Sendable {
 
 public enum PointerVerdict: Equatable, Sendable {
     case pass
+    /// A press, its release, a Force Click stage, or a withheld press's drags inside a swipe or window swipe.
     case drop
     /// Delivered as a plain pointer move: the pointer keeps moving, and no app sees a drag whose press it never got.
     case passAsMove
 }
 
 /// Click blocking for one event stream, as a pure state machine. One filter per click tap, fed every event in order.
-/// It knows no clock and no device. `trackpadBlocking` is the merged level's `blocksClicks`,
-/// read when the event arrives.
+/// It knows no clock and no device. `trackpadBlocking` is the merged level's `blocksClicks`, `trackpadBlocksDrags` its
+/// `blocksPressDrags`, both read when the event arrives; under the latter a withheld press's drags are dropped
+/// instead of passed as plain pointer moves.
 public struct ClickFilter: Sendable {
     /// What a frame needs to know about the press in progress. `.withheld` wins when buttons disagree.
     public enum Holding: Equatable, Sendable { case nothing, withheld, passed }
 
     public init() {}
 
-    public mutating func decide(_ event: PointerEvent, trackpadBlocking: Bool) -> PointerVerdict {
+    public mutating func decide(
+        _ event: PointerEvent, trackpadBlocking: Bool, trackpadBlocksDrags: Bool
+    ) -> PointerVerdict {
         switch event {
         case .press(let press):
             // A new press of a button ends any stale one.
@@ -49,7 +53,7 @@ public struct ClickFilter: Sendable {
             defer { held[press.button] = nil }
             return held[press.button] == .withheld(press) ? .drop : .pass
         case .drag(let button):
-            if case .withheld = held[button] { return .passAsMove }
+            if case .withheld = held[button] { return trackpadBlocksDrags ? .drop : .passAsMove }
             return .pass
         case .pressure:
             // A Force Click's stages belong to its press.
