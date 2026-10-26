@@ -23,7 +23,7 @@ public struct TapFilters: Sendable {
         case .pointer(let pointer):
             verdict = .pointer(click.decide(
                 pointer, trackpadBlocking: context.blocking.blocksClicks,
-                trackpadBlocksDrags: context.blocking.blocksPressDrags))
+                trackpadBlocksPressDrags: context.blocking.blocksPressDrags))
         case .scroll(let scrollEvent):
             verdict = .scroll(scroll.decide(scrollEvent, trackpadBlocking: context.blocking.blocksClicks))
         case .dockSwipe(let phase, let stream):

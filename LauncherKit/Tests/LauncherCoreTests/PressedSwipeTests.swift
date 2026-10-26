@@ -11,6 +11,11 @@ import LauncherCore
         TouchScript(.macBook14).thumb(atMM: (10, 10)).land(fingers: 2).wait(.milliseconds(20))
     }
 
+    private var pressedDownwardHand: TouchScript {
+        TouchScript(.macBook14).thumb(atMM: (10, 10)).land(fingers: 2, atMM: (62, 30))
+            .wait(.milliseconds(20)).press().slide(byMM: (0, 3.5)).slide(byMM: (0, 12))
+    }
+
     @Test func aPressedSwipeDropsTheHeldPressDragsAndRunsAsWithoutThePress() {
         let world = World.switcherWorld(accessGranted: true)
         let plain = World.switcherWorld(accessGranted: true)
@@ -41,8 +46,7 @@ import LauncherCore
 
     @Test func aPressedWindowSwipeDropsTheHeldPressDrags() {
         let world = World.windowWorld(visible: ["One", "Two"])
-        let hand = TouchScript(.macBook14).thumb(atMM: (10, 10)).land(fingers: 2, atMM: (62, 30))
-            .wait(.milliseconds(20)).press().slide(byMM: (0, 3.5)).slide(byMM: (0, 12))
+        let hand = pressedDownwardHand
         world.play(hand)
         #expect(world.launcher.windowSwitcher?.selection.selected == 1)
         #expect(world.system.windows.raised == [[world.window("Two")]])
@@ -72,8 +76,7 @@ import LauncherCore
 
     @Test func aPressedSlideWithNoWindowSwipeStillMovesThePointer() {
         let world = World.windowWorld(visible: ["One"])
-        let hand = TouchScript(.macBook14).thumb(atMM: (10, 10)).land(fingers: 2, atMM: (62, 30))
-            .wait(.milliseconds(20)).press().slide(byMM: (0, 3.5)).slide(byMM: (0, 12))
+        let hand = pressedDownwardHand
         world.play(hand)
         #expect(world.launcher.windowSwitcher == nil)
         #expect(world.launcher.switcher == nil)
@@ -96,7 +99,7 @@ import LauncherCore
             (120, h.frame(atMS: 120, [thumbDown, h.contact(1, atMM: 66, 45), h.contact(2, atMM: 74, 45)], press: .click)),
             (130, h.frame(atMS: 130, [thumbDown, h.contact(1, atMM: 78, 45), h.contact(2, atMM: 86, 45)], press: .click)),
             (140, h.frame(atMS: 140, [thumbDown], press: .click)),
-            (150, h.frame(atMS: 150)),
+            (150, h.frame(atMS: 150, [thumbDown])),
         ]
         var gated: [Int: Bool] = [:]
         var switcherShown: [Int: Bool] = [:]

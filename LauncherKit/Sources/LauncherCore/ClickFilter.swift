@@ -31,7 +31,7 @@ public enum PointerVerdict: Equatable, Sendable {
 }
 
 /// Click blocking for one event stream, as a pure state machine. One filter per click tap, fed every event in order.
-/// It knows no clock and no device. `trackpadBlocking` is the merged level's `blocksClicks`, `trackpadBlocksDrags` its
+/// It knows no clock and no device. `trackpadBlocking` is the merged level's `blocksClicks`, `trackpadBlocksPressDrags` its
 /// `blocksPressDrags`, both read when the event arrives; under the latter a withheld press's drags are dropped
 /// instead of passed as plain pointer moves.
 public struct ClickFilter: Sendable {
@@ -41,7 +41,7 @@ public struct ClickFilter: Sendable {
     public init() {}
 
     public mutating func decide(
-        _ event: PointerEvent, trackpadBlocking: Bool, trackpadBlocksDrags: Bool
+        _ event: PointerEvent, trackpadBlocking: Bool, trackpadBlocksPressDrags: Bool
     ) -> PointerVerdict {
         switch event {
         case .press(let press):
@@ -53,7 +53,7 @@ public struct ClickFilter: Sendable {
             defer { held[press.button] = nil }
             return held[press.button] == .withheld(press) ? .drop : .pass
         case .drag(let button):
-            if case .withheld = held[button] { return trackpadBlocksDrags ? .drop : .passAsMove }
+            if case .withheld = held[button] { return trackpadBlocksPressDrags ? .drop : .passAsMove }
             return .pass
         case .pressure:
             // A Force Click's stages belong to its press.

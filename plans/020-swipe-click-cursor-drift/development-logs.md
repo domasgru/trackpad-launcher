@@ -16,3 +16,11 @@
 - Review: the git checks assumed the reproduction was tracked and the new files already committed, and "one changed line" in `TapFilters` could fail on a line wrap → `test ! -e` for the reproduction, the diff stat after the slice's commit, and "only the pointer branch of `decide` changes".
 
 ## Implement
+- S1 built as planned. The full gate (`Scripts/test.sh`) is green: 533 core tests and 104 platform tests. The repo has no verification skill, so that step was skipped. The hardware cursor probe (`.temp/probes/cursor-freeze.swift`) was not run, by the user's choice; it stays with the user after the PR.
+- Review: the `levels` helper's per-frame equalities `blocksClicks == (blocking >= .clicks)` and `blocksPressDrags == (blocking == .pressDrags)` restated their one-line definitions → removed; the implication-chain checks stay, and `blocksPressDrags ⇒ blocksClicks` was added to them.
+- Review: T9's confirmed window-swipe row called `step` directly, so its `.pressDrags` frames skipped the chain check → it now goes through a `recognitions(_:answering:)` helper, which `levels` wraps. The repeated window-swipe hand is now one shared property.
+- Review: the parameter `trackpadBlocksDrags` read as if every drag were blocked, and test names said "reads drags" → renamed to `trackpadBlocksPressDrags`, and the tests now say "drops press drags".
+- Review: T5's 150 ms frame was empty, so the thumb lifted together with the release → it now holds the thumb alone, as the plan's row says.
+- Review: two `PressedSwipeTests` rows repeated the pressed downward hand → one shared `pressedDownwardHand` property.
+- Review, not fixed: passing `Blocking` to `ClickFilter` instead of two Bools. The plan chose the Bools on purpose: each filter takes only the Bools it needs, and `TapFilters` derives them. Also not fixed: several assertions per World row, and `Recognition` not forwarding `blocksPressDrags`.
+- After the fixes the full gate is green: 533 core tests and 104 platform tests.

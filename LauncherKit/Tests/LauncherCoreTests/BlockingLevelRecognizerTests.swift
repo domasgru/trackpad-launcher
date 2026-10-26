@@ -6,19 +6,25 @@ import LauncherCore
     private let h = HandFrames()
     private let thumb = TouchScript(.macBook14).thumb(atMM: (10, 10))
 
-    /// Every frame's level from a fresh recognizer, checking on each that the two Bools follow the level.
-    private func levels(_ frames: [TouchFrame], answering: Bool? = true) -> [Blocking] {
+    /// Every frame's recognition from a fresh recognizer, checking on each that the blocking Bools nest.
+    private func recognitions(_ frames: [TouchFrame], answering: Bool? = true) -> [Recognition] {
         var recognizer = makeRecognizer()
         return frames.map {
             let recognition = recognizer.step($0, answering: answering)
-            #expect(recognition.blocksClicks == (recognition.blocking >= .clicks))
             #expect(recognition.blocksDockSwipes == (recognition.blocking >= .dockSwipes))
-            #expect(recognition.blocking.blocksPressDrags == (recognition.blocking == .pressDrags))
             #expect(!recognition.blocking.blocksPressDrags || recognition.blocksClicks)
             #expect(!recognition.blocksClicks || recognition.blocksDockSwipes)
             #expect(!recognition.blocksDockSwipes || recognition.blocking.wantsTap)
-            return recognition.blocking
+            return recognition
         }
+    }
+
+    private func levels(_ frames: [TouchFrame], answering: Bool? = true) -> [Blocking] {
+        recognitions(frames, answering: answering).map(\.blocking)
+    }
+
+    private var completedWindowSwipe: [TouchFrame] {
+        thumb.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 10)).lift().liftThumb().frames
     }
 
     private func makeRecognizer() -> GestureRecognizer {
@@ -101,7 +107,7 @@ import LauncherCore
         #expect(result[4] == .none)
     }
 
-    @Test func aConfirmedSwipeReadsDragsFromItsFirstFrameAndAfterTheThumbLifted() {
+    @Test func aConfirmedSwipeDropsPressDragsFromItsFirstFrameAndAfterTheThumbLifted() {
         let frames = [
             h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)]),
             h.frame(atMS: 10, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]),
@@ -113,10 +119,9 @@ import LauncherCore
         #expect(levels(frames) == [.possible, .clicks, .pressDrags, .pressDrags, .pressDrags, .none])
     }
 
-    @Test func aConfirmedWindowSwipeReadsDragsFromTheFrameAfterItsConfirmationUntilItEnds() {
-        let frames = thumb.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 10)).lift().liftThumb().frames
-        var recognizer = makeRecognizer()
-        let recognitions = frames.map { recognizer.step($0, answering: true) }
+    @Test func aConfirmedWindowSwipeDropsPressDragsFromTheFrameAfterItsConfirmationUntilItEnds() {
+        let frames = completedWindowSwipe
+        let recognitions = recognitions(frames)
         let began = recognitions.firstIndex { $0.windowSwipe == .began }!
         let ended = recognitions.firstIndex { $0.windowSwipe == .ended }!
         #expect(recognitions[began].blocking == .clicks)
@@ -131,8 +136,8 @@ import LauncherCore
     }
 
     @Test(arguments: [nil, false] as [Bool?])
-    func aWindowSwipeNobodyConfirmedNeverReadsDrags(answer: Bool?) {
-        let frames = thumb.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 10)).lift().liftThumb().frames
+    func aWindowSwipeNobodyConfirmedNeverDropsPressDrags(answer: Bool?) {
+        let frames = completedWindowSwipe
         let result = levels(frames, answering: answer)
         #expect(!result.contains(.pressDrags))
         for (frame, level) in zip(frames, result) where frame.touches.count == 3 {
