@@ -114,11 +114,12 @@ struct AppPicker: NSViewRepresentable {
                 return titledItem("Choose app…", color: .secondaryLabelColor)
             case .present(let entry):
                 let item = titledItem(Self.fitted(entry.name, within: Self.nameWidth))
-                item.image = icon(entry.url)
+                item.image = Self.spaced(icon(entry.url))
                 return item
             case .missing(let name):
                 let item = titledItem(Self.fitted(name, within: Self.nameWidth), color: .tertiaryLabelColor)
                 item.image = NSImage(systemSymbolName: "questionmark.app.dashed", accessibilityDescription: "not found")
+                    .map(Self.spaced)
                 return item
             }
         }
@@ -152,9 +153,25 @@ struct AppPicker: NSViewRepresentable {
         }
 
         private static let font = NSFont.systemFont(ofSize: NSFont.systemFontSize(for: .regular))
+        /// The pop-up button starts the title 2 pt after the image; the design has 4 pt between icon and name.
+        private static let iconTrailingSpace: CGFloat = 2
+
+        /// `image` with `iconTrailingSpace` of clear room on its right. A template image stays one, so the symbol
+        /// still takes the button's colour.
+        private static func spaced(_ image: NSImage) -> NSImage {
+            let size = NSSize(width: image.size.width + iconTrailingSpace, height: image.size.height)
+            let spaced = NSImage(size: size, flipped: false) { _ in
+                image.draw(in: NSRect(origin: .zero, size: image.size))
+                return true
+            }
+            spaced.isTemplate = image.isTemplate
+            spaced.accessibilityDescription = image.accessibilityDescription
+            return spaced
+        }
+
         /// What the pop-up button keeps around a name beside a 16 pt icon at its full left margin: the margins, the
-        /// icon and the arrows. Measured on macOS 26.
-        private static let chrome: CGFloat = 66
+        /// icon with its trailing space and the arrows. Measured on macOS 26.
+        private static let chrome: CGFloat = 66 + iconTrailingSpace
         private static let nameWidth = AppPicker.width - chrome
 
         /// `name`, cut at the end with an ellipsis until it fits `width`.
