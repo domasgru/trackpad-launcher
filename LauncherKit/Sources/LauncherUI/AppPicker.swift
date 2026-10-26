@@ -30,6 +30,8 @@ struct AppPicker: NSViewRepresentable {
     func makeNSView(context: Context) -> NSPopUpButton {
         let button = NSPopUpButton(frame: .zero, pullsDown: false)
         button.menu?.autoenablesItems = false
+        // The delegate checks the row's app itself: the selected item is always the first, see `menuNeedsUpdate`.
+        (button.cell as? NSPopUpButtonCell)?.altersStateOfSelectedItem = false
         button.menu?.delegate = context.coordinator
         context.coordinator.button = button
         return button
@@ -83,18 +85,18 @@ struct AppPicker: NSViewRepresentable {
         }
 
         /// Runs each time the menu is about to open. A list that arrived while a menu was open is applied here. The
-        /// pop-up button checks the selected item: the row's app, matched by bundle identifier.
+        /// row's app, matched by bundle identifier, is checked. The pop-up button opens its menu with the selected
+        /// item over itself, so the first item is the selected one: the list opens at its top whatever the row holds.
         func menuNeedsUpdate(_ menu: NSMenu) {
             guard let button else { return }
             menu.removeAllItems()
-            var selected: NSMenuItem?
             for pickerItem in installedApps.pickerMenu(checking: current) {
                 switch pickerItem {
                 case .app(let entry, let state):
                     let item = actionItem(title: entry.name, action: #selector(pick(_:)))
                     item.representedObject = entry
                     item.image = cachedIcon(entry.url)
-                    if state == .current { selected = item }
+                    item.state = state == .current ? .on : .off
                     menu.addItem(item)
                 case .divider:
                     menu.addItem(.separator())
@@ -104,7 +106,7 @@ struct AppPicker: NSViewRepresentable {
                     menu.addItem(actionItem(title: "None", action: #selector(pick(_:))))
                 }
             }
-            button.select(selected)
+            button.selectItem(at: 0)
         }
 
         /// The closed button's only item; never in the open menu.
