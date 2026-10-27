@@ -526,6 +526,7 @@ final class EffectLog {
     private(set) var installCalls = 0
     private(set) var removeOriginalCalls = 0
     private(set) var openInstalledCopyCalls = 0
+    private(set) var ejected: [DiskImage] = []
     /// Runs after the swap, before `done`: the moment /Applications changed.
     var onInstalled: (() -> Void)?
     /// Runs before and after each call that leaves something behind.
@@ -561,6 +562,11 @@ final class EffectLog {
         openInstalledCopyCalls += 1
         log?.entries.append("openInstalledCopy")
         onEffect?()
+    }
+
+    func eject(_ diskImage: DiskImage) {
+        ejected.append(diskImage)
+        log?.entries.append("eject")
     }
 }
 

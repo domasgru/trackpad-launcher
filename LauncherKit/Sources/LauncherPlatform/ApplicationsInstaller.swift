@@ -5,21 +5,26 @@ import LauncherCore
 @MainActor public final class ApplicationsInstaller: Installer {
     private let location: Location
     private let applications: URL
+    private let administrator: any Administrator
 
     public convenience init(location: Location) {
-        self.init(location: location, applications: URL(filePath: "/Applications"))
+        self.init(
+            location: location, applications: URL(filePath: "/Applications"), administrator: AuthorizationAdministrator())
     }
 
-    init(location: Location, applications: URL) {
+    /// Tests: a temp folder for /Applications and a test administrator.
+    init(location: Location, applications: URL, administrator: any Administrator) {
         self.location = location
         self.applications = applications
+        self.administrator = administrator
     }
 
     public func install(then done: @escaping @MainActor (InstallOutcome) -> Void) {
         let location = location
         let applications = applications
+        let administrator = administrator
         Task {
-            let outcome = await Self.copy(location, into: applications)
+            let outcome = await Self.copy(location, into: applications, by: administrator)
             done(outcome)
         }
     }
@@ -34,8 +39,15 @@ import LauncherCore
     public func openInstalledCopy() {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
+        if let diskImage = location.diskImage {
+            configuration.arguments = ["--eject-disk-image", diskImage.volume.path]
+        }
         NSWorkspace.shared.openApplication(
             at: Self.destination(of: location, in: applications), configuration: configuration)
+    }
+
+    public func eject(_ diskImage: DiskImage) {
+        DiskImages.eject(diskImage)
     }
 
     /// The bundle with this app's identifier already directly inside `applications`, under any name; else the original's
@@ -53,7 +65,9 @@ import LauncherCore
     }
 
     @concurrent
-    private static func copy(_ location: Location, into applications: URL) async -> InstallOutcome {
+    private static func copy(
+        _ location: Location, into applications: URL, by administrator: any Administrator
+    ) async -> InstallOutcome {
         let destination = destination(of: location, in: applications)
         let staged: URL
         do {
@@ -65,9 +79,11 @@ import LauncherCore
         let canWrite =
             files.isWritableFile(atPath: applications.path)
             && (!files.fileExists(atPath: destination.path) || files.isWritableFile(atPath: destination.path))
-        guard canWrite else {
+        if !canWrite {
+            let outcome = PrivilegedInstall.swap(
+                staged, into: destination, asideIn: staged.deletingLastPathComponent(), by: administrator)
             BundleInstall.discard(staged)
-            return .failed(reason: Copy.cannotWriteToApplications)
+            return outcome
         }
         do {
             try BundleInstall.swap(staged, into: destination)

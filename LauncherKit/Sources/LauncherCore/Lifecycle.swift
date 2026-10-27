@@ -28,8 +28,13 @@ public enum Route: Equatable, Sendable {
 /// One process start.
 public struct Launch: Equatable, Sendable {
     public var opening: Opening
+    /// Only on the copy a move just installed: the disk image the mover ran from, ejected once the mover has exited.
+    public var diskImageToEject: DiskImage?
 
-    public init(opening: Opening) { self.opening = opening }
+    public init(opening: Opening, diskImageToEject: DiskImage? = nil) {
+        self.opening = opening
+        self.diskImageToEject = diskImageToEject
+    }
 }
 
 /// The quit being handled in `applicationShouldTerminate`, as `QuitSignals` classifies it.
@@ -149,6 +154,8 @@ public enum InstallOutcome: Equatable, Sendable {
     func removeOriginal()
     /// Opens the installed copy as by hand.
     func openInstalledCopy()
+    /// Ejects it; returns at once. A file on it in use leaves it mounted.
+    func eject(_ diskImage: DiskImage)
 }
 
 /// What this process does as it starts, is opened again and is asked to quit.
@@ -158,7 +165,7 @@ public final class Lifecycle {
     private enum Stage {
         case idle
         /// Other copies are stopping; nothing of ours senses yet.
-        case replacingOthers(opensWindow: Bool)
+        case replacingOthers(opensWindow: Bool, eject: DiskImage?)
         case resident(Launcher)
         /// The move dialog is up; a resident keeps its gestures.
         case askingToMove(resident: Launcher?)
@@ -213,15 +220,15 @@ public final class Lifecycle {
         switch route {
         case .end: end()
         case .askToMove: stage = .askingToMove(resident: nil)
-        case .runSilently: replace(others, opensWindow: false)
-        case .runWithWindow: replace(others, opensWindow: true)
+        case .runSilently: replace(others, opensWindow: false, eject: launch.diskImageToEject)
+        case .runWithWindow: replace(others, opensWindow: true, eject: launch.diskImageToEject)
         }
     }
 
     /// From applicationShouldHandleReopen.
     public func openedAgain(_ opening: Opening) {
         switch (stage, Route(opening, placement: placement, olderCopyRuns: false)) {
-        case (.replacingOthers, .runWithWindow): stage = .replacingOthers(opensWindow: true)
+        case (.replacingOthers(_, let eject), .runWithWindow): stage = .replacingOthers(opensWindow: true, eject: eject)
         case (.resident(let launcher), .runWithWindow): launcher.openedByHand()
         case (.resident(let launcher), .askToMove): stage = .askingToMove(resident: launcher)
         default: break
@@ -267,17 +274,19 @@ public final class Lifecycle {
     }
 
     /// The stage first: `stop` may call back before it returns.
-    private func replace(_ others: [RunningCopy], opensWindow: Bool) {
-        stage = .replacingOthers(opensWindow: opensWindow)
+    private func replace(_ others: [RunningCopy], opensWindow: Bool, eject: DiskImage?) {
+        stage = .replacingOthers(opensWindow: opensWindow, eject: eject)
         copies.stop(others) { [unowned self] in othersExited() }
     }
 
     private func othersExited() {
-        guard case .replacingOthers(let opensWindow) = stage else { return }
+        guard case .replacingOthers(let opensWindow, let eject) = stage else { return }
         let launcher = makeResident()
         launcher.start()
         stage = .resident(launcher)
         if opensWindow { launcher.openedByHand() }
+        // The mover has exited, so its volume is free.
+        if let eject { installer.eject(eject) }
     }
 
     /// The order converges after a crash at any point: the swap inside `install` is the first change anywhere, the login

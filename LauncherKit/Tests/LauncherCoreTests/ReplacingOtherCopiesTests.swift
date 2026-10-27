@@ -104,6 +104,32 @@ import Testing
         #expect(older.hardware.runCount == 1)
         #expect(!older.copies.hasEnded)
     }
+
+    @Test func theInstalledCopyEjectsTheMoversDiskImageOnlyAfterTheMoverHasExited() {
+        let world = LifecycleWorld(record: [.one: "Arc"])
+        let image = DiskImage(volume: URL(filePath: "/Volumes/Trackpad Launcher"))
+        let process = world.launch(.byHand, others: [.earlier], diskImageToEject: image)
+
+        #expect(process.installer.ejected.isEmpty)
+        #expect(process.residentsBuilt == 0)
+
+        process.letExit(.earlier)
+
+        #expect(process.window == .open(request: 1))
+        #expect(process.installer.ejected == [image])
+        #expect(world.log.entries == ["stop", "eject"])
+    }
+
+    @Test func anOpeningByHandWhileWaitingKeepsTheDiskImageToEject() {
+        let world = LifecycleWorld(record: [.one: "Arc"])
+        let image = DiskImage(volume: URL(filePath: "/Volumes/Trackpad Launcher"))
+        let process = world.launch(.atLogin, others: [.later], diskImageToEject: image)
+        process.openAgain(.byHand)
+
+        process.letExit(.later)
+
+        #expect(process.installer.ejected == [image])
+    }
 }
 
 private extension OneProcess {

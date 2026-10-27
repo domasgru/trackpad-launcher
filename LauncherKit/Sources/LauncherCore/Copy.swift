@@ -15,6 +15,7 @@ public enum Copy {
     public static let moveButton = "Move to Applications"
     public static let moveQuitButton = "Quit"
     public static let cannotWriteToApplications = "This account can't change the Applications folder."
+    public static let applicationsFolderNotChanged = "The Applications folder could not be changed."
     public static let moveFailedTitle = "Trackpad Launcher couldn't be moved to the Applications folder"
 
     /// The app menu's item in Quit's place.

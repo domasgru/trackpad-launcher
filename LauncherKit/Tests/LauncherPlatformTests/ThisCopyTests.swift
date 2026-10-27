@@ -35,4 +35,18 @@ import Testing
         #expect(ThisCopy.opening(of: Self.event(AEEventID(kAEReopenApplication), loginMarker: true)) == .atLogin)
         #expect(ThisCopy.opening(of: nil) == .byHand)
     }
+
+    @Test func theEjectFlagWithAVolumeNamesTheDiskImageToEject() {
+        let launch = ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "--eject-disk-image", "/Volumes/Trackpad Launcher"])
+        #expect(launch == Launch(opening: .byHand, diskImageToEject: DiskImage(volume: URL(filePath: "/Volumes/Trackpad Launcher"))))
+    }
+
+    @Test func theEjectFlagWithNoVolumeIsIgnored() {
+        #expect(ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "--eject-disk-image"]).diskImageToEject == nil)
+    }
+
+    @Test func unrelatedArgumentsAreIgnored() {
+        let launch = ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "-NSDocumentRevisionsDebugMode", "YES"])
+        #expect(launch == Launch(opening: .byHand))
+    }
 }

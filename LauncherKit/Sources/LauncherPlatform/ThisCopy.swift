@@ -4,9 +4,11 @@ import LauncherCore
 /// Facts about this process, parsed once into core types.
 public enum ThisCopy {
     /// The `oapp` of a start (read in didFinishLaunching: the event is nil in willFinishLaunching). `.atLogin` when it
-    /// carries the login-item marker; otherwise, and for nil, `.byHand`.
+    /// carries the login-item marker; otherwise, and for nil, `.byHand`. `--eject-disk-image <volume>` names the disk
+    /// image the mover ran from; any other argument is ignored.
     public static func launch(event: NSAppleEventDescriptor?, arguments: [String]) -> Launch {
-        Launch(opening: opening(of: event))
+        let volume = arguments.firstIndex(of: "--eject-disk-image").flatMap { arguments[safe: $0 + 1] }
+        return Launch(opening: opening(of: event), diskImageToEject: volume.map { DiskImage(volume: URL(filePath: $0)) })
     }
 
     /// A reopen (`aevt/rapp`): `.atLogin` only when it carries the login marker; otherwise, and for nil, `.byHand`.
@@ -18,7 +20,7 @@ public enum ThisCopy {
     /// Where this copy lies: a quarantined copy macOS translocated is traced back to the bundle the user opened. The
     /// disk-image lookup answers nil until a disk image can be told from any other folder.
     public static func location() -> Location {
-        location(of: Bundle.main.bundleURL, originalIfTranslocated: Translocation.original(of:), diskImage: { _ in nil })
+        location(of: Bundle.main.bundleURL, originalIfTranslocated: Translocation.original(of:), diskImage: DiskImages.image(holding:))
     }
 
     /// The same composition over injected lookups. The disk image is found from the original, not the running bundle,
@@ -56,4 +58,8 @@ private enum Translocation {
         else { return nil }
         return original as URL
     }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }

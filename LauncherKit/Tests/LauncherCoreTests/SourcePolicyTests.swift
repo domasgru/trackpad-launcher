@@ -134,6 +134,14 @@ import Testing
         Confined(
             token: "quarantinePropertiesKey", onlyIn: ["BundleInstall.swift"],
             rule: "the move's file operations are in one file"),
+        Confined(
+            token: "AuthorizationExecuteWithPrivileges", onlyIn: ["PrivilegedInstall.swift"],
+            rule: "the one privileged call has one file"),
+        Confined(
+            token: "AuthorizationCopyRights", onlyIn: ["PrivilegedInstall.swift"], rule: "the one privileged call has one file"),
+        Confined(token: "statfs", onlyIn: ["DiskImages.swift"], rule: "disk images are read and ejected in one place"),
+        Confined(token: "DADisk", onlyIn: ["DiskImages.swift"], rule: "disk images are read and ejected in one place"),
+        Confined(token: "unmountVolume", onlyIn: ["DiskImages.swift"], rule: "disk images are read and ejected in one place"),
         Confined(token: "SecTranslocate", onlyIn: ["ThisCopy.swift"], rule: "translocation is read in one place"),
         Confined(token: "runModal", onlyIn: ["MoveDialogPresenter.swift"], rule: "the move dialog is the one modal"),
         Confined(token: "kAEQuitReason", onlyIn: ["QuitSignals.swift"], rule: "the quit event is parsed in one place"),

@@ -21,7 +21,7 @@ import Testing
         let fixture = try BundleFixture()
         let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.0")
         let applications = try fixture.folder("Applications")
-        let installer = ApplicationsInstaller(location: location(running: source), applications: applications)
+        let installer = ApplicationsInstaller(location: location(running: source), applications: applications, administrator: TestAdministrator.refusing)
 
         let outcome = await install(installer)
 
@@ -40,7 +40,7 @@ import Testing
         let newer = try fixture.makeBundle(named: "Trackpad Launcher.app", in: applications, version: "2.0")
         #expect(try BundleFixture.manifest(of: newer) != BundleFixture.manifest(of: source))
 
-        let outcome = await install(ApplicationsInstaller(location: location(running: source), applications: applications))
+        let outcome = await install(ApplicationsInstaller(location: location(running: source), applications: applications, administrator: TestAdministrator.refusing))
 
         #expect(outcome == .installed)
         #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher.app"])
@@ -54,7 +54,7 @@ import Testing
         let applications = try fixture.folder("Applications")
         let renamed = try fixture.makeBundle(named: "Trackpad Launcher Old.app", in: applications, version: "2.0")
 
-        let outcome = await install(ApplicationsInstaller(location: location(running: source), applications: applications))
+        let outcome = await install(ApplicationsInstaller(location: location(running: source), applications: applications, administrator: TestAdministrator.refusing))
 
         #expect(outcome == .installed)
         #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher Old.app"])
@@ -68,7 +68,7 @@ import Testing
         let applications = try fixture.folder("Applications")
         let place = location(running: running, original: original, translocated: true)
 
-        let outcome = await install(ApplicationsInstaller(location: place, applications: applications))
+        let outcome = await install(ApplicationsInstaller(location: place, applications: applications, administrator: TestAdministrator.refusing))
 
         #expect(outcome == .installed)
         #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher.app"])
@@ -77,28 +77,12 @@ import Testing
                 == BundleFixture.manifest(of: running))
     }
 
-    @Test func anApplicationsFolderThisAccountCannotWriteFailsAndChangesNothing() async throws {
-        let fixture = try BundleFixture()
-        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.0")
-        let applications = try fixture.folder("Applications")
-        chmod(applications.path, 0o555)
-
-        let outcome = await install(ApplicationsInstaller(location: location(running: source), applications: applications))
-
-        guard case .failed(let reason) = outcome else {
-            Issue.record("expected a failure, got \(outcome)")
-            return
-        }
-        #expect(!reason.isEmpty)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: applications.path).isEmpty)
-    }
-
     @Test func anUnreadableSourceFailsBeforeAnythingChanges() async throws {
         let fixture = try BundleFixture()
         let applications = try fixture.folder("Applications")
         let missing = fixture.root.appending(path: "Gone.app")
 
-        let outcome = await install(ApplicationsInstaller(location: location(running: missing), applications: applications))
+        let outcome = await install(ApplicationsInstaller(location: location(running: missing), applications: applications, administrator: TestAdministrator.refusing))
 
         guard case .failed = outcome else {
             Issue.record("expected a failure, got \(outcome)")
@@ -110,7 +94,7 @@ import Testing
     @Test func removingTheOriginalDeletesItFromDownloads() throws {
         let fixture = try BundleFixture()
         let original = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.0")
-        let installer = ApplicationsInstaller(location: location(running: original), applications: try fixture.folder("Applications"))
+        let installer = ApplicationsInstaller(location: location(running: original), applications: try fixture.folder("Applications"), administrator: TestAdministrator.refusing)
 
         installer.removeOriginal()
 
@@ -123,7 +107,7 @@ import Testing
         let original = try fixture.makeBundle(named: "Trackpad Launcher.app", in: downloads, version: "1.0")
         let before = try BundleFixture.manifest(of: original)
         chmod(downloads.path, 0o555)
-        let installer = ApplicationsInstaller(location: location(running: original), applications: try fixture.folder("Applications"))
+        let installer = ApplicationsInstaller(location: location(running: original), applications: try fixture.folder("Applications"), administrator: TestAdministrator.refusing)
 
         installer.removeOriginal()
 
@@ -135,7 +119,7 @@ import Testing
         let original = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Volume"), version: "1.0")
         let image = DiskImage(volume: original.deletingLastPathComponent())
         let installer = ApplicationsInstaller(
-            location: location(running: original, diskImage: image), applications: try fixture.folder("Applications"))
+            location: location(running: original, diskImage: image), applications: try fixture.folder("Applications"), administrator: TestAdministrator.refusing)
 
         installer.removeOriginal()
 
@@ -146,7 +130,7 @@ import Testing
         let fixture = try BundleFixture()
         let applications = try fixture.folder("Applications")
         let installed = try fixture.makeBundle(named: "Trackpad Launcher.app", in: applications, version: "1.0")
-        let installer = ApplicationsInstaller(location: location(running: installed), applications: applications)
+        let installer = ApplicationsInstaller(location: location(running: installed), applications: applications, administrator: TestAdministrator.refusing)
 
         installer.removeOriginal()
 

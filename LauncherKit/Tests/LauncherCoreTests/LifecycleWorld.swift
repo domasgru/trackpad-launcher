@@ -68,7 +68,7 @@ import LauncherCore
     @discardableResult
     func launch(
         _ opening: Opening, others: [RunningCopy] = [], alreadyExited: Set<RunningCopy> = [],
-        placement: Placement = .installed
+        placement: Placement = .installed, diskImageToEject: DiskImage? = nil
     ) -> OneProcess {
         let process = OneProcess(mac: mac, placement: placement, log: log)
         process.installer.onEffect = { [unowned self] in snapshots.append(snapshot()) }
@@ -76,7 +76,7 @@ import LauncherCore
         process.copies.listed = others
         process.copies.alreadyExited = Set(alreadyExited.map(\.id))
         processes.append(process)
-        process.launch(opening)
+        process.launch(opening, diskImageToEject: diskImageToEject)
         return process
     }
 
@@ -126,8 +126,8 @@ import LauncherCore
     var launcher: Launcher { resident! }
     var window: Launcher.Window { resident?.window ?? .closed }
 
-    func launch(_ opening: Opening) {
-        lifecycle.launched(Launch(opening: opening))
+    func launch(_ opening: Opening, diskImageToEject: DiskImage? = nil) {
+        lifecycle.launched(Launch(opening: opening, diskImageToEject: diskImageToEject))
         history.append(window)
     }
 
