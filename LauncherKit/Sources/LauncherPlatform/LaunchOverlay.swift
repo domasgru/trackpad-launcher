@@ -139,7 +139,7 @@ import Synchronization
         panel.ignoresMouseEvents = true
         panel.level = .screenSaver
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        // The app is never active, so it never deactivates either.
+        // The app deactivates whenever another app is brought to front; the overlay must outlive that.
         panel.hidesOnDeactivate = false
         panel.animationBehavior = .none
         panel.isReleasedWhenClosed = false

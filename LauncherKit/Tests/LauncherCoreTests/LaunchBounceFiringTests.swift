@@ -28,7 +28,7 @@ import LauncherCore
         #expect(world.system.broughtToFront == [world.app("Figma")])
         #expect(world.system.launchAnimations.isEmpty)
         #expect(world.hardware.feedback == [Trackpad.macBook14.id])
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
         #expect(feedbackWhenBouncing == [Trackpad.macBook14.id], "the pulse comes first, in the same turn")
     }
 
@@ -64,7 +64,7 @@ import LauncherCore
         #expect(world.system.launchAnimations.isEmpty)
         #expect(world.system.broughtToFront == [world.app("Figma")])
         #expect(world.hardware.feedback.count == 1)
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
     }
 
     @Test(arguments: [LaunchProgress.windowShown, .wentNowhere, .ranOut])
@@ -185,7 +185,7 @@ import LauncherCore
         #expect(world.system.broughtToFront == [world.app("Figma"), world.app("Figma")])
         #expect(world.system.launchAnimations.isEmpty)
         #expect(world.hardware.feedback.count == 2)
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
     }
 
     @Test func aBounceThatStartedUpAndIsStillBouncingKeepsItsStateThroughARepeatedGesture() {

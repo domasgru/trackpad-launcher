@@ -131,7 +131,7 @@ import LauncherCore
         #expect(world.hardware.scroll(.fingers(.began)) == .pass)
     }
 
-    @Test func withNoFrontmostAppTheRowIsTheRunningAppsWithoutAGestureAndTheSelectionStartsOnTheFirst() throws {
+    @Test func withNoActiveAppTheRowIsTheRunningAppsWithoutAGestureAndTheSelectionStartsOnTheFirst() throws {
         let world = World.switcherWorld(apps: ["Safari", "Notes", "Mail"], frontmost: nil)
         assign(world, ["Safari"], to: [.one])
 
@@ -146,7 +146,7 @@ import LauncherCore
         #expect(world.hardware.feedback == [trackpad.id])
     }
 
-    @Test func withNoFrontmostAppAndEveryRunningAppAssignedNoSwitcherShows() {
+    @Test func withNoActiveAppAndEveryRunningAppAssignedNoSwitcherShows() {
         let world = World.switcherWorld(apps: ["Safari", "Mail"], frontmost: nil)
         assign(world, ["Safari", "Mail"], to: [.one, .two])
 

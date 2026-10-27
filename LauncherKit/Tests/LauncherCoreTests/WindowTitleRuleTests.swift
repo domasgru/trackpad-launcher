@@ -26,7 +26,7 @@ private let vsCodeInsiders = AppEntry(
         (frontmost: vsCodeInsiders as AppEntry?,
          raw: ["main.swift — trackpad-launcher", "how-explorer.md — skills"],
          shown: ["trackpad-launcher — main.swift", "skills — how-explorer.md"]),
-        (frontmost: nil as AppEntry?,
+        (frontmost: nil as AppEntry?, // no active app
          raw: ["Apple — Start Page", "how-explorer.md — skills"],
          shown: ["Apple — Start Page", "how-explorer.md — skills"]),
     ])

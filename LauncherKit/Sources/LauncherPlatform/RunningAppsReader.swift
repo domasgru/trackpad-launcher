@@ -17,7 +17,12 @@ import LauncherCore
 
     /// The active app through the public read, and the ⌘-Tab apps. Without the order, the apps are the workspace's Dock apps in the fallback order.
     func read() -> RunningApps {
-        RunningApps(frontmost: frontmost(), apps: order?.apps() ?? fallbackApps())
+        let apps = order?.apps() ?? fallbackApps()
+        let active = NSWorkspace.shared.frontmostApplication
+        let frontmost = Self.frontmost(
+            activePID: active?.processIdentifier, activeEntry: active.flatMap(RunningApp.entry(for:)),
+            ownPID: ProcessInfo.processInfo.processIdentifier, apps: apps)
+        return RunningApps(frontmost: frontmost, apps: apps)
     }
 
     private func fallbackApps() -> [AppEntry] {
@@ -33,12 +38,10 @@ import LauncherCore
         return FallbackOrder.pids(running: running, recency: tracker?.recency ?? []).compactMap { entries[$0] }
     }
 
-    /// nil when there is no active app, it has no bundle identifier or location, or it is this app, which never
-    /// activates except around the Other… chooser.
-    private func frontmost() -> AppEntry? {
-        guard let app = NSWorkspace.shared.frontmostApplication,
-            app.processIdentifier != ProcessInfo.processInfo.processIdentifier
-        else { return nil }
-        return RunningApp.entry(for: app)
+    /// Never this process. While it is active (its settings window in front), the app that was in front before it: the
+    /// first ⌘-Tab app, an order this process never enters (LaunchServices drops its pid; the tracker never notes it). Pure.
+    static func frontmost(activePID: pid_t?, activeEntry: AppEntry?, ownPID: pid_t, apps: [AppEntry]) -> AppEntry? {
+        guard let activePID else { return nil }
+        return activePID == ownPID ? apps.first : activeEntry
     }
 }

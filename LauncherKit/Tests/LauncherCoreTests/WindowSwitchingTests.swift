@@ -71,7 +71,7 @@ import LauncherCore
         #expect(world.hardware.pulses.map(\.haptic) == [.lightTick, .lightTick, .gesture])
         #expect(world.system.launchAnimations.isEmpty)
         #expect(world.system.bounces.isEmpty)
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
 
         world.play(lifted.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 3.5)))
         #expect(world.launcher.windowSwitcher?.rows.map(\.title) == ["News", "Docs", "Mail"])
@@ -94,7 +94,7 @@ import LauncherCore
         #expect(stack(world) == [restored])
         #expect(world.system.windows.minimisedTitles == [restored == "X" ? "Y" : "X"])
         #expect(world.hardware.feedback.count == 1)
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
     }
 
     @Test func liftingOnTheFrontWindowRaisesNothingAndIsSilent() {

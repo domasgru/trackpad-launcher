@@ -263,7 +263,7 @@ import LauncherCore
     private(set) var launchAnimations: [AppEntry] = []
     /// The latest set prepared; each prepare replaces the one before.
     private(set) var preparedLaunchAnimations: [AppEntry] = []
-    /// The active app the next `runningApps()` answers; nil models no active app, or Trackpad Launcher itself.
+    /// The active app the next `runningApps()` answers; nil models no active app.
     var frontmost: AppEntry?
     /// The ⌘-Tab apps the next `runningApps()` answers, most recently activated first.
     var running: [AppEntry] = []

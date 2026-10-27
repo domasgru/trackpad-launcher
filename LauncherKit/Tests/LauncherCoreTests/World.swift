@@ -203,7 +203,7 @@ final class LaunchRecord: Sendable {
 }
 
 extension World {
-    /// What the next swipe reads as frontmost; nil models no active app, or Trackpad Launcher itself.
+    /// What the next swipe reads as frontmost; nil models no active app.
     func makeFrontmost(_ name: String?) {
         system.frontmost = name.map { app($0) }
     }

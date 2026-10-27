@@ -3,7 +3,7 @@ import Observation
 
 /// The running Trackpad Launcher. Owns every decision; adapters sense and act, the shell and views render.
 /// `activity` is derived, never stored; `rows` derive from settings plus the catalog; `fire` is the only path
-/// that pulses, launches, plays the launch animation or the launch bounce, or closes the window from a gesture. `fire`
+/// that pulses, launches, plays the launch animation or the launch bounce from a gesture; no gesture closes the window. `fire`
 /// shows either only while the launch animation setting is on: the bounce for an app with no process, the animation for
 /// one with a process.
 @MainActor @Observable
@@ -266,7 +266,6 @@ public final class Launcher {
         case .bringToFrontOnly:
             system.bringToFront(app)
         }
-        window = .closed
     }
 
     /// A report for an app whose bounce ended finds no record: a late window plays nothing.
@@ -310,7 +309,6 @@ public final class Launcher {
             guard running.contains(target.url) else { return }
             hardware.playFeedback(.gesture, on: event.trackpad)
             system.bringToFront(open.selectedApp)
-            window = .closed
         case .cancelled:
             if case .apps(let open)? = shown, open.trackpad == event.trackpad { shown = nil }
         }
@@ -346,7 +344,6 @@ public final class Launcher {
             let lift = open.lift(now: system.frontmostWindows())
             if lift.playsHaptic {
                 hardware.playFeedback(.gesture, on: event.trackpad)
-                window = .closed
             }
             system.raiseWindows(lift.raises)
         case .cancelled:
@@ -362,7 +359,6 @@ public final class Launcher {
         guard let target = swapSeries.next(in: system.runningApps()) else { return }
         hardware.playFeedback(.gesture, on: event.trackpad)
         system.bringToFront(target)
-        window = .closed
     }
 
     /// Rows and the prepared launch animations change together, so the icon of any app that can fire is ready before

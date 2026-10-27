@@ -186,7 +186,7 @@ import LauncherCore
 
     // MARK: The lift
 
-    @Test func liftingOpensTheSelectionWithTheGestureHapticNoLaunchAnimationAndClosesTheWindow() {
+    @Test func liftingOpensTheSelectionWithTheGestureHapticNoLaunchAnimationAndLeavesTheWindowOpen() {
         let world = World.switcherWorld()
         world.launcher.openedByHand()
         let hand = world.swipe(3.5, 24, lift: false)
@@ -207,7 +207,7 @@ import LauncherCore
         #expect(world.system.launchAnimations.isEmpty)
         #expect(world.system.bounces.isEmpty)
         #expect(world.launcher.switcher == nil)
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
     }
 
     @Test func theSwitcherStaysUntilBothFingersLiftAndTheLastOneKeepsSteering() {
@@ -360,9 +360,9 @@ import LauncherCore
         #expect(world.hardware.scroll(.fingers(.began)) == .pass)
     }
 
-    // MARK: Trackpad Launcher in front
+    // MARK: No active app
 
-    @Test func withNoReadableFrontmostAppTheRowIsTheRunningAppsStartingOnTheMostRecent() {
+    @Test func withNoActiveAppTheRowIsTheRunningAppsStartingOnTheMostRecent() {
         let world = World.switcherWorld()
         world.makeFrontmost(nil)
 
@@ -372,7 +372,7 @@ import LauncherCore
         #expect(world.launcher.switcher?.selection.selected == 0)
     }
 
-    @Test func withNoReadableFrontmostAppLiftingOnTheFirstAppBringsItToFront() {
+    @Test func withNoActiveAppLiftingOnTheFirstAppBringsItToFront() {
         let world = World.switcherWorld()
         world.makeFrontmost(nil)
 
@@ -382,7 +382,7 @@ import LauncherCore
         #expect(world.hardware.feedback == [trackpad.id])
     }
 
-    @Test func withNoReadableFrontmostAppOneRunningAppIsEnoughToSwitchTo() {
+    @Test func withNoActiveAppOneRunningAppIsEnoughToSwitchTo() {
         let world = World.switcherWorld()
         world.makeRunning(["Safari"])
         world.makeFrontmost(nil)
@@ -407,7 +407,7 @@ import LauncherCore
 
     // MARK: The lift and the left end
 
-    @Test func oneStepRightAndLiftBringsMailToTheFrontWithTheGestureHapticAndClosesTheWindow() {
+    @Test func oneStepRightAndLiftBringsMailToTheFrontWithTheGestureHapticAndLeavesTheWindowOpen() {
         let world = World.switcherWorld()
         world.launcher.openedByHand()
 
@@ -421,7 +421,7 @@ import LauncherCore
         #expect(world.system.launchAnimations.isEmpty)
         #expect(world.system.bounces.isEmpty)
         #expect(world.launcher.switcher == nil)
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
     }
 
     @Test func liftingBeforeAnIconIsReachedDoesNothing() {
