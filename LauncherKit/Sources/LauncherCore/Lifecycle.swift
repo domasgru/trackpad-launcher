@@ -11,12 +11,14 @@ public enum Opening: Equatable, Sendable {
 
 /// What one opening of this process leads to: the whole table, pure.
 public enum Route: Equatable, Sendable {
-    case runSilently, runWithWindow
+    case runSilently, runWithWindow, end
 
-    public init(_ opening: Opening) {
-        switch opening {
-        case .atLogin: self = .runSilently
-        case .byHand: self = .runWithWindow
+    /// `olderCopyRuns` matters only at login: two login starts converge on the older copy.
+    public init(_ opening: Opening, olderCopyRuns: Bool) {
+        switch (opening, olderCopyRuns) {
+        case (.atLogin, true): self = .end
+        case (.atLogin, false): self = .runSilently
+        case (.byHand, _): self = .runWithWindow
         }
     }
 }
@@ -37,8 +39,32 @@ public enum QuitRequest: Equatable, Sendable {
     case other
 }
 
+public struct CopyID: Hashable, Sendable {
+    public let rawValue: Int32
+    public init(rawValue: Int32) { self.rawValue = rawValue }
+}
+
+/// Another running Trackpad Launcher process: any build, any place, the menu bar version included.
+public struct RunningCopy: Hashable, Sendable {
+    public let id: CopyID
+    /// Launched before this process, by the adapter's one total order (launch date, a missing date counting as latest,
+    /// then pid). At login, this process defers to such a copy.
+    public let startedEarlier: Bool
+
+    public init(id: CopyID, startedEarlier: Bool) {
+        self.id = id
+        self.startedEarlier = startedEarlier
+    }
+}
+
 /// The running Trackpad Launcher processes. Real: SystemRunningCopies. Test: InMemoryRunningCopies.
 @MainActor public protocol RunningCopies: AnyObject {
+    /// Every other process with this bundle identifier, read now.
+    func others() -> [RunningCopy]
+    /// Stops each at once without asking: a copy can neither refuse, nor ask its user, nor hang the stop. Calls
+    /// `exited` once, on the main actor, when every listed copy has exited; synchronously when none still runs. The
+    /// signal is the processes' own termination, never a wait or a poll.
+    func stop(_ copies: [RunningCopy], then exited: @escaping @MainActor () -> Void)
     /// AppKit's terminate for this process; `Lifecycle.shouldEnd` has already agreed (stage `.ending`).
     func endThisCopy()
 }
@@ -66,6 +92,8 @@ public final class Lifecycle {
     /// Every legal situation of the process, and nothing else. Written only by the intents.
     private enum Stage {
         case idle
+        /// Other copies are stopping; nothing of ours senses yet.
+        case replacingOthers(opensWindow: Bool)
         case resident(Launcher)
         case ending
     }
@@ -87,22 +115,27 @@ public final class Lifecycle {
     /// Once, from applicationDidFinishLaunching. A second call does nothing.
     public func launched(_ launch: Launch) {
         guard case .idle = stage else { return }
-        let launcher = makeResident()
-        launcher.start()
-        stage = .resident(launcher)
-        if Route(launch.opening) == .runWithWindow { launcher.openedByHand() }
+        let others = copies.others()
+        switch Route(launch.opening, olderCopyRuns: others.contains(where: \.startedEarlier)) {
+        case .end: end()
+        case .runSilently: replace(others, opensWindow: false)
+        case .runWithWindow: replace(others, opensWindow: true)
+        }
     }
 
     /// From applicationShouldHandleReopen.
     public func openedAgain(_ opening: Opening) {
-        guard case .resident(let launcher) = stage, Route(opening) == .runWithWindow else { return }
-        launcher.openedByHand()
+        switch (stage, Route(opening, olderCopyRuns: false)) {
+        case (.replacingOthers, .runWithWindow): stage = .replacingOthers(opensWindow: true)
+        case (.resident(let launcher), .runWithWindow): launcher.openedByHand()
+        default: break
+        }
     }
 
     /// From applicationShouldTerminate.
     public func shouldEnd(_ request: QuitRequest) -> Bool {
         switch stage {
-        case .ending, .idle: return true
+        case .ending, .idle, .replacingOthers: return true
         case .resident(let launcher):
             // Every ordinary way to quit exists only while the settings window is open: close it, keep running. With it
             // closed, a quit is the system's or a script's: end, never hold up a logout.
@@ -122,5 +155,19 @@ public final class Lifecycle {
     private func end() {
         stage = .ending
         copies.endThisCopy()
+    }
+
+    /// The stage first: `stop` may call back before it returns.
+    private func replace(_ others: [RunningCopy], opensWindow: Bool) {
+        stage = .replacingOthers(opensWindow: opensWindow)
+        copies.stop(others) { [unowned self] in othersExited() }
+    }
+
+    private func othersExited() {
+        guard case .replacingOthers(let opensWindow) = stage else { return }
+        let launcher = makeResident()
+        launcher.start()
+        stage = .resident(launcher)
+        if opensWindow { launcher.openedByHand() }
     }
 }

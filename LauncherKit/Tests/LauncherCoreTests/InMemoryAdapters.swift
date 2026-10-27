@@ -466,10 +466,48 @@ import LauncherCore
     }
 }
 
-/// Ending a process asks its `Lifecycle` first, as `NSApp.terminate` asks `applicationShouldTerminate`.
+/// Ending a process asks its `Lifecycle` first, as `NSApp.terminate` asks `applicationShouldTerminate`. Other copies
+/// exit only when a row lets them.
 @MainActor final class InMemoryRunningCopies: RunningCopies {
     weak var lifecycle: Lifecycle?
     private(set) var hasEnded = false
+    var listed: [RunningCopy] = []
+    /// Every copy passed to `stop`, in order.
+    private(set) var stopped: [RunningCopy] = []
+    /// Copies that exited before `stop` ran: `stop` then calls back inside itself, as KVO's `.initial` does.
+    var alreadyExited: Set<CopyID> = []
+    private var waitingFor: Set<CopyID> = []
+    private var pending: (@MainActor () -> Void)?
+    private var lastPush: (@MainActor () -> Void)?
+
+    func others() -> [RunningCopy] { listed }
+
+    func stop(_ copies: [RunningCopy], then exited: @escaping @MainActor () -> Void) {
+        stopped += copies
+        waitingFor = Set(copies.map(\.id)).subtracting(alreadyExited)
+        pending = exited
+        lastPush = exited
+        if waitingFor.isEmpty { fire() }
+    }
+
+    func letExit(_ id: CopyID) {
+        guard waitingFor.remove(id) != nil, waitingFor.isEmpty else { return }
+        fire()
+    }
+
+    func letStoppedCopiesExit() {
+        waitingFor = []
+        fire()
+    }
+
+    /// The same exit push arriving a second time.
+    func deliverExitAgain() { lastPush?() }
+
+    private func fire() {
+        guard let exited = pending else { return }
+        pending = nil
+        exited()
+    }
 
     func endThisCopy() {
         if lifecycle?.shouldEnd(.other) == true { hasEnded = true }

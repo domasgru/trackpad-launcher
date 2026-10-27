@@ -121,6 +121,9 @@ import Testing
         Confined(
             token: "currentAppleEvent", onlyIn: ["ThisCopy.swift", "TrackpadLauncherApp.swift"],
             rule: "the launch event is read at the app delegate and parsed in one place"),
+        Confined(
+            token: "forceTerminate", onlyIn: ["SystemRunningCopies.swift"], rule: "other copies are stopped in one place"),
+        Confined(token: ".terminate(", onlyIn: ["SystemRunningCopies.swift"], rule: "processes are ended in one place"),
         Confined(token: "kAEQuitReason", onlyIn: ["QuitSignals.swift"], rule: "the quit event is parsed in one place"),
     ]
 

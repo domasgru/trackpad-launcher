@@ -183,6 +183,15 @@ import Testing
         ending.quit()
         #expect(ending.shouldEnd(.system))
         #expect(ending.window == .open(request: 1))
+
+        let replacing = world.launch(.byHand, others: [.earlier])
+        #expect(replacing.shouldEnd(.system))
     }
+}
+
+extension RunningCopy {
+    static let earlier = RunningCopy(id: CopyID(rawValue: 100), startedEarlier: true)
+    static let later = RunningCopy(id: CopyID(rawValue: 300), startedEarlier: false)
+    static let tools = RunningCopy(id: CopyID(rawValue: 400), startedEarlier: true)
 }
 

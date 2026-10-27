@@ -27,16 +27,20 @@ import LauncherCore
 
     /// A process started by hand or at login, as `applicationDidFinishLaunching` hands it over.
     @discardableResult
-    func launch(_ opening: Opening) -> OneProcess {
+    func launch(
+        _ opening: Opening, others: [RunningCopy] = [], alreadyExited: Set<RunningCopy> = []
+    ) -> OneProcess {
         let process = OneProcess(mac: mac)
+        process.copies.listed = others
+        process.copies.alreadyExited = Set(alreadyExited.map(\.id))
         processes.append(process)
         process.launch(opening)
         return process
     }
 
     /// macOS at login: it starts a process, silently, only while the login item is on.
-    func login() -> OneProcess? {
-        loginItem.isOn ? launch(.atLogin) : nil
+    func login(others: [RunningCopy] = []) -> OneProcess? {
+        loginItem.isOn ? launch(.atLogin, others: others) : nil
     }
 }
 
@@ -80,6 +84,21 @@ import LauncherCore
 
     func openAgain(_ opening: Opening) {
         lifecycle.openedAgain(opening)
+        history.append(window)
+    }
+
+    func letExit(_ id: CopyID) {
+        copies.letExit(id)
+        history.append(window)
+    }
+
+    func letStoppedCopiesExit() {
+        copies.letStoppedCopiesExit()
+        history.append(window)
+    }
+
+    func deliverExitAgain() {
+        copies.deliverExitAgain()
         history.append(window)
     }
 

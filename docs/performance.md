@@ -5,7 +5,7 @@ How much of the Mac Trackpad Launcher uses, measured on Release builds, and how 
 ## Method
 
 ### Build
-`Scripts/perf/build.sh` builds the tools and a Release app into `build/perf/`. It uses the same `-O`, whole-module optimisation, universal binary and hardened runtime as the notarized release, with local Apple Development signing in place of Developer ID, which does not change runtime cost. Never measure a Debug build: it is unoptimised, and it opens the animation tuner. Quit every other copy of the app first, including one paused under Xcode, because two copies both react to gestures. Accessibility stays granted across rebuilds signed by the same identity.
+`Scripts/perf/build.sh` builds the tools and a Release app into `build/perf/`. It uses the same `-O`, whole-module optimisation, universal binary and hardened runtime as the notarized release, with local Apple Development signing in place of Developer ID, which does not change runtime cost. Never measure a Debug build: it is unoptimised, and it opens the animation tuner. Opening the perf build stops every other running copy by itself, so only one copy reacts to gestures. Accessibility stays granted across rebuilds signed by the same identity.
 
 ### Tools
 - `sampler` (`Scripts/perf/sampler.c`): `proc_pid_rusage` on the app's pid once per interval. It reports user plus system CPU, instructions, cycles, package idle wakeups, interrupt wakeups and phys footprint. Its own MultitouchSupport callback counts the frames the trackpads delivered in each interval, so every second is labelled touching or not touching. The sampler's cost lands in its own process, not the app's.
