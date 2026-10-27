@@ -1,0 +1,21 @@
+== S1 launch with NSSupportsSuddenTermination
+  processes: 22210 
+== S2 osascript quit
+  osascript: 49:53: execution error: TLProbe got an error: User canceled. (-128)
+  processes: 22210 
+== S3 NSRunningApplication.terminate()
+  terminator pid 22448: 1 running copies
+  terminate() pid 22210 -> true
+  after 1.5 s pid 22210 isTerminated=false
+  processes: 22210 
+== Cleanup
+  processes: 
+
+== Probe log
+[pid 22210 v3] willFinishLaunching path=/private/tmp/tl021probe/S/TLProbe.app policy=1 no current Apple event
+[pid 22210 v3] didFinishLaunching isDefaultLaunch=true event aevt/oapp propData=none quitReasonParam=none quitReasonAttr=none sender=22210 com.domasgru.tl021probe
+[pid 22210 v3] shouldTerminate allow=false event aevt/quit propData=none quitReasonParam=none quitReasonAttr=none sender=22355 osascript
+[pid 22210 v3] shouldTerminate allow=false event aevt/quit propData=none quitReasonParam=none quitReasonAttr=none sender=22448 (no NSRunningApplication)
+[pid 22210 v3] shouldTerminate allow=true event aevt/quit propData=none quitReasonParam=none quitReasonAttr=none sender=22581 osascript
+
+cleanup: probe processes left = 0

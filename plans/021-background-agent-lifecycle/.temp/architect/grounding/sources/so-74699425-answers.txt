@@ -1,0 +1,68 @@
+Source: https://stackoverflow.com/questions/74699425 (SMAppService register() - How to detect launch at startup/login vs regular launch), answers via api.stackexchange.com, fetched 2026-10-27
+----- score 0 accepted False
+In your Helper app
+- (void)applicationDidFinishLaunching: (NSNotification *)aNotification
+{
+    // Prepare a dictionary to pass to the App   
+    NSDictionary                    *env = @{@"launcher" : [[NSBundle mainBundle] bundleIdentifier]};
+    NSWorkspaceOpenConfiguration    *configuration = [NSWorkspaceOpenConfiguration new];
+    [configuration setEnvironment:env];
+    // Let's say your bundleIdentifier is "com.yourdomain.Helper"
+    // I used "--a" but you can use your arguments
+    [configuration setArguments:@[@"--a", [[NSBundle mainBundle] bundleIdentifier]]];
+    [configuration setPromptsUserIfNeeded:YES];
+    // This is the path to your App
+    NSArray     *pathComponents = [[[NSBundle mainBundle] bundlePath] pathComponents];
+    pathComponents = [pathComponents subarrayWithRange:NSMakeRange(0, pathComponents.count - 4)];
+    NSString    *path = [NSString pathWithComponents:pathComponents];
+    // Now the helper launches your App
+    [[NSWorkspace sharedWorkspace] openApplicationAtURL:[NSURL fileURLWithPath:path]
+                   configuration:configuration completionHandler:^(NSRunningApplication* app, NSError* error)
+     {
+        if(error){
+          NSLog(@"•••• Helper applicationDidFinishLaunching: Failed to run the app: %@", error.localizedDescription);
+        }
+        else{
+            //NSLog(@"•••• Helper applicationDidFinishLaunching: OK to run the app.");
+        }
+        exit(0);
+    }]; 
+}  
+In your App
+- (void)applicationDidFinishLaunching:(NSNotification*)aNotification
+{
+    NSArray *arguments = [[NSProcessInfo processInfo] arguments];
+    NSLog(@"•••• App applicationDidFinishLaunching!!! >>>>>>>>>> arguments %@", arguments);
+    // You will get the log with an array like the following one, containing
+        // The path to your app
+        // The argument --a you defined above
+        // The Helper identifier you defined above
+    /*
+        •••• App applicationDidFinishLaunching!!! >>>>>>>>>> arguments (
+        "/PathToYourApp.app/Contents/MacOS/YourApp",
+        "--a",
+        "com.yourdomain.Helper"
+    )
+    */
+    BOOL launchedByHelper = [arguments indexOfObject:@"com.yourdomain.Helper"] != NSNotFound;
+    if(launchedByHelper){
+        // Here you can run your code when the app
+        // has been launched by the Helper
+    }
+    else{
+    }
+}
+----- score 4 accepted True
+To answer my own question, it turns out this is possible. Inspired by this older answer which worked with the non Ventura API/paradigm.
+Inside your AppDelegate:
+- (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
+    NSAppleEventDescriptor* event = NSAppleEventManager.sharedAppleEventManager.currentAppleEvent;
+    BOOL launchedAsLoginItem = (event.eventID == kAEOpenApplication &&
+       [event paramDescriptorForKeyword:keyAEPropData].enumCodeValue == keyAELaunchedAsLogInItem);
+    ...
+}
+and Swift:
+let event = NSAppleEventManager.shared().currentAppleEvent
+let launchedAsLogInItem =
+    event?.eventID == kAEOpenApplication &&
+    event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
