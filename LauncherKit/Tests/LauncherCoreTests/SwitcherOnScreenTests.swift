@@ -188,7 +188,7 @@ import LauncherCore
 
     @Test func liftingOpensTheSelectionWithTheGestureHapticNoLaunchAnimationAndClosesTheWindow() {
         let world = World.switcherWorld()
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         let hand = world.swipe(3.5, 24, lift: false)
         #expect(names(world.launcher.switcher) == ["Safari", "Mail", "Slack", "Notes"])
         #expect(world.launcher.switcher?.selectedApp.name == "Slack")
@@ -271,7 +271,7 @@ import LauncherCore
 
     @Test func liftingOnTheFrontmostAppOnlyRemovesTheSwitcherAndLeavesTheWindowAlone() {
         let world = World.switcherWorld()
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         world.swipe(3.5, 4)
 
@@ -409,7 +409,7 @@ import LauncherCore
 
     @Test func oneStepRightAndLiftBringsMailToTheFrontWithTheGestureHapticAndClosesTheWindow() {
         let world = World.switcherWorld()
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         world.swipe(3.5, 12)
 
@@ -426,7 +426,7 @@ import LauncherCore
 
     @Test func liftingBeforeAnIconIsReachedDoesNothing() {
         let world = World.switcherWorld()
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         world.swipe(3.5, 4)
 
@@ -506,7 +506,7 @@ import LauncherCore
 
     @Test func liftingOnTheStartingAppAfterAnotherCameForwardIsSilent() {
         let world = World.switcherWorld()
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         let hand = world.swipe(3.5, 12, -12, lift: false)
 
         world.makeFrontmost("Mail")

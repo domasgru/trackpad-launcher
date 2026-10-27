@@ -17,59 +17,42 @@ import LauncherCore
         #expect(world.launcher.activity == .active)
     }
 
-    @Test func firstLaunchPromptsOnceAndHoldsTheWindowOpenUntilAnExplicitClose() {
+
+    @Test func firstRunPromptsOnceAndOpensTheWindow() {
         let world = World()
-
-        world.launcher.start()
-        #expect(world.permissions.asks == [.accessibility])
-        #expect(world.launcher.isWindowOpen)
-        #expect(world.system.loginItemRegistrations == 1)
-
-        world.launcher.dismissWindow()
-        #expect(world.launcher.isWindowOpen)
-        world.launcher.closeWindow()
-        #expect(!world.launcher.isWindowOpen)
-
-        world.relaunch().start()
-        #expect(world.permissions.asks == [.accessibility])
-        #expect(!world.launcher.isWindowOpen)
-    }
-
-    @Test func firstLaunchWithAccessAlreadyGrantedSkipsThePromptAndOpensAnOrdinaryWindow() {
-        let world = World(accessGranted: true)
 
         world.launcher.start()
         #expect(world.permissions.asks.isEmpty)
+        world.launcher.openedByHand()
+        #expect(world.permissions.asks == [.accessibility])
         #expect(world.launcher.isWindowOpen)
-        world.launcher.dismissWindow()
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.loginItem.calls == ["register"])
 
+        world.launcher.closeWindow()
         world.relaunch().start()
-        world.launcher.openWindow()
-        world.launcher.dismissWindow()
-        #expect(!world.launcher.isWindowOpen)
+        world.launcher.openedByHand()
+        #expect(world.permissions.asks == [.accessibility])
     }
 
-    @Test func aGrantEndsTheHoldAndClosesTheWindow() {
+    @Test func firstRunWithAccessAlreadyGrantedSkipsThePrompt() {
+        let world = World(accessGranted: true)
+
+        world.launcher.start()
+        world.launcher.openedByHand()
+
+        #expect(world.permissions.asks.isEmpty)
+        #expect(world.launcher.isWindowOpen)
+    }
+
+    @Test func aGrantLeavesTheWindowOpen() {
         let world = World()
         world.launcher.start()
+        world.launcher.openedByHand()
 
         world.permissions.set(.accessibility, granted: true)
 
-        #expect(!world.launcher.isWindowOpen)
-        #expect(world.launcher.isAccessibilityGranted)
-    }
-
-    @Test func aFiredGestureClosesAHeldWindow() {
-        let world = World(apps: ["Arc"])
-        world.launcher.start()
-        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
         #expect(world.launcher.isWindowOpen)
-
-        world.tap(1)
-
-        #expect(world.system.broughtToFront == [world.app("Arc")])
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.isAccessibilityGranted)
     }
 
     @Test func promptComesBeforeTheFirstSave() {
@@ -78,6 +61,7 @@ import LauncherCore
         world.permissions.onAsk = { [unowned world] in snapshots.append(world.store.load()) }
 
         world.launcher.start()
+        world.launcher.openedByHand()
 
         #expect(snapshots == [nil])
         #expect(world.store.load() != nil)

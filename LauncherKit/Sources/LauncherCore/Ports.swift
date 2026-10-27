@@ -57,8 +57,6 @@ public enum Haptic: Sendable { case gesture, lightTick }
 @MainActor public protocol SystemActions: AnyObject {
     /// Bring to front: launch, or unhide / restore / reopen / activate exactly like a Dock click.
     func bringToFront(_ app: AppEntry)
-    /// Open at Login. Idempotent. Called only on first launch.
-    func registerLoginItem()
     /// The apps the next launch animations and launch bounces may be for. Each call replaces the previous set. Readies
     /// whatever a later `playLaunchAnimation` or `bringToFrontBouncing` for one of them needs now, so that call does no
     /// slow work.

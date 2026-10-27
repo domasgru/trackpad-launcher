@@ -12,7 +12,7 @@ extension Launcher {
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
         world.startProcess("Figma")
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         var broughtToFrontWhenAnimationRequested: [AppEntry]?
         world.system.onPlayLaunchAnimation = { [system = world.system] in
             broughtToFrontWhenAnimationRequested = system.broughtToFront
@@ -33,7 +33,7 @@ extension Launcher {
         let world = World(apps: ["Arc"])
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         world.launcher.setLaunchAnimation(on: false)
 
         world.tap(1)
@@ -96,7 +96,7 @@ extension Launcher {
     @Test func unassignedGestureIsSilentAndLeavesTheWindowOpen() {
         let world = World(apps: ["Arc"])
         world.launcher.start()
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         world.tap(3)
 
@@ -171,7 +171,7 @@ extension Launcher {
         world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
         world.registry[World.bundleID("Arc")] = [world.trash("Arc")]
 
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         #expect(
             world.system.preparedLaunchAnimations == [world.app("Figma")],

@@ -37,6 +37,7 @@ targets:
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         LSUIElement: true
+        NSSupportsSuddenTermination: true
         LSMinimumSystemVersion: "26.0"
     settings:
       base:

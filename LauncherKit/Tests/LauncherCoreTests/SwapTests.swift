@@ -14,7 +14,7 @@ import LauncherCore
 
     @Test func theThumbLiftingSwapsToThePreviousAppWithTheHapticAndNoAnimationAndClosesTheWindow() {
         let world = World.switcherWorld()
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         let base = rest()
 
         world.play(base.thumb(atMM: (10, 10)).wait(.milliseconds(50)))
@@ -140,7 +140,7 @@ import LauncherCore
         let finder = only.app("Finder", in: only.coreServices)
         only.makeRunning([finder])
         only.system.frontmost = finder
-        only.launcher.openWindow()
+        only.launcher.openedByHand()
         only.swap()
         #expect(nothingHappened(only))
         #expect(only.launcher.isWindowOpen)

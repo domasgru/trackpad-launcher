@@ -6,7 +6,13 @@ public enum Copy {
         "Clicks and scrolling aren't blocked during gestures, and windows can't be switched. "
         + "Allow Accessibility access to do both."
 
-    /// Shown in the launcher window while Screen Recording is missing and the window swipe is on.
+    /// The red button that ends the settings window.
+    public static let quitButton = "Quit Trackpad Launcher"
+
+    /// The app menu's item in Quit's place.
+    public static let closeSettings = "Close Settings"
+
+    /// Shown in the settings window while Screen Recording is missing and the window swipe is on.
     public static let screenRecordingHint = "Window previews need Screen Recording."
 
     public static func screenRecordingButton(_ hint: ScreenRecordingHint) -> String {

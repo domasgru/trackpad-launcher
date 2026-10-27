@@ -39,7 +39,7 @@ let tunerOverride = Mutex(LaunchTuning.shipped)
 }
 
 /// Takes keyboard focus and activates the app on any click, so the preset name field receives typing even though
-/// the app is a menu bar app that is otherwise never active.
+/// the app is a background app that is otherwise rarely active.
 private final class TunerPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }

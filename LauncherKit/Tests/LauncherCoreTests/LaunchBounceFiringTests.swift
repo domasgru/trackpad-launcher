@@ -18,7 +18,7 @@ import LauncherCore
 
     @Test func aGestureForAnAppWithNoProcessBouncesInsteadOfFloatingAndPulsesFirst() {
         let world = world([("Figma", .two)])
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         var feedbackWhenBouncing: [TrackpadID]?
         world.system.onBringToFrontBouncing = { [unowned world] in feedbackWhenBouncing = world.hardware.feedback }
 
@@ -55,7 +55,7 @@ import LauncherCore
 
     @Test func withTheLaunchAnimationOffAnAppWithNoProcessJustLaunches() {
         let world = world([("Figma", .two)])
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         world.launcher.setLaunchAnimation(on: false)
 
         world.tap(2)
@@ -177,7 +177,7 @@ import LauncherCore
     func aRepeatedGestureKeepsTheOneBounceButPulsesAndBringsTheAppToFront(twoGestures: Bool) {
         let world = twoGestures ? world([("Figma", .one), ("Figma", .two)]) : world([("Figma", .two)])
         world.tap(twoGestures ? 1 : 2)
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         world.tap(2)
 

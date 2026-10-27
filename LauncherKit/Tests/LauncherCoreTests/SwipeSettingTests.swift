@@ -8,7 +8,7 @@ import LauncherCore
 
     @Test func turningTheSwipeOffShowsNoSwitcherAndKeepsTheWindowOpen() {
         let world = World.switcherWorld()
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         world.launcher.setSwipe(on: false)
         #expect(!world.launcher.isSwipeOn)

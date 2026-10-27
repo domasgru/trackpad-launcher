@@ -259,7 +259,6 @@ import LauncherCore
 
 @MainActor final class RecordingSystemActions: SystemActions {
     private(set) var broughtToFront: [AppEntry] = []
-    private(set) var loginItemRegistrations = 0
     /// One entry per play, in order.
     private(set) var launchAnimations: [AppEntry] = []
     /// The latest set prepared; each prepare replaces the one before.
@@ -268,8 +267,6 @@ import LauncherCore
     var frontmost: AppEntry?
     /// The ⌘-Tab apps the next `runningApps()` answers, most recently activated first.
     var running: [AppEntry] = []
-    /// Runs inside `registerLoginItem()` so a test can observe what is stored at that moment.
-    var onRegisterLoginItem: (() -> Void)?
     /// Runs inside `playLaunchAnimation(for:)` so a test can observe the other effects at that moment.
     var onPlayLaunchAnimation: (() -> Void)?
 
@@ -283,11 +280,6 @@ import LauncherCore
     func frontmostWindows() -> FrontmostWindows { windows.read(frontmost: frontmost) }
 
     func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
-
-    func registerLoginItem() {
-        loginItemRegistrations += 1
-        onRegisterLoginItem?()
-    }
 
     func prepareLaunchAnimations(for apps: [AppEntry]) { preparedLaunchAnimations = apps }
 
@@ -455,6 +447,32 @@ import LauncherCore
         guard granted != self.granted.contains(permission) else { return }
         if granted { self.granted.insert(permission) } else { self.granted.remove(permission) }
         if push { onChange?() }
+    }
+}
+
+@MainActor final class InMemoryLoginItem: LoginItem {
+    /// The user's Login Items choice for this app.
+    var isOn = false
+    /// Every `register()` call, in order.
+    private(set) var calls: [String] = []
+    /// Runs inside `register()` so a test can observe what is stored at that moment.
+    var onRegister: (() -> Void)?
+
+    @discardableResult func register() -> Bool {
+        calls.append("register")
+        isOn = true
+        onRegister?()
+        return true
+    }
+}
+
+/// Ending a process asks its `Lifecycle` first, as `NSApp.terminate` asks `applicationShouldTerminate`.
+@MainActor final class InMemoryRunningCopies: RunningCopies {
+    weak var lifecycle: Lifecycle?
+    private(set) var hasEnded = false
+
+    func endThisCopy() {
+        if lifecycle?.shouldEnd(.other) == true { hasEnded = true }
     }
 }
 

@@ -116,7 +116,7 @@ import LauncherCore
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
         world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         world.hardware.inject(.gesture(GestureEvent(gesture: .one, trackpad: Trackpad.macBook14.id)))
 

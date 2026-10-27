@@ -7,8 +7,8 @@ import SwiftUI
 /// regular size, are padded out to 28. Below them, while any applies, the trackpad settings notice, the Accessibility
 /// hint and the screen recording hint. The guide naming the two marks sits over the first illustration while the first
 /// gesture has no app, between it and the 132 pt picker, and only in right-hand mode, where its arrows meet the thumb.
-/// Quit lives in the status item's right-click menu.
-struct LauncherView: View {
+/// The *Quit Trackpad Launcher* button ends it, below everything else, aligned right.
+struct SettingsView: View {
     let launcher: Launcher
     let actions: LauncherActions
 
@@ -48,6 +48,12 @@ struct LauncherView: View {
                     }
                 }
             }
+            Button(Copy.quitButton, action: actions.quit)
+                .buttonStyle(.glassProminent)
+                .tint(.red)
+                .buttonBorderShape(.capsule)
+                .controlSize(.regular)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14))
         .frame(width: 266)

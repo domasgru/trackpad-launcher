@@ -1,6 +1,5 @@
 import AppKit
 import LauncherCore
-import ServiceManagement
 
 @MainActor public final class WorkspaceActions: SystemActions {
     private let overlay: LaunchOverlay
@@ -84,11 +83,6 @@ import ServiceManagement
     public func frontmostWindows() -> FrontmostWindows { windows.read() }
 
     public func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
-
-    /// Registration failing (unsigned build, user-disabled item) leaves the app running without a login item.
-    public func registerLoginItem() {
-        try? SMAppService.mainApp.register()
-    }
 
     public func prepareLaunchAnimations(for apps: [AppEntry]) {
         overlay.prepare(for: apps)
