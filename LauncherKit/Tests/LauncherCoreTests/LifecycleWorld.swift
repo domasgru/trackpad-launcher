@@ -10,15 +10,20 @@ import LauncherCore
     var loginItem: InMemoryLoginItem { mac.loginItem }
     var permissions: InMemoryPermissions { mac.permissions }
     private var processes: [OneProcess] = []
+    /// The login item's calls, the copies stopped and the installer's calls of every process, in order.
+    let log = EffectLog()
+    /// How many snapshots existed when /Applications changed; nil while it has not.
+    private(set) var installedAt: Int?
 
     /// `record` is what an earlier run saved: these apps on these gestures. nil is a Mac that holds no settings.
     init(
         apps: [String] = ["Arc", "Notes"], accessGranted: Bool = true, record: [Gesture: String]? = nil,
-        loginItemOn: Bool = false
+        handMode: HandMode = .right, loginItemOn: Bool = false
     ) {
         mac = World(apps: apps, accessGranted: accessGranted)
         if let record {
             var settings = Settings()
+            settings.handMode = handMode
             for (gesture, name) in record { settings.assignments[gesture] = AssignedApp(mac.app(name)) }
             mac.freshStore().save(settings)
         }
@@ -54,6 +59,7 @@ import LauncherCore
     }
 
     private func recordEveryEffect() {
+        loginItem.log = log
         loginItem.onEffect = { [unowned self] in snapshots.append(snapshot()) }
         permissions.onEffect = { [unowned self] in snapshots.append(snapshot()) }
     }
@@ -64,7 +70,9 @@ import LauncherCore
         _ opening: Opening, others: [RunningCopy] = [], alreadyExited: Set<RunningCopy> = [],
         placement: Placement = .installed
     ) -> OneProcess {
-        let process = OneProcess(mac: mac, placement: placement)
+        let process = OneProcess(mac: mac, placement: placement, log: log)
+        process.installer.onEffect = { [unowned self] in snapshots.append(snapshot()) }
+        process.installer.onInstalled = { [unowned self] in installedAt = snapshots.count }
         process.copies.listed = others
         process.copies.alreadyExited = Set(alreadyExited.map(\.id))
         processes.append(process)
@@ -83,6 +91,7 @@ import LauncherCore
     private let startAtLogin: StartAtLogin
     private(set) var lifecycle: Lifecycle!
     let copies = InMemoryRunningCopies()
+    let installer = InMemoryInstaller()
     let hardware: InMemoryTrackpads
     let preferences = InMemoryTrackpadPreferences()
     let system = RecordingSystemActions()
@@ -92,12 +101,15 @@ import LauncherCore
     /// Kept apart from `lifecycle.launcher`, which is nil once the process is ending.
     private var resident: Launcher?
 
-    init(mac: World, placement: Placement) {
+    init(mac: World, placement: Placement, log: EffectLog) {
         self.mac = mac
+        copies.log = log
+        installer.log = log
         startAtLogin = mac.startAtLogin(placement: placement)
         hardware = InMemoryTrackpads(attached: [.macBook14])
         lifecycle = Lifecycle(
-            copies: copies, startAtLogin: startAtLogin, makeResident: { [unowned self] in makeResident() })
+            placement: placement, copies: copies, installer: installer, startAtLogin: startAtLogin,
+            makeResident: { [unowned self] in makeResident() })
         copies.lifecycle = lifecycle
     }
 
@@ -149,6 +161,18 @@ import LauncherCore
         let answer = lifecycle.shouldEnd(request)
         history.append(window)
         return answer
+    }
+
+    var moveDialog: MoveDialog? { lifecycle.moveDialog }
+
+    func answer(_ answer: MoveAnswer) {
+        lifecycle.answer(answer)
+        history.append(window)
+    }
+
+    func releaseInstall(_ outcome: InstallOutcome) {
+        installer.release(outcome)
+        history.append(window)
     }
 
     func quit() {

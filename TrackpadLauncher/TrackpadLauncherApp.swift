@@ -17,6 +17,7 @@ enum TrackpadLauncherApp {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lifecycle: Lifecycle!
     private var shell: SettingsShell?
+    private var moveDialog: MoveDialogPresenter?
     private let quitSignals = QuitSignals()
     private var event: NSAppleEventDescriptor? { NSAppleEventManager.shared().currentAppleEvent }
     #if DEBUG
@@ -27,14 +28,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_: Notification) {
         // Only the login item starts Trackpad Launcher at login.
         NSApp.disableRelaunchOnLogin()
-        let bundle = Bundle.main.bundleURL
+        let location = ThisCopy.location()
         let placement = Placement(
-            build: CodeSignature.buildOfThisProcess(arguments: CommandLine.arguments),
-            location: Location(running: bundle, original: bundle, isTranslocated: false, diskImage: nil))
+            build: CodeSignature.buildOfThisProcess(arguments: CommandLine.arguments), location: location)
         let startAtLogin = StartAtLogin(item: SystemLoginItem(), defaults: .standard, placement: placement)
         lifecycle = Lifecycle(
-            copies: SystemRunningCopies(), startAtLogin: startAtLogin,
-            makeResident: { [unowned self] in makeResident(startAtLogin) })
+            placement: placement, copies: SystemRunningCopies(), installer: ApplicationsInstaller(location: location),
+            startAtLogin: startAtLogin, makeResident: { [unowned self] in makeResident(startAtLogin) })
+        moveDialog = MoveDialogPresenter(lifecycle: lifecycle)
     }
 
     /// The open event exists only from here.

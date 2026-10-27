@@ -473,6 +473,7 @@ import LauncherCore
     var onRegister: (() -> Void)?
     /// Runs before and after every call of ours, so a test can observe what a crash there would leave.
     var onEffect: (() -> Void)?
+    var log: EffectLog?
 
     /// The user switches it off in System Settings → Login Items. Not one of our calls.
     func userTurnsOff() {
@@ -494,6 +495,7 @@ import LauncherCore
 
     @discardableResult func register() -> Bool {
         calls.append("register")
+        log?.entries.append("register")
         onEffect?()
         defer { onEffect?() }
         if isOffByUser, userOffReading == .refusesRegistering { return false }
@@ -505,9 +507,59 @@ import LauncherCore
 
     func unregister() {
         calls.append("unregister")
+        log?.entries.append("unregister")
         onEffect?()
         isOn = false
         isOffByUser = false
+        onEffect?()
+    }
+}
+
+/// What the login item, the copies and the installer did, in one order.
+final class EffectLog {
+    var entries: [String] = []
+}
+
+/// Holds `done` until a row releases an outcome, and records its calls in the shared log.
+@MainActor final class InMemoryInstaller: Installer {
+    var log: EffectLog?
+    private(set) var installCalls = 0
+    private(set) var removeOriginalCalls = 0
+    private(set) var openInstalledCopyCalls = 0
+    /// Runs after the swap, before `done`: the moment /Applications changed.
+    var onInstalled: (() -> Void)?
+    /// Runs before and after each call that leaves something behind.
+    var onEffect: (() -> Void)?
+    private var held: (@MainActor (InstallOutcome) -> Void)?
+
+    var isHolding: Bool { held != nil }
+
+    func install(then done: @escaping @MainActor (InstallOutcome) -> Void) {
+        installCalls += 1
+        log?.entries.append("install")
+        held = done
+    }
+
+    func release(_ outcome: InstallOutcome) {
+        guard let done = held else { return }
+        held = nil
+        if outcome == .installed {
+            onEffect?()
+            onInstalled?()
+            onEffect?()
+        }
+        done(outcome)
+    }
+
+    func removeOriginal() {
+        removeOriginalCalls += 1
+        log?.entries.append("removeOriginal")
+        onEffect?()
+    }
+
+    func openInstalledCopy() {
+        openInstalledCopyCalls += 1
+        log?.entries.append("openInstalledCopy")
         onEffect?()
     }
 }
@@ -516,6 +568,7 @@ import LauncherCore
 /// exit only when a row lets them.
 @MainActor final class InMemoryRunningCopies: RunningCopies {
     weak var lifecycle: Lifecycle?
+    var log: EffectLog?
     private(set) var hasEnded = false
     var listed: [RunningCopy] = []
     /// Every copy passed to `stop`, in order.
@@ -530,6 +583,7 @@ import LauncherCore
 
     func stop(_ copies: [RunningCopy], then exited: @escaping @MainActor () -> Void) {
         stopped += copies
+        if !copies.isEmpty { log?.entries.append("stop") }
         waitingFor = Set(copies.map(\.id)).subtracting(alreadyExited)
         pending = exited
         lastPush = exited

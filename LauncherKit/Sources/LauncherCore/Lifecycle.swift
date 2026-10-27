@@ -11,14 +11,16 @@ public enum Opening: Equatable, Sendable {
 
 /// What one opening of this process leads to: the whole table, pure.
 public enum Route: Equatable, Sendable {
-    case runSilently, runWithWindow, end
+    case runSilently, runWithWindow, askToMove, end
 
-    /// `olderCopyRuns` matters only at login: two login starts converge on the older copy.
-    public init(_ opening: Opening, olderCopyRuns: Bool) {
-        switch (opening, olderCopyRuns) {
-        case (.atLogin, true): self = .end
-        case (.atLogin, false): self = .runSilently
-        case (.byHand, _): self = .runWithWindow
+    /// `olderCopyRuns` matters only at login: two login starts converge on the older copy. By hand, a copy outside
+    /// /Applications that is a release build asks to be moved; every other copy runs where it is.
+    public init(_ opening: Opening, placement: Placement, olderCopyRuns: Bool) {
+        switch (opening, placement, olderCopyRuns) {
+        case (.atLogin, _, true): self = .end
+        case (.atLogin, _, false): self = .runSilently
+        case (.byHand, .elsewhere, _): self = .askToMove
+        case (.byHand, .installed, _), (.byHand, .development, _): self = .runWithWindow
         }
     }
 }
@@ -122,6 +124,33 @@ public struct RunningCopy: Hashable, Sendable {
     private func forget() { defaults.removeObject(forKey: key) }
 }
 
+/// The dialog a copy opened by hand outside /Applications shows before anything else.
+public enum MoveDialog: Equatable, Sendable {
+    /// "Trackpad Launcher needs to be in the Applications folder": Move to Applications (default), Quit.
+    case asking
+    /// The move failed before /Applications changed: the reason, and Quit.
+    case failed(reason: String)
+}
+
+public enum MoveAnswer: Sendable { case move, quit }
+
+public enum InstallOutcome: Equatable, Sendable {
+    case installed, cancelled, failed(reason: String)
+}
+
+/// Putting this copy into /Applications. Real: ApplicationsInstaller. Test: InMemoryInstaller.
+@MainActor public protocol Installer: AnyObject {
+    /// Copies this copy into /Applications, replacing any Trackpad Launcher there whatever its version. Nothing there
+    /// changes unless the outcome is `.installed`, and never a mix of two copies. Unprivileged, the replace is one
+    /// atomic step. `done` runs once, on the main actor. The copy can block; a test holds `done`.
+    func install(then done: @escaping @MainActor (InstallOutcome) -> Void)
+    /// Removes the copy the user opened (its original place when translocated), unless it is on a disk image or is the
+    /// installed copy itself. A failure (a read-only share) leaves it there.
+    func removeOriginal()
+    /// Opens the installed copy as by hand.
+    func openInstalledCopy()
+}
+
 /// What this process does as it starts, is opened again and is asked to quit.
 @MainActor @Observable
 public final class Lifecycle {
@@ -131,22 +160,46 @@ public final class Lifecycle {
         /// Other copies are stopping; nothing of ours senses yet.
         case replacingOthers(opensWindow: Bool)
         case resident(Launcher)
+        /// The move dialog is up; a resident keeps its gestures.
+        case askingToMove(resident: Launcher?)
+        /// After Move, until the process ends.
+        case moving(resident: Launcher?)
+        case moveFailed(reason: String, resident: Launcher?)
         case ending
     }
 
     private var stage: Stage = .idle
+    @ObservationIgnored private let placement: Placement
     @ObservationIgnored private let copies: any RunningCopies
+    @ObservationIgnored private let installer: any Installer
     @ObservationIgnored private let startAtLogin: StartAtLogin
     @ObservationIgnored private let makeResident: @MainActor () -> Launcher
 
-    /// The gesture model once it runs; nil before.
+    /// The gesture model once it runs, including while a resident shows the dialog, moves or shows the failure; nil for
+    /// a copy that only asks or is still stopping others.
     public var launcher: Launcher? {
-        if case .resident(let launcher) = stage { launcher } else { nil }
+        switch stage {
+        case .resident(let launcher): launcher
+        case .askingToMove(let resident), .moving(let resident), .moveFailed(_, let resident): resident
+        case .idle, .replacingOthers, .ending: nil
+        }
+    }
+
+    /// What the move dialog presenter renders; nil when none shows.
+    public var moveDialog: MoveDialog? {
+        switch stage {
+        case .askingToMove: .asking
+        case .moveFailed(let reason, _): .failed(reason: reason)
+        default: nil
+        }
     }
 
     public init(
-        copies: any RunningCopies, startAtLogin: StartAtLogin, makeResident: @escaping @MainActor () -> Launcher
+        placement: Placement, copies: any RunningCopies, installer: any Installer, startAtLogin: StartAtLogin,
+        makeResident: @escaping @MainActor () -> Launcher
     ) {
+        self.placement = placement
+        self.installer = installer
         self.copies = copies
         self.startAtLogin = startAtLogin
         self.makeResident = makeResident
@@ -156,8 +209,10 @@ public final class Lifecycle {
     public func launched(_ launch: Launch) {
         guard case .idle = stage else { return }
         let others = copies.others()
-        switch Route(launch.opening, olderCopyRuns: others.contains(where: \.startedEarlier)) {
+        let route = Route(launch.opening, placement: placement, olderCopyRuns: others.contains(where: \.startedEarlier))
+        switch route {
         case .end: end()
+        case .askToMove: stage = .askingToMove(resident: nil)
         case .runSilently: replace(others, opensWindow: false)
         case .runWithWindow: replace(others, opensWindow: true)
         }
@@ -165,9 +220,10 @@ public final class Lifecycle {
 
     /// From applicationShouldHandleReopen.
     public func openedAgain(_ opening: Opening) {
-        switch (stage, Route(opening, olderCopyRuns: false)) {
+        switch (stage, Route(opening, placement: placement, olderCopyRuns: false)) {
         case (.replacingOthers, .runWithWindow): stage = .replacingOthers(opensWindow: true)
         case (.resident(let launcher), .runWithWindow): launcher.openedByHand()
+        case (.resident(let launcher), .askToMove): stage = .askingToMove(resident: launcher)
         default: break
         }
     }
@@ -175,7 +231,8 @@ public final class Lifecycle {
     /// From applicationShouldTerminate.
     public func shouldEnd(_ request: QuitRequest) -> Bool {
         switch stage {
-        case .ending, .idle, .replacingOthers: return true
+        case .ending, .idle, .replacingOthers, .askingToMove, .moveFailed: return true
+        case .moving: return request == .system
         case .resident(let launcher):
             // Every ordinary way to quit exists only while the settings window is open: close it, keep running. With it
             // closed, a quit is the system's or a script's: end, never hold up a logout.
@@ -185,9 +242,20 @@ public final class Lifecycle {
         }
     }
 
+    /// The move dialog's buttons.
+    public func answer(_ answer: MoveAnswer) {
+        switch (stage, answer) {
+        case (.askingToMove(let resident), .move):
+            stage = .moving(resident: resident)
+            installer.install { [unowned self] in installed($0) }
+        case (.askingToMove, .quit), (.moveFailed, _): end()
+        default: break
+        }
+    }
+
     /// The Quit Trackpad Launcher button: it also turns starting at login off, when that is on.
     public func quit() {
-        guard launcher != nil else { return }
+        guard case .resident = stage else { return }
         startAtLogin.suspend()
         end()
     }
@@ -210,5 +278,23 @@ public final class Lifecycle {
         launcher.start()
         stage = .resident(launcher)
         if opensWindow { launcher.openedByHand() }
+    }
+
+    /// The order converges after a crash at any point: the swap inside `install` is the first change anywhere, the login
+    /// item is handed over before the original can go, and every other copy stops before the installed one opens, so
+    /// that open always starts a fresh process.
+    private func installed(_ outcome: InstallOutcome) {
+        guard case .moving(let resident) = stage else { return }
+        switch outcome {
+        case .cancelled: end()
+        case .failed(let reason): stage = .moveFailed(reason: reason, resident: resident)
+        case .installed:
+            startAtLogin.suspend()
+            installer.removeOriginal()
+            copies.stop(copies.others()) { [unowned self] in
+                installer.openInstalledCopy()
+                end()
+            }
+        }
     }
 }

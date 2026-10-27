@@ -41,6 +41,7 @@ import Testing
         #expect(process.residentsBuilt == 1)
         #expect(!process.copies.hasEnded)
         #expect(process.system.broughtToFront == [world.mac.app("Arc")])
+        #expect(process.moveDialog == nil)
     }
 
     @Test func aLoginStartIsSilentAndLeavesTheSavedSettingsAlone() throws {
