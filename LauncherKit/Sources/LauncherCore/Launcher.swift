@@ -184,13 +184,18 @@ public final class Launcher {
 
     /// The user opened Trackpad Launcher. The first time in this process, on a first run (no saved settings): start at
     /// login and ask for Accessibility when it is missing, then save; both effects come before the save, so a crash in
-    /// between repeats them rather than losing them. Every time: the settings window opens or comes to the front, the
+    /// between repeats them rather than losing them. On any other run, start at login again if a Quit turned it off.
+    /// Every time: the settings window opens or comes to the front, the
     /// rows resolve again and the app list refreshes in the background.
     public func openedByHand() {
-        if openings == 0, isFirstLaunch {
-            startAtLogin.enrol()
-            if !isAccessibilityGranted { permissions.ask(.accessibility) }
-            store.save(settings)
+        if openings == 0 {
+            if isFirstLaunch {
+                startAtLogin.enrol()
+                if !isAccessibilityGranted { permissions.ask(.accessibility) }
+                store.save(settings)
+            } else {
+                startAtLogin.resume()
+            }
         }
         openings += 1
         window = .open(request: openings)

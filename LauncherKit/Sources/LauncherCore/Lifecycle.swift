@@ -71,19 +71,55 @@ public struct RunningCopy: Hashable, Sendable {
 
 /// This app's login item, as the main app's Open at Login entry. Real: SystemLoginItem. Test: InMemoryLoginItem.
 @MainActor public protocol LoginItem: AnyObject {
+    /// The next login starts it. Every other status (never registered, the user's off) is off.
+    var isOn: Bool { get }
     /// True when registered afterwards, already-registered included; false when macOS refused (the user turned it off
     /// in Login Items, an unsigned build).
     @discardableResult func register() -> Bool
+    /// This process keeps running. A no-op when not registered.
+    func unregister()
 }
 
-/// Starting at login: the one owner of "Trackpad Launcher turns back on only what it turned off itself".
+/// Starting at login: the one owner of "Trackpad Launcher turns back on only what it turned off itself". Its one fact
+/// is its own key in the app's defaults domain, beside the `settings` record and never inside it, so a move and the
+/// running copy never write the same record. A development build outside /Applications leaves starting at login
+/// alone: every intent is a no-op for it. It only ever asks whether the item is on now, so how macOS reports a user's
+/// own off cannot mislead it.
 @MainActor public final class StartAtLogin {
     private let item: any LoginItem
+    private let defaults: UserDefaults
+    private let placement: Placement
+    private let key = "startAtLoginTurnedOffByQuit"
 
-    public init(item: any LoginItem) { self.item = item }
+    public init(item: any LoginItem, defaults: UserDefaults, placement: Placement) {
+        self.item = item
+        self.defaults = defaults
+        self.placement = placement
+    }
 
-    /// The first run: turn it on. A user's earlier off stands: macOS refuses.
-    public func enrol() { item.register() }
+    /// The first run: turn it on and forget any stale fact. A user's earlier off stands: macOS refuses.
+    public func enrol() {
+        guard placement != .development else { return }
+        item.register()
+        forget()
+    }
+
+    /// Quit, or a move: if it is on now, remember that Trackpad Launcher turned it off, then turn it off. Remembering
+    /// comes first, so a crash before the unregister leaves it on and remembered, and resuming converges.
+    public func suspend() {
+        guard placement != .development, item.isOn else { return }
+        defaults.set(true, forKey: key)
+        item.unregister()
+    }
+
+    /// Opened by hand: turn it back on only if Trackpad Launcher turned it off. The fact stays until macOS accepts;
+    /// registering comes first, so a crash before forgetting registers again, harmlessly.
+    public func resume() {
+        guard placement != .development, defaults.bool(forKey: key) else { return }
+        if item.register() { forget() }
+    }
+
+    private func forget() { defaults.removeObject(forKey: key) }
 }
 
 /// What this process does as it starts, is opened again and is asked to quit.
@@ -100,6 +136,7 @@ public final class Lifecycle {
 
     private var stage: Stage = .idle
     @ObservationIgnored private let copies: any RunningCopies
+    @ObservationIgnored private let startAtLogin: StartAtLogin
     @ObservationIgnored private let makeResident: @MainActor () -> Launcher
 
     /// The gesture model once it runs; nil before.
@@ -107,8 +144,11 @@ public final class Lifecycle {
         if case .resident(let launcher) = stage { launcher } else { nil }
     }
 
-    public init(copies: any RunningCopies, makeResident: @escaping @MainActor () -> Launcher) {
+    public init(
+        copies: any RunningCopies, startAtLogin: StartAtLogin, makeResident: @escaping @MainActor () -> Launcher
+    ) {
         self.copies = copies
+        self.startAtLogin = startAtLogin
         self.makeResident = makeResident
     }
 
@@ -145,9 +185,10 @@ public final class Lifecycle {
         }
     }
 
-    /// The Quit Trackpad Launcher button.
+    /// The Quit Trackpad Launcher button: it also turns starting at login off, when that is on.
     public func quit() {
         guard launcher != nil else { return }
+        startAtLogin.suspend()
         end()
     }
 

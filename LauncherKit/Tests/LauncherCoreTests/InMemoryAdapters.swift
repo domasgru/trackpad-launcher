@@ -431,12 +431,15 @@ import LauncherCore
     private(set) var asks: [Permission] = []
     /// Runs inside `ask(_:)` so a test can observe what is stored at that moment.
     var onAsk: (() -> Void)?
+    /// Runs before `ask(_:)` takes effect, so a test can observe what a crash there would leave.
+    var onEffect: (() -> Void)?
 
     init(granted: Set<Permission> = []) { self.granted = granted }
 
     func isGranted(_ permission: Permission) -> Bool { granted.contains(permission) }
 
     func ask(_ permission: Permission) {
+        onEffect?()
         asks.append(permission)
         onAsk?()
     }
@@ -451,18 +454,61 @@ import LauncherCore
 }
 
 @MainActor final class InMemoryLoginItem: LoginItem {
-    /// The user's Login Items choice for this app.
+    /// How macOS may report the user's own off, which is disputed: both readings read `isOn == false`.
+    enum UserOffReading {
+        /// `register()` fails and the item stays off (`.requiresApproval`).
+        case refusesRegistering
+        /// `register()` succeeds and turns it on (`.notRegistered`, as after removal from the list).
+        case acceptsRegistering
+    }
+
+    var userOffReading: UserOffReading = .refusesRegistering
+    /// Next login starts the app.
     var isOn = false
-    /// Every `register()` call, in order.
+    /// True from the user's off in Login Items until anything turns it on again.
+    private(set) var isOffByUser = false
+    /// Every `register()` and `unregister()` call of ours, in order.
     private(set) var calls: [String] = []
     /// Runs inside `register()` so a test can observe what is stored at that moment.
     var onRegister: (() -> Void)?
+    /// Runs before and after every call of ours, so a test can observe what a crash there would leave.
+    var onEffect: (() -> Void)?
+
+    /// The user switches it off in System Settings → Login Items. Not one of our calls.
+    func userTurnsOff() {
+        isOn = false
+        isOffByUser = true
+    }
+
+    /// The user switches it back on in System Settings → Login Items. Not one of our calls.
+    func userTurnsOn() {
+        isOn = true
+        isOffByUser = false
+    }
+
+    /// Puts the item back as a snapshot found it.
+    func restore(isOn: Bool, isOffByUser: Bool) {
+        self.isOn = isOn
+        self.isOffByUser = isOffByUser
+    }
 
     @discardableResult func register() -> Bool {
         calls.append("register")
+        onEffect?()
+        defer { onEffect?() }
+        if isOffByUser, userOffReading == .refusesRegistering { return false }
         isOn = true
+        isOffByUser = false
         onRegister?()
         return true
+    }
+
+    func unregister() {
+        calls.append("unregister")
+        onEffect?()
+        isOn = false
+        isOffByUser = false
+        onEffect?()
     }
 }
 

@@ -6,6 +6,8 @@ import ServiceManagement
 @MainActor public final class SystemLoginItem: LoginItem {
     public init() {}
 
+    public var isOn: Bool { SMAppService.mainApp.status == .enabled }
+
     @discardableResult public func register() -> Bool {
         do {
             try SMAppService.mainApp.register()
@@ -14,4 +16,7 @@ import ServiceManagement
             return (error as NSError).code == kSMErrorAlreadyRegistered
         }
     }
+
+    /// `kSMErrorJobNotFound` (never registered) is the no-op case.
+    public func unregister() { try? SMAppService.mainApp.unregister() }
 }

@@ -91,7 +91,7 @@ final class LaunchRecord: Sendable {
         self.store = store
         launcher = Self.makeLauncher(
             hardware: hardware, preferences: preferences, permissions: permissions, system: system, catalog: catalog,
-            scanner: scanner, store: store, startAtLogin: StartAtLogin(item: loginItem))
+            scanner: scanner, store: store, startAtLogin: Self.startAtLogin(item: loginItem, suiteName: suiteName))
         install("Finder", in: coreServices)
         for name in apps { install(name) }
     }
@@ -113,6 +113,26 @@ final class LaunchRecord: Sendable {
     /// Plants a raw record exactly where the store keeps its own, as an earlier build would have left it.
     func seedSettingsRecord(_ data: Data) {
         UserDefaults(suiteName: suiteName)!.set(data, forKey: "settings")
+    }
+
+    static func startAtLogin(item: InMemoryLoginItem, suiteName: String, placement: Placement = .installed) -> StartAtLogin {
+        StartAtLogin(item: item, defaults: UserDefaults(suiteName: suiteName)!, placement: placement)
+    }
+
+    /// A process's `StartAtLogin` over this Mac's login item and a fresh `UserDefaults` instance on the same suite.
+    func startAtLogin(placement: Placement = .installed) -> StartAtLogin {
+        Self.startAtLogin(item: loginItem, suiteName: suiteName, placement: placement)
+    }
+
+    /// Every key the suite holds, as a new process would read it.
+    func suiteDomain() -> [String: Any] {
+        UserDefaults(suiteName: suiteName)!.persistentDomain(forName: suiteName) ?? [:]
+    }
+
+    /// Writes a domain exactly as given into an empty suite.
+    func seedSuite(_ domain: [String: Any]) {
+        let defaults = UserDefaults(suiteName: suiteName)!
+        for (key, value) in domain { defaults.set(value, forKey: key) }
     }
 
     /// A store over a fresh `UserDefaults` instance on the same suite: what a new process would read.
@@ -197,7 +217,7 @@ final class LaunchRecord: Sendable {
         self.store = store
         launcher = Self.makeLauncher(
             hardware: hardware, preferences: preferences, permissions: permissions, system: system, catalog: catalog,
-            scanner: scanner, store: store, startAtLogin: StartAtLogin(item: loginItem))
+            scanner: scanner, store: store, startAtLogin: startAtLogin())
         return launcher
     }
 }

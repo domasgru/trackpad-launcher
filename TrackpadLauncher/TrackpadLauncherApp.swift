@@ -27,9 +27,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_: Notification) {
         // Only the login item starts Trackpad Launcher at login.
         NSApp.disableRelaunchOnLogin()
-        let startAtLogin = StartAtLogin(item: SystemLoginItem())
+        let bundle = Bundle.main.bundleURL
+        let placement = Placement(
+            build: CodeSignature.buildOfThisProcess(arguments: CommandLine.arguments),
+            location: Location(running: bundle, original: bundle, isTranslocated: false, diskImage: nil))
+        let startAtLogin = StartAtLogin(item: SystemLoginItem(), defaults: .standard, placement: placement)
         lifecycle = Lifecycle(
-            copies: SystemRunningCopies(), makeResident: { [unowned self] in makeResident(startAtLogin) })
+            copies: SystemRunningCopies(), startAtLogin: startAtLogin,
+            makeResident: { [unowned self] in makeResident(startAtLogin) })
     }
 
     /// The open event exists only from here.
