@@ -80,7 +80,7 @@ struct AuthorizationAdministrator: Administrator {
         if granted == errAuthorizationCanceled { return .cancelled }
         guard granted == errAuthorizationSuccess else { return .failed }
 
-        var argv: [UnsafeMutablePointer<CChar>?] = (["-c", script, "sh"] + arguments).map { strdup($0) } + [nil]
+        let argv: [UnsafeMutablePointer<CChar>?] = (["-c", script, "sh"] + arguments).map { strdup($0) } + [nil]
         defer { argv.forEach { free($0) } }
         var pipe: UnsafeMutablePointer<FILE>?
         guard execute(authorization, "/bin/sh", [], argv, &pipe) == errAuthorizationSuccess else { return .failed }

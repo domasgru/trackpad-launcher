@@ -137,7 +137,7 @@ import Testing
         process.releaseInstall(.installed)
 
         #expect(!world.loginItem.isOn)
-        #expect(world.mac.suiteDomain()["startAtLoginTurnedOffByQuit"] as? Bool == true)
+        #expect(Set(world.mac.suiteDomain().keys).count == 2 && world.mac.suiteDomain().keys.contains("settings"))
         #expect(process.copies.stopped == [.earlier])
         #expect(process.installer.openInstalledCopyCalls == 0)
         #expect(!process.copies.hasEnded)

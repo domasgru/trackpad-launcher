@@ -48,7 +48,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            Button(Copy.quitButton, action: actions.quit)
+            Button(action: actions.quit) { Text(Copy.quitButton).foregroundStyle(.white) }
                 .buttonStyle(.glassProminent)
                 .tint(.red)
                 .buttonBorderShape(.capsule)

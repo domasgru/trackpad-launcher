@@ -3,8 +3,6 @@ import LauncherCore
 import Testing
 
 @MainActor @Suite struct StartAtLoginTests {
-    private static let turnedOffKey = "startAtLoginTurnedOffByQuit"
-
     private func keys(_ world: LifecycleWorld) -> Set<String> { Set(world.mac.suiteDomain().keys) }
 
     @Test func quitTurnsItOffAndTheNextOpeningByHandTurnsItBackOn() {

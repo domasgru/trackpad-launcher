@@ -7,29 +7,29 @@ import Testing
 @MainActor @Suite struct QuitSignalsTests {
     struct Case: Sendable, CustomTestStringConvertible {
         let hasQuitReason: Bool
-        let senderBundleID: String?
         let afterPowerOff: Bool
-        var testDescription: String {
-            "reason \(hasQuitReason), sender \(senderBundleID ?? "none"), after power-off \(afterPowerOff)"
-        }
+        let sender: String
+        let expected: QuitRequest
+        var testDescription: String { "reason \(hasQuitReason), power-off \(afterPowerOff), sender \(sender)" }
     }
 
-    nonisolated static let cases: [Case] = [true, false].flatMap { reason in
-        ["com.apple.loginwindow", "com.apple.dock"].flatMap { sender in
-            [true, false].map { Case(hasQuitReason: reason, senderBundleID: sender, afterPowerOff: $0) }
-        }
-    }
+    nonisolated static let cases: [Case] = [
+        Case(hasQuitReason: false, afterPowerOff: false, sender: "com.apple.dock", expected: .other),
+        Case(hasQuitReason: false, afterPowerOff: false, sender: "com.apple.loginwindow", expected: .system),
+        Case(hasQuitReason: false, afterPowerOff: true, sender: "com.apple.dock", expected: .system),
+        Case(hasQuitReason: false, afterPowerOff: true, sender: "com.apple.loginwindow", expected: .system),
+        Case(hasQuitReason: true, afterPowerOff: false, sender: "com.apple.dock", expected: .system),
+        Case(hasQuitReason: true, afterPowerOff: false, sender: "com.apple.loginwindow", expected: .system),
+        Case(hasQuitReason: true, afterPowerOff: true, sender: "com.apple.dock", expected: .system),
+        Case(hasQuitReason: true, afterPowerOff: true, sender: "com.apple.loginwindow", expected: .system),
+    ]
 
     @Test(arguments: cases)
     func aQuitIsTheSystemsExactlyWhenOneOfTheThreeSignalsHolds(_ input: Case) {
-        let expected: QuitRequest =
-            input.hasQuitReason || input.senderBundleID == "com.apple.loginwindow" || input.afterPowerOff
-            ? .system : .other
-
         #expect(
             QuitSignals.request(
-                hasQuitReason: input.hasQuitReason, senderBundleID: input.senderBundleID,
-                afterPowerOff: input.afterPowerOff) == expected)
+                hasQuitReason: input.hasQuitReason, senderBundleID: input.sender, afterPowerOff: input.afterPowerOff)
+                == input.expected)
     }
 
     private static func quit(reason: OSType?) -> NSAppleEventDescriptor {

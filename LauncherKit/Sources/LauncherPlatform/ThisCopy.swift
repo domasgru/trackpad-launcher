@@ -18,7 +18,7 @@ public enum ThisCopy {
     }
 
     /// Where this copy lies: a quarantined copy macOS translocated is traced back to the bundle the user opened. The
-    /// disk-image lookup answers nil until a disk image can be told from any other folder.
+    /// disk image holding the original, if any, comes from `DiskImages.image(holding:)`.
     public static func location() -> Location {
         location(of: Bundle.main.bundleURL, originalIfTranslocated: Translocation.original(of:), diskImage: DiskImages.image(holding:))
     }

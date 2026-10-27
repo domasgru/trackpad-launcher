@@ -11,7 +11,7 @@ public enum Copy {
 
     /// The move dialog's message and buttons.
     public static let moveDialogTitle = "Trackpad Launcher needs to be in the Applications folder"
-    public static let moveDialogMessage = "Move it there to finish installing. The copy you opened will be removed."
+    public static let moveDialogMessage = "Move it there to finish installing."
     public static let moveButton = "Move to Applications"
     public static let moveQuitButton = "Quit"
     public static let cannotWriteToApplications = "This account can't change the Applications folder."

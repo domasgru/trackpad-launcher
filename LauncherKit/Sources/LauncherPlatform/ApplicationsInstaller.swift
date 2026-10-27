@@ -50,18 +50,21 @@ import LauncherCore
         DiskImages.eject(diskImage)
     }
 
-    /// The bundle with this app's identifier already directly inside `applications`, under any name; else the original's
-    /// name there.
+    /// The bundle with this app's identifier already anywhere inside `applications`, a direct child preferred; else the
+    /// original's name there.
     private nonisolated static func destination(of location: Location, in applications: URL) -> URL {
         let name = location.original.lastPathComponent
-        let identifier = Bundle(url: location.running)?.bundleIdentifier
-        let installed = (try? FileManager.default.contentsOfDirectory(
-            at: applications, includingPropertiesForKeys: nil)) ?? []
-        let ours =
-            installed
-            .filter { $0.pathExtension == "app" && identifier != nil && Bundle(url: $0)?.bundleIdentifier == identifier }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        return ours.first { $0.lastPathComponent == name } ?? ours.first ?? applications.appending(path: name)
+        let fallback = applications.appending(path: name)
+        guard let identifier = Bundle(url: location.running)?.bundleIdentifier,
+            let walk = FileManager.default.enumerator(
+                at: applications, includingPropertiesForKeys: nil, options: [.skipsPackageDescendants, .skipsHiddenFiles])
+        else { return fallback }
+        let ours = walk.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "app" && Bundle(url: $0)?.bundleIdentifier == identifier }
+            .sorted { $0.pathComponents.count != $1.pathComponents.count
+                ? $0.pathComponents.count < $1.pathComponents.count : $0.path < $1.path }
+        let direct = ours.filter { $0.deletingLastPathComponent().standardizedFileURL == applications.standardizedFileURL }
+        return direct.first { $0.lastPathComponent == name } ?? direct.first ?? ours.first ?? fallback
     }
 
     @concurrent

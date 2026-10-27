@@ -21,6 +21,7 @@ import LauncherCore
 
     public func stop(_ copies: [RunningCopy], then exited: @escaping @MainActor () -> Void) {
         let apps = copies.compactMap { NSRunningApplication(processIdentifier: $0.id.rawValue) }
+            .filter { !$0.isTerminated }
         let remaining = Remaining(count: apps.count)
         guard !apps.isEmpty else {
             exited()

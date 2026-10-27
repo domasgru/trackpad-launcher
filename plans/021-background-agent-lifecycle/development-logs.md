@@ -38,3 +38,18 @@
 - Test planner: the `removeItem(` confinement clashed with the installer's comments and its cancel path → every file operation goes through `BundleInstall`.
 - Test planner (second pass): the admin script's failure paths could report `.failed` with /Applications changed → the script moves the aside copy back when the second move fails, and ignores a failed removal of the aside copy.
 - Phase D: the domain model and the architecture doc were updated at planning → the slices' doc checkboxes now check that what was built still matches them.
+
+## Implement
+- No `AGENTS.md` in the repo → full gate taken as a clean `Scripts/test.sh` plus `xcodegen generate` and a Debug `xcodebuild` of the app, as in plan 012. No `.claude/skills/verify-*` → verification-skill step skipped.
+- S1: the *Other…* sheet and the System Settings buttons that only open the pane moved from S2 into S1, because `openWindow()` is deleted in S1.
+- S4: `CodeSignature.build(of:)` skips resource validation → a Developer ID app with a broken resource seal still reads release, as `codesign -dvv` reports it.
+- S5: quarantine is cleared with `removexattr` per item rather than `quarantinePropertiesKey` (a symlink's own mark, dangling links); `removeOriginal` checks `isDeletableFile` first so a read-only folder never leaves a half-removed bundle.
+- Full gate after S7: green (145 + 565 tests, app builds), one compiler warning.
+- Review: R20 was partial (a copy nested inside /Applications, e.g. Utilities, was not replaced) → the installer searches /Applications at any depth; new T34 case.
+- Review: the move dialog promised the opened copy "will be removed", false on a disk image or a read-only share → reworded.
+- Review: the administrator script's `mv`/`rm` broke the doc's "every file operation of that move is confined to one file" → the doc now names the unprivileged file and the script's file; `/bin/mv` and `/bin/rm` confined to `PrivilegedInstall.swift`.
+- Review: the DEBUG tuner was lost when the opening by hand first waited for other copies; `SystemRunningCopies.stop` called back a turn late for copies already exited; a stale `ThisCopy` comment; ports declared outside `Ports.swift`; the Quit button's white text implicit; a compiler warning → fixed.
+- Review: T3 skipped `moveDialog`, T10 recomputed its expected values with the code's formula, a tautological script assertion, tests reading `StartAtLogin`'s private key → fixed.
+- Review, not fixed: order assertions on the effect log (the plan pins the move's order on purpose), the plan's names (`Launch`, resident), the start-at-login split between `Lifecycle` and `Launcher`, a shared `dlsym` helper.
+- Full gate after fixes: green (146 + 565 tests, no warnings from the branch, app builds).
+- Not run (manual: need a real Mac session, logins, a standard account or a Developer ID certificate): C1-C24, except the local unsigned disk-image layout dry run. C25 and C26 pass.

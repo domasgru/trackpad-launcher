@@ -1,7 +1,7 @@
 import Foundation
 
 /// Every unprivileged file operation of moving this app into /Applications, over URLs a test points at temp folders.
-/// This file is the only one that copies, moves or deletes a bundle.
+/// This file holds every unprivileged one; the administrator path's moves are `PrivilegedInstall`'s script.
 enum BundleInstall {
     private static let quarantine = "com.apple.quarantine"
 

@@ -49,11 +49,14 @@ import Testing
         let seeded = world.mac.settingsRecordBytes()
         let process = world.login()!
         var windows: [Launcher.Window] = [process.window]
+        var dialogs: [MoveDialog?] = [process.moveDialog]
 
         process.tap(1)
         windows.append(process.window)
+        dialogs.append(process.moveDialog)
 
         #expect(windows == [.closed, .closed])
+        #expect(dialogs == [nil, nil])
         #expect(world.permissions.asks.isEmpty)
         #expect(world.loginItem.calls.isEmpty)
         #expect(world.mac.settingsRecordBytes() == seeded)

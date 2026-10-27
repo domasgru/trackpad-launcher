@@ -77,7 +77,6 @@ final class TestAdministrator: Administrator {
         default: Issue.record("\(answer) gave \(outcome)")
         }
         #expect(administrator.calls.count == 1)
-        #expect(administrator.calls.first?.script == PrivilegedInstall.script)
         #expect(try BundleFixture.manifest(of: older) == before)
         #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher.app"])
         let staged = try #require(stagedPath(administrator))

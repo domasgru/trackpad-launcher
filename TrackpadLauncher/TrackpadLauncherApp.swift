@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var event: NSAppleEventDescriptor? { NSAppleEventManager.shared().currentAppleEvent }
     #if DEBUG
     private var system: WorkspaceActions?
-    private var hasShownTuner = false
+    private var tunerWanted = false
     #endif
 
     func applicationWillFinishLaunching(_: Notification) {
@@ -68,16 +68,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shell = SettingsShell(launcher: launcher, quit: { [unowned self] in lifecycle.quit() })
         #if DEBUG
         system = actions
+        showAnimationTuner()
         #endif
         return launcher
     }
 
-    /// Debug builds: the animation tuner opens with the first opening by hand, never at a login start.
+    /// Debug builds: the animation tuner opens with the first opening by hand, never at a login start. An opening that
+    /// waits for other copies to exit has no resident yet, so the tuner opens once the resident exists.
     private func showAnimationTuner(for opening: Opening) {
         #if DEBUG
-        guard opening == .byHand, !hasShownTuner else { return }
-        hasShownTuner = true
-        system?.showAnimationTuner()
+        if opening == .byHand { tunerWanted = true }
+        showAnimationTuner()
         #endif
     }
+
+    #if DEBUG
+    private func showAnimationTuner() {
+        guard tunerWanted, let system else { return }
+        tunerWanted = false
+        system.showAnimationTuner()
+    }
+    #endif
 }

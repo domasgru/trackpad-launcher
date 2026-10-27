@@ -146,3 +146,41 @@ public enum Permission: Hashable, Sendable {
     /// The scanner also scans by itself after an app is installed, removed or renamed, and at no other time.
     func scan()
 }
+
+/// The running Trackpad Launcher processes. Real: SystemRunningCopies. Test: InMemoryRunningCopies.
+@MainActor public protocol RunningCopies: AnyObject {
+    /// Every other process with this bundle identifier, read now.
+    func others() -> [RunningCopy]
+    /// Stops each at once without asking: a copy can neither refuse, nor ask its user, nor hang the stop. Calls
+    /// `exited` once, on the main actor, when every listed copy has exited; synchronously when none still runs. The
+    /// signal is the processes' own termination, never a wait or a poll.
+    func stop(_ copies: [RunningCopy], then exited: @escaping @MainActor () -> Void)
+    /// AppKit's terminate for this process; `Lifecycle.shouldEnd` has already agreed (stage `.ending`).
+    func endThisCopy()
+}
+
+/// This app's login item, as the main app's Open at Login entry. Real: SystemLoginItem. Test: InMemoryLoginItem.
+@MainActor public protocol LoginItem: AnyObject {
+    /// The next login starts it. Every other status (never registered, the user's off) is off.
+    var isOn: Bool { get }
+    /// True when registered afterwards, already-registered included; false when macOS refused (the user turned it off
+    /// in Login Items, an unsigned build).
+    @discardableResult func register() -> Bool
+    /// This process keeps running. A no-op when not registered.
+    func unregister()
+}
+
+/// Putting this copy into /Applications. Real: ApplicationsInstaller. Test: InMemoryInstaller.
+@MainActor public protocol Installer: AnyObject {
+    /// Copies this copy into /Applications, replacing any Trackpad Launcher there whatever its version. Nothing there
+    /// changes unless the outcome is `.installed`, and never a mix of two copies. Unprivileged, the replace is one
+    /// atomic step. `done` runs once, on the main actor. The copy can block; a test holds `done`.
+    func install(then done: @escaping @MainActor (InstallOutcome) -> Void)
+    /// Removes the copy the user opened (its original place when translocated), unless it is on a disk image or is the
+    /// installed copy itself. A failure (a read-only share) leaves it there.
+    func removeOriginal()
+    /// Opens the installed copy as by hand.
+    func openInstalledCopy()
+    /// Ejects it; returns at once. A file on it in use leaves it mounted.
+    func eject(_ diskImage: DiskImage)
+}

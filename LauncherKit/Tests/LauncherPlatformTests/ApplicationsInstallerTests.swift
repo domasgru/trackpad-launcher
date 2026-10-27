@@ -61,6 +61,20 @@ import Testing
         #expect(try BundleFixture.manifest(of: renamed) == BundleFixture.manifest(of: source))
     }
 
+    @Test func installingReplacesACopyNestedInAFolderInsideApplications() async throws {
+        let fixture = try BundleFixture()
+        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.0")
+        let applications = try fixture.folder("Applications")
+        let nested = try fixture.makeBundle(named: "TrackpadLauncher.app", in: fixture.folder("Applications/Utilities"), version: "2.0")
+
+        let outcome = await install(ApplicationsInstaller(location: location(running: source), applications: applications, administrator: TestAdministrator.refusing))
+
+        #expect(outcome == .installed)
+        #expect(try BundleFixture.appNames(in: applications).isEmpty)
+        #expect(try BundleFixture.appNames(in: nested.deletingLastPathComponent()) == ["TrackpadLauncher.app"])
+        #expect(try BundleFixture.manifest(of: nested) == BundleFixture.manifest(of: source))
+    }
+
     @Test func aTranslocatedCopyIsCopiedFromTheRunningBundleUnderTheOriginalsName() async throws {
         let fixture = try BundleFixture()
         let running = try fixture.makeBundle(named: "Mounted.app", in: fixture.folder("AppTranslocation"), version: "1.0")
