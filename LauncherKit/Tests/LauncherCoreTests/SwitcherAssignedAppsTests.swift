@@ -67,7 +67,7 @@ import LauncherCore
         let notes = world.app("Notes")
         world.registry[World.bundleID("Notes")] = [world.trash("Notes")]
         world.makeRunning([world.app("Safari"), notes, world.app("Mail")])
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         #expect(world.launcher.app(for: .three) == .missing(name: "Notes"))
 
         world.swipe(3.5, lift: false)
@@ -77,7 +77,7 @@ import LauncherCore
 
     @Test func theFrontmostAppStaysAtTheLeftEndEvenWhenItAndAnotherAppHaveGestures() throws {
         let world = World.switcherWorld()
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         assign(world, ["Safari", "Mail"], to: [.one, .two])
 
         let hand = world.swipe(3.5, lift: false)
@@ -131,7 +131,7 @@ import LauncherCore
         #expect(world.hardware.scroll(.fingers(.began)) == .pass)
     }
 
-    @Test func withNoFrontmostAppTheRowIsTheRunningAppsWithoutAGestureAndTheSelectionStartsOnTheFirst() throws {
+    @Test func withNoActiveAppTheRowIsTheRunningAppsWithoutAGestureAndTheSelectionStartsOnTheFirst() throws {
         let world = World.switcherWorld(apps: ["Safari", "Notes", "Mail"], frontmost: nil)
         assign(world, ["Safari"], to: [.one])
 
@@ -146,7 +146,7 @@ import LauncherCore
         #expect(world.hardware.feedback == [trackpad.id])
     }
 
-    @Test func withNoFrontmostAppAndEveryRunningAppAssignedNoSwitcherShows() {
+    @Test func withNoActiveAppAndEveryRunningAppAssignedNoSwitcherShows() {
         let world = World.switcherWorld(apps: ["Safari", "Mail"], frontmost: nil)
         assign(world, ["Safari", "Mail"], to: [.one, .two])
 

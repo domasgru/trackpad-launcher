@@ -1,8 +1,8 @@
 import Foundation
 
 /// The switcher during one swipe. The row is fixed when the swipe begins; the selection follows the travel.
-/// The selection starts on the first icon: the frontmost app, or the most recently used running app when no frontmost
-/// app can be read, as while Trackpad Launcher itself is active.
+/// The selection starts on the first icon: the frontmost app, or the most recently used running app when no app is
+/// active.
 public struct Switcher: Equatable, Sendable {
     /// Left to right: the frontmost app, if any, then the running apps in ⌘-Tab order without the copy at the frontmost
     /// app's location and without any app whose bundle identifier is left out, at most `switcherMaxApps` in all.

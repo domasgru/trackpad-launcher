@@ -1,0 +1,22 @@
+== R1 same version, identical copy: run A, replace A with an identical copy, open A
+  processes: 92200 
+  processes: 92200 92392 
+  processes: 
+== R2 same version, different executable: run A, replace A with the variant, open A
+  processes: 92590 
+  processes: 92590 92780 
+  processes: 
+
+== Probe log
+[pid 92200 v1] willFinishLaunching path=/private/tmp/tl021probe/A/TLProbe.app policy=1 no current Apple event
+[pid 92200 v1] didFinishLaunching isDefaultLaunch=true event aevt/oapp propData=none quitReasonParam=none quitReasonAttr=none sender=92200 com.domasgru.tl021probe
+[pid 92392 v1] willFinishLaunching path=/private/tmp/tl021probe/A/TLProbe.app policy=1 no current Apple event
+[pid 92392 v1] didFinishLaunching isDefaultLaunch=true event aevt/oapp propData=none quitReasonParam=none quitReasonAttr=none sender=92392 com.domasgru.tl021probe
+[pid 92392 v1] shouldTerminate allow=true event aevt/quit propData=none quitReasonParam=none quitReasonAttr=none sender=92487 osascript
+[pid 92590 v1] willFinishLaunching path=/private/tmp/tl021probe/A/TLProbe.app policy=1 no current Apple event
+[pid 92590 v1] didFinishLaunching isDefaultLaunch=true event aevt/oapp propData=none quitReasonParam=none quitReasonAttr=none sender=92590 com.domasgru.tl021probe
+[pid 92780 v1] willFinishLaunching path=/private/tmp/tl021probe/A/TLProbe.app policy=1 no current Apple event
+[pid 92780 v1] didFinishLaunching isDefaultLaunch=true event aevt/oapp propData=none quitReasonParam=none quitReasonAttr=none sender=92780 com.domasgru.tl021probe
+[pid 92780 v1] shouldTerminate allow=true event aevt/quit propData=none quitReasonParam=none quitReasonAttr=none sender=92878 osascript
+
+cleanup: probe processes left = 0

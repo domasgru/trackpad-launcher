@@ -18,9 +18,10 @@ import LauncherCore
         #expect(relaunched.handMode == .left)
     }
 
-    @Test func firstLaunchShowsFreshDefaultsOpensTheWindowAndRegistersTheLoginItem() {
+    @Test func firstRunShowsFreshDefaultsOpensTheWindowAndRegistersTheLoginItem() {
         let world = World()
-
+        world.launcher.start()
+        world.launcher.openedByHand()
         world.launcher.start()
 
         #expect(world.launcher.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
@@ -30,18 +31,19 @@ import LauncherCore
         #expect(world.launcher.isSwapOn)
         #expect(world.launcher.isWindowSwipeOn)
         #expect(world.launcher.isWindowOpen)
-        #expect(world.system.loginItemRegistrations == 1)
+        #expect(world.loginItem.calls == ["register"])
     }
 
     @Test func secondLaunchStaysQuietAndDoesNotRegisterAgain() {
         let world = World()
         world.launcher.start()
+        world.launcher.openedByHand()
 
         let relaunched = world.relaunch()
         relaunched.start()
 
         #expect(!relaunched.isWindowOpen)
-        #expect(world.system.loginItemRegistrations == 1)
+        #expect(world.loginItem.calls == ["register"])
     }
 
     @Test func undecodableRecordLoadsAsDefaultsNotAsFirstLaunch() {
@@ -50,9 +52,10 @@ import LauncherCore
         let relaunched = world.relaunch()
 
         relaunched.start()
+        relaunched.openedByHand()
 
-        #expect(world.system.loginItemRegistrations == 0)
-        #expect(!relaunched.isWindowOpen)
+        #expect(world.loginItem.calls.isEmpty)
+        #expect(world.permissions.asks.isEmpty)
         #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
         #expect(relaunched.handMode == .right)
         #expect(relaunched.isLaunchAnimationOn)
@@ -63,9 +66,10 @@ import LauncherCore
     @Test func loginItemIsRegisteredBeforeTheFirstSave() {
         let world = World()
         var storedAtRegistration: [Settings?] = []
-        world.system.onRegisterLoginItem = { [unowned world] in storedAtRegistration.append(world.store.load()) }
+        world.loginItem.onRegister = { [unowned world] in storedAtRegistration.append(world.store.load()) }
 
         world.launcher.start()
+        world.launcher.openedByHand()
 
         #expect(storedAtRegistration == [nil])
         #expect(world.store.load() != nil)
@@ -127,13 +131,14 @@ import LauncherCore
 
         let relaunched = world.relaunch()
         relaunched.start()
+        relaunched.openedByHand()
 
         #expect(relaunched.isLaunchAnimationOn)
         #expect(relaunched.isSwipeOn)
         #expect(relaunched.handMode == .left)
         #expect(relaunched.rows.map(\.app) == threeAppsThenUnassigned(world))
-        #expect(world.system.loginItemRegistrations == 0)
-        #expect(!relaunched.isWindowOpen)
+        #expect(world.loginItem.calls.isEmpty)
+        #expect(world.permissions.asks.isEmpty)
     }
 
     @Test func theFirstSaveAfterAnUpgradeCarriesTheOldSettingsWithIt() throws {
@@ -157,13 +162,14 @@ import LauncherCore
 
         let relaunched = world.relaunch()
         relaunched.start()
+        relaunched.openedByHand()
 
         #expect(relaunched.isLaunchAnimationOn)
         #expect(relaunched.isSwipeOn)
         #expect(relaunched.handMode == .right)
         #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: Gesture.allCases.count))
-        #expect(world.system.loginItemRegistrations == 0)
-        #expect(!relaunched.isWindowOpen)
+        #expect(world.loginItem.calls.isEmpty)
+        #expect(world.permissions.asks.isEmpty)
     }
 
     @Test func turningTheLaunchAnimationOffSurvivesARelaunchAndGesturesShowNoIcon() {

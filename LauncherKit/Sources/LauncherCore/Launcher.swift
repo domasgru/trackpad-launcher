@@ -3,7 +3,7 @@ import Observation
 
 /// The running Trackpad Launcher. Owns every decision; adapters sense and act, the shell and views render.
 /// `activity` is derived, never stored; `rows` derive from settings plus the catalog; `fire` is the only path
-/// that pulses, launches, plays the launch animation or the launch bounce, or closes the window from a gesture. `fire`
+/// that pulses, launches, plays the launch animation or the launch bounce from a gesture; no gesture closes the window. `fire`
 /// shows either only while the launch animation setting is on: the bounce for an app with no process, the animation for
 /// one with a process.
 @MainActor @Observable
@@ -41,12 +41,15 @@ public final class Launcher {
         return settings.hasAskedForScreenRecording ? .openSettings : .ask
     }
 
-    /// `.heldOpen` is the first-launch window under the system's Accessibility prompt. The prompt takes focus when it
-    /// appears and its buttons are outside clicks; both would close an ordinary window before the user saw the hint.
-    /// A held window closes only on an explicit close, a fired gesture, or a grant.
-    private enum Window: Equatable { case closed, open, heldOpen }
+    public enum Window: Equatable, Sendable {
+        case closed
+        /// `request` counts the openings by hand in this process. Each one brings the settings window to the front with
+        /// the keyboard focus, restoring it when minimised; centring on the pointer's display happens only from
+        /// `.closed`.
+        case open(request: Int)
+    }
 
-    private var window: Window = .closed
+    public private(set) var window: Window = .closed
     /// At most one switcher of either kind at a time. Written only by `swipe(_:)`, `windowSwipe(_:)` and `reconcile()`.
     private enum ShownSwitcher: Equatable { case apps(Switcher), windows(WindowSwitcher) }
 
@@ -59,6 +62,8 @@ public final class Launcher {
     private var connected: [Trackpad] = []
     private var preferenceValues: [TrackpadKind: TrackpadPreferenceValues] = [:]
     @ObservationIgnored private let isFirstLaunch: Bool
+    /// The openings by hand in this process; `window`'s request number.
+    @ObservationIgnored private var openings = 0
     @ObservationIgnored private let hardware: any TrackpadHardware
     @ObservationIgnored private let preferences: any TrackpadPreferences
     @ObservationIgnored private let permissions: any Permissions
@@ -66,11 +71,14 @@ public final class Launcher {
     @ObservationIgnored private let catalog: AppCatalog
     @ObservationIgnored private let scanner: any AppScanner
     @ObservationIgnored private let store: SettingsStore
+    @ObservationIgnored private let startAtLogin: StartAtLogin
 
     public init(
         hardware: any TrackpadHardware, preferences: any TrackpadPreferences, permissions: any Permissions,
-        system: any SystemActions, catalog: AppCatalog, scanner: any AppScanner, store: SettingsStore
+        system: any SystemActions, catalog: AppCatalog, scanner: any AppScanner, store: SettingsStore,
+        startAtLogin: StartAtLogin
     ) {
+        self.startAtLogin = startAtLogin
         self.hardware = hardware
         self.preferences = preferences
         self.permissions = permissions
@@ -85,7 +93,8 @@ public final class Launcher {
         rows = makeRows()
     }
 
-    /// Launch. Call once, after the status item exists.
+    /// Gestures on: wires the adapters, scans, reconciles. Asks nothing, opens nothing, saves nothing: all a login
+    /// start does, so a first run waits for the first opening by hand. Call once.
     public func start() {
         hardware.onEvent = { [unowned self] event in
             switch event {
@@ -102,15 +111,6 @@ public final class Launcher {
         preferences.onChange = { [unowned self] in reconcile() }
         permissions.onChange = { [unowned self] in reconcile() }
         reconcile()
-        if isFirstLaunch {
-            // Both effects come before the first save: a crash in between repeats them next time instead of
-            // losing them.
-            system.registerLoginItem()
-            let prompting = !isAccessibilityGranted
-            if prompting { permissions.ask(.accessibility) }
-            store.save(settings)
-            window = prompting ? .heldOpen : .open
-        }
         resolveRows()
     }
 
@@ -182,18 +182,29 @@ public final class Launcher {
         permissions.ask(.screenRecording)
     }
 
-    /// Show the launcher window, re-resolve the rows and refresh the app list in the background.
-    public func openWindow() {
-        if window == .closed { window = .open }
+    /// The user opened Trackpad Launcher. The first time in this process, on a first run (no saved settings): start at
+    /// login and ask for Accessibility when it is missing, then save; both effects come before the save, so a crash in
+    /// between repeats them rather than losing them. On any other run, start at login again if a Quit turned it off.
+    /// Every time: the settings window opens or comes to the front, the
+    /// rows resolve again and the app list refreshes in the background.
+    public func openedByHand() {
+        if openings == 0 {
+            if isFirstLaunch {
+                startAtLogin.enrol()
+                if !isAccessibilityGranted { permissions.ask(.accessibility) }
+                store.save(settings)
+            } else {
+                startAtLogin.resume()
+            }
+        }
+        openings += 1
+        window = .open(request: openings)
         resolveRows()
         scanner.scan()
     }
 
-    /// Icon click, Escape, the window's own System Settings buttons: always closes.
+    /// Close button, ⌘W, Escape, Close Settings (⌘Q), the Dock's Quit. Gestures keep running.
     public func closeWindow() { window = .closed }
-
-    /// An outside click, or the panel losing focus: closes unless the window is held open under the first-launch prompt.
-    public func dismissWindow() { if window == .open { window = .closed } }
 
     /// What the trackpads were last run with. A reconcile that would run them the same way leaves them, and any swipe
     /// in progress, alone: preference and trust notifications also fire for writes that change nothing here.
@@ -215,8 +226,6 @@ public final class Launcher {
         connected = hardware.connected()
         preferenceValues = preferences.current()
         let granted = permissions.isGranted(.accessibility)
-        // A grant ends the hold: the hint has done its job and the user is in System Settings.
-        if granted && !isAccessibilityGranted && window == .heldOpen { window = .closed }
         isAccessibilityGranted = granted
         // Before the run guard: a Screen Recording change never re-runs the trackpads.
         isScreenRecordingGranted = permissions.isGranted(.screenRecording)
@@ -262,7 +271,6 @@ public final class Launcher {
         case .bringToFrontOnly:
             system.bringToFront(app)
         }
-        window = .closed
     }
 
     /// A report for an app whose bounce ended finds no record: a late window plays nothing.
@@ -306,7 +314,6 @@ public final class Launcher {
             guard running.contains(target.url) else { return }
             hardware.playFeedback(.gesture, on: event.trackpad)
             system.bringToFront(open.selectedApp)
-            window = .closed
         case .cancelled:
             if case .apps(let open)? = shown, open.trackpad == event.trackpad { shown = nil }
         }
@@ -342,7 +349,6 @@ public final class Launcher {
             let lift = open.lift(now: system.frontmostWindows())
             if lift.playsHaptic {
                 hardware.playFeedback(.gesture, on: event.trackpad)
-                window = .closed
             }
             system.raiseWindows(lift.raises)
         case .cancelled:
@@ -358,7 +364,6 @@ public final class Launcher {
         guard let target = swapSeries.next(in: system.runningApps()) else { return }
         hardware.playFeedback(.gesture, on: event.trackpad)
         system.bringToFront(target)
-        window = .closed
     }
 
     /// Rows and the prepared launch animations change together, so the icon of any app that can fire is ready before

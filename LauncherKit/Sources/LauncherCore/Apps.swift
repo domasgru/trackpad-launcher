@@ -31,8 +31,8 @@ public struct AppEntry: Hashable, Sendable, Identifiable {
 
 /// What the apps on screen are right now, as one read of the system.
 public struct RunningApps: Equatable, Sendable {
-    /// The active app; nil when there is none, it has no bundle identifier or location, or it is Trackpad Launcher
-    /// itself, which never activates except around the Other… chooser.
+    /// The active app; nil when there is none or it has no bundle identifier or location. Never Trackpad Launcher: while it
+    /// is active (its settings window in front), the app that was in front before it, the most recently used ⌘-Tab app.
     public let frontmost: AppEntry?
     /// The apps ⌘-Tab shows, most recently activated first. May lack `frontmost` (a menu bar app with a window in
     /// front). Named as macOS names a running app, which can differ from the Finder name the pickers show.

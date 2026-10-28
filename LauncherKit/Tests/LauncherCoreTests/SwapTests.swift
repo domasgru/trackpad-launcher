@@ -12,9 +12,9 @@ import LauncherCore
             && world.launcher.switcher == nil
     }
 
-    @Test func theThumbLiftingSwapsToThePreviousAppWithTheHapticAndNoAnimationAndClosesTheWindow() {
+    @Test func theThumbLiftingSwapsToThePreviousAppWithTheHapticAndNoAnimationAndLeavesTheWindowOpen() {
         let world = World.switcherWorld()
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         let base = rest()
 
         world.play(base.thumb(atMM: (10, 10)).wait(.milliseconds(50)))
@@ -28,7 +28,7 @@ import LauncherCore
         #expect(world.system.launchAnimations.isEmpty)
         #expect(world.system.bounces.isEmpty)
         #expect(world.launcher.switcher == nil)
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
 
         world.play(tapped.lift())
         #expect(world.system.broughtToFront == [world.app("Mail")])
@@ -77,7 +77,7 @@ import LauncherCore
         #expect(!after.hardware.isBlockingClicks)
     }
 
-    @Test func aMenuBarAppInFrontIsSkippedAndNoFrontmostAppSwapsToTheFirstRunningApp() {
+    @Test func aMenuBarAppInFrontIsSkippedAndNoActiveAppSwapsToTheFirstRunningApp() {
         let menuBar = World(apps: ["Bartender", "Safari", "Mail"])
         menuBar.launcher.start()
         menuBar.makeRunning(["Safari", "Mail"])
@@ -140,7 +140,7 @@ import LauncherCore
         let finder = only.app("Finder", in: only.coreServices)
         only.makeRunning([finder])
         only.system.frontmost = finder
-        only.launcher.openWindow()
+        only.launcher.openedByHand()
         only.swap()
         #expect(nothingHappened(only))
         #expect(only.launcher.isWindowOpen)

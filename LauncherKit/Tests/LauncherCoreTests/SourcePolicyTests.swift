@@ -61,6 +61,12 @@ import Testing
         Entry(token: "CGImageDestination", rule: "a preview is never encoded or written"),
         Entry(token: "representation(using", rule: "a preview is never encoded or written"),
         Entry(token: "tiffRepresentation", rule: "a preview is never encoded or written"),
+        Entry(token: "NSStatusBar", rule: "no menu bar icon"),
+        Entry(token: "NSStatusItem", rule: "no menu bar icon"),
+        Entry(token: "SMAppService.agent", rule: "nothing relaunches the app"),
+        Entry(token: "SMAppService.daemon", rule: "nothing relaunches the app"),
+        Entry(token: "SMAppService.loginItem", rule: "nothing relaunches the app"),
+        Entry(token: "SMLoginItemSetEnabled", rule: "nothing relaunches the app"),
     ]
 
     /// Each permission API lives in exactly one file, the adapter that owns it. Any other hit fails.
@@ -88,7 +94,7 @@ import Testing
             token: "mouseMoved", onlyIn: ["BounceOverlay.swift", "ClickTap.swift"],
             rule: "pointer moves are read only while a launch bounce shows; the click tap only rewrites to one"),
         Confined(
-            token: "addGlobalMonitorForEvents", onlyIn: ["MenuBarShell.swift", "BounceOverlay.swift"],
+            token: "addGlobalMonitorForEvents", onlyIn: ["BounceOverlay.swift"],
             rule: "pointer moves are read only while a launch bounce shows"),
         Confined(
             token: "addLocalMonitorForEvents", onlyIn: ["BounceOverlay.swift"],
@@ -102,6 +108,45 @@ import Testing
             rule: "the private ⌘-Tab order has one reader"),
         Confined(token: "AXUIElement", onlyIn: ["FrontmostAppWindows.swift", "LaunchWatch.swift"], rule: "the window reads have two readers"),
         Confined(token: "CGWindowList", onlyIn: ["FrontmostAppWindows.swift", "LaunchWatch.swift"], rule: "the window reads have two readers"),
+        Confined(token: "SecCode", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
+        Confined(token: "SecStaticCode", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
+        Confined(token: "SecRequirement", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
+        Confined(token: "/bin/mv", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's move has one script"),
+        Confined(token: "/bin/rm", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's move has one script"),
+        Confined(token: "SMAppService", onlyIn: ["SystemLoginItem.swift"], rule: "one login item, one adapter"),
+        Confined(
+            token: "setActivationPolicy", onlyIn: ["SettingsShell.swift"],
+            rule: "the Dock icon follows the settings window, in one place"),
+        Confined(
+            token: "disableRelaunchOnLogin", onlyIn: ["TrackpadLauncherApp.swift"],
+            rule: "only the login item starts the app at login"),
+        Confined(
+            token: "keyAELaunchedAsLogInItem", onlyIn: ["ThisCopy.swift"],
+            rule: "the launch event is parsed in one place"),
+        Confined(
+            token: "currentAppleEvent", onlyIn: ["ThisCopy.swift", "TrackpadLauncherApp.swift"],
+            rule: "the launch event is read at the app delegate and parsed in one place"),
+        Confined(
+            token: "forceTerminate", onlyIn: ["SystemRunningCopies.swift"], rule: "other copies are stopped in one place"),
+        Confined(token: ".terminate(", onlyIn: ["SystemRunningCopies.swift"], rule: "processes are ended in one place"),
+        Confined(token: "copyItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
+        Confined(token: "moveItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
+        Confined(token: "replaceItemAt(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
+        Confined(token: "removeItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
+        Confined(
+            token: "quarantinePropertiesKey", onlyIn: ["BundleInstall.swift"],
+            rule: "the move's file operations are in one file"),
+        Confined(
+            token: "AuthorizationExecuteWithPrivileges", onlyIn: ["PrivilegedInstall.swift"],
+            rule: "the one privileged call has one file"),
+        Confined(
+            token: "AuthorizationCopyRights", onlyIn: ["PrivilegedInstall.swift"], rule: "the one privileged call has one file"),
+        Confined(token: "statfs", onlyIn: ["DiskImages.swift"], rule: "disk images are read and ejected in one place"),
+        Confined(token: "DADisk", onlyIn: ["DiskImages.swift"], rule: "disk images are read and ejected in one place"),
+        Confined(token: "unmountVolume", onlyIn: ["DiskImages.swift"], rule: "disk images are read and ejected in one place"),
+        Confined(token: "SecTranslocate", onlyIn: ["ThisCopy.swift"], rule: "translocation is read in one place"),
+        Confined(token: "runModal", onlyIn: ["MoveDialogPresenter.swift"], rule: "the move dialog is the one modal"),
+        Confined(token: "kAEQuitReason", onlyIn: ["QuitSignals.swift"], rule: "the quit event is parsed in one place"),
     ]
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.

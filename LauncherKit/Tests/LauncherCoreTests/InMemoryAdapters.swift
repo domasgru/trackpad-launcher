@@ -259,17 +259,14 @@ import LauncherCore
 
 @MainActor final class RecordingSystemActions: SystemActions {
     private(set) var broughtToFront: [AppEntry] = []
-    private(set) var loginItemRegistrations = 0
     /// One entry per play, in order.
     private(set) var launchAnimations: [AppEntry] = []
     /// The latest set prepared; each prepare replaces the one before.
     private(set) var preparedLaunchAnimations: [AppEntry] = []
-    /// The active app the next `runningApps()` answers; nil models no active app, or Trackpad Launcher itself.
+    /// The active app the next `runningApps()` answers; nil models no active app.
     var frontmost: AppEntry?
     /// The ⌘-Tab apps the next `runningApps()` answers, most recently activated first.
     var running: [AppEntry] = []
-    /// Runs inside `registerLoginItem()` so a test can observe what is stored at that moment.
-    var onRegisterLoginItem: (() -> Void)?
     /// Runs inside `playLaunchAnimation(for:)` so a test can observe the other effects at that moment.
     var onPlayLaunchAnimation: (() -> Void)?
 
@@ -283,11 +280,6 @@ import LauncherCore
     func frontmostWindows() -> FrontmostWindows { windows.read(frontmost: frontmost) }
 
     func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
-
-    func registerLoginItem() {
-        loginItemRegistrations += 1
-        onRegisterLoginItem?()
-    }
 
     func prepareLaunchAnimations(for apps: [AppEntry]) { preparedLaunchAnimations = apps }
 
@@ -439,12 +431,15 @@ import LauncherCore
     private(set) var asks: [Permission] = []
     /// Runs inside `ask(_:)` so a test can observe what is stored at that moment.
     var onAsk: (() -> Void)?
+    /// Runs before `ask(_:)` takes effect, so a test can observe what a crash there would leave.
+    var onEffect: (() -> Void)?
 
     init(granted: Set<Permission> = []) { self.granted = granted }
 
     func isGranted(_ permission: Permission) -> Bool { granted.contains(permission) }
 
     func ask(_ permission: Permission) {
+        onEffect?()
         asks.append(permission)
         onAsk?()
     }
@@ -455,6 +450,173 @@ import LauncherCore
         guard granted != self.granted.contains(permission) else { return }
         if granted { self.granted.insert(permission) } else { self.granted.remove(permission) }
         if push { onChange?() }
+    }
+}
+
+@MainActor final class InMemoryLoginItem: LoginItem {
+    /// How macOS may report the user's own off, which is disputed: both readings read `isOn == false`.
+    enum UserOffReading {
+        /// `register()` fails and the item stays off (`.requiresApproval`).
+        case refusesRegistering
+        /// `register()` succeeds and turns it on (`.notRegistered`, as after removal from the list).
+        case acceptsRegistering
+    }
+
+    var userOffReading: UserOffReading = .refusesRegistering
+    /// Next login starts the app.
+    var isOn = false
+    /// True from the user's off in Login Items until anything turns it on again.
+    private(set) var isOffByUser = false
+    /// Every `register()` and `unregister()` call of ours, in order.
+    private(set) var calls: [String] = []
+    /// Runs inside `register()` so a test can observe what is stored at that moment.
+    var onRegister: (() -> Void)?
+    /// Runs before and after every call of ours, so a test can observe what a crash there would leave.
+    var onEffect: (() -> Void)?
+    var log: EffectLog?
+
+    /// The user switches it off in System Settings → Login Items. Not one of our calls.
+    func userTurnsOff() {
+        isOn = false
+        isOffByUser = true
+    }
+
+    /// The user switches it back on in System Settings → Login Items. Not one of our calls.
+    func userTurnsOn() {
+        isOn = true
+        isOffByUser = false
+    }
+
+    /// Puts the item back as a snapshot found it.
+    func restore(isOn: Bool, isOffByUser: Bool) {
+        self.isOn = isOn
+        self.isOffByUser = isOffByUser
+    }
+
+    @discardableResult func register() -> Bool {
+        calls.append("register")
+        log?.entries.append("register")
+        onEffect?()
+        defer { onEffect?() }
+        if isOffByUser, userOffReading == .refusesRegistering { return false }
+        isOn = true
+        isOffByUser = false
+        onRegister?()
+        return true
+    }
+
+    func unregister() {
+        calls.append("unregister")
+        log?.entries.append("unregister")
+        onEffect?()
+        isOn = false
+        isOffByUser = false
+        onEffect?()
+    }
+}
+
+/// What the login item, the copies and the installer did, in one order.
+final class EffectLog {
+    var entries: [String] = []
+}
+
+/// Holds `done` until a row releases an outcome, and records its calls in the shared log.
+@MainActor final class InMemoryInstaller: Installer {
+    var log: EffectLog?
+    private(set) var installCalls = 0
+    private(set) var removeOriginalCalls = 0
+    private(set) var openInstalledCopyCalls = 0
+    private(set) var ejected: [DiskImage] = []
+    /// Runs after the swap, before `done`: the moment /Applications changed.
+    var onInstalled: (() -> Void)?
+    /// Runs before and after each call that leaves something behind.
+    var onEffect: (() -> Void)?
+    private var held: (@MainActor (InstallOutcome) -> Void)?
+
+    var isHolding: Bool { held != nil }
+
+    func install(then done: @escaping @MainActor (InstallOutcome) -> Void) {
+        installCalls += 1
+        log?.entries.append("install")
+        held = done
+    }
+
+    func release(_ outcome: InstallOutcome) {
+        guard let done = held else { return }
+        held = nil
+        if outcome == .installed {
+            onEffect?()
+            onInstalled?()
+            onEffect?()
+        }
+        done(outcome)
+    }
+
+    func removeOriginal() {
+        removeOriginalCalls += 1
+        log?.entries.append("removeOriginal")
+        onEffect?()
+    }
+
+    func openInstalledCopy() {
+        openInstalledCopyCalls += 1
+        log?.entries.append("openInstalledCopy")
+        onEffect?()
+    }
+
+    func eject(_ diskImage: DiskImage) {
+        ejected.append(diskImage)
+        log?.entries.append("eject")
+    }
+}
+
+/// Ending a process asks its `Lifecycle` first, as `NSApp.terminate` asks `applicationShouldTerminate`. Other copies
+/// exit only when a row lets them.
+@MainActor final class InMemoryRunningCopies: RunningCopies {
+    weak var lifecycle: Lifecycle?
+    var log: EffectLog?
+    private(set) var hasEnded = false
+    var listed: [RunningCopy] = []
+    /// Every copy passed to `stop`, in order.
+    private(set) var stopped: [RunningCopy] = []
+    /// Copies that exited before `stop` ran: `stop` then calls back inside itself, as KVO's `.initial` does.
+    var alreadyExited: Set<CopyID> = []
+    private var waitingFor: Set<CopyID> = []
+    private var pending: (@MainActor () -> Void)?
+    private var lastPush: (@MainActor () -> Void)?
+
+    func others() -> [RunningCopy] { listed }
+
+    func stop(_ copies: [RunningCopy], then exited: @escaping @MainActor () -> Void) {
+        stopped += copies
+        if !copies.isEmpty { log?.entries.append("stop") }
+        waitingFor = Set(copies.map(\.id)).subtracting(alreadyExited)
+        pending = exited
+        lastPush = exited
+        if waitingFor.isEmpty { fire() }
+    }
+
+    func letExit(_ id: CopyID) {
+        guard waitingFor.remove(id) != nil, waitingFor.isEmpty else { return }
+        fire()
+    }
+
+    func letStoppedCopiesExit() {
+        waitingFor = []
+        fire()
+    }
+
+    /// The same exit push arriving a second time.
+    func deliverExitAgain() { lastPush?() }
+
+    private func fire() {
+        guard let exited = pending else { return }
+        pending = nil
+        exited()
+    }
+
+    func endThisCopy() {
+        if lifecycle?.shouldEnd(.other) == true { hasEnded = true }
     }
 }
 

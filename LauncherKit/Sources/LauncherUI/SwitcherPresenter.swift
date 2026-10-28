@@ -2,7 +2,7 @@ import AppKit
 import LauncherCore
 import Observation
 
-/// Renders `launcher.switcher` and holds nothing the model holds. Owned by `MenuBarShell`.
+/// Renders `launcher.switcher` and holds nothing the model holds. Owned by `SettingsShell`.
 ///
 /// The panel is created now so a swipe never pays the first window's cost, and the 80 pt icons of the running Dock apps
 /// are drawn before any swipe: at `startIconPasses(waiting:)`, again off the main actor for each app the workspace
@@ -101,7 +101,9 @@ final class SwitcherPresenter {
 
     /// A Dock app's location (regular activation policy and a bundle), spelled as the running-apps read spells it.
     private static func dockLocation(_ app: NSRunningApplication) -> URL? {
-        guard app.activationPolicy == .regular, let bundleURL = app.bundleURL else { return nil }
+        guard app.activationPolicy == .regular, app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+            let bundleURL = app.bundleURL
+        else { return nil }
         return AppEntry.location(ofBundleAtPath: bundleURL.path)
     }
 

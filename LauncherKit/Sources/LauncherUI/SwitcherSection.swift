@@ -7,21 +7,21 @@ struct SwitcherSection: View {
     let launcher: Launcher
 
     var body: some View {
-        VStack(spacing: 12) {
-            SettingRow(
-                illustration: "swipe", title: "Switch recent", handMode: launcher.handMode,
-                isOn: Binding(get: { launcher.isSwipeOn }, set: { launcher.setSwipe(on: $0) }))
-            SettingRow(
-                illustration: "window-swipe", title: "Switch windows", handMode: launcher.handMode,
-                isOn: Binding(get: { launcher.isWindowSwipeOn }, set: { launcher.setWindowSwipe(on: $0) }))
-            SettingRow(
-                illustration: "thumb-tap", title: "Toggle recent", handMode: launcher.handMode,
-                isOn: Binding(get: { launcher.isSwapOn }, set: { launcher.setSwap(on: $0) }))
-        }
+        SettingRow(
+            illustration: "swipe", title: "Switch recent", handMode: launcher.handMode,
+            isOn: Binding(get: { launcher.isSwipeOn }, set: { launcher.setSwipe(on: $0) }))
+        FormDivider()
+        SettingRow(
+            illustration: "window-swipe", title: "Switch windows", handMode: launcher.handMode,
+            isOn: Binding(get: { launcher.isWindowSwipeOn }, set: { launcher.setWindowSwipe(on: $0) }))
+        FormDivider()
+        SettingRow(
+            illustration: "thumb-tap", title: "Toggle recent", handMode: launcher.handMode,
+            isOn: Binding(get: { launcher.isSwapOn }, set: { launcher.setSwap(on: $0) }))
     }
 }
 
-/// One switch with its illustration (the inverse copy in left-hand mode) and its title.
+/// One switch with its illustration (the inverse copy in left-hand mode) 10 pt before its title.
 struct SettingRow: View {
     let illustration: String
     let title: String
@@ -29,14 +29,11 @@ struct SettingRow: View {
     let isOn: Binding<Bool>
 
     var body: some View {
-        HStack(spacing: 8) {
+        FormRow {
             Illustration(name: illustration, handMode: handMode)
                 .accessibilityHidden(true)
-            Text(title)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Toggle(title, isOn: isOn)
-                .toggleStyle(.switch)
-                .labelsHidden()
+                .padding(.trailing, 10)
+            SwitchRow(title: title, isOn: isOn)
         }
     }
 }

@@ -1,7 +1,7 @@
 import AppKit
 import LauncherCore
 
-/// The System Settings panes the window opens.
+/// The System Settings panes the settings window opens.
 enum SettingsPane {
     case trackpad
     case accessibility
@@ -24,9 +24,11 @@ struct LauncherActions {
     let cachedIcon: (URL) -> NSImage
     /// Draws a missing icon on the spot. Only for the closed button's app.
     let icon: (URL) -> NSImage
-    /// Other…: closes the window, activates, runs the file chooser for applications, hands the chosen app to the
-    /// completion, and reopens the window.
+    /// Other…: runs the file chooser for applications as a sheet on the settings window and hands the chosen app to the
+    /// completion. Cancel, or closing the window, hands nothing over.
     let chooseOtherApp: (@escaping (URL) -> Void) -> Void
-    /// Closes the window explicitly (System Settings takes focus; a held window must not sit over it), then opens the pane.
+    /// Opens the System Settings pane; the settings window stays open.
     let openSettings: (SettingsPane) -> Void
+    /// The *Quit Trackpad Launcher* button.
+    let quit: () -> Void
 }

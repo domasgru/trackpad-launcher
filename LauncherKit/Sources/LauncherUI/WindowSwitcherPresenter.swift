@@ -2,7 +2,7 @@ import AppKit
 import LauncherCore
 import Observation
 
-/// Renders `launcher.windowSwitcher` and holds nothing the model holds. Owned by `MenuBarShell` beside
+/// Renders `launcher.windowSwitcher` and holds nothing the model holds. Owned by `SettingsShell` beside
 /// `SwitcherPresenter`. The panel is created now, so a window swipe never pays the first window's cost. Its own icons
 /// take the frontmost app's icon from the running app (about 0.1 ms), so it needs none of the swipe setting's icon
 /// passes. Each window swipe that shows previews starts one capture, whose pictures go straight into the panel.

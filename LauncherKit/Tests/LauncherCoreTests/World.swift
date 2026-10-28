@@ -48,6 +48,7 @@ final class LaunchRecord: Sendable {
     let preferences = InMemoryTrackpadPreferences()
     let system = RecordingSystemActions()
     let permissions: InMemoryPermissions
+    let loginItem = InMemoryLoginItem()
     let registry = Registry()
     let launches = LaunchRecord()
     let scanner: InMemoryAppScanner
@@ -90,18 +91,19 @@ final class LaunchRecord: Sendable {
         self.store = store
         launcher = Self.makeLauncher(
             hardware: hardware, preferences: preferences, permissions: permissions, system: system, catalog: catalog,
-            scanner: scanner, store: store)
+            scanner: scanner, store: store, startAtLogin: Self.startAtLogin(item: loginItem, suiteName: suiteName))
         install("Finder", in: coreServices)
         for name in apps { install(name) }
     }
 
     private static func makeLauncher(
         hardware: InMemoryTrackpads, preferences: InMemoryTrackpadPreferences, permissions: InMemoryPermissions,
-        system: RecordingSystemActions, catalog: AppCatalog, scanner: InMemoryAppScanner, store: SettingsStore
+        system: RecordingSystemActions, catalog: AppCatalog, scanner: InMemoryAppScanner, store: SettingsStore,
+        startAtLogin: StartAtLogin
     ) -> Launcher {
         Launcher(
             hardware: hardware, preferences: preferences, permissions: permissions, system: system, catalog: catalog,
-            scanner: scanner, store: store)
+            scanner: scanner, store: store, startAtLogin: startAtLogin)
     }
 
     deinit {
@@ -111,6 +113,36 @@ final class LaunchRecord: Sendable {
     /// Plants a raw record exactly where the store keeps its own, as an earlier build would have left it.
     func seedSettingsRecord(_ data: Data) {
         UserDefaults(suiteName: suiteName)!.set(data, forKey: "settings")
+    }
+
+    static func startAtLogin(item: InMemoryLoginItem, suiteName: String, placement: Placement = .installed) -> StartAtLogin {
+        StartAtLogin(item: item, defaults: UserDefaults(suiteName: suiteName)!, placement: placement)
+    }
+
+    /// A process's `StartAtLogin` over this Mac's login item and a fresh `UserDefaults` instance on the same suite.
+    func startAtLogin(placement: Placement = .installed) -> StartAtLogin {
+        Self.startAtLogin(item: loginItem, suiteName: suiteName, placement: placement)
+    }
+
+    /// Every key the suite holds, as a new process would read it.
+    func suiteDomain() -> [String: Any] {
+        UserDefaults(suiteName: suiteName)!.persistentDomain(forName: suiteName) ?? [:]
+    }
+
+    /// Writes a domain exactly as given into an empty suite.
+    func seedSuite(_ domain: [String: Any]) {
+        let defaults = UserDefaults(suiteName: suiteName)!
+        for (key, value) in domain { defaults.set(value, forKey: key) }
+    }
+
+    /// A store over a fresh `UserDefaults` instance on the same suite: what a new process would read.
+    func freshStore() -> SettingsStore {
+        SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
+    }
+
+    /// The saved record exactly as stored.
+    func settingsRecordBytes() -> Data? {
+        UserDefaults(suiteName: suiteName)!.data(forKey: "settings")
     }
 
     /// What `displayName` answers: the bundle's file name, as Finder shows it with extensions on. Asking LaunchServices
@@ -177,20 +209,21 @@ final class LaunchRecord: Sendable {
         hardware.touch(newer, on: trackpad.id)
     }
 
-    /// A second `Launcher` over the same adapters and a fresh `UserDefaults` instance on the same suite.
+    /// A second `Launcher` over the same adapters and a fresh `UserDefaults` instance on the same suite. Started alone it
+    /// is a login start; a test that wants the window calls `openedByHand()` after `start()`.
     @discardableResult
     func relaunch() -> Launcher {
         let store = SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
         self.store = store
         launcher = Self.makeLauncher(
             hardware: hardware, preferences: preferences, permissions: permissions, system: system, catalog: catalog,
-            scanner: scanner, store: store)
+            scanner: scanner, store: store, startAtLogin: startAtLogin())
         return launcher
     }
 }
 
 extension World {
-    /// What the next swipe reads as frontmost; nil models no active app, or Trackpad Launcher itself.
+    /// What the next swipe reads as frontmost; nil models no active app.
     func makeFrontmost(_ name: String?) {
         system.frontmost = name.map { app($0) }
     }

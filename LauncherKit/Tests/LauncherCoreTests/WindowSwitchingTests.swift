@@ -63,7 +63,7 @@ import LauncherCore
 
     @Test func liftingOnAnotherWindowKeepsItInFrontWithTheFrontWindowNextAndTheNextWindowSwipeStartsThere() {
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         let lifted = world.windowSwipe(3.5, 24)
 
@@ -71,7 +71,7 @@ import LauncherCore
         #expect(world.hardware.pulses.map(\.haptic) == [.lightTick, .lightTick, .gesture])
         #expect(world.system.launchAnimations.isEmpty)
         #expect(world.system.bounces.isEmpty)
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
 
         world.play(lifted.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 3.5)))
         #expect(world.launcher.windowSwitcher?.rows.map(\.title) == ["News", "Docs", "Mail"])
@@ -81,7 +81,7 @@ import LauncherCore
     @Test(arguments: ["back to the first row", "onto the second row"])
     func withEveryWindowMinimisedLiftingRestoresTheSelectedOneWithTheHaptic(path: String) {
         let world = World.windowWorld(minimised: ["X", "Y"], frontmost: "Finder")
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         let hand = path == "back to the first row"
             ? world.windowSwipe(3.5, 12, -12, lift: false) : world.windowSwipe(3.5, 12, lift: false)
@@ -94,12 +94,12 @@ import LauncherCore
         #expect(stack(world) == [restored])
         #expect(world.system.windows.minimisedTitles == [restored == "X" ? "Y" : "X"])
         #expect(world.hardware.feedback.count == 1)
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
     }
 
     @Test func liftingOnTheFrontWindowRaisesNothingAndIsSilent() {
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         let before = stack(world)
 
         world.windowSwipe(3.5)
@@ -113,7 +113,7 @@ import LauncherCore
 
     @Test func slidingAwayAndBackThenLiftingRestoresTheOrderSilently() {
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         let hand = world.windowSwipe(3.5, lift: false)
         let down = hand.slide(byMM: (0, 24), over: .milliseconds(10))
         world.play(down)
@@ -129,7 +129,7 @@ import LauncherCore
 
     @Test func aWindowMinimisedMidSwipeStaysMinimisedWhenTheLiftIsOnAnotherRow() {
         let world = World.windowWorld(visible: ["A", "B", "C", "D"])
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         let hand = world.windowSwipe(3.5, lift: false)
 
         world.system.windows.minimise("B")
@@ -209,7 +209,7 @@ import LauncherCore
     @Test(arguments: ["the app stops answering", "Notes becomes the frontmost app", "every listed window closes"])
     func whenTheSelectedWindowCannotBeReachedTheLiftChangesNothingAndIsSilent(change: String) {
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         let hand = world.windowSwipe(3.5, 12, lift: false)
         let raisedWhileSliding = world.system.windows.raised.count
         let before = stack(world)

@@ -53,7 +53,7 @@ import LauncherCore
     }
 
     enum Front: String, CaseIterable, Sendable {
-        case textEditOneWindow, finderNoWindows, noFrontmostApp, safariFullScreen
+        case textEditOneWindow, finderNoWindows, noActiveApp, safariFullScreen
     }
 
     enum Hand: String, CaseIterable, Sendable {
@@ -95,7 +95,7 @@ import LauncherCore
         switch front {
         case .textEditOneWindow: world = .windowWorld(visible: ["Letter"], frontmost: "TextEdit")
         case .finderNoWindows: world = .windowWorld(frontmost: "Finder")
-        case .noFrontmostApp: world = .windowWorld(frontmost: nil)
+        case .noActiveApp: world = .windowWorld(frontmost: nil)
         case .safariFullScreen: world = .windowWorld(visible: ["Film", "Docs", "Mail"], fullScreenFront: true)
         }
         world.launcher.setAssignment(.app(world.app("Notes")), for: .one)

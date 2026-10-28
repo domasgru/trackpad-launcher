@@ -65,7 +65,7 @@ import LauncherCore
         world.recordLaunch("Arc")
         world.recordLaunch("Sketch", in: world.downloads)
 
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         let installed = world.launcher.installedApps
         #expect(names(installed.recent) == ["Arc"])
@@ -83,7 +83,7 @@ import LauncherCore
         world.recordLaunch("Figma")
         world.recordLaunch("Arc")
 
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         #expect(
             menu(world.launcher, checking: world.launcher.app(for: .two)!)
@@ -111,12 +111,12 @@ import LauncherCore
         #expect(names(world.launcher.installedApps.recent) == ["Arc"])
 
         world.recordLaunch("Notion")
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         #expect(names(world.launcher.installedApps.recent) == ["Notion", "Arc"])
 
         world.launcher.closeWindow()
         world.recordLaunch("Arc")
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         #expect(names(world.launcher.installedApps.recent) == ["Arc", "Notion"])
     }
 
@@ -128,7 +128,7 @@ import LauncherCore
 
         world.scanner.holdScans()
         world.recordLaunch("Arc")
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         #expect(names(world.launcher.installedApps.recent) == ["Figma"])
 
         world.scanner.deliverHeldScan()
@@ -170,11 +170,10 @@ import LauncherCore
         world.permissions.set(.accessibility, granted: true)
         world.tap(1)
         world.launcher.closeWindow()
-        world.launcher.dismissWindow()
         #expect(world.system.broughtToFront == [world.app("Arc")])
         #expect(world.scanner.scanRequests == 1)
 
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         #expect(world.scanner.scanRequests == 2)
     }
 

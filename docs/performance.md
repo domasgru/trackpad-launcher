@@ -5,7 +5,7 @@ How much of the Mac Trackpad Launcher uses, measured on Release builds, and how 
 ## Method
 
 ### Build
-`Scripts/perf/build.sh` builds the tools and a Release app into `build/perf/`. It uses the same `-O`, whole-module optimisation, universal binary and hardened runtime as the notarized release, with local Apple Development signing in place of Developer ID, which does not change runtime cost. Never measure a Debug build: it is unoptimised, and it opens the animation tuner. Quit every other copy of the app first, including one paused under Xcode, because two copies both react to gestures. Accessibility stays granted across rebuilds signed by the same identity.
+`Scripts/perf/build.sh` builds the tools and a Release app into `build/perf/`. It uses the same `-O`, whole-module optimisation, universal binary and hardened runtime as the notarized release, with local Apple Development signing in place of Developer ID, which does not change runtime cost. Never measure a Debug build: it is unoptimised, and it opens the animation tuner. Opening the perf build stops every other running copy by itself, so only one copy reacts to gestures. Accessibility stays granted across rebuilds signed by the same identity.
 
 ### Tools
 - `sampler` (`Scripts/perf/sampler.c`): `proc_pid_rusage` on the app's pid once per interval. It reports user plus system CPU, instructions, cycles, package idle wakeups, interrupt wakeups and phys footprint. Its own MultitouchSupport callback counts the frames the trackpads delivered in each interval, so every second is labelled touching or not touching. The sampler's cost lands in its own process, not the app's.
@@ -16,7 +16,7 @@ How much of the Mac Trackpad Launcher uses, measured on Release builds, and how 
 - `footprint -p <pid>`, `vmmap --summary <pid>` and `heap <pid>` for memory composition.
 
 ### Scenarios
-`Scripts/perf/session.sh <pid> <outdir>` runs them in order: hands off (60 s), pointer and scroll (40 s), launcher taps, app switcher swipes, window switcher swipes, swaps, the menu window, hands off again (60 s). A person at the trackpad follows the spoken cues.
+`Scripts/perf/session.sh <pid> <outdir>` runs them in order: hands off (60 s), pointer and scroll (40 s), launcher taps, app switcher swipes, window switcher swipes, swaps, the settings window, hands off again (60 s). A person at the trackpad follows the spoken cues.
 
 The headline number is **CPU per trackpad frame during ordinary pointer and scroll use**: the user touches the trackpad all day, and every frame reaches the app. Report it with the share of one core it adds up to while touching. Measure attribution as an A/B: the app against `mtidle` over the same touches, or the app against a build with one component removed.
 
@@ -50,12 +50,12 @@ The same Mac, origin/main `9557bc2`.
 | App switcher swipes, about 6 in 30 s | 1362 ms (4.5%) | 1.08 ms | |
 | Window switcher swipes with previews, about 6 in 30 s | 744 ms (2.5%) | 0.58 ms | |
 | Swaps, 20 s | 148 ms (0.7%) | 0.19 ms | |
-| Menu window and one picker, 25 s | 1166 ms (4.6%) | – | One-off rendering |
+| Settings window and one picker, 25 s | 1166 ms (4.6%) | – | One-off rendering |
 | Startup, first 6 s | 1078 ms, almost all in the first second | – | Settles at 0 |
 
 **Memory.**
 - After launch: 37–42 MB phys footprint, with a 63.5 MB lifetime peak.
-- After the menu window was first opened: 57 MB, and it stays there after the window closes. MALLOC_SMALL went from 22 to 36 MB, plus 7 MB of CG images and 3.5 MB of CoreAnimation.
+- After the settings window was first opened: 57 MB, and it stays there after the window closes. MALLOC_SMALL went from 22 to 36 MB, plus 7 MB of CG images and 3.5 MB of CoreAnimation.
 - About 20 MB of live heap in 145k allocations, much of it AppKit layout, CFStrings and the app scan's URLs and file caches.
 
 **Attribution of the pointer and scroll cost.**
@@ -76,5 +76,5 @@ Plan 014's budget (0.088 ms per frame) is this no-tap figure plus 0.03 ms.
 ## Decisions
 - **Gate the event tap: done (plan 014).** The always-on active session tap made every scroll, drag and system gesture event on the Mac a synchronous round trip through the app. It cost about 2.3% of a core whenever a finger was down, and put the app in the latency path of all scrolling.
 - **Fewer redraws in `SwitcherPanel.show`: rejected.** It would save a few milliseconds per swipe, and skipping unchanged transforms would likely change the icon-grow animation, which plan 013 keeps unchanged.
-- **Release the menu window's content on close (about 15 MB): rejected.** Plan 003 keeps pickers instant on every open, and freed small-heap memory is often not returned to the system, so the saving is uncertain. Measure what the 15 MB is before revisiting.
+- **Release the settings window's content on close (about 15 MB): rejected.** Plan 003 keeps pickers instant on every open, and freed small-heap memory is often not returned to the system, so the saving is uncertain. Measure what the 15 MB is before revisiting.
 - **Per-frame allocations in the recognizer and the frame parser: not worth it.** They are a few percent of a cost that is now near the floor.

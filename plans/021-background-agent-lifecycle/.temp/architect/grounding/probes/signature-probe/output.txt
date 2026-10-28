@@ -1,0 +1,7 @@
+/tmp/tl021sig/check: replacing existing signature
+/Applications/Ghostty.app: developerID=true (OSStatus 0)
+/Applications/Visual Studio Code.app: developerID=true (OSStatus 0)
+/Applications/TrackpadLauncher.app: developerID=false (OSStatus -67050)
+/Users/dominykasgrubys/Library/Developer/Xcode/DerivedData/TrackpadLauncher-czktprlleazztgblkvqjohabcjsy/Build/Products/Debug/TrackpadLauncher.app: developerID=false (OSStatus -67050)
+/tmp/tl021sig/check: developerID=false (OSStatus -67050)
+self (/tmp/tl021sig/check): developerID=false (OSStatus -67050)

@@ -65,7 +65,7 @@ import LauncherCore
         world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
         world.registry[World.bundleID("Figma")] = [world.trash("Figma", into: trash)]
 
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         #expect(world.launcher.app(for: .two) == .missing(name: "Figma"))
         world.tap(2)
         #expect(world.system.broughtToFront.isEmpty)
@@ -88,7 +88,7 @@ import LauncherCore
 
         world.tap(2)
         #expect(world.system.broughtToFront == [entry])
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         #expect(world.launcher.app(for: .two) == .present(entry))
 
         #expect(world.store.load()?.assignments[.two]?.lastKnownURL == original)
@@ -99,12 +99,12 @@ import LauncherCore
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
         world.registry[World.bundleID("Figma")] = [world.trash("Figma")]
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         #expect(world.launcher.app(for: .two) == .missing(name: "Figma"))
 
         let reinstalled = world.install("Figma")
         world.registry[World.bundleID("Figma")] = [reinstalled]
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         #expect(world.launcher.app(for: .two) == .present(world.app("Figma")))
 
         world.tap(2)
@@ -119,7 +119,7 @@ import LauncherCore
         world.install("Figma", bundleID: "com.other.figma")
         world.registry[World.bundleID("Figma")] = []
 
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         #expect(world.launcher.app(for: .two) == .missing(name: "Figma"))
     }

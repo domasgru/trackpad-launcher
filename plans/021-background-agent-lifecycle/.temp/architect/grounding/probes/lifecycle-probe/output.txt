@@ -1,0 +1,62 @@
+
+== E1 open A (not running): launch event, policy, LaunchServices type
+  processes: 17061 
+  pid 17061 "ApplicationType"="UIElement"
+
+== E2 open A again while it runs (same path): reopen? second process? window, activation, type after .regular
+  processes: 17061 
+  pid 17061 "ApplicationType"="Foreground"
+
+== E3 close the window through a reopen with the close flag: type after .accessory
+  processes: 17061 
+  pid 17061 "ApplicationType"="UIElement"
+
+== E4 copy the same build to B and open B while A runs (same build, other place)
+  processes: 17061 17443 
+
+== E5 quit Apple event from osascript (stands in for the Dock's Quit) to every copy: cancelled?
+  osascript: 49:53: execution error: TLProbe got an error: User canceled. (-128)
+  processes: 17061 17443 
+
+== E6 NSRunningApplication.terminate() from another process (as a newer copy would): sender, reason, outcome
+  terminator pid 17682: 2 running copies
+  terminate() pid 17061 -> true
+  terminate() pid 17443 -> true
+  after 1.5 s pid 17061 isTerminated=false
+  after 1.5 s pid 17443 isTerminated=false
+  processes: 17061 17443 
+
+== E7 bring another app (Calculator) to front while the probe is active with its window key
+  processes: 17061 
+
+== E8 replace A in place with build v2 while v1 runs (rm + copy, like Finder's Replace), then open A
+  processes: 17061 18445 
+  pid 17061 "ApplicationType"="UIElement"
+  pid 18445 "ApplicationType"="UIElement"
+
+== Cleanup
+  processes: 
+
+== Probe log (/tmp/tl021probe/log.txt)
+[pid 17061 v1] willFinishLaunching path=/private/tmp/tl021probe/A/TLProbe.app policy=1 no current Apple event
+[pid 17061 v1] didFinishLaunching isDefaultLaunch=true event aevt/oapp propData=none quitReasonParam=none quitReasonAttr=none sender=17061 com.domasgru.tl021probe
+[pid 17061 v1] reopen hasVisibleWindows=false isActive=true event aevt/rapp propData=none quitReasonParam=none quitReasonAttr=none sender=17189 (no NSRunningApplication)
+[pid 17061 v1] after show: policy=0 isActive=true windowVisible=true windowKey=true frontmost=com.domasgru.tl021probe frontmostIsSelf=true
+[pid 17061 v1] reopen hasVisibleWindows=true isActive=true event aevt/rapp propData=none quitReasonParam=none quitReasonAttr=none sender=17313 (no NSRunningApplication)
+[pid 17061 v1] after close: policy=1 isActive=false windowVisible=false windowKey=false frontmost=com.figma.Desktop frontmostIsSelf=false
+[pid 17443 v1] willFinishLaunching path=/private/tmp/tl021probe/B/TLProbe.app policy=1 no current Apple event
+[pid 17443 v1] didFinishLaunching isDefaultLaunch=true event aevt/oapp propData=none quitReasonParam=none quitReasonAttr=none sender=17443 com.domasgru.tl021probe
+[pid 17443 v1] shouldTerminate allow=false event aevt/quit propData=none quitReasonParam=none quitReasonAttr=none sender=17563 osascript
+[pid 17061 v1] shouldTerminate allow=false event aevt/quit propData=none quitReasonParam=none quitReasonAttr=none sender=17682 (no NSRunningApplication)
+[pid 17443 v1] shouldTerminate allow=false event aevt/quit propData=none quitReasonParam=none quitReasonAttr=none sender=17682 (no NSRunningApplication)
+[pid 17061 v1] reopen hasVisibleWindows=false isActive=true event aevt/rapp propData=none quitReasonParam=none quitReasonAttr=none sender=17833 (no NSRunningApplication)
+[pid 17061 v1] after show: policy=0 isActive=true windowVisible=true windowKey=true frontmost=com.domasgru.tl021probe frontmostIsSelf=true
+[pid 17061 v1] bring: openApplication error=nil
+[pid 17061 v1] after bring: policy=0 isActive=false windowVisible=true windowKey=false frontmost=com.apple.calculator frontmostIsSelf=false
+[pid 17061 v1] reopen hasVisibleWindows=true isActive=true event aevt/rapp propData=none quitReasonParam=none quitReasonAttr=none sender=18208 (no NSRunningApplication)
+[pid 17061 v1] after close: policy=1 isActive=false windowVisible=false windowKey=false frontmost=com.apple.calculator frontmostIsSelf=false
+[pid 18445 v2] willFinishLaunching path=/private/tmp/tl021probe/A/TLProbe.app policy=1 no current Apple event
+[pid 18445 v2] didFinishLaunching isDefaultLaunch=true event aevt/oapp propData=none quitReasonParam=none quitReasonAttr=none sender=18445 com.domasgru.tl021probe
+[pid 18445 v2] shouldTerminate allow=true event aevt/quit propData=none quitReasonParam=none quitReasonAttr=none sender=18579 osascript
+
+cleanup: probe processes left = 0, Calculator running = no (was 0)

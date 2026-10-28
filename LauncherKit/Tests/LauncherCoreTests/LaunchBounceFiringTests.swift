@@ -18,7 +18,7 @@ import LauncherCore
 
     @Test func aGestureForAnAppWithNoProcessBouncesInsteadOfFloatingAndPulsesFirst() {
         let world = world([("Figma", .two)])
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         var feedbackWhenBouncing: [TrackpadID]?
         world.system.onBringToFrontBouncing = { [unowned world] in feedbackWhenBouncing = world.hardware.feedback }
 
@@ -28,7 +28,7 @@ import LauncherCore
         #expect(world.system.broughtToFront == [world.app("Figma")])
         #expect(world.system.launchAnimations.isEmpty)
         #expect(world.hardware.feedback == [Trackpad.macBook14.id])
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
         #expect(feedbackWhenBouncing == [Trackpad.macBook14.id], "the pulse comes first, in the same turn")
     }
 
@@ -55,7 +55,7 @@ import LauncherCore
 
     @Test func withTheLaunchAnimationOffAnAppWithNoProcessJustLaunches() {
         let world = world([("Figma", .two)])
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
         world.launcher.setLaunchAnimation(on: false)
 
         world.tap(2)
@@ -64,7 +64,7 @@ import LauncherCore
         #expect(world.system.launchAnimations.isEmpty)
         #expect(world.system.broughtToFront == [world.app("Figma")])
         #expect(world.hardware.feedback.count == 1)
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
     }
 
     @Test(arguments: [LaunchProgress.windowShown, .wentNowhere, .ranOut])
@@ -177,7 +177,7 @@ import LauncherCore
     func aRepeatedGestureKeepsTheOneBounceButPulsesAndBringsTheAppToFront(twoGestures: Bool) {
         let world = twoGestures ? world([("Figma", .one), ("Figma", .two)]) : world([("Figma", .two)])
         world.tap(twoGestures ? 1 : 2)
-        world.launcher.openWindow()
+        world.launcher.openedByHand()
 
         world.tap(2)
 
@@ -185,7 +185,7 @@ import LauncherCore
         #expect(world.system.broughtToFront == [world.app("Figma"), world.app("Figma")])
         #expect(world.system.launchAnimations.isEmpty)
         #expect(world.hardware.feedback.count == 2)
-        #expect(!world.launcher.isWindowOpen)
+        #expect(world.launcher.window == .open(request: 1))
     }
 
     @Test func aBounceThatStartedUpAndIsStillBouncingKeepsItsStateThroughARepeatedGesture() {
