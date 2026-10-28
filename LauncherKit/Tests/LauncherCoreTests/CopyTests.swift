@@ -2,17 +2,18 @@ import Testing
 import LauncherCore
 
 @Suite struct CopyTests {
-    @Test func theAccessibilityHintNamesScrollingAndSwitchingWindows() {
-        #expect(
-            Copy.accessibilityHint
-                == "Clicks and scrolling aren't blocked during gestures, and windows can't be switched. "
-                + "Allow Accessibility access to do both.")
+    @Test func theAccessibilityHintAsksForAccessAndItsButtonNamesThePane() {
+        #expect(Copy.accessibilityHint == "Allow Accessibility access to make trackpad gestures work reliably.")
+        #expect(Copy.accessibilityButton == "Open Accessibility Settings…")
     }
 
-    @Test func theScreenRecordingHintSaysPreviewsNeedItAndItsButtonNamesWhatItDoes() {
-        #expect(Copy.screenRecordingHint == "Window previews need Screen Recording.")
-        #expect(Copy.screenRecordingButton(.ask) == "Allow Screen Recording…")
-        #expect(Copy.screenRecordingButton(.openSettings) == "Open System Settings…")
+    @Test func theScreenRecordingHintSaysWhatNeedsItAndItsButtonNamesThePane() {
+        #expect(Copy.screenRecordingHint == "Allow Screen Recording access to show previews in the window switcher.")
+        #expect(Copy.screenRecordingButton == "Open Screen Recording Settings…")
+    }
+
+    @Test func theTrackpadSettingsNoticesButtonNamesThePane() {
+        #expect(Copy.trackpadSettingsButton == "Open Trackpad Settings…")
     }
 
     @Test func theWindowSwitcherNamesItsBadgeVerbatim() {

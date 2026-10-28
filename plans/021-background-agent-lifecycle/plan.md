@@ -171,7 +171,7 @@ While starting at login is on, Trackpad Launcher MUST start at every login with 
 - **THEN** no window opens and nothing asks for the permission, and a 1-finger gesture still brings its assigned app to front; only click blocking and the window swipe need the permission
 
 ### R10. The Quit button's place and look
-The settings window MUST end with a *Quit Trackpad Launcher* button, below every other setting, notice and hint, aligned right. It MUST be a Liquid Glass capsule tinted solid red, with white text, at the system's regular button size.
+The settings window MUST end with a *Quit Trackpad Launcher* button, below every other setting, notice and hint, aligned right, followed by a *Close* button that closes the window. The Quit button MUST be red text on a faint red fill, at the system's regular button size, as the settings window design (Figma node 2102:16148) draws it.
 
 #### Scenario: The button stays last
 - **GIVEN** the Accessibility hint and the screen recording hint both show

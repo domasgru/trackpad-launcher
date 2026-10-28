@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// The settings window: an ordinary titled window with the close and minimise buttons. Its content is an
-/// `NSGlassEffectView` hosting the SwiftUI view, built once and kept so the pickers open instantly.
+/// The settings window: an ordinary titled window with the close and minimise buttons, on the system's window
+/// background. It hosts the SwiftUI view, built once and kept so the pickers open instantly.
 final class SettingsWindow: NSWindow {
     var onCancel: () -> Void = {}
 
@@ -18,10 +18,7 @@ final class SettingsWindow: NSWindow {
 
     func install(content: some View) {
         let hosting = NSHostingView(rootView: AnyView(content))
-        let glass = NSGlassEffectView()
-        glass.style = .regular
-        glass.contentView = hosting
-        contentView = glass
+        contentView = hosting
         self.hosting = hosting
     }
 

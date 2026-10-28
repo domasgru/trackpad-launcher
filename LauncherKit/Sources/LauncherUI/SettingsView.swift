@@ -2,67 +2,115 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// One 266 pt column of 28 pt rows 12 pt apart: five gesture rows, the switcher section, the Launch animations switch
-/// and the thumb picker. The illustrations are 28 pt tall; the system switch and segmented control, 24 pt at the
-/// regular size, are padded out to 28. Below them, while any applies, the trackpad settings notice, the Accessibility
-/// hint and the screen recording hint. The guide naming the two marks sits over the first illustration while the first
-/// gesture has no app, between it and the 132 pt picker, and only in right-hand mode, where its arrows meet the thumb.
-/// The *Quit Trackpad Launcher* button ends it, below everything else, aligned right.
+/// One 326 pt column, 16 pt inside the window, of rounded groups 10 pt apart: the five gesture rows and the Animate app
+/// launch switch; the switcher section; the thumb picker; then, while any applies, the trackpad settings notice, the
+/// Accessibility hint and the screen recording hint, one group each. Rows are at least 42 pt tall, with a hairline
+/// between them. The illustrations are 45 × 28 pt. The guide naming the two marks sits over the first illustration in
+/// right-hand mode, where its arrows meet the thumb. *Quit Trackpad Launcher* and *Close* end it, aligned right.
 struct SettingsView: View {
     let launcher: Launcher
     let actions: LauncherActions
 
     var body: some View {
-        VStack(spacing: 16) {
-            VStack(spacing: 12) {
+        VStack(spacing: 10) {
+            FormGroup {
                 ForEach(launcher.rows) { row in
                     GestureRowView(row: row, launcher: launcher, actions: actions)
+                    FormDivider()
                 }
-                SwitcherSection(launcher: launcher)
-                LaunchAnimationSwitch(launcher: launcher)
-                    .padding(.vertical, 2)
+                FormRow {
+                    SwitchRow(
+                        title: "Animate app launch",
+                        isOn: Binding(
+                            get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) }))
+                }
+            }
+            FormGroup { SwitcherSection(launcher: launcher) }
+            FormGroup {
                 ThumbPicker(launcher: launcher)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 8)
             }
-            // The labels only: the controls keep the system's own fonts.
-            .font(.system(size: 13, weight: .medium))
-            if hasNotices {
-                VStack(spacing: 16) {
-                    if case .inactive(let cause) = launcher.activity {
-                        SettingsNotice(
-                            message: Copy.inactiveNotice(for: cause), button: "Trackpad settings…",
-                            open: { actions.openSettings(.trackpad) })
-                    }
-                    if !launcher.isAccessibilityGranted {
-                        SettingsNotice(
-                            message: Copy.accessibilityHint,
-                            button: "Grant access…", open: { actions.openSettings(.accessibility) })
-                    }
-                    if let hint = launcher.screenRecordingHint {
-                        SettingsNotice(message: Copy.screenRecordingHint, button: Copy.screenRecordingButton(hint)) {
-                            switch hint {
-                            case .ask: launcher.askForScreenRecording()
-                            case .openSettings: actions.openSettings(.screenRecording)
-                            }
-                        }
+            if case .inactive(let cause) = launcher.activity {
+                SettingsNotice(
+                    message: Copy.inactiveNotice(for: cause), button: Copy.trackpadSettingsButton,
+                    open: { actions.openSettings(.trackpad) })
+            }
+            if !launcher.isAccessibilityGranted {
+                SettingsNotice(
+                    message: Copy.accessibilityHint, button: Copy.accessibilityButton,
+                    open: { actions.openSettings(.accessibility) })
+            }
+            if let hint = launcher.screenRecordingHint {
+                SettingsNotice(message: Copy.screenRecordingHint, button: Copy.screenRecordingButton) {
+                    switch hint {
+                    case .ask: launcher.askForScreenRecording()
+                    case .openSettings: actions.openSettings(.screenRecording)
                     }
                 }
             }
-            Button(action: actions.quit) { Text(Copy.quitButton).foregroundStyle(.white) }
-                .buttonStyle(.glassProminent)
-                .tint(.red)
-                .buttonBorderShape(.capsule)
-                .controlSize(.regular)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button(Copy.quitButton, action: actions.quit)
+                    .buttonStyle(TintedButtonStyle(tint: .red))
+                Button("Close") { launcher.closeWindow() }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 6))
+            }
+            .padding(.top, 10)
         }
-        .padding(EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14))
-        .frame(width: 266)
+        // The labels only: the controls keep the system's own fonts.
+        .font(.system(size: 13, weight: .medium))
+        .padding(16)
+        .frame(width: 326)
         .fixedSize(horizontal: true, vertical: false)
     }
+}
 
-    private var hasNotices: Bool {
-        if case .inactive = launcher.activity { return true }
-        return !launcher.isAccessibilityGranted || launcher.screenRecordingHint != nil
+/// A rounded group of rows: 10 pt in from its sides, on the faintest fill.
+struct FormGroup<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: 0) { content }
+            .padding(.horizontal, 10)
+            .background(Color(nsColor: .quaternarySystemFill), in: .rect(cornerRadius: 12))
+    }
+}
+
+/// One row of a group: at least 42 pt tall, its content centred.
+struct FormRow<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(spacing: 0) { content }
+            .padding(.vertical, 2)
+            .frame(maxWidth: .infinity, minHeight: 42)
+    }
+}
+
+/// The hairline between two rows of a group.
+struct FormDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color(nsColor: .quinaryLabel))
+            .frame(height: 1)
+    }
+}
+
+/// A title and its switch, the switch at the trailing edge.
+struct SwitchRow: View {
+    let title: String
+    let isOn: Binding<Bool>
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle(title, isOn: isOn)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .labelsHidden()
+        }
     }
 }
 
@@ -73,7 +121,7 @@ struct GestureRowView: View {
     let actions: LauncherActions
 
     var body: some View {
-        HStack(spacing: 8) {
+        FormRow {
             GestureIllustration(gesture: row.gesture, handMode: launcher.handMode)
                 .overlay(alignment: .topLeading) {
                     if showsGuide {
@@ -81,7 +129,7 @@ struct GestureRowView: View {
                         Guide().offset(x: 12, y: -4.37)
                     }
                 }
-            Spacer(minLength: 0)
+            Spacer(minLength: 12)
             AppPicker(
                 current: row.app,
                 installedApps: launcher.installedApps,
@@ -90,11 +138,12 @@ struct GestureRowView: View {
                 choose: { launcher.setAssignment($0, for: row.gesture) },
                 chooseOther: { actions.chooseOtherApp { launcher.setAssignment(.appBundle(at: $0), for: row.gesture) } })
         }
+        // Above the next row, so the guide's arrows draw over it.
+        .zIndex(row.gesture == .one ? 1 : 0)
     }
 
-    private var showsGuide: Bool {
-        row.gesture == .one && row.app == .unassigned && launcher.handMode == .right
-    }
+    /// Right-hand mode only: the left hand's illustrations put the thumb top-right, away from the arrows.
+    private var showsGuide: Bool { row.gesture == .one && launcher.handMode == .right }
 }
 
 struct GestureIllustration: View {
@@ -162,9 +211,9 @@ struct Guide: View {
     }
 }
 
-/// The system segmented control at the regular size (24 pt), filling the window's width in two equal segments:
-/// SwiftUI's segmented picker keeps its fitting width on macOS, so this wraps `NSSegmentedControl`. The right hand
-/// anchors its thumb on the left, so *Left thumb* is `.right`.
+/// The system segmented control at the regular size (24 pt), filling the group's width in two equal segments, the
+/// chosen one in the accent colour: SwiftUI's segmented picker keeps its fitting width on macOS, so this wraps
+/// `NSSegmentedControl`. The right hand anchors its thumb on the left, so *Left thumb* is `.right`.
 struct ThumbPicker: NSViewRepresentable {
     let launcher: Launcher
 
@@ -180,6 +229,7 @@ struct ThumbPicker: NSViewRepresentable {
             target: context.coordinator, action: #selector(Coordinator.changed(_:)))
         control.segmentDistribution = .fillEqually
         control.controlSize = .regular
+        control.selectedSegmentBezelColor = .controlAccentColor
         control.setAccessibilityLabel("Thumb")
         return control
     }
@@ -200,46 +250,44 @@ struct ThumbPicker: NSViewRepresentable {
     }
 }
 
-struct LaunchAnimationSwitch: View {
-    let launcher: Launcher
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Text("Launch animations")
-            Spacer(minLength: 0)
-            Toggle(
-                "Launch animations",
-                isOn: Binding(get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
-            )
-            .toggleStyle(.switch)
-            .labelsHidden()
-        }
-    }
-}
-
-/// A hint plus a button. The trackpad settings notice, the Accessibility hint and the screen recording hint share it.
+/// A hint plus a button, in a group of its own. The trackpad settings notice, the Accessibility hint and the screen
+/// recording hint share it.
 struct SettingsNotice: View {
     let message: String
     let button: String
     let open: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(message)
-                .hintStyle()
-            Button(button, action: open)
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.capsule)
+        FormGroup {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(message)
+                    .font(.system(size: 11))
+                    .lineSpacing(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(button, action: open)
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 6))
+            }
+            .padding(.vertical, 8)
+            .frame(minHeight: 42)
         }
     }
 }
 
-private extension View {
-    func hintStyle() -> some View {
-        // macOS body text: 13 pt, with SF Pro's loose leading (the roomier of its built-in line heights).
-        font(.body.leading(.loose))
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
+/// A regular-size push button drawn in `tint`: the label in it, on a fifth-strength wash of it.
+struct TintedButtonStyle: ButtonStyle {
+    let tint: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 16)
+            .frame(height: 24)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(tint.mix(with: .black, by: 0.1).opacity(configuration.isPressed ? 0.3 : 0.2)))
+            .contentShape(.rect(cornerRadius: 6))
     }
 }

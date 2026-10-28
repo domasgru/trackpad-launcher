@@ -2,11 +2,13 @@ import Foundation
 
 /// The strings the window quotes verbatim, kept in core so they are tested as values.
 public enum Copy {
-    public static let accessibilityHint =
-        "Clicks and scrolling aren't blocked during gestures, and windows can't be switched. "
-        + "Allow Accessibility access to do both."
+    public static let accessibilityHint = "Allow Accessibility access to make trackpad gestures work reliably."
+    public static let accessibilityButton = "Open Accessibility Settings…"
 
-    /// The red button that ends the settings window.
+    /// The trackpad settings notice's button.
+    public static let trackpadSettingsButton = "Open Trackpad Settings…"
+
+    /// The red button that ends the settings window, beside *Close*.
     public static let quitButton = "Quit Trackpad Launcher"
 
     /// The move dialog's message and buttons.
@@ -22,14 +24,9 @@ public enum Copy {
     public static let closeSettings = "Close Settings"
 
     /// Shown in the settings window while Screen Recording is missing and the window swipe is on.
-    public static let screenRecordingHint = "Window previews need Screen Recording."
-
-    public static func screenRecordingButton(_ hint: ScreenRecordingHint) -> String {
-        switch hint {
-        case .ask: "Allow Screen Recording…"
-        case .openSettings: "Open System Settings…"
-        }
-    }
+    public static let screenRecordingHint = "Allow Screen Recording access to show previews in the window switcher."
+    /// The same words whether the press asks macOS first or opens System Settings: either way the user ends up there.
+    public static let screenRecordingButton = "Open Screen Recording Settings…"
 
     /// The badge on a minimised window's row.
     public static let minimisedBadge = "Minimised"
