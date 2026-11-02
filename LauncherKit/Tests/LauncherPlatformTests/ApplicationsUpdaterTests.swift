@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import LauncherCore
 import Testing
 
@@ -49,10 +50,14 @@ import Testing
         let administrator: TestAdministrator
         let updater: ApplicationsUpdater
         let log = EventLog()
+        /// The name of a file in the ad-hoc release app, to find an unpacked copy of it.
+        let marker = BundleFixture.newMarker()
+        let downloadFilesBefore = BundleFixture.downloadFiles()
 
-        init(administrator: TestAdministrator = TestAdministrator(answer: nil), signer: Signer = ApplicationsUpdaterTests.signer)
-            async throws
-        {
+        init(
+            administrator: TestAdministrator = TestAdministrator(answer: nil), signer: Signer = ApplicationsUpdaterTests.signer,
+            download: ApplicationsUpdater.Download? = nil
+        ) async throws {
             fixture = try BundleFixture()
             applications = try fixture.folder("Applications")
             old = try fixture.makeBundle(named: "TrackpadLauncher.app", in: applications, version: "1.0.0")
@@ -61,7 +66,32 @@ import Testing
             self.administrator = administrator
             updater = ApplicationsUpdater(
                 replacing: old, signer: signer, administrator: administrator,
-                download: GitHubReleases.ArchiveDownload(stall: 1).archive)
+                download: download ?? GitHubReleases.ArchiveDownload(stall: 1).archive)
+        }
+
+        /// An ad-hoc signed 1.1.0 app carrying the marker, archived as release.sh does.
+        func adHocArchive() throws -> Data {
+            let release = try fixture.folder("Release")
+            try fixture.makeBundle(named: "TrackpadLauncher.app", in: release, version: "1.1.0", marker: marker)
+            return try BundleFixture.archive("TrackpadLauncher.app", in: release)
+        }
+
+        /// Serves `archive` as a stream of two chunks, the first `percent` of it, each when the gate lets it go.
+        func stream(_ archive: Data, firstChunkPercent percent: Int) -> LocalReleaseServer.ChunkGate {
+            let gate = LocalReleaseServer.ChunkGate()
+            let cut = (archive.count * percent + 99) / 100
+            server.script(
+                ApplicationsUpdaterTests.archivePath,
+                .stream(length: archive.count, chunks: [Data(archive.prefix(cut)), Data(archive.dropFirst(cut))], gate: gate))
+            return gate
+        }
+
+        func untilTheServerSeesTheClientClose() async -> Bool {
+            for _ in 0..<100 {
+                if !server.clientClosures.isEmpty { return true }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            return false
         }
 
         func release(size: Int) -> Release {
@@ -79,6 +109,12 @@ import Testing
             #expect(try BundleFixture.manifest(of: old) == oldManifest)
             #expect(try BundleFixture.appNames(in: applications) == ["TrackpadLauncher.app"])
             #expect(administrator.calls.isEmpty)
+            expectNothingOfTheUpdateOnDisk()
+        }
+
+        func expectNothingOfTheUpdateOnDisk() {
+            #expect(BundleFixture.downloadFiles() == downloadFilesBefore)
+            #expect(BundleFixture.copies(carrying: marker) == [])
         }
     }
 
@@ -114,9 +150,7 @@ import Testing
     @Test func anArchiveThatIsNotGenuineIsRefusedBeforeAnyPromptEvenWhereThePromptWouldBeNeeded() async throws {
         let rig = try await Rig(administrator: .refusing)
         defer { rig.server.stop() }
-        let release = try rig.fixture.folder("Release")
-        try rig.fixture.makeBundle(named: "TrackpadLauncher.app", in: release, version: "1.1.0")
-        let archive = try BundleFixture.archive("TrackpadLauncher.app", in: release)
+        let archive = try rig.adHocArchive()
         rig.server.script(Self.archivePath, .respond(status: 200, body: archive))
         chmod(rig.applications.path, 0o555)
 
@@ -132,9 +166,10 @@ import Testing
     func aBodyOfTheWrongLengthFailsWithoutEverReportingTheDownloaded(size: Int) async throws {
         let rig = try await Rig()
         defer { rig.server.stop() }
-        rig.server.script(Self.archivePath, .respond(status: 200, body: Data(repeating: 7, count: 4000)))
+        let archive = try rig.adHocArchive()
+        rig.server.script(Self.archivePath, .respond(status: 200, body: archive))
 
-        rig.update(size: size)
+        rig.update(size: archive.count + (size - 4000))
         await rig.log.until { $0.contains(.failed) }
 
         #expect(!rig.log.events.contains(.downloaded))
@@ -142,17 +177,50 @@ import Testing
         try rig.expectOldBundleUntouched()
     }
 
-    @Test func aBodyCutShortFails() async throws {
+    @Test func aConnectionClosedAfterFortyPercentFails() async throws {
         let rig = try await Rig()
         defer { rig.server.stop() }
+        let archive = try rig.adHocArchive()
+        let cut = (archive.count * 40 + 99) / 100
         let gate = LocalReleaseServer.ChunkGate()
-        rig.server.script(Self.archivePath, .stream(length: 4000, chunks: [Data(repeating: 7, count: 1000)], gate: gate))
+        rig.server.script(Self.archivePath, .stream(length: archive.count, chunks: [Data(archive.prefix(cut))], gate: gate))
 
-        rig.update(size: 4000)
+        rig.update(size: archive.count)
         gate.release()
         await rig.log.until { $0.contains(.failed) }
 
+        #expect(rig.log.progress.last == 0.4)
         #expect(!rig.log.events.contains(.downloaded))
+        #expect(rig.log.followsTheContract)
+        try rig.expectOldBundleUntouched()
+    }
+
+    @Test(arguments: [false, true])
+    func aCompleteArchiveIsDownloadedWhetherItComesAtOnceOrSlowerInTotalThanTheStallButNeverIdleThatLong(trickle: Bool) async throws {
+        let rig = try await Rig()
+        defer { rig.server.stop() }
+        let archive = try rig.adHocArchive()
+        if trickle {
+            let size = archive.count / 6 + 1
+            let gate = LocalReleaseServer.ChunkGate()
+            let pieces = stride(from: 0, to: archive.count, by: size).map { Data(archive[$0..<min($0 + size, archive.count)]) }
+            rig.server.script(Self.archivePath, .stream(length: archive.count, chunks: pieces, gate: gate))
+            rig.update(size: archive.count)
+            await Task.detached {
+                for _ in pieces {
+                    gate.release()
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
+            }.value
+        } else {
+            rig.server.script(Self.archivePath, .respond(status: 200, body: archive))
+            rig.update(size: archive.count)
+        }
+        await rig.log.until { $0.contains(.failed) }
+
+        #expect(rig.log.events.suffix(2) == [.downloaded, .failed])
+        #expect(rig.log.progress.last == 1.0)
+        #expect(rig.log.followsTheContract)
         try rig.expectOldBundleUntouched()
     }
 
@@ -172,16 +240,84 @@ import Testing
     @Test func aServerThatStopsSendingFailsAfterTheStall() async throws {
         let rig = try await Rig()
         defer { rig.server.stop() }
-        let gate = LocalReleaseServer.ChunkGate()
-        rig.server.script(Self.archivePath, .stream(length: 4000, chunks: [Data(repeating: 7, count: 1000), Data(repeating: 7, count: 3000)], gate: gate))
+        let archive = try rig.adHocArchive()
+        let gate = rig.stream(archive, firstChunkPercent: 40)
+        rig.update(size: archive.count)
 
-        let started = ContinuousClock.now
-        rig.update(size: 4000)
+        let lastByte = ContinuousClock.now
         gate.release()
         await rig.log.until { $0.contains(.failed) }
 
-        #expect(ContinuousClock.now - started >= .milliseconds(950))
+        #expect(ContinuousClock.now - lastByte >= .seconds(1))
+        #expect(rig.log.progress.last == 0.4)
         #expect(!rig.log.events.contains(.downloaded))
+        #expect(rig.log.followsTheContract)
+        try rig.expectOldBundleUntouched()
+    }
+
+    @Test func cancellingAtFortyPercentClosesTheConnectionAndLeavesNothingAndTheNextUpdateWorks() async throws {
+        let rig = try await Rig(administrator: .refusing)
+        defer { rig.server.stop() }
+        let archive = try rig.adHocArchive()
+        let gate = rig.stream(archive, firstChunkPercent: 40)
+        chmod(rig.applications.path, 0o555)
+        rig.update(size: archive.count)
+        gate.release()
+        await rig.log.until { $0.contains(.progress(0.4)) }
+
+        rig.updater.cancelDownload()
+        let seen = await rig.untilTheServerSeesTheClientClose()
+        gate.release()
+        try await Task.sleep(for: .milliseconds(400))
+
+        #expect(seen)
+        #expect(rig.log.progress.last == 0.4)
+        #expect(rig.log.events == rig.log.progress.map { .progress($0) })
+        try rig.expectOldBundleUntouched()
+
+        rig.server.script(Self.archivePath, .respond(status: 200, body: archive))
+        let again = EventLog()
+        rig.updater.update(to: rig.release(size: archive.count)) { again.record($0) }
+        await again.until { $0.contains(.failed) }
+        #expect(again.events.contains(.downloaded))
+        #expect(again.followsTheContract)
+        #expect(again.events.suffix(2) == [.downloaded, .failed])
+    }
+
+    @Test func cancellingTheMomentTheArchiveArrivesStopsBeforeTheDownloadedIsReported() async throws {
+        let hold = Hold()
+        let rig = try await Rig(download: { _, _ in await hold.wait() })
+        defer { rig.server.stop() }
+        let archive = try rig.adHocArchive()
+        chmod(rig.applications.path, 0o555)
+        rig.update(size: archive.count)
+        while !hold.isWaiting { try await Task.sleep(for: .milliseconds(20)) }
+
+        hold.release(archive)
+        rig.updater.cancelDownload()
+        try await Task.sleep(for: .milliseconds(500))
+
+        #expect(rig.log.events.isEmpty)
+        try rig.expectOldBundleUntouched()
+    }
+
+    @Test func cancellingFromInsideTheDownloadedEventChangesNothingAndOneOutcomeFollows() async throws {
+        let hold = Hold()
+        let rig = try await Rig(download: { _, _ in await hold.wait() })
+        defer { rig.server.stop() }
+        let archive = try rig.adHocArchive()
+        let log = rig.log
+        let updater = rig.updater
+        updater.update(to: rig.release(size: archive.count)) { event in
+            if event == .downloaded { updater.cancelDownload() }
+            log.record(event)
+        }
+        while !hold.isWaiting { try await Task.sleep(for: .milliseconds(20)) }
+
+        hold.release(archive)
+        await log.until { $0.contains(.failed) }
+
+        #expect(log.events == [.downloaded, .failed])
         try rig.expectOldBundleUntouched()
     }
 
@@ -287,5 +423,233 @@ import Testing
         #expect(log.events.suffix(2) == [.downloaded, .declined])
         #expect(rig.administrator.calls.count == 1)
         #expect(try BundleFixture.manifest(of: rig.old) == rig.oldManifest)
+    }
+
+    // MARK: Refused before any prompt
+
+    enum Refusal: CaseIterable {
+        case signedByAnotherTeam, anotherIdentifier, anotherVersionThanOffered, anotherMinimumMacOS, oneResourceByteChanged
+    }
+
+    @Test(
+        .enabled(if: UpdateFixtures.arePresent, "run Scripts/make-update-fixtures.sh to generate the fixtures"),
+        arguments: Refusal.allCases)
+    func aGenuineLookingArchiveThatIsNotTheOneOfferedIsRefusedBeforeAnyPromptAndNothingOfItRemains(_ refusal: Refusal) async throws {
+        let record = try UpdateFixtures.loadRecord()
+        var signer = Signer(team: record.team, identifier: record.identifier)
+        var version = Version(record.version)!
+        var minimum = Version(record.minimumMacOS)!
+        var archive = try Data(contentsOf: UpdateFixtures.archive)
+        switch refusal {
+        case .signedByAnotherTeam: signer = Signer(team: "ZZZZZZZZZZ", identifier: record.identifier)
+        case .anotherIdentifier: signer = Signer(team: record.team, identifier: "com.example.NotTheLauncher")
+        case .anotherVersionThanOffered: version = Version(1, 0, 5)
+        case .anotherMinimumMacOS: minimum = Version(99)
+        case .oneResourceByteChanged: break
+        }
+        let rig = try await Rig(administrator: .refusing, signer: signer)
+        defer { rig.server.stop() }
+        if refusal == .oneResourceByteChanged {
+            let folder = try rig.fixture.folder("Tampered")
+            let copy = folder.appending(path: "TrackpadLauncher.app")
+            try FileManager.default.copyItem(at: UpdateFixtures.developerIDApp, to: copy)
+            try Self.changeOneByteOfAResource(in: copy)
+            archive = try BundleFixture.archive("TrackpadLauncher.app", in: folder)
+        }
+        rig.server.script(Self.archivePath, .respond(status: 200, body: archive))
+        chmod(rig.applications.path, 0o555)
+        let offered = Release(version: version, minimumMacOS: minimum, archive: rig.server.url(path: Self.archivePath), archiveSize: archive.count)
+        let log = rig.log
+
+        rig.updater.update(to: offered) { log.record($0) }
+        await log.until { $0.contains(.failed) || $0.contains(.declined) || $0.contains(.installed) }
+
+        #expect(log.events.suffix(2) == [.downloaded, .failed])
+        #expect(log.followsTheContract)
+        #expect(BundleFixture.bundles(identifiedBy: record.identifier) == [])
+        try rig.expectOldBundleUntouched()
+    }
+
+    private static func changeOneByteOfAResource(in app: URL) throws {
+        let files = FileManager.default
+        let resources = app.appending(path: "Contents/Resources")
+        for case let item as URL in files.enumerator(at: resources, includingPropertiesForKeys: [.isRegularFileKey])! {
+            guard (try item.resourceValues(forKeys: [.isRegularFileKey])).isRegularFile == true else { continue }
+            var bytes = try Data(contentsOf: item)
+            guard !bytes.isEmpty else { continue }
+            bytes[bytes.startIndex] ^= 0xFF
+            chmod(item.path, 0o644)
+            try bytes.write(to: item)
+            return
+        }
+        throw CocoaError(.fileNoSuchFile)
+    }
+
+    enum Crafted: CaseIterable {
+        case besideTheBundle, climbingOutOfTheBundle, absolutePath, lookalikeBundleName, fileBeneathALinkOutOfTheBundle, namedPipe
+
+        func extras(sentinel: URL) -> [CraftedArchive.Entry] {
+            let data = Data("x".utf8)
+            switch self {
+            case .besideTheBundle: return [.directory("Other.app"), .file("Other.app/x", data)]
+            case .climbingOutOfTheBundle: return [.file("TrackpadLauncher.app/../escape", data)]
+            case .absolutePath: return [.file(sentinel.path + "/pwned", data)]
+            case .lookalikeBundleName: return [.directory("TrackpadLauncher.appx"), .file("TrackpadLauncher.appx/x", data)]
+            case .fileBeneathALinkOutOfTheBundle:
+                return [.link("TrackpadLauncher.app/Contents/out", to: sentinel.path), .file("TrackpadLauncher.app/Contents/out/pwned", data)]
+            case .namedPipe: return [.fifo("TrackpadLauncher.app/Contents/pipe")]
+            }
+        }
+    }
+
+    @Test(arguments: Crafted.allCases)
+    func anArchiveHoldingAnythingButTheAppIsRefusedAndNothingIsWrittenOutsideTheStagingFolder(_ crafted: Crafted) async throws {
+        let rig = try await Rig(administrator: .refusing)
+        defer { rig.server.stop() }
+        let release = try rig.fixture.folder("Release")
+        let app = try rig.fixture.makeBundle(named: "TrackpadLauncher.app", in: release, version: "1.1.0", marker: rig.marker)
+        let sentinel = try rig.fixture.folder("Sentinel")
+        let archive = try CraftedArchive.make(CraftedArchive.entries(of: app) + crafted.extras(sentinel: sentinel))
+        rig.server.script(Self.archivePath, .respond(status: 200, body: archive))
+        chmod(rig.applications.path, 0o555)
+
+        rig.update(size: archive.count)
+        await rig.log.until { $0.contains(.failed) || $0.contains(.declined) || $0.contains(.installed) }
+
+        #expect(rig.log.events.suffix(2) == [.downloaded, .failed])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: sentinel.path) == [])
+        try rig.expectOldBundleUntouched()
+        #expect(!FileManager.default.fileExists(atPath: rig.fixture.root.appending(path: "escape").path))
+    }
+
+    // MARK: The administrator's prompt
+
+    /// The order in which the update's events and the administrator's prompt happened.
+    private final class Happenings: @unchecked Sendable {
+        private let lock = NSLock()
+        private var all: [String] = []
+
+        func add(_ what: String) {
+            lock.lock()
+            all.append(what)
+            lock.unlock()
+        }
+
+        var list: [String] {
+            lock.lock()
+            defer { lock.unlock() }
+            return all
+        }
+    }
+
+    enum PromptCase: CaseIterable { case cancelledWithReadOnlyApplications, cancelledWithReadOnlyOldBundle, runUnprivileged }
+
+    @Test(
+        .enabled(if: UpdateFixtures.arePresent, "run Scripts/make-update-fixtures.sh to generate the fixtures"),
+        arguments: PromptCase.allCases)
+    func theAdministratorIsAskedOnceAfterTheDownloadIsVerifiedAndCancellingDeclinesWhileApprovingInstalls(_ row: PromptCase) async throws {
+        let record = try UpdateFixtures.loadRecord()
+        let happenings = Happenings()
+        let applicationsPath = Mutex<String>("")
+        let administrator = TestAdministrator(
+            answer: row == .runUnprivileged ? nil : .cancelled,
+            beforeRunning: { _ in
+                happenings.add("asked")
+                if row == .runUnprivileged { chmod(applicationsPath.withLock { $0 }, 0o755) }
+            })
+        let rig = try await Rig(administrator: administrator, signer: Signer(team: record.team, identifier: record.identifier))
+        defer { rig.server.stop() }
+        applicationsPath.withLock { $0 = rig.applications.path }
+        let archive = try Data(contentsOf: UpdateFixtures.archive)
+        rig.server.script(Self.archivePath, .respond(status: 200, body: archive))
+        switch row {
+        case .cancelledWithReadOnlyOldBundle: chmod(rig.old.path, 0o555)
+        case .cancelledWithReadOnlyApplications, .runUnprivileged: chmod(rig.applications.path, 0o555)
+        }
+        let offered = Release(
+            version: Version(record.version)!, minimumMacOS: Version(record.minimumMacOS)!,
+            archive: rig.server.url(path: Self.archivePath), archiveSize: archive.count)
+        let log = rig.log
+
+        rig.updater.update(to: offered) {
+            happenings.add(String(describing: $0))
+            log.record($0)
+        }
+        await log.until { $0.contains(.declined) || $0.contains(.failed) || $0.contains(.installed) }
+
+        let outcome: UpdateEvent = row == .runUnprivileged ? .installed : .declined
+        #expect(log.events.suffix(2) == [.downloaded, outcome])
+        #expect(log.followsTheContract)
+        #expect(administrator.calls.count == 1)
+        #expect(happenings.list.filter { !$0.hasPrefix("progress") } == ["downloaded", "asked", String(describing: outcome)])
+        let staged = URL(fileURLWithPath: try #require(administrator.calls.first?.arguments[1]))
+        #expect(!FileManager.default.fileExists(atPath: staged.path))
+        #expect(!FileManager.default.fileExists(atPath: staged.deletingLastPathComponent().path))
+        if row == .runUnprivileged {
+            #expect(try BundleFixture.manifest(of: rig.old) == record.manifest)
+        } else {
+            #expect(try BundleFixture.manifest(of: rig.old) == rig.oldManifest)
+        }
+    }
+}
+
+/// A download that ignores cancellation and returns the archive when the test lets it.
+private final class Hold: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Data?, Never>?
+
+    func wait() async -> Data? {
+        await withCheckedContinuation { next in
+            lock.lock()
+            continuation = next
+            lock.unlock()
+        }
+    }
+
+    var isWaiting: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return continuation != nil
+    }
+
+    func release(_ archive: Data) {
+        lock.lock()
+        let next = continuation
+        continuation = nil
+        lock.unlock()
+        next?.resume(returning: archive)
+    }
+}
+
+/// The updater as the composition root builds it, with its literal 30 seconds. Not main-actor isolated, so the half
+/// minute does not hold up the other suites.
+@Suite(.timeLimit(.minutes(2))) struct ShippedUpdaterStallTests {
+    @Test func aDownloadThatMakesNoProgressFailsAfterThirtySeconds() async throws {
+        let fixture = try BundleFixture()
+        let applications = try fixture.folder("Applications")
+        let old = try fixture.makeBundle(named: "TrackpadLauncher.app", in: applications, version: "1.0.0")
+        let server = try await LocalReleaseServer()
+        defer { server.stop() }
+        let gate = LocalReleaseServer.ChunkGate()
+        let body = Data(repeating: 7, count: 4000)
+        server.script("/archive", .stream(length: 4000, chunks: [body.prefix(1600), body.dropFirst(1600)].map { Data($0) }, gate: gate))
+        let release = Release(version: Version(1, 1, 0), minimumMacOS: Version(26, 0), archive: server.url(path: "/archive"), archiveSize: 4000)
+
+        let lastByte = Mutex<ContinuousClock.Instant?>(nil)
+        let failedAt: ContinuousClock.Instant = await withCheckedContinuation { done in
+            Task { @MainActor in
+                let updater = ApplicationsUpdater(replacing: old, signer: Signer(team: "ABCDE12345", identifier: BundleFixture.identifier))
+                updater.update(to: release) { event in
+                    if event == .failed { done.resume(returning: .now) }
+                    _ = updater
+                }
+                lastByte.withLock { $0 = .now }
+                gate.release()
+            }
+        }
+
+        let elapsed = failedAt - lastByte.withLock { $0 }!
+        #expect(elapsed >= .seconds(30))
+        #expect(elapsed <= .seconds(35))
     }
 }

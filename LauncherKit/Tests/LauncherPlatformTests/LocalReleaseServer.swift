@@ -65,6 +65,8 @@ final class LocalReleaseServer: @unchecked Sendable {
     private var served: [String: Int] = [:]
     private var recorded: [Request] = []
     private var connections: [NWConnection] = []
+    private var closedBySelf: Set<ObjectIdentifier> = []
+    private var closedByClient: [String] = []
     let port: UInt16
 
     /// Listens until `stop()` or deinit.
@@ -99,7 +101,14 @@ final class LocalReleaseServer: @unchecked Sendable {
         let open = connections
         connections = []
         lock.unlock()
-        open.forEach { $0.cancel() }
+        open.forEach(close)
+    }
+
+    /// The paths whose connection the client closed before the server finished its reply.
+    var clientClosures: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return closedByClient
     }
 
     func url(path: String) -> URL { URL(string: "http://127.0.0.1:\(port)\(path)")! }
@@ -115,6 +124,26 @@ final class LocalReleaseServer: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return recorded
+    }
+
+    private func close(_ connection: NWConnection) {
+        lock.lock()
+        closedBySelf.insert(ObjectIdentifier(connection))
+        lock.unlock()
+        connection.cancel()
+    }
+
+    /// Notes when the peer closes while the server still holds the connection open.
+    private func watchForClose(_ connection: NWConnection, path: String) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 1) { [self] _, _, isComplete, error in
+            if isComplete || error != nil {
+                lock.lock()
+                if !closedBySelf.contains(ObjectIdentifier(connection)) { closedByClient.append(path) }
+                lock.unlock()
+            } else {
+                watchForClose(connection, path: path)
+            }
+        }
     }
 
     private func accept(_ connection: NWConnection) {
@@ -178,13 +207,14 @@ final class LocalReleaseServer: @unchecked Sendable {
             for (name, value) in headers { head += "\(name): \(value)\r\n" }
             head += "\r\n"
             connection.send(content: Data(head.utf8), completion: .contentProcessed { _ in })
+            watchForClose(connection, path: path)
             sendChunk(0, of: chunks, gate: gate, on: connection)
         }
     }
 
     private func sendChunk(_ index: Int, of chunks: [Data], gate: ChunkGate, on connection: NWConnection) {
         guard index < chunks.count else {
-            connection.send(content: nil, contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { _ in connection.cancel() })
+            connection.send(content: nil, contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { [self] _ in close(connection) })
             return
         }
         gate.whenReleased(index) { [self] in
@@ -201,7 +231,7 @@ final class LocalReleaseServer: @unchecked Sendable {
         head += "\r\n"
         connection.send(
             content: Data(head.utf8) + body, contentContext: .finalMessage, isComplete: true,
-            completion: .contentProcessed { _ in connection.cancel() })
+            completion: .contentProcessed { [self] _ in close(connection) })
     }
 }
 

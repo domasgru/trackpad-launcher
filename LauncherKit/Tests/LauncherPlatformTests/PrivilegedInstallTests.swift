@@ -30,8 +30,8 @@ final class TestAdministrator: Administrator {
 
     func run(script: String, arguments: [String]) -> AdministratorResult {
         recorded.withLock { $0.append(Call(script: script, arguments: arguments)) }
-        if let answer { return answer }
         beforeRunning(arguments)
+        if let answer { return answer }
         let process = Process()
         process.executableURL = URL(filePath: "/bin/sh")
         process.arguments = ["-c", script, "sh"] + arguments

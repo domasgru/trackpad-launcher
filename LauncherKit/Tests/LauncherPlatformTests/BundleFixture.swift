@@ -28,7 +28,7 @@ final class BundleFixture {
 
     /// An app with nested files and a symlink, the quarantine set on every item.
     @discardableResult
-    func makeBundle(named name: String, in folder: URL, version: String) throws -> URL {
+    func makeBundle(named name: String, in folder: URL, version: String, marker: String? = nil) throws -> URL {
         let files = FileManager.default
         let app = folder.appending(path: name)
         let contents = app.appending(path: "Contents")
@@ -42,6 +42,11 @@ final class BundleFixture {
         try (info as NSDictionary).write(to: contents.appending(path: "Info.plist"))
         try Data("binary \(version)".utf8).write(to: contents.appending(path: "MacOS/fixture"))
         try Data("deep \(version)".utf8).write(to: nested.appending(path: "deep.txt"))
+        if let marker {
+            // Large enough that a download of the archive arrives in many reads.
+            let filler = Data((0..<300_000).map { _ in UInt8.random(in: 0...255) })
+            try (Data(marker.utf8) + filler).write(to: contents.appending(path: "Resources/\(marker)"))
+        }
         try files.createSymbolicLink(
             atPath: contents.appending(path: "Resources/link").path, withDestinationPath: "nested/deep.txt")
         try quarantineEveryItem(of: app)
@@ -94,6 +99,37 @@ final class BundleFixture {
         defer { try? FileManager.default.removeItem(at: output) }
         try run("/usr/bin/aa", ["archive", "-d", folder.path, "-exclude-field", "uid,gid,xat,acl,flg", "-o", output.path])
         return try Data(contentsOf: output)
+    }
+
+    /// A file name no other bundle carries, to find an unpacked copy of one bundle.
+    static func newMarker() -> String { "marker-\(UUID().uuidString)" }
+
+    /// Where an unpacked update can sit outside any fixture's folder: the item-replacement folders on the temporary
+    /// volume, and the temporary folder itself.
+    private static func unpackedBundles() -> [URL] {
+        let files = FileManager.default
+        let temporary = files.temporaryDirectory
+        let replacements = (try? files.contentsOfDirectory(atPath: temporary.appending(path: "TemporaryItems").path)) ?? []
+        let folders = [temporary] + replacements.map { temporary.appending(path: "TemporaryItems/\($0)") }
+        return folders.map { $0.appending(path: "TrackpadLauncher.app") }.filter { files.fileExists(atPath: $0.path) }
+    }
+
+    /// Unpacked copies, outside any fixture's folder, of the bundle that carries `marker`.
+    static func copies(carrying marker: String) -> [URL] {
+        unpackedBundles().filter { FileManager.default.fileExists(atPath: $0.appending(path: "Contents/Resources/\(marker)").path) }
+    }
+
+    /// App bundles outside any fixture's folder whose identifier is `identifier`.
+    static func bundles(identifiedBy identifier: String) -> [URL] {
+        unpackedBundles().filter {
+            (NSDictionary(contentsOf: $0.appending(path: "Contents/Info.plist"))?["CFBundleIdentifier"] as? String) == identifier
+        }
+    }
+
+    /// The partial files a download task leaves in the temporary folder when it writes to disk.
+    static func downloadFiles() -> [String] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)) ?? []
+        return names.filter { $0.hasPrefix("CFNetworkDownload_") }
     }
 
     static func appNames(in folder: URL) throws -> [String] {
