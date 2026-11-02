@@ -18,7 +18,7 @@ import Testing
     @Test func aNewerVersionAppearsAsTheCardMomentsAfterTheWindowOpens() throws {
         let world = LifecycleWorld(record: [.one: "Arc"], loginItemOn: true)
         let process = try #require(world.login(running: .release("1.0.0")))
-        #expect(process.releases.fetches == 0)
+        #expect(process.releases.fetches == 0 && process.updates.requests.isEmpty)
 
         process.openAgain(.byHand)
 
@@ -158,7 +158,7 @@ import Testing
         let first = LifecycleWorld(record: [.one: "Arc"], loginItemOn: true)
         let atLogin = try #require(first.login(running: .release("1.0.0")))
         Self.aDayPasses(in: first, atLogin)
-        #expect(atLogin.releases.fetches == 0)
+        #expect(atLogin.releases.fetches == 0 && atLogin.updates.requests.isEmpty)
         #expect(atLogin.card == nil)
 
         let second = LifecycleWorld(record: [.one: "Arc"], loginItemOn: true)
@@ -181,7 +181,7 @@ import Testing
         process.answer(.quit)
 
         #expect(process.updater == nil)
-        #expect(process.releases.fetches == 0)
+        #expect(process.releases.fetches == 0 && process.updates.requests.isEmpty)
         #expect(process.copies.hasEnded)
     }
 
@@ -191,7 +191,7 @@ import Testing
 
         #expect(process.moveDialog == .asking)
         #expect(process.updater == nil)
-        #expect(process.releases.fetches == 0)
+        #expect(process.releases.fetches == 0 && process.updates.requests.isEmpty)
     }
 
     @Test(arguments: [Placement.installed, .development])
@@ -202,7 +202,7 @@ import Testing
 
         #expect(process.window == .open(request: 2))
         #expect(process.updater == nil)
-        #expect(process.releases.fetches == 0)
+        #expect(process.releases.fetches == 0 && process.updates.requests.isEmpty)
         #expect(process.history.allSatisfy { $0.card == nil })
     }
 

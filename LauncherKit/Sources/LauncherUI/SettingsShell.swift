@@ -19,6 +19,15 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     private var isShown = false
     private var observations: [Task<Void, Never>] = []
 
+    /// Everything that decides the window's height.
+    private struct Fit: Equatable {
+        let activity: GestureActivity
+        let isAccessibilityGranted: Bool
+        let isSwipeOn: Bool
+        let screenRecordingHint: ScreenRecordingHint?
+        let card: UpdateCard.Layout?
+    }
+
     public init(launcher: Launcher, updater: Updater?, quit: @escaping () -> Void) {
         self.launcher = launcher
         self.updater = updater
@@ -37,12 +46,16 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
 
         observations.append(
             Task { [weak self] in
-                for await _ in Observations({
-                    (
-                        launcher.activity, launcher.isAccessibilityGranted, launcher.isSwipeOn,
-                        launcher.screenRecordingHint, updater?.card?.layout
-                    )
+                var last: Fit?
+                for await fit in Observations({
+                    Fit(
+                        activity: launcher.activity, isAccessibilityGranted: launcher.isAccessibilityGranted,
+                        isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint,
+                        card: updater?.card?.layout)
                 }) {
+                    // The card's progress changes what the observation reads, never what this holds.
+                    guard fit != last else { continue }
+                    last = fit
                     self?.refit()
                 }
             })

@@ -78,6 +78,24 @@ final class BundleFixture {
         try run("/usr/bin/xattr", ["-r", app.path])
     }
 
+    /// `folder`'s `subdirectory` archived by release.sh's own line, read back whole.
+    static func archive(_ subdirectory: String, in folder: URL) throws -> Data {
+        let output = FileManager.default.temporaryDirectory.appending(path: "tl-archive-\(UUID().uuidString).aar")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try run(
+            "/usr/bin/aa",
+            ["archive", "-d", folder.path, "-subdir", subdirectory, "-exclude-field", "uid,gid,xat,acl,flg", "-o", output.path])
+        return try Data(contentsOf: output)
+    }
+
+    /// Everything in `folder`, archived without a subdirectory, so entries sit beside the app.
+    static func archiveEverything(in folder: URL) throws -> Data {
+        let output = FileManager.default.temporaryDirectory.appending(path: "tl-archive-\(UUID().uuidString).aar")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try run("/usr/bin/aa", ["archive", "-d", folder.path, "-exclude-field", "uid,gid,xat,acl,flg", "-o", output.path])
+        return try Data(contentsOf: output)
+    }
+
     static func appNames(in folder: URL) throws -> [String] {
         try FileManager.default.contentsOfDirectory(atPath: folder.path).filter { $0.hasSuffix(".app") }.sorted()
     }

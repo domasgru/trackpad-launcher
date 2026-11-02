@@ -41,6 +41,78 @@ import LauncherCore
         return parse(data)
     }
 
+    /// The download half, used by `ApplicationsUpdater`, kept here so the network API has one file. The archive is
+    /// received into memory: nothing is written until all of it has arrived, so a cancel, a quit, a crash or a logout
+    /// mid-download leaves nothing on disk. The request carries the same constant headers as the list's, with
+    /// `Accept: application/octet-stream`, across the one redirect to the release assets' host.
+    struct ArchiveDownload: Sendable {
+        /// Seconds with no byte after which the request fails (the request's own idle timeout).
+        let stall: TimeInterval
+
+        /// The whole archive, exactly `release.archiveSize` bytes, or nil (failed, stalled, cancelled, wrong length).
+        /// `progress` runs on the main actor, in whole percents of `archiveSize`, in order, and has run for every
+        /// percent reached by the time this returns. Cancelling the calling task cancels the request.
+        @concurrent func archive(of release: Release, progress: @escaping @MainActor (Double) -> Void) async -> Data? {
+            let session = GitHubReleases.session(accept: "application/octet-stream", stall: stall)
+            defer { session.finishTasksAndInvalidate() }
+            var request = URLRequest(url: release.archive)
+            request.httpMethod = "GET"
+            request.timeoutInterval = stall
+            request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+            request.httpShouldHandleCookies = false
+
+            let (percents, push) = AsyncStream.makeStream(of: Int.self, bufferingPolicy: .unbounded)
+            let reporter = Task { @MainActor in
+                for await percent in percents { progress(Double(percent) / 100) }
+            }
+            let watcher = ByteWatcher(total: release.archiveSize, push: push)
+            let received = try? await session.data(for: request, delegate: watcher)
+            push.finish()
+            await reporter.value
+
+            guard let (data, response) = received, (response as? HTTPURLResponse)?.statusCode == 200,
+                data.count == release.archiveSize
+            else { return nil }
+            return data
+        }
+    }
+
+    /// Pushes each whole percent of the declared size the task has received, and cancels the task once more than that
+    /// arrives. Observes the task's byte count by KVO, so every push is the system's own.
+    private final class ByteWatcher: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+        private let total: Int
+        private let push: AsyncStream<Int>.Continuation
+        private let lock = NSLock()
+        private var observation: NSKeyValueObservation?
+        private var lastPercent = 0
+
+        init(total: Int, push: AsyncStream<Int>.Continuation) {
+            self.total = total
+            self.push = push
+        }
+
+        func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+            let observation = task.observe(\.countOfBytesReceived, options: [.new]) { [self] task, _ in
+                received(Int(task.countOfBytesReceived), by: task)
+            }
+            lock.lock()
+            self.observation = observation
+            lock.unlock()
+        }
+
+        private func received(_ bytes: Int, by task: URLSessionTask) {
+            // Only the archive's own bytes count: an error page's body is not progress.
+            guard (task.response as? HTTPURLResponse)?.statusCode == 200 else { return }
+            guard bytes <= total else { return task.cancel() }
+            let percent = total > 0 ? bytes * 100 / total : 0
+            lock.lock()
+            defer { lock.unlock() }
+            guard percent > lastPercent else { return }
+            lastPercent = percent
+            push.yield(percent)
+        }
+    }
+
     private struct WireRelease: Decodable {
         let draft: Bool?
         let prerelease: Bool?

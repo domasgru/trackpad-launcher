@@ -155,8 +155,19 @@ import Testing
         Confined(token: "replaceItemAt(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
         Confined(token: "removeItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
         Confined(
-            token: "quarantinePropertiesKey", onlyIn: ["BundleInstall.swift"],
-            rule: "the move's file operations are in one file"),
+            token: "AppleArchive", onlyIn: ["BundleInstall.swift"], rule: "the update's unpacking is in one file"),
+        Confined(
+            token: "ArchiveStream", onlyIn: ["BundleInstall.swift"], rule: "the update's unpacking is in one file"),
+        Confined(
+            token: "ArchiveByteStream", onlyIn: ["BundleInstall.swift"], rule: "the update's unpacking is in one file"),
+        Confined(
+            token: "removexattr", onlyIn: ["BundleInstall.swift"], rule: "the quarantine is cleared in one file"),
+        Confined(
+            token: "itemReplacementDirectory", onlyIn: ["BundleInstall.swift"],
+            rule: "the staging folder is made in one file"),
+        Confined(
+            token: "createsNewApplicationInstance", onlyIn: ["ApplicationsUpdater.swift"],
+            rule: "the new version is opened as a new process in one place"),
         Confined(
             token: "AuthorizationExecuteWithPrivileges", onlyIn: ["PrivilegedInstall.swift"],
             rule: "the one privileged call has one file"),

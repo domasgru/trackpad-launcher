@@ -39,6 +39,22 @@ public struct InstalledRelease: Equatable, Sendable {
     }
 }
 
+/// What an update reports, in this order: any `.progress`; then `.failed`, or `.downloaded` followed by exactly one of
+/// `.installed`, `.declined`, `.failed`.
+public enum UpdateEvent: Equatable, Sendable {
+    /// 0...1 of the archive received, in whole percents.
+    case progress(Double)
+    /// The whole archive arrived. From here on nothing cancels the update.
+    case downloaded
+    /// /Applications holds the new version.
+    case installed
+    /// The administrator prompt was cancelled; nothing changed.
+    case declined
+    /// Nothing changed: the download failed, stalled or had the wrong length; the archive held something else; the
+    /// app was not genuine; or the swap failed.
+    case failed
+}
+
 /// The update card, the settings window's first group while a newer version is known. Not dismissable.
 public enum UpdateCard: Equatable, Sendable {
     /// "Version 1.1.0 is available" · *Update now*

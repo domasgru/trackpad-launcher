@@ -73,6 +73,8 @@ import LauncherCore
         let process = OneProcess(mac: mac, placement: placement, running: running, log: log)
         process.installer.onEffect = { [unowned self] in snapshots.append(snapshot()) }
         process.installer.onInstalled = { [unowned self] in installedAt = snapshots.count }
+        process.updates.onEffect = { [unowned self] in snapshots.append(snapshot()) }
+        process.updates.onInstalled = { [unowned self] in installedAt = snapshots.count }
         process.copies.listed = others
         process.copies.alreadyExited = Set(alreadyExited.map(\.id))
         processes.append(process)
@@ -118,6 +120,7 @@ extension Release {
     private(set) var lifecycle: Lifecycle!
     let copies = InMemoryRunningCopies()
     let installer = InMemoryInstaller()
+    let updates = InMemoryUpdateInstaller()
     let hardware: InMemoryTrackpads
     let preferences = InMemoryTrackpadPreferences()
     let system = RecordingSystemActions()
@@ -130,12 +133,14 @@ extension Release {
     struct Published: Equatable {
         let window: Launcher.Window
         let card: UpdateCard?
+        var isInstalling = false
     }
 
     /// The window and the card after each intent, in order.
     private(set) var history: [Published] = []
     var windows: [Launcher.Window] { history.map(\.window) }
     var card: UpdateCard? { updater?.card }
+    var isInstalling: Bool { updater?.isInstalling == true }
     /// Kept apart from `lifecycle.launcher`, which is nil once the process is ending.
     private var resident: Launcher?
 
@@ -143,14 +148,15 @@ extension Release {
         self.mac = mac
         let releases = InMemoryReleaseList()
         self.releases = releases
-        updater = running.installed(at: placement).map { Updater($0, releases: releases) }
+        let updates = updates
+        updater = running.installed(at: placement).map { Updater($0, releases: releases, installer: updates) }
         copies.log = log
         installer.log = log
         startAtLogin = mac.startAtLogin(placement: placement)
         hardware = InMemoryTrackpads(attached: [.macBook14])
         lifecycle = Lifecycle(
             placement: placement, copies: copies, installer: installer, startAtLogin: startAtLogin,
-            makeResident: { [unowned self] in makeResident() })
+            updater: updater, makeResident: { [unowned self] in makeResident() })
         copies.lifecycle = lifecycle
     }
 
@@ -164,7 +170,7 @@ extension Release {
         return launcher
     }
 
-    private func record() { history.append(Published(window: window, card: card)) }
+    private func record() { history.append(Published(window: window, card: card, isInstalling: isInstalling)) }
 
     /// The oldest check still open answers.
     func deliver(_ list: [Release]) {
@@ -238,6 +244,46 @@ extension Release {
 
     func quit() {
         lifecycle.quit()
+        record()
+    }
+
+    func updateNow() {
+        updater?.updateNow()
+        record()
+    }
+
+    func cancel() {
+        updater?.cancel()
+        record()
+    }
+
+    func progress(_ fraction: Double) {
+        updates.progress(fraction)
+        record()
+    }
+
+    func finishDownload() {
+        updates.finishDownload()
+        record()
+    }
+
+    func swapIn() {
+        updates.swapIn()
+        record()
+    }
+
+    func decline() {
+        updates.decline()
+        record()
+    }
+
+    func failUpdate() {
+        updates.fail()
+        record()
+    }
+
+    func answerOpen(started: Bool) {
+        updates.answerOpen(started: started)
         record()
     }
 

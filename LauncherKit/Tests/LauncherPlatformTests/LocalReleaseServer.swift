@@ -8,6 +8,37 @@ final class LocalReleaseServer: @unchecked Sendable {
     enum Reply: Sendable {
         case respond(status: Int, headers: [String: String] = [:], body: Data = Data())
         case neverAnswer
+        /// Declares `length` bytes, then sends `chunks` one at a time, each when `gate` releases it. Ends the connection
+        /// after the last chunk, whatever `length` declared.
+        case stream(headers: [String: String] = [:], length: Int, chunks: [Data], gate: ChunkGate)
+    }
+
+    /// Lets a row release a streamed body one chunk at a time.
+    final class ChunkGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var released = 0
+        private var waiting: [Int: @Sendable () -> Void] = [:]
+
+        /// Lets the next chunk go.
+        func release() {
+            lock.lock()
+            released += 1
+            let ready = waiting.removeValue(forKey: released - 1)
+            lock.unlock()
+            ready?()
+        }
+
+        /// Runs `send` for chunk `index` once it is released.
+        fileprivate func whenReleased(_ index: Int, _ send: @escaping @Sendable () -> Void) {
+            lock.lock()
+            if index < released {
+                lock.unlock()
+                send()
+            } else {
+                waiting[index] = send
+                lock.unlock()
+            }
+        }
     }
 
     struct Request: Sendable, Equatable {
@@ -142,6 +173,24 @@ final class LocalReleaseServer: @unchecked Sendable {
             break
         case .respond(let status, let headers, let body)?:
             send(status: status, headers: headers, body: body, on: connection)
+        case .stream(let headers, let length, let chunks, let gate)?:
+            var head = "HTTP/1.1 200 OK\r\nContent-Length: \(length)\r\nConnection: close\r\n"
+            for (name, value) in headers { head += "\(name): \(value)\r\n" }
+            head += "\r\n"
+            connection.send(content: Data(head.utf8), completion: .contentProcessed { _ in })
+            sendChunk(0, of: chunks, gate: gate, on: connection)
+        }
+    }
+
+    private func sendChunk(_ index: Int, of chunks: [Data], gate: ChunkGate, on connection: NWConnection) {
+        guard index < chunks.count else {
+            connection.send(content: nil, contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { _ in connection.cancel() })
+            return
+        }
+        gate.whenReleased(index) { [self] in
+            connection.send(content: chunks[index], completion: .contentProcessed { _ in
+                self.sendChunk(index + 1, of: chunks, gate: gate, on: connection)
+            })
         }
     }
 

@@ -53,6 +53,36 @@ public enum CodeSignature {
         return signer(of: code)
     }
 
+    /// Whether a downloaded bundle is the release the card offered: the Developer ID requirement with this copy's team
+    /// and identifier and Apple's notarisation, checked with strict validation of every architecture, nested code and
+    /// resource, reading the stapled ticket rather than asking the network; and its sealed Info.plist names exactly
+    /// `release.version` and `release.minimumMacOS`.
+    static func isGenuine(_ bundle: URL, as release: Release, signer: Signer) -> Bool {
+        let quoted = CharacterSet(charactersIn: "\"\\")
+        guard signer.team.rangeOfCharacter(from: quoted) == nil, signer.identifier.rangeOfCharacter(from: quoted) == nil
+        else { return false }
+        let text =
+            "\(developerID) and certificate leaf[subject.OU] = \"\(signer.team)\" and identifier \"\(signer.identifier)\" and notarized"
+        var code: SecStaticCode?
+        var requirement: SecRequirement?
+        guard SecStaticCodeCreateWithPath(bundle as CFURL, [], &code) == errSecSuccess, let code,
+            SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess, let requirement
+        else { return false }
+        // kSecCSNoNetworkAccess (1 << 29) is not imported into Swift.
+        let noNetworkAccess: UInt32 = 1 << 29
+        let strict = SecCSFlags(
+            rawValue: kSecCSStrictValidate | kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | noNetworkAccess)
+        guard SecStaticCodeCheckValidity(code, strict, requirement) == errSecSuccess else { return false }
+        var information: CFDictionary?
+        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,
+            let values = information as? [String: Any],
+            let plist = values[kSecCodeInfoPList as String] as? [String: Any],
+            let version = (plist["CFBundleShortVersionString"] as? String).flatMap(Version.init),
+            let minimum = (plist["LSMinimumSystemVersion"] as? String).flatMap(Version.init)
+        else { return false }
+        return version == release.version && minimum == release.minimumMacOS
+    }
+
     private static func signer(of code: SecStaticCode) -> Signer? {
         var information: CFDictionary?
         guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,

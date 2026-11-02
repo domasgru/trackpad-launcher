@@ -655,6 +655,64 @@ final class EffectLog {
     func answersInline(_ list: [Release]) { inlineAnswer = list }
 }
 
+/// Keeps every attempt's event sink; a row speaks for the live (latest) attempt, or replays into an earlier one.
+@MainActor final class InMemoryUpdateInstaller: UpdateInstaller {
+    /// The releases asked for, one per attempt.
+    private(set) var requests: [Release] = []
+    /// How many times the model asked to stop a download.
+    private(set) var cancels = 0
+    /// How many times the model asked to open the new version.
+    private(set) var opens = 0
+    /// Runs before and after the swap, as `InMemoryInstaller.release(.installed)` does.
+    var onEffect: (() -> Void)?
+    /// Runs after the swap: the moment /Applications changed.
+    var onInstalled: (() -> Void)?
+    private var sinks: [@MainActor (UpdateEvent) -> Void] = []
+    private var failsNext = false
+    private var openAnswers: [@MainActor (Bool) -> Void] = []
+
+    func update(to release: Release, events: @escaping @MainActor (UpdateEvent) -> Void) {
+        requests.append(release)
+        sinks.append(events)
+        if failsNext {
+            failsNext = false
+            events(.failed)
+        }
+    }
+
+    func cancelDownload() { cancels += 1 }
+
+    func openNewVersion(then started: @escaping @MainActor (Bool) -> Void) {
+        opens += 1
+        openAnswers.append(started)
+    }
+
+    func progress(_ fraction: Double) { sinks.last?(.progress(fraction)) }
+    func finishDownload() { sinks.last?(.downloaded) }
+    func decline() { sinks.last?(.declined) }
+    func fail() { sinks.last?(.failed) }
+
+    /// /Applications changes, then the model hears of it.
+    func swapIn() {
+        onEffect?()
+        onInstalled?()
+        onEffect?()
+        sinks.last?(.installed)
+    }
+
+    /// An event of attempt number `attempt` (1-based), however long ago it began.
+    func deliverLate(_ event: UpdateEvent, attempt: Int) { sinks[attempt - 1](event) }
+
+    /// The next attempt fails inside `update(to:events:)`.
+    func failsInline() { failsNext = true }
+
+    /// LaunchServices answers the oldest open still unanswered.
+    func answerOpen(started: Bool) {
+        guard !openAnswers.isEmpty else { return }
+        openAnswers.removeFirst()(started)
+    }
+}
+
 /// Runs the real `catalog.installedApps()` synchronously. `foldersChanged()` stands in for the FSEvents push.
 @MainActor final class InMemoryAppScanner: AppScanner {
     var onScan: (@MainActor (InstalledApps) -> Void)?
