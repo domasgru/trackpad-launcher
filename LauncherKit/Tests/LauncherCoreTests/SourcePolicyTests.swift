@@ -67,6 +67,7 @@ import Testing
         Entry(token: "SMAppService.daemon", rule: "nothing relaunches the app"),
         Entry(token: "SMAppService.loginItem", rule: "nothing relaunches the app"),
         Entry(token: "SMLoginItemSetEnabled", rule: "nothing relaunches the app"),
+        Entry(token: "/bin/rm", rule: "the administrator's swap removes nothing"),
     ]
 
     /// Each permission API lives in exactly one file, the adapter that owns it. Any other hit fails.
@@ -112,7 +113,7 @@ import Testing
         Confined(token: "SecStaticCode", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
         Confined(token: "SecRequirement", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
         Confined(token: "/bin/mv", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's move has one script"),
-        Confined(token: "/bin/rm", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's move has one script"),
+        Confined(token: "osascript", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's exchange has one script"),
         Confined(token: "SMAppService", onlyIn: ["SystemLoginItem.swift"], rule: "one login item, one adapter"),
         Confined(
             token: "setActivationPolicy", onlyIn: ["SettingsShell.swift"],

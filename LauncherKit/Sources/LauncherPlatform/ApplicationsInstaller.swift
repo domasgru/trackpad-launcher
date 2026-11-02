@@ -78,22 +78,29 @@ import LauncherCore
         } catch {
             return .failed(reason: error.localizedDescription)
         }
+        return put(staged, at: destination, by: administrator)
+    }
+
+    /// The move's and the update's one swap: `BundleInstall.swap` when the destination's folder and the destination
+    /// are writable, else `PrivilegedInstall.swap`, which shows the prompt. Atomic on both paths; `destination` is
+    /// untouched unless `.installed`. The staged copy and its staging folder are gone on every outcome.
+    nonisolated static func put(_ staged: URL, at destination: URL, by administrator: any Administrator) -> InstallOutcome {
         let files = FileManager.default
         let canWrite =
-            files.isWritableFile(atPath: applications.path)
+            files.isWritableFile(atPath: destination.deletingLastPathComponent().path)
             && (!files.fileExists(atPath: destination.path) || files.isWritableFile(atPath: destination.path))
-        if !canWrite {
-            let outcome = PrivilegedInstall.swap(
-                staged, into: destination, asideIn: staged.deletingLastPathComponent(), by: administrator)
-            BundleInstall.discard(staged)
-            return outcome
+        let outcome: InstallOutcome
+        if canWrite {
+            do {
+                try BundleInstall.swap(staged, into: destination)
+                outcome = .installed
+            } catch {
+                outcome = .failed(reason: error.localizedDescription)
+            }
+        } else {
+            outcome = PrivilegedInstall.swap(staged, into: destination, by: administrator)
         }
-        do {
-            try BundleInstall.swap(staged, into: destination)
-            return .installed
-        } catch {
-            BundleInstall.discard(staged)
-            return .failed(reason: error.localizedDescription)
-        }
+        BundleInstall.discard(staged)
+        return outcome
     }
 }
