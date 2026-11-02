@@ -1,0 +1,27 @@
+== (1) zip via ditto
+zip bytes: 3181504
+codesign --verify --strict --deep: ok
+The validate action worked!
+xattrs on bundle root: com.apple.provenance 
+== (2) Apple Archive via aa + AppleArchive framework
+aar bytes: 3038462
+extracted entries: 68
+codesign --verify --strict --deep: ok
+The validate action worked!
+xattrs on bundle root: com.apple.macl com.apple.provenance com.dropbox.attrs 
+== requirement checks on both unpacked copies
+== /tmp/tl-probe-archive.SnsjV9/zip-out/Shottr.app
+team: 2Y683PRQWN identifier: cc.ffitch.shottr version: 1.9.1 LSMinimumSystemVersion: 10.15
+     0 19 ms notarized
+     0 4 ms anchor apple generic and certificate leaf[subject.OU] = "2Y683PRQWN" and identifier "cc.ffitch.shottr" and notarized
+-67050 0 ms anchor apple generic and certificate leaf[subject.OU] = "WRONGTEAM1" and identifier "cc.ffitch.shottr" and notarized
+-67050 0 ms anchor apple generic and certificate leaf[subject.OU] = "2Y683PRQWN" and identifier "wrong.identifier" and notarized
+     0 4 ms anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "2Y683PRQWN"
+== /tmp/tl-probe-archive.SnsjV9/aar-out/Shottr.app
+team: 2Y683PRQWN identifier: cc.ffitch.shottr version: 1.9.1 LSMinimumSystemVersion: 10.15
+     0 48 ms notarized
+     0 21 ms anchor apple generic and certificate leaf[subject.OU] = "2Y683PRQWN" and identifier "cc.ffitch.shottr" and notarized
+-67050 0 ms anchor apple generic and certificate leaf[subject.OU] = "WRONGTEAM1" and identifier "cc.ffitch.shottr" and notarized
+-67050 0 ms anchor apple generic and certificate leaf[subject.OU] = "2Y683PRQWN" and identifier "wrong.identifier" and notarized
+     0 23 ms anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "2Y683PRQWN"
+cleaned up
