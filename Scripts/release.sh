@@ -1,9 +1,14 @@
 #!/bin/bash
-# Builds the release disk image: archive, export with the developer-id method,
-# notarize and staple the app, lay out a disk image, sign, notarize and staple it.
+# Builds a release: refuses a version that is not above every earlier release, archives, exports with the
+# developer-id method, notarizes and staples the app, archives it as the update asset, lays out a disk image,
+# signs, notarizes and staples it, and creates a DRAFT GitHub release carrying both.
 # Output: build/release/TrackpadLauncher.dmg
+#         build/release/TrackpadLauncher-<version>-macOS-<minimum>.aar
+#         a draft release v<version> on GitHub; publishing is a separate, deliberate step:
+#         gh release edit v<version> --draft=false --latest
 #
-# Needs a "Developer ID Application" identity in the keychain, a notarytool
+# Needs gh authenticated for the repository, a clean worktree whose HEAD is on origin,
+# a "Developer ID Application" identity in the keychain, a notarytool
 # keychain profile (xcrun notarytool store-credentials) named by NOTARY_PROFILE,
 # and xcodegen on the PATH. The Finder layout step needs the Automation
 # permission for Finder (asked once). Signing of the app is left to xcodebuild,
@@ -13,6 +18,10 @@
 #   Scripts/release.sh --image-only <app>  lay out an UNSIGNED image around an
 #                                          existing app, to check the layout
 #                                          without a certificate
+#   Scripts/release.sh --archive-only <app> write the .aar for an existing app and self-check it the way an
+#                                          older version will, without notarisation or GitHub. Here the
+#                                          stapler and Team ID checks are only reported; in the full
+#                                          release they are fatal
 set -euo pipefail
 
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
@@ -23,6 +32,10 @@ VOLUME_NAME="Trackpad Launcher"
 OUT="${RELEASE_OUT:-$ROOT/build/release}"
 BACKGROUND="$ROOT/Scripts/release/dmg-background.png"
 DMG="$OUT/$APP_NAME.dmg"
+REPOSITORY="domasgru/trackpad-launcher"
+NUMERIC='^[0-9]+(\.[0-9]+)*$'
+EXPECTED_VERSION=""
+AAR=""
 STAGE="$OUT/dmg-stage"
 RW_DMG="$OUT/$APP_NAME-rw.dmg"
 
@@ -44,6 +57,76 @@ cleanup() {
   rm -rf "$STAGE"
 }
 trap cleanup EXIT
+
+# Refuses to start unless the version in Config/Version.xcconfig is above every earlier tag and release,
+# drafts included. Sets EXPECTED_VERSION.
+preflight() {
+  gh auth status >/dev/null 2>&1 || fail "gh is not authenticated; run 'gh auth login' and retry."
+  git -C "$ROOT" fetch --quiet --tags origin || fail "cannot fetch origin."
+  [ -z "$(git -C "$ROOT" status --porcelain)" ] || fail "the worktree is not clean; commit or stash everything and retry."
+  [ -n "$(git -C "$ROOT" branch --remotes --contains HEAD)" ] ||
+    fail "HEAD is not on origin; push it first, the release targets this commit."
+
+  EXPECTED_VERSION="$(sed -n 's/^MARKETING_VERSION *= *//p' "$ROOT/Config/Version.xcconfig" | tr -d '[:space:]')"
+  [[ "$EXPECTED_VERSION" =~ $NUMERIC ]] ||
+    fail "MARKETING_VERSION '$EXPECTED_VERSION' in Config/Version.xcconfig is not dotted whole numbers."
+  [ -z "$(git -C "$ROOT" tag --list "v$EXPECTED_VERSION")" ] || fail "tag v$EXPECTED_VERSION already exists."
+
+  local releases tags highest
+  releases="$(gh release list --repo "$REPOSITORY" --limit 1000 --json tagName --jq '.[].tagName')" ||
+    fail "cannot list the releases of $REPOSITORY."
+  tags="$(git -C "$ROOT" tag --list 'v*')"
+  highest="$(printf '%s\n%s\n%s\n' "v$EXPECTED_VERSION" "$tags" "$releases" | grep -v '^$' | sort -V | tail -n 1)"
+  [ "$highest" = "v$EXPECTED_VERSION" ] ||
+    fail "version $EXPECTED_VERSION is not above every earlier release (${highest#v} exists); raise Config/Version.xcconfig."
+}
+
+# Archives the app as the update asset, unpacks it as an older version will and checks the result. Sets AAR.
+# With mode "lenient" the stapler and Team ID checks are reported instead of fatal.
+archive_and_check() {
+  local app="$1" mode="$2"
+  [ -d "$app" ] || fail "no app at $app"
+  local plist="$app/Contents/Info.plist" version minimum
+  version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")"
+  minimum="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$plist")"
+  [[ "$version" =~ $NUMERIC ]] || fail "app version '$version' is not dotted whole numbers."
+  [[ "$minimum" =~ $NUMERIC ]] || fail "app minimum macOS '$minimum' is not dotted whole numbers."
+  [ -z "$EXPECTED_VERSION" ] || [ "$version" = "$EXPECTED_VERSION" ] ||
+    fail "app version $version differs from Config/Version.xcconfig's $EXPECTED_VERSION."
+
+  AAR="$OUT/$APP_NAME-$version-macOS-$minimum.aar"
+  local source unpacked copy
+  source="$(mktemp -d)"
+  unpacked="$(mktemp -d)"
+  ditto "$app" "$source/$APP_NAME.app"
+  mkdir -p "$OUT"
+  rm -f "$AAR"
+  aa archive -d "$source" -subdir "$APP_NAME.app" -exclude-field uid,gid,xat,acl,flg -o "$AAR"
+  aa extract -d "$unpacked" -i "$AAR"
+  copy="$unpacked/$APP_NAME.app"
+  [ -d "$copy" ] || fail "the archive does not unpack to $APP_NAME.app."
+
+  codesign --verify --strict --deep --verbose=2 "$copy" || fail "the unpacked app fails codesign verification."
+  local before after
+  before="$(codesign -dv --verbose=2 "$app" 2>&1 | grep -E '^(Identifier|TeamIdentifier)=' | sort)"
+  after="$(codesign -dv --verbose=2 "$copy" 2>&1 | grep -E '^(Identifier|TeamIdentifier)=' | sort)"
+  [ "$before" = "$after" ] || fail "identifier or team changed by the archive: '$before' vs '$after'."
+
+  local stapled=true signed=true
+  xcrun stapler validate "$copy" >/dev/null 2>&1 || stapled=false
+  grep -qx "TeamIdentifier=$TEAM_ID" <<<"$after" || signed=false
+  if [ "$mode" = lenient ]; then
+    $stapled || echo "note: no valid stapled ticket (not fatal in --archive-only)."
+    $signed || echo "note: not signed by team $TEAM_ID (not fatal in --archive-only)."
+  else
+    $stapled || fail "the unpacked app has no valid stapled ticket."
+    $signed || fail "the unpacked app is not signed by team $TEAM_ID."
+  fi
+  # The kernel stamps com.apple.provenance on files this process creates; it cannot be excluded, anything else can.
+  [ -z "$(xattr -lr "$copy" | grep -v ': com.apple.provenance: ')" ] || fail "the unpacked app carries extended attributes."
+  rm -rf "$source" "$unpacked"
+  echo "Archive self-check passed: $AAR"
+}
 
 # Stages the app, an Applications link and the background, then writes an
 # unsigned compressed image to $DMG.
@@ -117,6 +200,14 @@ if [ "${1:-}" = "--image-only" ]; then
   exit 0
 fi
 
+if [ "${1:-}" = "--archive-only" ]; then
+  [ -n "${2:-}" ] || fail "usage: release.sh --archive-only <path to TrackpadLauncher.app>"
+  archive_and_check "$2" lenient
+  exit 0
+fi
+
+preflight
+
 security find-identity -v -p codesigning | grep -q "Developer ID Application" ||
   fail "no 'Developer ID Application' signing identity in the keychain; install the certificate and retry."
 
@@ -180,6 +271,8 @@ xcrun stapler staple "$APP"
 xcrun stapler validate "$APP"
 rm -f "$ZIP"
 
+archive_and_check "$APP" strict
+
 build_image "$APP"
 
 codesign --timestamp -s "Developer ID Application" "$DMG"
@@ -192,4 +285,9 @@ xcrun stapler validate "$DMG"
 spctl --assess --type open --context context:primary-signature -vv "$DMG"
 spctl --assess --type execute -vv "$APP"
 
-echo "Release artifact: $DMG"
+MIN_MACOS="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist")"
+gh release create "v$EXPECTED_VERSION" "$DMG" "$AAR" --repo "$REPOSITORY" --draft \
+  --target "$(git -C "$ROOT" rev-parse HEAD)" \
+  --title "Trackpad Launcher $EXPECTED_VERSION" --notes "Requires macOS $MIN_MACOS or later."
+echo "Release artifacts: $DMG $AAR"
+echo "Draft v$EXPECTED_VERSION created. Publish with: gh release edit v$EXPECTED_VERSION --draft=false --latest"

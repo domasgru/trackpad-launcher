@@ -38,7 +38,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         NSSupportsSuddenTermination: true
-        LSMinimumSystemVersion: "26.0"
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.domasgru.TrackpadLauncherApp
