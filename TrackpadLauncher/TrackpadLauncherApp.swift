@@ -32,10 +32,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let placement = Placement(
             build: CodeSignature.buildOfThisProcess(arguments: CommandLine.arguments), location: location)
         let startAtLogin = StartAtLogin(item: SystemLoginItem(), defaults: .standard, placement: placement)
+        let updater = makeUpdater(placement: placement)
         lifecycle = Lifecycle(
             placement: placement, copies: SystemRunningCopies(), installer: ApplicationsInstaller(location: location),
-            startAtLogin: startAtLogin, makeResident: { [unowned self] in makeResident(startAtLogin) })
+            startAtLogin: startAtLogin, makeResident: { [unowned self] in makeResident(startAtLogin, updater) })
         moveDialog = MoveDialogPresenter(lifecycle: lifecycle)
+    }
+
+    /// Only a copy truly signed with a Developer ID and lying in /Applications ever reaches the network. The rule itself
+    /// is `InstalledRelease.init?`, which the tests call too. `developerIDSigner()` takes no arguments, so
+    /// `--as-release-build` cannot fake it.
+    private func makeUpdater(placement: Placement) -> Updater? {
+        guard
+            let installed = InstalledRelease(
+                placement: placement, developerIDSigned: CodeSignature.developerIDSigner() != nil,
+                version: ThisCopy.version(), macOS: ThisCopy.macOS())
+        else { return nil }
+        return Updater(installed, releases: GitHubReleases())
     }
 
     /// The open event exists only from here.
@@ -58,14 +71,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The gesture model and the window that renders it, built together, only for a copy that runs gestures. The shell
     /// comes first, so its first icon pass finishes before `Lifecycle` starts the gestures.
-    private func makeResident(_ startAtLogin: StartAtLogin) -> Launcher {
+    private func makeResident(_ startAtLogin: StartAtLogin, _ updater: Updater?) -> Launcher {
         let catalog = AppCatalog.system
         let actions = WorkspaceActions()
         let launcher = Launcher(
             hardware: MultitouchTrackpads(), preferences: SystemTrackpadPreferences(), permissions: SystemPermissions(),
             system: actions, catalog: catalog, scanner: SystemAppScanner(catalog: catalog),
-            store: SettingsStore(defaults: .standard), startAtLogin: startAtLogin)
-        shell = SettingsShell(launcher: launcher, quit: { [unowned self] in lifecycle.quit() })
+            store: SettingsStore(defaults: .standard), startAtLogin: startAtLogin, updater: updater)
+        shell = SettingsShell(launcher: launcher, updater: updater, quit: { [unowned self] in lifecycle.quit() })
         #if DEBUG
         system = actions
         showAnimationTuner()

@@ -2,17 +2,22 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// One 326 pt column, 16 pt inside the window, of rounded groups 10 pt apart: the five gesture rows and the Animate app
+/// One 326 pt column, 16 pt inside the window, of rounded groups 10 pt apart: the update card, while a newer version is
+/// known; the five gesture rows and the Animate app
 /// launch switch; the switcher section; the thumb picker; then, while any applies, the trackpad settings notice, the
 /// Accessibility hint and the screen recording hint, one group each. Rows are at least 42 pt tall, with a hairline
 /// between them. The illustrations are 45 × 28 pt. The guide naming the two marks sits over the first illustration in
 /// right-hand mode, where its arrows meet the thumb. *Quit Trackpad Launcher* and *Close* end it, aligned right.
 struct SettingsView: View {
     let launcher: Launcher
+    let updater: Updater?
     let actions: LauncherActions
 
     var body: some View {
         VStack(spacing: 10) {
+            if let card = updater?.card {
+                UpdateCardView(card: card, updateNow: {}, cancel: {})
+            }
             FormGroup {
                 ForEach(launcher.rows) { row in
                     GestureRowView(row: row, launcher: launcher, actions: actions)

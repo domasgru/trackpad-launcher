@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 /// only through the model: the close button, ⌘W, Escape and Close Settings (⌘Q) all send `closeWindow()`.
 public final class SettingsShell: NSObject, NSWindowDelegate {
     private let launcher: Launcher
+    private let updater: Updater?
     private let icons = AppIcons()
     private let switcherPresenter: SwitcherPresenter
     private let windowSwitcherPresenter: WindowSwitcherPresenter
@@ -18,12 +19,13 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     private var isShown = false
     private var observations: [Task<Void, Never>] = []
 
-    public init(launcher: Launcher, quit: @escaping () -> Void) {
+    public init(launcher: Launcher, updater: Updater?, quit: @escaping () -> Void) {
         self.launcher = launcher
+        self.updater = updater
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let window = SettingsWindow()
         let actions = Self.makeActions(launcher: launcher, icons: icons, window: window, quit: quit)
-        window.install(content: SettingsView(launcher: launcher, actions: actions))
+        window.install(content: SettingsView(launcher: launcher, updater: updater, actions: actions))
         self.window = window
         switcherPresenter = SwitcherPresenter(launcher: launcher)
         windowSwitcherPresenter = WindowSwitcherPresenter(launcher: launcher)
@@ -38,7 +40,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                 for await _ in Observations({
                     (
                         launcher.activity, launcher.isAccessibilityGranted, launcher.isSwipeOn,
-                        launcher.screenRecordingHint
+                        launcher.screenRecordingHint, updater?.card?.layout
                     )
                 }) {
                     self?.refit()

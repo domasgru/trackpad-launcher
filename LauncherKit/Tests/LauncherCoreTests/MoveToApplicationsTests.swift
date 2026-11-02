@@ -19,7 +19,7 @@ import Testing
         #expect(process.moveDialog == nil)
 
         #expect(process.residentsBuilt == 1)
-        #expect(process.history == [.closed, .closed])
+        #expect(process.windows == [.closed, .closed])
         #expect(world.permissions.asks.isEmpty)
         #expect(world.loginItem.calls.isEmpty)
         process.tap(1)
@@ -82,7 +82,7 @@ import Testing
 
         process.openAgain(.byHand)
         #expect(process.moveDialog == .asking)
-        #expect(process.history == [.closed, .closed, .closed])
+        #expect(process.windows == [.closed, .closed, .closed])
 
         process.answer(.quit)
 

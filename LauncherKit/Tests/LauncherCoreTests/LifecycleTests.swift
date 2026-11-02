@@ -25,7 +25,7 @@ import Testing
     @Test func openingAgainShowsTheSameWindowEveryTimeAndClosingKeepsGesturesRunning() {
         let world = LifecycleWorld(record: [.two: "Arc"], loginItemOn: true)
         let process = world.login()!
-        #expect(process.history == [.closed])
+        #expect(process.windows == [.closed])
 
         process.openAgain(.byHand)
         process.openAgain(.byHand)
@@ -35,7 +35,7 @@ import Testing
         process.openAgain(.byHand)
 
         #expect(
-            process.history == [
+            process.windows == [
                 .closed, .open(request: 1), .open(request: 2), .open(request: 3), .closed, .open(request: 4),
             ])
         #expect(process.residentsBuilt == 1)
@@ -94,7 +94,7 @@ import Testing
 
         process.openAgain(.atLogin)
 
-        #expect(process.history == [.closed, .closed])
+        #expect(process.windows == [.closed, .closed])
     }
 
     @Test func theFirstRunByHandEnrolsAsksOpensAndGesturesWork() {

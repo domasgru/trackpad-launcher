@@ -620,6 +620,41 @@ final class EffectLog {
     }
 }
 
+/// Holds each fetch's completion until a row answers it, in order. `fetches` counts every request the model made.
+@MainActor final class InMemoryReleaseList: ReleaseList {
+    private(set) var fetches = 0
+    private var open: [(number: Int, done: @MainActor ([Release]) -> Void)] = []
+    private var inlineAnswer: [Release]?
+
+    func fetch(then done: @escaping @MainActor ([Release]) -> Void) {
+        fetches += 1
+        if let answer = inlineAnswer {
+            inlineAnswer = nil
+            done(answer)
+        } else {
+            open.append((fetches, done))
+        }
+    }
+
+    /// Answers the oldest fetch still open.
+    func deliver(_ list: [Release]) {
+        guard !open.isEmpty else { return }
+        open.removeFirst().done(list)
+    }
+
+    /// Answers fetch number `number` (1-based).
+    func deliver(_ list: [Release], toFetch number: Int) {
+        guard let at = open.firstIndex(where: { $0.number == number }) else { return }
+        open.remove(at: at).done(list)
+    }
+
+    /// The oldest open fetch fails, which the port reports as an empty list.
+    func fail() { deliver([]) }
+
+    /// The next fetch answers inside the call.
+    func answersInline(_ list: [Release]) { inlineAnswer = list }
+}
+
 /// Runs the real `catalog.installedApps()` synchronously. `foldersChanged()` stands in for the FSEvents push.
 @MainActor final class InMemoryAppScanner: AppScanner {
     var onScan: (@MainActor (InstalledApps) -> Void)?

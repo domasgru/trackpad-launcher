@@ -19,7 +19,22 @@ import Testing
         Entry(token: "Logger(", rule: "log"),
         Entry(token: "import OSLog", rule: "log"),
         Entry(token: "import os", rule: "log"),
-        Entry(token: "URLSession", rule: "network"),
+        Entry(token: "URLSession.shared", rule: "network"),
+        Entry(token: "URLSessionConfiguration.default", rule: "network"),
+        Entry(token: ".background(withIdentifier", rule: "network"),
+        Entry(token: "String(contentsOf:", rule: "network"),
+        Entry(token: "NSURLConnection", rule: "network"),
+        Entry(token: "NSURLDownload", rule: "network"),
+        Entry(token: "CFHTTP", rule: "network"),
+        Entry(token: "import WebKit", rule: "network"),
+        Entry(token: "WKWebView", rule: "network"),
+        Entry(token: "curl", rule: "network"),
+        Entry(token: "NSAppleScript", rule: "network"),
+        Entry(token: "Process()", rule: "no child processes"),
+        Entry(token: "Process.run(", rule: "no child processes"),
+        Entry(token: "executableURL", rule: "no child processes"),
+        Entry(token: "NSTask", rule: "no child processes"),
+        Entry(token: "posix_spawn", rule: "no child processes"),
         Entry(token: "import Network", rule: "network"),
         Entry(token: "NWConnection", rule: "network"),
         Entry(token: "CFSocket", rule: "network"),
@@ -80,6 +95,11 @@ import Testing
     }
 
     static let confined: [Confined] = [
+        Confined(
+            token: "URLSession", onlyIn: ["GitHubReleases.swift"],
+            rule: "the update check and its download are the one network path"),
+        Confined(token: "http", onlyIn: ["GitHubReleases.swift"], rule: "the one network file holds every address"),
+        Confined(token: "Data(contentsOf:", onlyIn: ["Apps.swift"], rule: "the one local-file reader; a URL read is a request"),
         Confined(token: "AXIsProcessTrusted", onlyIn: ["SystemPermissions.swift"], rule: "R9 one permission, one adapter"),
         Confined(token: "notify_register", onlyIn: ["SystemPermissions.swift"], rule: "R7 the trust push"),
         Confined(
@@ -149,6 +169,18 @@ import Testing
         Confined(token: "runModal", onlyIn: ["MoveDialogPresenter.swift"], rule: "the move dialog is the one modal"),
         Confined(token: "kAEQuitReason", onlyIn: ["QuitSignals.swift"], rule: "the quit event is parsed in one place"),
     ]
+
+    @Test func theNetworkBansAreAllStillListed() {
+        let listed = Set(Self.banned.map(\.token))
+        let required: Set<String> = [
+            "URLSession.shared", "URLSessionConfiguration.default", ".background(withIdentifier", "String(contentsOf:",
+            "NSURLConnection", "NSURLDownload", "CFHTTP", "import WebKit", "WKWebView", "curl", "NSAppleScript",
+            "import Network", "NWConnection", "CFSocket", "CFStream", "Process()", "Process.run(", "executableURL",
+            "NSTask", "posix_spawn", "Timer", "asyncAfter", "Task.sleep", ".write(to:", "FileHandle(forWriting",
+            "createFile(atPath",
+        ]
+        #expect(required.subtracting(listed).isEmpty, "dropped from banned: \(required.subtracting(listed).sorted())")
+    }
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.
     static let packageRoot = URL(fileURLWithPath: #filePath)

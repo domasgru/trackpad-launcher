@@ -184,3 +184,11 @@ public enum Permission: Hashable, Sendable {
     /// Ejects it; returns at once. A file on it in use leaves it mounted.
     func eject(_ diskImage: DiskImage)
 }
+
+/// The public list of Trackpad Launcher releases. Real: GitHubReleases. Test: InMemoryReleaseList.
+@MainActor public protocol ReleaseList: AnyObject {
+    /// One request for the list. Returns at once; `done` runs once on the main actor, possibly inside this call, with
+    /// every release that counts (see `Release`), or none when the request failed (offline, no answer, any status but
+    /// 200, a body that does not parse). Sends nothing about the user, the Mac, this version or macOS.
+    func fetch(then done: @escaping @MainActor ([Release]) -> Void)
+}

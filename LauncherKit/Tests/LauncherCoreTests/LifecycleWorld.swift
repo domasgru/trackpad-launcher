@@ -68,9 +68,9 @@ import LauncherCore
     @discardableResult
     func launch(
         _ opening: Opening, others: [RunningCopy] = [], alreadyExited: Set<RunningCopy> = [],
-        placement: Placement = .installed, diskImageToEject: DiskImage? = nil
+        placement: Placement = .installed, running: RunningBuild = .development, diskImageToEject: DiskImage? = nil
     ) -> OneProcess {
-        let process = OneProcess(mac: mac, placement: placement, log: log)
+        let process = OneProcess(mac: mac, placement: placement, running: running, log: log)
         process.installer.onEffect = { [unowned self] in snapshots.append(snapshot()) }
         process.installer.onInstalled = { [unowned self] in installedAt = snapshots.count }
         process.copies.listed = others
@@ -81,8 +81,34 @@ import LauncherCore
     }
 
     /// macOS at login: it starts a process, silently, only while the login item is on.
-    func login(others: [RunningCopy] = []) -> OneProcess? {
-        loginItem.isOn ? launch(.atLogin, others: others) : nil
+    func login(others: [RunningCopy] = [], running: RunningBuild = .development) -> OneProcess? {
+        loginItem.isOn ? launch(.atLogin, others: others, running: running) : nil
+    }
+}
+
+/// What the running copy is, as the composition root would read it: a release build signed with a Developer ID at some
+/// version on this Mac's macOS, or a development build. Both go through the real `InstalledRelease` gate.
+enum RunningBuild {
+    case release(String, macOS: String = "26.0")
+    case development
+
+    func installed(at placement: Placement) -> InstalledRelease? {
+        switch self {
+        case .release(let version, let macOS):
+            InstalledRelease(placement: placement, developerIDSigned: true, version: version, macOS: Version(macOS)!)
+        case .development:
+            InstalledRelease(placement: placement, developerIDSigned: false, version: "1.0.0", macOS: Version(26, 0))
+        }
+    }
+}
+
+extension Release {
+    /// A release that needs `macOS` or newer, with a well-formed archive.
+    static func version(_ version: String, needs macOS: String = "26.0") -> Release {
+        Release(
+            version: Version(version)!, minimumMacOS: Version(macOS)!,
+            archive: URL(string: "https://example.invalid/TrackpadLauncher-\(version)-macOS-\(macOS).aar")!,
+            archiveSize: 1000)
     }
 }
 
@@ -95,14 +121,29 @@ import LauncherCore
     let hardware: InMemoryTrackpads
     let preferences = InMemoryTrackpadPreferences()
     let system = RecordingSystemActions()
+    let releases: InMemoryReleaseList
+    /// nil where the real gate refuses an update check: a development build, a copy outside /Applications.
+    let updater: Updater?
     private(set) var residentsBuilt = 0
-    /// The window after each intent, in order.
-    private(set) var history: [Launcher.Window] = []
+
+    /// What the settings window shows after an intent.
+    struct Published: Equatable {
+        let window: Launcher.Window
+        let card: UpdateCard?
+    }
+
+    /// The window and the card after each intent, in order.
+    private(set) var history: [Published] = []
+    var windows: [Launcher.Window] { history.map(\.window) }
+    var card: UpdateCard? { updater?.card }
     /// Kept apart from `lifecycle.launcher`, which is nil once the process is ending.
     private var resident: Launcher?
 
-    init(mac: World, placement: Placement, log: EffectLog) {
+    init(mac: World, placement: Placement, running: RunningBuild, log: EffectLog) {
         self.mac = mac
+        let releases = InMemoryReleaseList()
+        self.releases = releases
+        updater = running.installed(at: placement).map { Updater($0, releases: releases) }
         copies.log = log
         installer.log = log
         startAtLogin = mac.startAtLogin(placement: placement)
@@ -118,9 +159,29 @@ import LauncherCore
         let launcher = Launcher(
             hardware: hardware, preferences: preferences, permissions: mac.permissions, system: system,
             catalog: mac.catalog, scanner: InMemoryAppScanner(catalog: mac.catalog), store: mac.freshStore(),
-            startAtLogin: startAtLogin)
+            startAtLogin: startAtLogin, updater: updater)
         resident = launcher
         return launcher
+    }
+
+    private func record() { history.append(Published(window: window, card: card)) }
+
+    /// The oldest check still open answers.
+    func deliver(_ list: [Release]) {
+        releases.deliver(list)
+        record()
+    }
+
+    /// Fetch number `number` (1-based) answers, whatever else is open.
+    func deliver(_ list: [Release], toFetch number: Int) {
+        releases.deliver(list, toFetch: number)
+        record()
+    }
+
+    /// The oldest check still open fails.
+    func failCheck() {
+        releases.fail()
+        record()
     }
 
     var launcher: Launcher { resident! }
@@ -128,38 +189,38 @@ import LauncherCore
 
     func launch(_ opening: Opening, diskImageToEject: DiskImage? = nil) {
         lifecycle.launched(Launch(opening: opening, diskImageToEject: diskImageToEject))
-        history.append(window)
+        record()
     }
 
     func openAgain(_ opening: Opening) {
         lifecycle.openedAgain(opening)
-        history.append(window)
+        record()
     }
 
     func letExit(_ id: CopyID) {
         copies.letExit(id)
-        history.append(window)
+        record()
     }
 
     func letStoppedCopiesExit() {
         copies.letStoppedCopiesExit()
-        history.append(window)
+        record()
     }
 
     func deliverExitAgain() {
         copies.deliverExitAgain()
-        history.append(window)
+        record()
     }
 
     func closeWindow() {
         launcher.closeWindow()
-        history.append(window)
+        record()
     }
 
     @discardableResult
     func shouldEnd(_ request: QuitRequest) -> Bool {
         let answer = lifecycle.shouldEnd(request)
-        history.append(window)
+        record()
         return answer
     }
 
@@ -167,17 +228,17 @@ import LauncherCore
 
     func answer(_ answer: MoveAnswer) {
         lifecycle.answer(answer)
-        history.append(window)
+        record()
     }
 
     func releaseInstall(_ outcome: InstallOutcome) {
         installer.release(outcome)
-        history.append(window)
+        record()
     }
 
     func quit() {
         lifecycle.quit()
-        history.append(window)
+        record()
     }
 
     func tap(_ fingers: Int, thumbAtMM thumb: (x: Double, y: Double) = (10, 10)) {
