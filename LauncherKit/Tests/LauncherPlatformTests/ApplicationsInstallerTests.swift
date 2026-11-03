@@ -4,11 +4,11 @@ import Testing
 
 @testable import LauncherPlatform
 
-@MainActor @Suite struct ApplicationsInstallerTests {
+@MainActor @Suite(.timeLimit(.minutes(1))) struct ApplicationsInstallerTests {
     private func install(_ installer: ApplicationsInstaller) async -> InstallOutcome {
-        await withCheckedContinuation { continuation in
-            installer.install { continuation.resume(returning: $0) }
-        }
+        await awaiting("the install's outcome") { (resume: @escaping @Sendable (InstallOutcome) -> Void) in
+            installer.install { resume($0) }
+        } ?? .failed(reason: "no outcome")
     }
 
     private func location(running: URL, original: URL? = nil, translocated: Bool = false, diskImage: DiskImage? = nil)

@@ -27,7 +27,7 @@ import Testing
         let atLogin = world.login()
         #expect(atLogin != nil)
         atLogin?.tap(1)
-        #expect(atLogin?.history == [.closed])
+        #expect(atLogin?.windows == [.closed])
         #expect(atLogin?.window == .closed)
         #expect(atLogin?.system.broughtToFront == [world.mac.app("Arc")])
     }

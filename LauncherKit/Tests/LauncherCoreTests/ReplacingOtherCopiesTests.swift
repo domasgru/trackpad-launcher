@@ -11,7 +11,7 @@ import Testing
         #expect(process.lifecycle.launcher == nil)
         #expect(process.residentsBuilt == 0)
         #expect(process.hardware.runCount == 0)
-        #expect(process.history == [.closed])
+        #expect(process.windows == [.closed])
         #expect(world.permissions.asks.isEmpty)
         #expect(world.loginItem.calls.isEmpty)
 

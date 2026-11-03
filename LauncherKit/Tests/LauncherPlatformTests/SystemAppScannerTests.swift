@@ -7,7 +7,7 @@ import Testing
 
 /// The real scanner over a temp tree: real FSEvents and real off-main scans. Each push is awaited with a bound,
 /// never polled.
-@MainActor @Suite struct SystemAppScannerTests {
+@MainActor @Suite(.timeLimit(.minutes(1))) struct SystemAppScannerTests {
     /// Blocks readers until opened; stays open afterwards.
     final class Gate: Sendable {
         private let semaphore = DispatchSemaphore(value: 0)

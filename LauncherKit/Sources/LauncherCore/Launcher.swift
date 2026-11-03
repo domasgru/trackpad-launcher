@@ -72,13 +72,15 @@ public final class Launcher {
     @ObservationIgnored private let scanner: any AppScanner
     @ObservationIgnored private let store: SettingsStore
     @ObservationIgnored private let startAtLogin: StartAtLogin
+    @ObservationIgnored private let updater: Updater?
 
     public init(
         hardware: any TrackpadHardware, preferences: any TrackpadPreferences, permissions: any Permissions,
         system: any SystemActions, catalog: AppCatalog, scanner: any AppScanner, store: SettingsStore,
-        startAtLogin: StartAtLogin
+        startAtLogin: StartAtLogin, updater: Updater? = nil
     ) {
         self.startAtLogin = startAtLogin
+        self.updater = updater
         self.hardware = hardware
         self.preferences = preferences
         self.permissions = permissions
@@ -202,14 +204,21 @@ public final class Launcher {
                 startAtLogin.resume()
             }
         }
+        let opens = window == .closed
         openings += 1
         window = .open(request: openings)
         resolveRows()
         scanner.scan()
+        // A re-front is not an opening: only the edge from closed asks the updater.
+        if opens { updater?.windowOpened() }
     }
 
     /// Close button, ⌘W, Escape, Close Settings (⌘Q), the Dock's Quit. Gestures keep running.
-    public func closeWindow() { window = .closed }
+    public func closeWindow() {
+        guard window != .closed else { return }
+        window = .closed
+        updater?.windowClosed()
+    }
 
     /// What the trackpads were last run with. A reconcile that would run them the same way leaves them, and any swipe
     /// in progress, alone: preference and trust notifications also fire for writes that change nothing here.

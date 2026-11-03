@@ -14,31 +14,34 @@ enum AdministratorResult: Equatable, Sendable { case ran(exitStatus: Int32), can
 
 /// Swapping a staged copy into /Applications as root when this account cannot write there.
 enum PrivilegedInstall {
-    /// Takes the paths as "$1" (destination), "$2" (staged) and "$3" (aside, inside the staging folder), never
-    /// interpolated: the old copy moves to the aside path, the staged copy moves in, and when that fails the old copy
-    /// moves back and the exit is non-zero; then the aside copy is removed, a failure there ignored, and the exit is
-    /// zero. So a status matches what /Applications holds. Only a kill between the two moves leaves /Applications
-    /// without the app and the old copy in the staging folder, never inside /Applications.
+    /// Takes the destination as "$1", the staged copy as "$2" and the exchange program as "$3", never interpolated.
+    /// With something at the destination, Foundation's replace runs as root: one exchange of the two directory
+    /// entries; else one move. The exit status matches what /Applications holds, and a kill at any instant leaves a
+    /// whole copy there. The script removes nothing.
     static let script = """
-        destination="$1"; staged="$2"; aside="$3"
-        moved=no
+        destination="$1"; staged="$2"; exchange="$3"
         if [ -e "$destination" ] || [ -L "$destination" ]; then
-            /bin/mv -- "$destination" "$aside" || exit 1
-            moved=yes
+            /usr/bin/osascript -l JavaScript -e "$exchange" "$destination" "$staged" >/dev/null || exit 1
+        else
+            /bin/mv -- "$staged" "$destination" || exit 1
         fi
-        if ! /bin/mv -- "$staged" "$destination"; then
-            if [ "$moved" = yes ]; then /bin/mv -- "$aside" "$destination"; fi
-            exit 1
-        fi
-        /bin/rm -rf -- "$aside"
         exit 0
         """
 
-    static func swap(
-        _ staged: URL, into destination: URL, asideIn folder: URL, by administrator: any Administrator
-    ) -> InstallOutcome {
-        let aside = folder.appending(path: "Replaced " + destination.lastPathComponent)
-        let result = administrator.run(script: script, arguments: [destination.path, staged.path, aside.path])
+    /// JXA that replaces argv[0] with argv[1], no backup. It throws on failure so `osascript` exits non-zero; a
+    /// returned value would exit zero.
+    static let exchange = """
+        ObjC.import("Foundation");
+        function run(argv) {
+            const error = Ref();
+            const ok = $.NSFileManager.defaultManager.replaceItemAtURLWithItemAtURLBackupItemNameOptionsResultingItemURLError(
+                $.NSURL.fileURLWithPath(argv[0]), $.NSURL.fileURLWithPath(argv[1]), $(), 0, $(), error);
+            if (!ok) { throw new Error(error[0] ? error[0].localizedDescription.js : "replace failed"); }
+        }
+        """
+
+    static func swap(_ staged: URL, into destination: URL, by administrator: any Administrator) -> InstallOutcome {
+        let result = administrator.run(script: script, arguments: [destination.path, staged.path, exchange])
         switch result {
         case .ran(exitStatus: 0): return .installed
         case .ran: return .failed(reason: Copy.applicationsFolderNotChanged)

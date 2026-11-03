@@ -1,0 +1,18 @@
+== A (default configuration): log
+launch pid=44690 version=1
+self-swapped pid=44690
+createsNewApplicationInstance=false
+openApplication answered pid=44690 error=nil (caller pid=44690)
+reopen pid=44690 version=1
+== A (default configuration): probe processes running
+  44690 /private/tmp/tl-probe-selfrelaunch.JGZggd/apps/Self Probe.app/Contents/MacOS/SelfProbe
+== B (createsNewApplicationInstance = true): log
+launch pid=44886 version=1
+self-swapped pid=44886
+createsNewApplicationInstance=true
+openApplication answered pid=44917 error=nil (caller pid=44886)
+launch pid=44917 version=2
+== B (createsNewApplicationInstance = true): probe processes running
+  44886 /private/tmp/tl-probe-selfrelaunch.JGZggd/apps/Self Probe.app/Contents/MacOS/SelfProbe
+  44917 /private/tmp/tl-probe-selfrelaunch.JGZggd/apps/Self Probe.app/Contents/MacOS/SelfProbe
+cleaned up

@@ -184,3 +184,29 @@ public enum Permission: Hashable, Sendable {
     /// Ejects it; returns at once. A file on it in use leaves it mounted.
     func eject(_ diskImage: DiskImage)
 }
+
+/// Replacing this copy in /Applications with a newer version, and opening it. Real: ApplicationsUpdater.
+/// Test: InMemoryUpdateInstaller.
+@MainActor public protocol UpdateInstaller: AnyObject {
+    /// Downloads `release`'s archive into memory, then installs it: unpacks it into a staging folder beside
+    /// /Applications, checks that it is genuine (this copy's Developer ID team, notarised, this identifier, `release`'s
+    /// version and minimum macOS, every resource sealed), and swaps it in for this copy in one atomic step, as an
+    /// administrator when this account cannot write there; the prompt comes only at that step. Returns at once;
+    /// `events` runs on the main actor, possibly inside this call, in `UpdateEvent`'s order. 30 s without a byte fails.
+    /// /Applications changes only with `.installed`. On every outcome nothing of the update is left on disk except the
+    /// installed app.
+    func update(to release: Release, events: @escaping @MainActor (UpdateEvent) -> Void)
+    /// Before `.downloaded`: stops the download, and no further event arrives. From `.downloaded` on: does nothing.
+    func cancelDownload()
+    /// Opens the copy now in /Applications as a new process, an opening by hand, never a reopen of this one.
+    /// `started` runs once, on the main actor: whether macOS started it.
+    func openNewVersion(then started: @escaping @MainActor (Bool) -> Void)
+}
+
+/// The public list of Trackpad Launcher releases. Real: GitHubReleases. Test: InMemoryReleaseList.
+@MainActor public protocol ReleaseList: AnyObject {
+    /// One request for the list. Returns at once; `done` runs once on the main actor, possibly inside this call, with
+    /// every release that counts (see `Release`), or none when the request failed (offline, no answer, any status but
+    /// 200, a body that does not parse). Sends nothing about the user, the Mac, this version or macOS.
+    func fetch(then done: @escaping @MainActor ([Release]) -> Void)
+}

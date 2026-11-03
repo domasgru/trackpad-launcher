@@ -1,0 +1,12 @@
+replaced
+exit status: 0
+marker now: new
+destination inode == staged inode: yes
+staged path still exists: no
+== a path with quotes, spaces and $(touch pwned) is passed through intact
+replaced
+marker now: new2
+pwned file created: no
+== missing destination
+/Users/dominykasgrubys/code/trackpad-launcher/.claude/worktrees/022-in-app-updates/plans/022-in-app-updates/.temp/architect/grounding/probes/jxa-swap.sh: line 36: 46013 Segmentation fault: 11  /bin/sh -c '/usr/bin/osascript -l JavaScript -e "$1" "$2" "$3"' sh "$SCRIPT" "$DIR/nowhere/Probe.app" "$DIR/stage2dir/Probe.app"
+cleaned up

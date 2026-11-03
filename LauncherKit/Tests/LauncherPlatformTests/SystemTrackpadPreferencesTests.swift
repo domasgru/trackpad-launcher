@@ -5,7 +5,7 @@ import Testing
 @testable import LauncherPlatform
 
 /// The real adapter against throwaway cfprefs domains written by a child process, the way System Settings writes.
-@MainActor @Suite struct SystemTrackpadPreferencesTests {
+@MainActor @Suite(.timeLimit(.minutes(1))) struct SystemTrackpadPreferencesTests {
     /// A domain named by an absolute path, which cfprefs keeps at that path plus `.plist`, in a temp folder removed in
     /// teardown even if an expectation fails. A named domain would leave an empty plist in ~/Library/Preferences even
     /// after `defaults delete`.

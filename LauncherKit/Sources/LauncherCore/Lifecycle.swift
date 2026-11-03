@@ -142,6 +142,7 @@ public final class Lifecycle {
     @ObservationIgnored private let copies: any RunningCopies
     @ObservationIgnored private let installer: any Installer
     @ObservationIgnored private let startAtLogin: StartAtLogin
+    @ObservationIgnored private let updater: Updater?
     @ObservationIgnored private let makeResident: @MainActor () -> Launcher
 
     /// The gesture model once it runs, including while a resident shows the dialog, moves or shows the failure; nil for
@@ -165,13 +166,15 @@ public final class Lifecycle {
 
     public init(
         placement: Placement, copies: any RunningCopies, installer: any Installer, startAtLogin: StartAtLogin,
-        makeResident: @escaping @MainActor () -> Launcher
+        updater: Updater? = nil, makeResident: @escaping @MainActor () -> Launcher
     ) {
         self.placement = placement
         self.installer = installer
         self.copies = copies
         self.startAtLogin = startAtLogin
+        self.updater = updater
         self.makeResident = makeResident
+        updater?.onReplaced = { [unowned self] in replaced() }
     }
 
     /// Once, from applicationDidFinishLaunching. A second call does nothing.
@@ -203,11 +206,15 @@ public final class Lifecycle {
         case .ending, .idle, .replacingOthers, .askingToMove, .moveFailed: return true
         case .moving: return request == .system
         case .resident(let launcher):
-            // Every ordinary way to quit exists only while the settings window is open: close it, keep running. With it
-            // closed, a quit is the system's or a script's: end, never hold up a logout.
-            guard request == .other, launcher.isWindowOpen else { return true }
-            launcher.closeWindow()
-            return false
+            // Logout, restart and shutdown always end, mid-install too.
+            guard request == .other else { return true }
+            // Every ordinary way to quit exists only while the settings window is open: close it, keep running.
+            if launcher.isWindowOpen {
+                launcher.closeWindow()
+                return false
+            }
+            // With the window closed, an ordinary quit is a script's: end, unless an update installs (as `.moving`).
+            return updater?.isInstalling != true
         }
     }
 
@@ -224,8 +231,14 @@ public final class Lifecycle {
 
     /// The Quit Trackpad Launcher button: it also turns starting at login off, when that is on.
     public func quit() {
-        guard case .resident = stage else { return }
+        guard case .resident = stage, updater?.isInstalling != true else { return }
         startAtLogin.suspend()
+        end()
+    }
+
+    /// The new version has started: end, as the mover does once it has opened the installed copy.
+    private func replaced() {
+        guard case .resident = stage else { return }
         end()
     }
 
