@@ -1,0 +1,12 @@
+element count=6 (expect 6)
+element frame=(28.0, 58.0, 64.0, 64.0) delegate=Optional(_SwiftUISDFLayerDelegate) name=nil actions=[]
+element frame=(298.0, 58.0, 64.0, 64.0) delegate=Optional(_SwiftUISDFLayerDelegate) name=nil actions=[]
+element frame=(118.0, 58.0, 64.0, 64.0) delegate=Optional(_SwiftUISDFLayerDelegate) name=nil actions=[]
+element frame=(388.0, 58.0, 64.0, 64.0) delegate=Optional(_SwiftUISDFLayerDelegate) name=nil actions=[]
+element frame=(194.0, 44.0, 92.0, 92.0) delegate=Optional(_SwiftUISDFLayerDelegate) name=nil actions=[]
+element frame=(40.0, 66.0, 400.0, 48.0) delegate=Optional(_SwiftUISDFLayerDelegate) name=nil actions=[]
+spring settling duration=1.6027377575066875
+after view frame set: bead4 element model=(298.0, 48.0, 64.0, 64.0) presentation=(298.0, 48.0, 64.0, 64.0) anims=[]
+after view frame set: swell element model=(194.0, 40.0, 92.0, 100.0) anims=["probe-wobble", "probe-wobble-x"] presentation=(193.94048178195953, 40.0, 91.88096356391907, 100.0) same layer=true
+wake-ups over 2.0 s with springs on the render server (probe's own blocks: 3-4): 23
+after orderOut/orderFront: element count=6 swell element same layer=true

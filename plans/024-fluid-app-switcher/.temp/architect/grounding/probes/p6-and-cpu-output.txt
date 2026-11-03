@@ -1,0 +1,32 @@
+Machine: macOS 26.6.2 (25G83), Xcode 27.1 (SDK 27.0), 2026-11-03. Printed output, copied verbatim.
+
+== p1b / p2 with process CPU (getrusage) over the animation window ==
+[p1b element]  process CPU during the animation window: 4.5 ms, including the capture spawn
+[p1b element]  mode=element main run loop wake-ups during the 1.2 s animation (probe's own scheduled blocks: 2): 3
+[p1b animator] process CPU during the animation window: 133.1 ms, including the capture spawn
+[p1b animator] mode=animator main run loop wake-ups during the 1.2 s animation (probe's own scheduled blocks: 2): 303
+[p2 swiftui]   process CPU during the animation window: 381.5 ms, including the capture spawn
+[p2 swiftui]   SwiftUI spring: main run loop wake-ups in 1.6 s: 200, Shape.path calls: 199
+second run:
+[p1b element]  process CPU during the animation window: 2.5 ms, including the capture spawn
+[p1b animator] process CPU during the animation window: 166.9 ms, including the capture spawn
+[p2 swiftui]   process CPU during the animation window: 422.0 ms, including the capture spawn
+
+== p3 wake-up attribution (2.0 s window, springs on element layers) ==
+nosync (no view frame set mid-spring): 13, 15
+with one view frame set mid-spring:    25, 25
+
+== p6 per-event cost: 200 events at 100 Hz over 2 s, 21 glass views (band, 10 beads, 9 necks, swell); 11 changed per event ==
+mode=views    200 events over 2 s: process CPU 548.1 ms, main wake-ups 649 (the event source alone is 200)
+mode=elements 200 events over 2 s: process CPU 54.2 ms, main wake-ups 255 (the event source alone is 200)
+mode=views    200 events over 2 s: process CPU 516.5 ms, main wake-ups 626 (the event source alone is 200)
+mode=elements 200 events over 2 s: process CPU 43.2 ms, main wake-ups 208 (the event source alone is 200)
+
+re-sync check (elements mode):
+right after: swell view frame=(58.0, 28.0, 104.0, 104.0) element frame=(58.0, 28.0, 96.49012753228324, 104.0)
+after layout + band frame change: swell element frame=(58.0, 28.0, 104.0, 104.0)
+after appearance change: swell element frame=(58.0, 28.0, 104.0, 104.0) still in tree=true
+
+mode=additive 200 events over 2 s: process CPU 33.2 ms, main wake-ups 438 (the event source alone is 200)
+mode=additive 200 events over 2 s: process CPU 67.1 ms, main wake-ups 493 (the event source alone is 200)
+(additive: element model frames stay equal to the views' frames; the offsets are held animations)

@@ -1,0 +1,6 @@
+A-no-spares: inside brightness ["0.914", "0.914", "0.914", "0.914", "0.914"] backdrop 0.502; neck 3-4 top edge at y = 61.5 pt from top
+B-six-coincident-spares: inside brightness ["0.800", "0.800", "0.800", "0.800", "0.800"] backdrop 0.502; neck 3-4 top edge at y = 59.0 pt from top
+C-spares-removed: inside brightness ["0.800", "0.800", "0.800", "0.800", "0.800"] backdrop 0.502; neck 3-4 top edge at y = 59.5 pt from top
+A-no-spares: inside brightness ["0.800", "0.800", "0.800", "0.800", "0.800"] backdrop 0.502; neck 3-4 top edge at y = 59.5 pt from top
+B-six-coincident-spares: inside brightness ["0.800", "0.800", "0.800", "0.800", "0.800"] backdrop 0.502; neck 3-4 top edge at y = 61.5 pt from top
+C-spares-removed: inside brightness ["0.800", "0.800", "0.800", "0.800", "0.800"] backdrop 0.502; neck 3-4 top edge at y = 61.5 pt from top

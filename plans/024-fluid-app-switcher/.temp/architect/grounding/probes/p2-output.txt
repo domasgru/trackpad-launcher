@@ -1,0 +1,11 @@
+layer classes at rest: ["CABackdropLayer", "CALayer", "CASDFElementLayer", "CASDFLayer", "NSViewBackingLayer", "SwiftUI.SDFLayer", "_TtC7SwiftUIP33_05C1F5BE6EE7940FED05100EA822F7B314SDFPortalLayer"]
+SwiftUI.SDFLayer frame=(0.0, 0.0, 376.0, 148.0) anims=[]
+CASDFLayer frame=(30.0, 23.016465771091767, 316.0, 101.96706845781645) anims=[]
+CASDFElementLayer frame=(30.0, 44.0, 60.0, 60.0) anims=[]
+CASDFElementLayer frame=(129.5, 44.0, 60.0, 60.0) anims=[]
+CASDFElementLayer frame=(128.0, -17.0, 196.0, 182.0) anims=[]
+CASDFElementLayer frame=(286.0, 44.0, 60.0, 60.0) anims=[]
+_TtC7SwiftUIP33_05C1F5BE6EE7940FED05100EA822F7B314SDFPortalLayer frame=(30.0, 23.016465771091767, 316.0, 101.96706845781645) anims=[]
+CASDFLayer frame=(30.0, 23.016465771091767, 316.0, 101.96706845781645) anims=[]
+_TtC7SwiftUIP33_05C1F5BE6EE7940FED05100EA822F7B314SDFPortalLayer frame=(0.0, 0.0, 0.0, 0.0) anims=[]
+SwiftUI spring: main run loop wake-ups in 1.6 s: 199, Shape.path calls: 197

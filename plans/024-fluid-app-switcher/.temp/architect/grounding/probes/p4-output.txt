@@ -1,0 +1,1 @@
+mask applied to glass layer: true; glass sublayers: ["CALayer", "NSViewBackingLayer"]

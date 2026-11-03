@@ -1,0 +1,52 @@
+# Development logs: Liquid app switcher
+
+## Specify
+- Lifting mid-animation was unspecified → added R12: lifting never waits for the liquid.
+- Overlapping selection changes and an unbounded flow duration clashed with "no lag" → R6 bounds the flow to 200 ms and retargets a running flow; the flick case split out as R7.
+- Only dark appearance was tested; the accent tint was a builder's call → R2 adds a light-over-white scenario and drops the tint (moved to non-goals, back to the user if glass fails).
+- The wave had no upper bound → R8 forbids breaking the band or pushing icons out of their beads.
+- R8 (settle) contradicted its own wobble → "once settled, no movement until the fingers move".
+- R5 and the end stretch could each be built two ways → R5 anchors the trailing edge; R10 pulls only the swell's outer edge, at most 20 pt, band still.
+- Reduce Motion past an end, "as today" wording, hedged numbers, the one-app scenario → clarified.
+- Missing idle cost requirement → added R16.
+- Non-goals: launch bounce unchanged; app quitting mid-show behaves as today.
+- Rejected: moving tunability (R17) to the technical plan. The user asked for it explicitly.
+
+## Plan
+- Probes found only SDF-merged glass reads as Liquid Glass, and every public way to animate it runs per display frame at 30 to 100× the CPU → the motion plays on the render server through AppKit's private mirrored glass layers, with the Reduce Motion look as fallback; `docs/architecture.md` gains the wording (open question 4).
+- Arena: both runners delivered. Base: candidate 1 (Opus). The cross-judge, on a different model, agreed (26 to 18) and found no claim in it that contradicts a probe, a check or the code.
+- Red flag, pass-through: candidate 2's `LiquidGeometry` wrapped `SwitcherRowLayout` → not grafted; the layout stays the one geometry source.
+- Red flag, information leakage: candidate 2's adapter held the shown state (presentation reads at a crossing, the reach split, wave keys) → rejected; all motion state stays in `Liquid`.
+- Cross-judge, leakage in the base: Core's `LiquidTrack` carried Core Animation key strings → keys moved to the UI's `LiquidKeyframes`; Core keeps the channel and `holds`.
+- Cross-judge, a latching fallback: in the base, one mirror mismatch turned motion off until relaunch → liveness is checked per swipe, and the pre-warm re-runs after the fade.
+- Membership churn: the base's pooled beads would rebuild the mirror lazily (checks K4, K5) → candidate 2's fixed twelve glass views, grafted.
+- Candidate 2 parked spares outside the window (K2), fell back to `isHidden` (K4) and matched before the first show (K1) → spares lie exactly over the band, and the match happens at a zero-opacity pre-warm with distinct frames (K3, K12).
+- Spares over the last real bead would mask that bead's wave troughs → spares over the band, which never animates.
+- Candidate 2's from-equals-to spring kicks are probably inert, and its waves fire only at selection changes (missing R11's opening wave) → rejected for the base's sampled curves and crests from the first move.
+- Candidate 2's `OverlayPanel` convenience-init delegation is invalid for `WindowSwitcherPanel`'s `super.init` → the base's `init(content:)` with `roundedGlass` kept.
+- Cross-judge: `Codable` was unconditional → DEBUG-only, per the `LaunchTuning` precedent. `CACurrentMediaTime` and `beginTime` are noted as new to the codebase.
+- The base's unrun probe P7 was run as checks: a frame set and tracks share a commit (K9); finished, filled animations cost nothing at rest (K11); sampled tracks cost about 7% of a core at 240 Hz (K10) → sampling moved to 120 Hz.
+- Verify: call site 2 passed a media time as `beginTime` → converted with `layer.convertTime`. The icon's grow is tied to the flow's lead arrival.
+- Test planner: R1's one-app GIVEN ("only the frontmost app") can never show a switcher → reworded to "no app in front, one other app runs".
+- Test planner: the R6 call-site test contradicted the lean rule → it steps a whole 12 mm.
+- Test planner: liveness was read inside `apply`'s transaction, before frames reach their elements (K9) → `checkMirror()` runs once per swipe after a flush; `apply` uses the swipe's `liveMirror`.
+- Test planner: the follow's tail and the end pull's curve were unbounded → every arrival velocity is clamped within `wobble`, and the outer edge's whole curve is capped at 0.2 pitch.
+- Test planner: a subtle swell was smaller than the grown icon → containment is by the icon's visible body, and the swell's height is clamped to [body + 4 pt, rest].
+- Test planner: lowering `swellRise` changed the scale on narrow displays (against R17) → a fixed `room` sets the scale and panel, and the rise is clamped to fit it.
+- Test planner: `shape(at:)` is the sampler's own closed form → its validity is documented, and tests rebuild what played from the staged frames.
+- Test planner: the zero-opacity pre-warm was unprobed → probed (K12); it builds the mirror and shows nothing.
+- Test planner: the glass views were private → internal, for `@testable` tests.
+- Test planner, second pass: under Reduce Motion `emptied()` would re-run the pre-warm after every swipe → it checks `mirror?.isLive` itself.
+- Test planner, second pass: `shape(at:)`'s validity rule and the module map's Tests row were out of line → aligned.
+- Rejected: testing the presenter's wiring. It would need a real `Launcher` over adapters that live only in LauncherCoreTests, plus a window; its parts are each tested, and the wiring stays a hand check.
+- Docs: `docs/domain-model.md`'s Switcher entry now describes the band, the beads and the swell (and the light tick counts selection crossings); `docs/architecture.md` names the liquid's per-event updates and the confined mirror reach with its fallback.
+- User answer, R4 means 12 pt beyond the beads (a 104 pt swell) → R4 reworded; the tests' "open question 1" readings are now plain requirement citations.
+- User answer, the end pull springs back when the fingers stop moving or turn back, like today, rather than holding → R10 reworded, with a new "Rest past the last app" scenario.
+  - Design: each new selection value re-pulls the outer edge. `SwitcherSelection`'s `==` sees a push against the clamp. The pull springs back `pullHold` (60 ms) after the last move and is never held.
+  - T25 rewritten. S4 and the domain model aligned. A slow push not pulsing is now a hand-check risk.
+- User answer, the wave's maximum is its own setting, which a subtle swell must not lower → `LiquidLook.waveMax`, with `beadLimits` up to bead + 2 × `waveMax` (clamped to `room`).
+  - R8's bound ("no further than the swell itself") would contradict that for a subtle swell → reworded to "beyond the wave's own maximum, 12 pt by default, which does not follow the swell's size". R17's scenario needed no change.
+  - T6, T31 and T35 updated.
+- User answer, the private mirror and the `docs/architecture.md` wording are accepted → S3 unblocked.
+- User answer, light over white is fine as is, and a tint stays a non-goal unless the hand check fails → kept as a hand-check risk.
+- User answer, keep the DEBUG tuner (S6) → no change.

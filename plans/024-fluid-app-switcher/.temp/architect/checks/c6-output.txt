@@ -1,0 +1,6 @@
+mode=layer pre-warm at zero opacity: elements=12, matched uniquely=12/12
+first swipe right after orderFront + flush: elements in tree=12, matched live=12/12, at their view's frame=12/12
+first swipe 0.5 s later: elements in tree=12, matched live=12/12, at their view's frame=12/12
+mode=window pre-warm at zero opacity: elements=12, matched uniquely=12/12
+first swipe right after orderFront + flush: elements in tree=12, matched live=12/12, at their view's frame=12/12
+first swipe 0.5 s later: elements in tree=12, matched live=12/12, at their view's frame=12/12

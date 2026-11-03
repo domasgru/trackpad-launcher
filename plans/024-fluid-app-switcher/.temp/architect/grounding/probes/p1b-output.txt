@@ -1,0 +1,40 @@
+##### animator
+CASDFElementLayer properties: ["contentsOneValueDistance", "contentsZeroValueDistance", "gradientOvalization", "hitTestsAsFill", "mode", "operation"]
+CASDFElementLayer superclass: CALayer
+CASDFLayer properties: ["effect", "effectOffset", "gaussianRadius", "mergeElements", "smoothness"]
+CASDFLayer superclass: CALayer
+element (236.5, 60.0, 60.0, 60.0) anims=[] presentation=(236.5, 60.0, 60.0, 60.0)
+element (30.0, 60.0, 60.0, 60.0) anims=[] presentation=(30.0, 60.0, 60.0, 60.0)
+element (168.0, 46.0, 114.0, 88.0) anims=[] presentation=(168.0, 46.0, 114.0, 88.0)
+element (334.0, 60.0, 60.0, 60.0) anims=[] presentation=(334.0, 60.0, 60.0, 60.0)
+element (106.0, 60.0, 60.0, 60.0) anims=[] presentation=(106.0, 60.0, 60.0, 60.0)
+mode=animator main run loop wake-ups during the 1.2 s animation (probe's own scheduled blocks: 2): 301
+##### implicit
+CASDFElementLayer properties: ["contentsOneValueDistance", "contentsZeroValueDistance", "gradientOvalization", "hitTestsAsFill", "mode", "operation"]
+CASDFElementLayer superclass: CALayer
+CASDFLayer properties: ["effect", "effectOffset", "gaussianRadius", "mergeElements", "smoothness"]
+CASDFLayer superclass: CALayer
+element (106.0, 60.0, 60.0, 60.0) anims=[] presentation=(106.0, 60.0, 60.0, 60.0)
+element (208.0, 60.0, 60.0, 60.0) anims=[] presentation=(208.0, 60.0, 60.0, 60.0)
+element (334.0, 60.0, 60.0, 60.0) anims=[] presentation=(334.0, 60.0, 60.0, 60.0)
+element (30.0, 60.0, 60.0, 60.0) anims=[] presentation=(30.0, 60.0, 60.0, 60.0)
+element (168.0, 46.0, 115.0, 88.0) anims=[] presentation=(168.0, 46.0, 115.0, 88.0)
+mode=implicit main run loop wake-ups during the 1.2 s animation (probe's own scheduled blocks: 2): 289
+##### element
+CASDFElementLayer properties: ["contentsOneValueDistance", "contentsZeroValueDistance", "gradientOvalization", "hitTestsAsFill", "mode", "operation"]
+CASDFElementLayer superclass: CALayer
+CASDFLayer properties: ["effect", "effectOffset", "gaussianRadius", "mergeElements", "smoothness"]
+CASDFLayer superclass: CALayer
+added animation to element layer (258.0, 60.0, 60.0, 60.0)
+element (106.0, 60.0, 60.0, 60.0) anims=[] presentation=(106.0, 60.0, 60.0, 60.0)
+element (168.0, 46.0, 88.0, 88.0) anims=[] presentation=(168.0, 46.0, 88.0, 88.0)
+element (258.0, 60.0, 60.0, 60.0) anims=["probe-element"] presentation=(245.0349496603012, 60.0, 60.0, 60.0)
+element (334.0, 60.0, 60.0, 60.0) anims=[] presentation=(334.0, 60.0, 60.0, 60.0)
+element (30.0, 60.0, 60.0, 60.0) anims=[] presentation=(30.0, 60.0, 60.0, 60.0)
+mode=element main run loop wake-ups during the 1.2 s animation (probe's own scheduled blocks: 2): 2
+##### spacing
+CASDFElementLayer properties: ["contentsOneValueDistance", "contentsZeroValueDistance", "gradientOvalization", "hitTestsAsFill", "mode", "operation"]
+CASDFElementLayer superclass: CALayer
+CASDFLayer properties: ["effect", "effectOffset", "gaussianRadius", "mergeElements", "smoothness"]
+CASDFLayer superclass: CALayer
+spacing=40: captured rest only

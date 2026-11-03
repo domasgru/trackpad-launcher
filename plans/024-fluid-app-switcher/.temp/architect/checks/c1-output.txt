@@ -1,0 +1,9 @@
+(a) before any orderFront: container has no layer
+(a) right after orderFrontRegardless: container has no layer
+(a) after CATransaction.flush: elements=5 frames=[40.0, 130.0, 220.0, 310.0, 4000.0] CASDFLayer=[(40.0, 50.0, 4040.0, 80.0), (40.0, 50.0, 4040.0, 80.0)] backdrop=[(40.0, 50.0, 4040.0, 80.0)]
+(a) after one run loop turn: elements=5 frames=[40.0, 130.0, 220.0, 310.0, 4000.0] CASDFLayer=[(40.0, 50.0, 4040.0, 80.0), (40.0, 50.0, 4040.0, 80.0)] backdrop=[(40.0, 50.0, 4040.0, 80.0)]
+(c) isHidden: elements at x=[40.0, 130.0, 220.0, 310.0, 4000.0]; others kept identity=true
+(c) unhidden: elements at x=[40.0, 130.0, 220.0, 310.0, 4000.0]; x=310 same object as before hiding=true; others kept identity=true
+(b) after removing the parked view: elements=5 frames=[40.0, 130.0, 220.0, 310.0, 4000.0] CASDFLayer=[(40.0, 50.0, 4040.0, 80.0), (40.0, 50.0, 4040.0, 80.0)] backdrop=[(40.0, 50.0, 4040.0, 80.0)]
+(d) right after orderOut + orderFront + flush: every element the same object=false (4 elements)
+(d) three turns later: every element the same object=false

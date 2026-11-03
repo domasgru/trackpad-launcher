@@ -1,0 +1,8 @@
+match at first show: views=12 elements=12 matched uniquely=12 sdf=[(4.0, 24.0, 1000.0, 112.0), (4.0, 24.0, 1000.0, 112.0)]
+first swipe, 0.3 s on screen: elements in tree=12, matched still live=12/12, at their view's frame=12/12, sdf=[(4.0, 24.0, 1000.0, 112.0), (4.0, 24.0, 1000.0, 112.0)]
+second swipe (4 apps), right after orderFront + flush: elements in tree=12, matched still live=12/12, at their view's frame=12/12, sdf=[(16.0, 24.0, 388.0, 112.0), (16.0, 24.0, 388.0, 112.0)]
+second swipe, 0.3 s later: elements in tree=12, matched still live=12/12, at their view's frame=12/12, sdf=[(16.0, 24.0, 388.0, 112.0), (16.0, 24.0, 388.0, 112.0)]
+isHidden on one spare bead, 0.3 s later: elements in tree=11
+after isHidden: elements in tree=11, matched still live=11/12, at their view's frame=6/12, sdf=[(16.0, 24.0, 388.0, 112.0), (16.0, 24.0, 388.0, 112.0)]
+after unhiding, 0.3 s later: elements in tree=12, matched still live=11/12, at their view's frame=12/12, sdf=[(16.0, 24.0, 388.0, 112.0), (16.0, 24.0, 388.0, 112.0)]
+third swipe (10 apps), right after orderFront + flush: elements in tree=12, matched still live=11/12, at their view's frame=11/12, sdf=[(16.0, 24.0, 1000.0, 112.0), (16.0, 24.0, 1000.0, 112.0)]

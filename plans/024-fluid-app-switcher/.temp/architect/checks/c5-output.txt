@@ -1,0 +1,8 @@
+elements=12, matched swell and 10 beads
+(b) swell element minX: before 38.0, right after the view frame set inside the transaction 38.0, right after commit 138.0, next turn 138.0
+(c) 200 events over 2 s, 3 tracks x 240 samples per event + 10 bead tracks x 150 every 5th: process CPU 139.9 ms, main wake-ups 424 (the event source alone is 200)
+(a) 13 held finished animations: WindowServer CPU over 5 s = 0.48 s; our main wake-ups = 28
+(a) no animations: WindowServer CPU over 5 s = 0.47 s; our main wake-ups = 27
+(a) 11 held finished animations, again: WindowServer CPU over 5 s = 0.49 s; our main wake-ups = 27
+(a) no animations, again: WindowServer CPU over 5 s = 0.49 s; our main wake-ups = 27
+(a) one running 5 s animation (contrast): WindowServer CPU over 5 s = 2.28 s; our main wake-ups = 30
