@@ -22,7 +22,7 @@ import LauncherCore
 
     @Test func theUpdateCardQuotesItsTextsAndButtonsVerbatim() {
         let version = Version(1, 10, 0)
-        #expect(Copy.updateAvailable(version) == "Version 1.10.0 is available")
+        #expect(Copy.updateAvailable(version) == "App version 1.10.0 is available")
         #expect(Copy.updateNowButton == "Update now")
         #expect(Copy.updateDownloading(version) == "Downloading version 1.10.0…")
         #expect(Copy.cancelButton == "Cancel")

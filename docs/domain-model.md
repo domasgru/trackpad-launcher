@@ -39,7 +39,7 @@ When several are newer, the highest is offered. Trackpad Launcher never offers o
 
 ## Update card
 The settings window's first group while a newer version is known: one rounded group, its text on the left and its button on the right. It cannot be dismissed. It is in one of four states:
-- *Version X is available*, with *Update now*;
+- *App version X is available*, with *Update now*;
 - *Downloading version X…*, with a filling bar and *Cancel*;
 - *Installing version X…*, with nothing to press;
 - *The update couldn't be installed.*, with *Try again*, which starts the update again.

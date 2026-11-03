@@ -4,7 +4,7 @@ import Foundation
 /// part counting as zero: 1.9.0 < 1.10.0, 1.1 == 1.1.0. "1.1.0-beta", "v1.1" and "" are not versions, so a release named
 /// with one never counts.
 public struct Version: Comparable, Hashable, Sendable, CustomStringConvertible {
-    /// As written, for the card: "Version 1.10.0 is available".
+    /// As written, for the card: "App version 1.10.0 is available".
     public let description: String
     /// Trailing zeros dropped, so ==, hash and < agree.
     private let parts: [Int]

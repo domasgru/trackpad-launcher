@@ -185,7 +185,7 @@ import Testing
             process.openAgain(.byHand)
             process.deliver([.version("1.1.0")])
             #expect(process.card == .available(Self.next))
-            #expect(Copy.updateAvailable(Self.next) == "Version 1.1.0 is available")
+            #expect(Copy.updateAvailable(Self.next) == "App version 1.1.0 is available")
         }
     }
 

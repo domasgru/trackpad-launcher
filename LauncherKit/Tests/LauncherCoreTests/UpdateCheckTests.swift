@@ -30,7 +30,7 @@ import Testing
         let card = try #require(process.card)
         #expect(card == .available(Version(1, 1, 0)))
         guard case .available(let version) = card else { return }
-        #expect(Copy.updateAvailable(version) == "Version 1.1.0 is available")
+        #expect(Copy.updateAvailable(version) == "App version 1.1.0 is available")
         #expect(Copy.updateNowButton == "Update now")
     }
 
@@ -150,7 +150,7 @@ import Testing
         let expected = row.offered.map { UpdateCard.available(Version($0)!) }
         #expect(process.card == expected)
         if let offered = row.offered, case .available(let version)? = process.card {
-            #expect(Copy.updateAvailable(version) == "Version \(offered) is available")
+            #expect(Copy.updateAvailable(version) == "App version \(offered) is available")
         }
     }
 

@@ -8,7 +8,7 @@ The app makes no network calls today, by rule. So it cannot learn that a newer v
 
 ## Solution
 
-When the user opens the settings window, Trackpad Launcher checks once whether a newer version has been released. If one has, an **update card** appears at the top of the settings window: "Version 1.1.0 is available" with an **Update now** button (design: [Figma, node 2143-1845](https://www.figma.com/design/EB5ptBWZnAot7J3vx3cYLw/TapLauncher?node-id=2143-1845)). **Update now** downloads the new version, checks that it is genuine, replaces the app in /Applications and reopens it with the settings window open. Settings, starting at login and permissions all carry over.
+When the user opens the settings window, Trackpad Launcher checks once whether a newer version has been released. If one has, an **update card** appears at the top of the settings window: "App version 1.1.0 is available" with an **Update now** button (design: [Figma, node 2143-1845](https://www.figma.com/design/EB5ptBWZnAot7J3vx3cYLw/TapLauncher?node-id=2143-1845)). **Update now** downloads the new version, checks that it is genuine, replaces the app in /Applications and reopens it with the settings window open. Settings, starting at login and permissions all carry over.
 
 The update check is the one exception to the no-network rule. It runs only when the settings window opens, in a copy installed in /Applications. It never runs at a login start, while the window is closed, or in a development build. It reads only the public list of releases and sends nothing about the user or the Mac.
 
@@ -22,7 +22,7 @@ Each time the settings window opens, a release build running from /Applications 
 #### Scenario: A newer version is out
 - **GIVEN** version 1.0.0 runs from /Applications with its settings window closed, and version 1.1.0 has been released
 - **WHEN** the user opens Trackpad Launcher from Spotlight
-- **THEN** the settings window opens at once, and the update card appears at the top of it moments later, reading "Version 1.1.0 is available"
+- **THEN** the settings window opens at once, and the update card appears at the top of it moments later, reading "App version 1.1.0 is available"
 
 #### Scenario: A version released while the window stays open
 - **GIVEN** the settings window opened with no update card, and stays open
@@ -81,7 +81,7 @@ A *newer version* MUST be a published full release with a higher version than th
 #### Scenario: The highest release this Mac can run
 - **GIVEN** version 1.0.0 runs on macOS 26, version 1.1.0 needs macOS 26 and version 1.2.0 needs macOS 27
 - **WHEN** the user opens the settings window
-- **THEN** the card reads "Version 1.1.0 is available"
+- **THEN** the card reads "App version 1.1.0 is available"
 
 #### Scenario: Versions compare by number
 - **GIVEN** version 1.9.0 runs, and version 1.10.0 has been released
@@ -94,12 +94,12 @@ A *newer version* MUST be a published full release with a higher version than th
 - **THEN** no update card shows
 
 ### R5. The update card
-While a newer version is known, the settings window MUST show the update card as its first group, above the gesture rows, as in the design: the text "Version <version> is available" on the left and the *Update now* button on the right. The card MUST NOT be dismissable. While no newer version is known, the card MUST NOT show and the gesture rows MUST be the first group, as in the window without the card.
+While a newer version is known, the settings window MUST show the update card as its first group, above the gesture rows, as in the design: the text "App version <version> is available" on the left and the *Update now* button on the right. The card MUST NOT be dismissable. While no newer version is known, the card MUST NOT show and the gesture rows MUST be the first group, as in the window without the card.
 
 #### Scenario: Card layout
 - **GIVEN** version 1.1.0 has been released and 1.0.0 runs
 - **WHEN** the update check finishes
-- **THEN** the card appears above the gesture rows, in its own rounded group, reading "Version 1.1.0 is available" with *Update now* on the right, and the rest of the window moves down to make room
+- **THEN** the card appears above the gesture rows, in its own rounded group, reading "App version 1.1.0 is available" with *Update now* on the right, and the rest of the window moves down to make room
 
 ### R6. A failed check is silent
 When an update check fails, for example offline or with no answer, the settings window MUST show no update card and no error.
@@ -110,12 +110,12 @@ When an update check fails, for example offline or with no answer, the settings 
 - **THEN** the window shows no update card and no error, and the next opening checks again
 
 ### R7. Updating shows progress and can be cancelled
-Pressing *Update now* MUST turn the card into its downloading state: the text "Downloading version <version>…", a progress bar that fills as the download goes, and a *Cancel* button. *Cancel* MUST stop the download and return the card to "Version <version> is available" with *Update now*, with nothing changed. When the download finishes, the card MUST enter its installing state: the text "Installing version <version>…", with no progress bar and no *Cancel*. *Cancel* MUST exist only in the downloading state.
+Pressing *Update now* MUST turn the card into its downloading state: the text "Downloading version <version>…", a progress bar that fills as the download goes, and a *Cancel* button. *Cancel* MUST stop the download and return the card to "App version <version> is available" with *Update now*, with nothing changed. When the download finishes, the card MUST enter its installing state: the text "Installing version <version>…", with no progress bar and no *Cancel*. *Cancel* MUST exist only in the downloading state.
 
 #### Scenario: Cancelling a download
 - **GIVEN** the card reads "Downloading version 1.1.0…" with the progress bar at 40%
 - **WHEN** the user presses *Cancel*
-- **THEN** the card reads "Version 1.1.0 is available" with *Update now*, and version 1.0.0 stays installed and running
+- **THEN** the card reads "App version 1.1.0 is available" with *Update now*, and version 1.0.0 stays installed and running
 
 #### Scenario: Download finishes
 - **GIVEN** the card reads "Downloading version 1.1.0…"
@@ -157,12 +157,12 @@ Every setting, starting at login and the Accessibility and Screen Recording perm
 - **THEN** version 1.1.0 runs from /Applications with its settings window open and no update card; the same apps are assigned, starting at login is still on, Accessibility is still granted, and no permission prompt or first-run step appears
 
 ### R11. An administrator's password when /Applications is not writable
-When the user's account cannot write to /Applications, the update MUST ask for an administrator's name and password, as the move dialog does. The prompt MUST appear after the download finishes and is verified, never before. Cancelling that prompt MUST return the card to "Version <version> is available" with *Update now*, with nothing changed and no error.
+When the user's account cannot write to /Applications, the update MUST ask for an administrator's name and password, as the move dialog does. The prompt MUST appear after the download finishes and is verified, never before. Cancelling that prompt MUST return the card to "App version <version> is available" with *Update now*, with nothing changed and no error.
 
 #### Scenario: Standard account cancels the prompt
 - **GIVEN** a standard account that cannot write to /Applications
 - **WHEN** the user presses *Update now*, the download finishes and the user cancels the administrator prompt
-- **THEN** version 1.0.0 stays installed and running, and the card reads "Version 1.1.0 is available" with *Update now*
+- **THEN** version 1.0.0 stays installed and running, and the card reads "App version 1.1.0 is available" with *Update now*
 
 ### R12. A failed update keeps the current version
 When a download or install fails for any reason other than R7's *Cancel* or R11's cancelled prompt, the card MUST read "The update couldn't be installed." with a *Try again* button. A download that makes no progress for 30 seconds MUST count as failed. *Try again* MUST start the update again, as *Update now* does. A failure before the new version is in place MUST leave the running version installed and working. When the new version is in place but macOS does not open it, the card MUST read the same failed text with *Try again*, the running version MUST keep working until it ends, and *Try again* MUST put the new version in place again and open it. On a failure and on a cancel, the downloaded file MUST be deleted.
@@ -188,7 +188,7 @@ Closing the settings window or pressing *Quit Trackpad Launcher* while a downloa
 #### Scenario: Closing the window mid-download
 - **GIVEN** the card reads "Downloading version 1.1.0…"
 - **WHEN** the user clicks *Close*
-- **THEN** the window closes, the download stops, version 1.0.0 keeps running, and the next opening shows "Version 1.1.0 is available"
+- **THEN** the window closes, the download stops, version 1.0.0 keeps running, and the next opening shows "App version 1.1.0 is available"
 
 #### Scenario: Closing the window while installing
 - **GIVEN** the card reads "Installing version 1.1.0…"
@@ -205,7 +205,7 @@ Each release made with the release process MUST be found by the update check of 
 #### Scenario: Publishing a release
 - **GIVEN** version 1.0.0 is installed on a Mac
 - **WHEN** the developer raises the version to 1.1.0, runs the release process and publishes the release
-- **THEN** opening 1.0.0's settings window shows "Version 1.1.0 is available", and *Update now* installs 1.1.0
+- **THEN** opening 1.0.0's settings window shows "App version 1.1.0 is available", and *Update now* installs 1.1.0
 
 ## Non-goals
 
@@ -452,7 +452,7 @@ The move's login-item handover exists because the copy changes path, and that re
 /// missing part counting as zero: 1.9.0 < 1.10.0, 1.1 == 1.1.0. "1.1.0-beta", "v1.1" and "" are not versions, so a
 /// release named with one never counts (R4).
 public struct Version: Comparable, Hashable, Sendable, CustomStringConvertible {
-    /// As written, for the card: "Version 1.10.0 is available".
+    /// As written, for the card: "App version 1.10.0 is available".
     public let description: String
     /// Trailing zeros dropped, so ==, hash and < agree.
     private let parts: [Int]
@@ -499,7 +499,7 @@ public struct InstalledRelease: Equatable, Sendable {
 
 /// The update card, the settings window's first group while a newer version is known. Not dismissable.
 public enum UpdateCard: Equatable, Sendable {
-    /// "Version 1.1.0 is available" · *Update now*
+    /// "App version 1.1.0 is available" · *Update now*
     case available(Version)
     /// "Downloading version 1.1.0…" · a bar at `progress` (0...1) · *Cancel*. The only state with *Cancel*.
     case downloading(Version, progress: Double)
@@ -743,7 +743,7 @@ private func replaced() {
 }
 
 // MARK: LauncherCore — Copy (asserted verbatim by CopyTests)
-//   updateAvailable(v)   = "Version \(v) is available"     updateNowButton = "Update now"
+//   updateAvailable(v)   = "App version \(v) is available"     updateNowButton = "Update now"
 //   updateDownloading(v) = "Downloading version \(v)…"     cancelButton    = "Cancel"
 //   updateInstalling(v)  = "Installing version \(v)…"
 //   updateFailed         = "The update couldn't be installed."   tryAgainButton = "Try again"
@@ -1182,17 +1182,17 @@ Model rows run on this Mac's macOS 26.0 and use releases that need macOS 26.0, u
 
 | ID | Requirements | Seam | Given / When / Then | Source of truth for the expected value |
 |----|--------------|------|---------------------|----------------------------------------|
-| T1 | R1, R5 | `LifecycleWorld` | **Given** 1.0.0 started at login, with its window closed and the release list held (variant: the list answers inside `fetch`). **When** it is opened by hand. **Then** the first published state is `.open(request: 1)`, with `fetches == 1` and `card == nil`, and the card stays nil until the answer. `deliver([1.1.0])` (the inline variant: at once) gives `.available(1.1.0)`, which `Copy` renders as "Version 1.1.0 is available" with "Update now". | R1 "A newer version is out"; R5's text |
+| T1 | R1, R5 | `LifecycleWorld` | **Given** 1.0.0 started at login, with its window closed and the release list held (variant: the list answers inside `fetch`). **When** it is opened by hand. **Then** the first published state is `.open(request: 1)`, with `fetches == 1` and `card == nil`, and the card stays nil until the answer. `deliver([1.1.0])` (the inline variant: at once) gives `.available(1.1.0)`, which `Copy` renders as "App version 1.1.0 is available" with "Update now". | R1 "A newer version is out"; R5's text |
 | T2 | R1 | `LifecycleWorld` | **Given** the window opened and its check answered `[]`. **When** the user opens it by hand twice more, taps every gesture, flips Accessibility and changes a trackpad preference, and macOS sends a login reopen. **Then** the window goes to `.open(request: 2)`, then `.open(request: 3)`, `fetches` stays 1, and no card shows. **When** the window is closed and opened again, and that check answers [1.1.0]. **Then** `fetches == 2` and the card shows. | R1 "Reopening an open window" and "A version released while the window stays open": one check per closed-to-open edge |
 | T3 | R1 | `LifecycleWorld` | **Given** an opening's check held. **When** (a) the window closes, then that check answers [1.1.0]; or (b) the window closes and reopens in the same turn (the second check held), then the first check answers [1.1.0] and the second answers `[]`. **Then** the card is nil at every published state of both runs, and `fetches` is 1 in (a) and 2 in (b). A further opening whose check answers [1.1.0] shows the card. | R1: "A check still running when the window closes MUST be dropped, and its result MUST NOT be kept" |
 | T4 | R6, R1 | `LifecycleWorld` | **Given** 1.0.0. **When** the opening's check fails (`fail()`). **Then** no card shows and no other state changes. **When** the window is closed and opened again, and the check answers [1.1.0]. **Then** `fetches == 2` and the card shows. | R6 "Offline" |
-| T5 | R4 | `LifecycleWorld` | One opening per case, given as running version, this Mac's macOS and the delivered list, then the card:<br>- 1.0.0, 26.0, [1.1.0, 1.2.0 needing 27.0] → 1.1.0<br>- 1.9.0, 26.0, [1.10.0] → 1.10.0, rendered "Version 1.10.0 is available"<br>- 1.0.0, 26.0, [1.2.0, 1.10.0, 1.9.0] → 1.10.0<br>- 1.0.0, 26.0, [1.1.0 needing 27.0] → no card<br>- 1.1.0, [1.1.0] → no card<br>- 1.1, [1.1.0] → no card<br>- 1.1.0, [1.0.5] → no card<br>- 1.0.0, 26.6.2, [1.1.0 needing 26.6.2] → 1.1.0<br>- 1.0.0, 26.6.2, [1.1.0 needing 26.6.3] → no card | R4's scenarios; the boundary where the minimum equals this Mac's macOS |
+| T5 | R4 | `LifecycleWorld` | One opening per case, given as running version, this Mac's macOS and the delivered list, then the card:<br>- 1.0.0, 26.0, [1.1.0, 1.2.0 needing 27.0] → 1.1.0<br>- 1.9.0, 26.0, [1.10.0] → 1.10.0, rendered "App version 1.10.0 is available"<br>- 1.0.0, 26.0, [1.2.0, 1.10.0, 1.9.0] → 1.10.0<br>- 1.0.0, 26.0, [1.1.0 needing 27.0] → no card<br>- 1.1.0, [1.1.0] → no card<br>- 1.1, [1.1.0] → no card<br>- 1.1.0, [1.0.5] → no card<br>- 1.0.0, 26.6.2, [1.1.0 needing 26.6.2] → 1.1.0<br>- 1.0.0, 26.6.2, [1.1.0 needing 26.6.3] → no card | R4's scenarios; the boundary where the minimum equals this Mac's macOS |
 | T6 | R2 | `LifecycleWorld` | **Given** a 1.0.0 release build in /Applications, with the login item on and a newer version released. **When** macOS starts it at login and a day passes: every gesture tapped, a permission flipped, a trackpad changed, a login reopen. In a second process, the window opens, its check answers, the window closes, and the same day passes. **Then** in the first process `fetches == 0` and `requests` is empty throughout. In the second, `fetches` is 1 (the opening's check) and stays 1. | R2 "Login start" |
 | T7 | R2 | `LifecycleWorld` | **Given** a copy that may not check:<br>- (a) `.release("1.0.0")` at `.elsewhere`, started at login from ~/Applications. Gestures are used, then it is opened by hand (the move dialog asks), and the user answers *Quit*.<br>- (b) `.release("1.0.0")` opened by hand from ~/Downloads, with the dialog unanswered.<br>- (c) `.development`, opened by hand at `.installed` (a Debug or perf build in /Applications, or one started with `--as-release-build`) and at `.development` (one run where it was built).<br>**When** each runs its course. **Then** none has an `Updater`, because the real `InstalledRelease` initializer answers nil. No request is made at any step. (c) opens its window and shows no card, and (a) ends. | R2 "Development build", "Release build outside /Applications" and "Move dialog" |
 | T8 | R1, R5, R7, R9, R10 | `LifecycleWorld` | **Given** 1.0.0 opened by hand, with Arc on the 1-finger gesture, the login item on, Accessibility granted, and the check answering [1.1.0]. **When** *Update now*. **Then** the card is `.downloading(1.1.0, progress: 0)`, rendered "Downloading version 1.1.0…" with "Cancel". **When** `progress(0.4)`, then a 1-finger tap. **Then** the card is `.downloading(1.1.0, progress: 0.4)` and Arc comes to the front. **When** `finishDownload()`, then a tap. **Then** the card is `.installing(1.1.0)` ("Installing version 1.1.0…"), `isInstalling` is true, and Arc comes to the front. **When** `swapIn()`, then a tap. **Then** the card still reads installing, `opens == 1`, and Arc comes to the front. **When** `answerOpen(started: true)`. **Then** the old copy has ended. **When** the 1.1.0 process is opened by hand, with the old copy (a) already exited or (b) still listed until `letExit`. **Then** its window is `.open(request: 1)`, `fetches == 1`, and [1.1.0] leaves no card. Throughout: the login item stays on with no call, nothing is asked, the suite at the swap and at the end equals the suite before *Update now*, and the new process's 1-finger row is Arc. | R9 "The new version opens" and "Gestures during the download"; R10 "Successful update"; the world's seeded record |
 | T9 | R7 | `LifecycleWorld` | **Given** 1.1.0 downloading at 40%. **When** *Cancel*. **Then** the card is `.available(1.1.0)` and `cancels == 1`. A late `.progress(0.6)` or `.downloaded` from that attempt changes nothing, nothing is swapped, the process keeps running and gestures work. **When** *Update now*. **Then** `requests.count == 2` and the card is `.downloading(1.1.0, progress: 0)`. | R7 "Cancelling a download" |
 | T10 | R7, R13 | `LifecycleWorld` | **Given** each of these states in turn: available; installing, after `finishDownload()` landed first; opening; failed. **When** *Cancel*. **Then** the card is unchanged and `cancels == 0`. Over the history of the T8 run plus one failure and one decline, `card` is `.installing` exactly when `isInstalling` is true. | R7 "*Cancel* MUST exist only in the downloading state"; R13 "During the installing state, *Quit Trackpad Launcher* MUST be disabled" |
-| T11 | R13 | `LifecycleWorld` | **Given** 1.1.0 downloading at 40%, with the window open. **When** (a) *Close*; or (b) the Dock's Quit (`shouldEnd(.other)`). **Then** the window closes, (b) answers false, and `cancels == 1`. A late `.downloaded` installs nothing, 1.0.0 keeps running with its gestures, and the next opening's check, answering [1.1.0], shows "Version 1.1.0 is available". **When** (c) *Quit Trackpad Launcher*. **Then** the process ends at once, with nothing swapped. | R13 "Closing the window mid-download" |
+| T11 | R13 | `LifecycleWorld` | **Given** 1.1.0 downloading at 40%, with the window open. **When** (a) *Close*; or (b) the Dock's Quit (`shouldEnd(.other)`). **Then** the window closes, (b) answers false, and `cancels == 1`. A late `.downloaded` installs nothing, 1.0.0 keeps running with its gestures, and the next opening's check, answering [1.1.0], shows "App version 1.1.0 is available". **When** (c) *Quit Trackpad Launcher*. **Then** the process ends at once, with nothing swapped. | R13 "Closing the window mid-download" |
 | T12 | R13 | `LifecycleWorld` | **Given** 1.1.0 installing with the window open, and separately 1.1.0 opening (after `swapIn()`). **When** *Quit Trackpad Launcher*. **Then** nothing happens: the process keeps running and the window stays open. **When** *Close Settings* (⌘Q) or the Dock's Quit. **Then** the window closes, the quit answers false, the card stays installing, and `cancels == 0`. **When** an ordinary quit arrives with the window closed. **Then** it answers false and the process keeps running. **When** a logout arrives (`.system`). **Then** it answers true. | R13's quit rules |
 | T13 | R13, R1 | `LifecycleWorld` | **Given** 1.1.0 installing. **When** *Close*, then an opening by hand before the swap, then *Close* and an opening again after `swapIn()`. **Then** each time, the window closes and reopens showing `.installing(1.1.0)`, and `fetches` is unchanged. **When** `answerOpen(started: true)`. **Then** the old copy ends, and the 1.1.0 process, opened by hand, opens its window. | R1, amended: "except an opening while an update installs (R7's installing state): the card then keeps showing the install, and that opening makes no check"; R13 "Closing the window while installing" |
 | T14 | R10, R13 | `LifecycleWorld` | **Given** 1.0.0 with a saved record and the login item on. **When** the T8 run is cut at each snapshot taken around its effects (the swap's `onEffect` and `onInstalled`). **Then** a Mac restored from each snapshot, and opened by hand as 1.0.0 (before the swap) or 1.1.0 (after it), opens its window and checks once. It keeps the seeded record and the login item on, makes no login-item call and asks for nothing. | The snapshot taken before the update; `MoveToApplicationsTests`' kill-anywhere pattern |
@@ -1248,11 +1248,11 @@ Model rows run on this Mac's macOS 26.0 and use releases that need macOS 26.0, u
   Setup: once a release vN is published (S5), archive and export a Developer ID build of the same commit with `MARKETING_VERSION` lowered (for example to 0.9.0), as release.sh does but without notarising or publishing. Put it in /Applications.
   1. Open it from Spotlight. Expected:
      - the window opens at once;
-     - moments later, the card "Version vN is available" appears in its own rounded group above the gesture rows, with *Update now* on the right, as in Figma node 2143-1845;
+     - moments later, the card "App version vN is available" appears in its own rounded group above the gesture rows, with *Update now* on the right, as in Figma node 2143-1845;
      - the window grows downward, and the button row stays fully visible;
      - the card has no close control.
-  2. Press *Update now*. Expected: "Downloading version vN…" with a filling bar and *Cancel*, and the window grows for the bar. Press *Cancel*. Expected: the card returns to "Version vN is available".
-  3. Press *Update now*, then ⌘W while the download runs. Expected: the window closes. Reopen it. Expected: the card reads "Version vN is available".
+  2. Press *Update now*. Expected: "Downloading version vN…" with a filling bar and *Cancel*, and the window grows for the bar. Press *Cancel*. Expected: the card returns to "App version vN is available".
+  3. Press *Update now*, then ⌘W while the download runs. Expected: the window closes. Reopen it. Expected: the card reads "App version vN is available".
   4. Set Network Link Conditioner to 100% loss and press *Update now*. Expected: about 30 s after progress stops, the card reads "The update couldn't be installed." with *Try again*. Turn the conditioner off and press *Try again*. Expected: the card goes back to downloading.
   5. Check the installing state with C7's steps.
 - **C5, R6: offline.** Turn Wi-Fi off and open the window. Expected: no card and no error. Turn Wi-Fi on, then close and reopen the window. Expected: the card shows.
@@ -1268,14 +1268,14 @@ Model rows run on this Mac's macOS 26.0 and use releases that need macOS 26.0, u
 - **C7, R11 and R13: a standard account (open question 3).** Use C4's setup on a standard account that cannot write to /Applications.
   1. Press *Update now*. Expected: the administrator prompt appears only after the bar has filled.
   2. While the prompt shows. Expected: the card reads "Installing version vN…", *Quit Trackpad Launcher* is greyed and does nothing, and ⌘Q and the Dock's Quit only close the window.
-  3. Cancel the prompt. Expected: the card reads "Version vN is available", and the old version still runs.
+  3. Cancel the prompt. Expected: the card reads "App version vN is available", and the old version still runs.
   4. Repeat, and enter an administrator's name and password. Expected: vN is installed and opens. This runs the `osascript` exchange as root.
 - **C8, R14: the release process.** Expected:
   - With `Config/Version.xcconfig` unchanged since the last release, `release.sh` exits non-zero in its preflight, before building.
   - With a raised version, it prints its self-check's success and creates a draft vX holding `TrackpadLauncher.dmg` and `TrackpadLauncher-X-macOS-26.0.aar`. Confirm with `gh release view vX --json assets,isDraft`.
   - The built app's `LSMinimumSystemVersion`, read with PlistBuddy, equals `MACOSX_DEPLOYMENT_TARGET`.
   - While vX is a draft, an older copy shows no card.
-  - After `gh release edit vX --draft=false --latest`, the older copy shows "Version X is available", and C6 completes.
+  - After `gh release edit vX --draft=false --latest`, the older copy shows "App version X is available", and C6 completes.
 - **C9, the docs.**
   - `docs/product-overview.md` names the update check as the one network exception, and says that an update also stops the old version and opens the new one.
   - `docs/domain-model.md` gains *Update check*, *Newer version* and *Update card*.
@@ -1302,7 +1302,7 @@ A restart during the swap (R13) has no manual check, because it cannot be timed 
 
 ### S2: Opening the settings window shows the update card
 
-**What to build:** A Developer ID build in /Applications reads the public release list once each time its settings window opens from closed. When a newer full release runs on this Mac, the window's first group is "Version X is available" with *Update now*. Nothing else, in any build, makes a request. The slice builds:
+**What to build:** A Developer ID build in /Applications reads the public release list once each time its settings window opens from closed. When a newer full release runs on this Mac, the window's first group is "App version X is available" with *Update now*. Nothing else, in any build, makes a request. The slice builds:
 - the data types: `Version`, `Release` with `newerVersion(in:than:on:)`, `InstalledRelease`, and `UpdateCard` with `layout`;
 - the `ReleaseList` port, with `InMemoryReleaseList`;
 - the check half of `Updater`: `windowOpened()`, `windowClosed()` and `card`;

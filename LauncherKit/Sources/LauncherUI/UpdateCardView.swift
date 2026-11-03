@@ -28,6 +28,7 @@ struct UpdateCardView: View {
     private func row(_ text: String, button: String?, action: @escaping () -> Void) -> some View {
         FormRow {
             Text(text)
+                .font(.system(size: 11))
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let button {
                 Button(button, action: action)

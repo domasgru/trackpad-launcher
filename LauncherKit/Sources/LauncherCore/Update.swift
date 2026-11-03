@@ -58,7 +58,7 @@ public enum UpdateEvent: Equatable, Sendable {
 
 /// The update card, the settings window's first group while a newer version is known. Not dismissable.
 public enum UpdateCard: Equatable, Sendable {
-    /// "Version 1.1.0 is available" · *Update now*
+    /// "App version 1.1.0 is available" · *Update now*
     case available(Version)
     /// "Downloading version 1.1.0…" · a bar at `progress` (0...1) · *Cancel*. The only state with *Cancel*.
     case downloading(Version, progress: Double)
