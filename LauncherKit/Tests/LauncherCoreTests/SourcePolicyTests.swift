@@ -153,6 +153,7 @@ import Testing
         Confined(token: "copyItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
         Confined(token: "moveItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
         Confined(token: "replaceItemAt(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
+        Confined(token: "renamex_np(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
         Confined(token: "removeItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
         Confined(
             token: "AppleArchive", onlyIn: ["BundleInstall.swift"], rule: "the update's unpacking is in one file"),

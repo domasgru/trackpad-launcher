@@ -112,12 +112,15 @@ enum BundleInstall {
         }
     }
 
-    /// Puts `staged` at `destination` in one step: an atomic replace when something lies there, a move when not.
-    /// Throws with `destination` untouched.
+    /// Puts `staged` at `destination` in one step: when something lies there, the kernel exchanges the two directory
+    /// entries (`RENAME_SWAP`, atomic by contract, so a crash at any instant leaves one whole copy there) and the old
+    /// copy, now at `staged`, is discarded; when nothing does, a move. Throws with `destination` untouched.
     static func swap(_ staged: URL, into destination: URL) throws {
         let files = FileManager.default
         if files.fileExists(atPath: destination.path) {
-            _ = try files.replaceItemAt(destination, withItemAt: staged)
+            guard renamex_np(staged.path, destination.path, UInt32(RENAME_SWAP)) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
         } else {
             try files.moveItem(at: staged, to: destination)
         }
