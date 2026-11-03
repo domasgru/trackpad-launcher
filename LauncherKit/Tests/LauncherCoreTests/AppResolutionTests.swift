@@ -31,6 +31,36 @@ import LauncherCore
         #expect(world.system.broughtToFront == [entry])
     }
 
+    @Test func pickingAnswersTheAppTheRowNowShowsPresent() throws {
+        let world = World(apps: ["Figma", "Mail", "Pages"])
+        world.launcher.start()
+        let sketch = world.install("Sketch", in: world.downloads)
+        let pages = world.trash("Pages")
+        let notes = world.downloads.appending(path: "Notes.txt")
+        try Data().write(to: notes)
+        world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
+
+        let mail = world.app("Mail")
+        #expect(world.launcher.setAssignment(.app(mail), for: .two) == mail)
+        #expect(world.launcher.app(for: .two) == .present(mail))
+
+        #expect(world.launcher.setAssignment(.app(mail), for: .two) == mail)
+        #expect(world.launcher.app(for: .two) == .present(mail))
+
+        let sketchEntry = world.app("Sketch", in: world.downloads)
+        #expect(world.launcher.setAssignment(.appBundle(at: sketch), for: .two) == sketchEntry)
+        #expect(world.launcher.app(for: .two) == .present(sketchEntry))
+
+        #expect(world.launcher.setAssignment(.appBundle(at: notes), for: .two) == nil)
+        #expect(world.launcher.app(for: .two) == .present(sketchEntry))
+
+        #expect(world.launcher.setAssignment(.appBundle(at: pages), for: .two) == nil)
+        #expect(world.launcher.app(for: .two) == .missing(name: "Pages"))
+
+        #expect(world.launcher.setAssignment(nil, for: .two) == nil)
+        #expect(world.launcher.app(for: .two) == .unassigned)
+    }
+
     @Test func unassigningClearsTheRowForeverAndSilencesTheGesture() {
         let world = World(apps: ["Notion"])
         world.launcher.start()

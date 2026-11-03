@@ -136,7 +136,10 @@ struct GestureRowView: View {
                 cachedIcon: actions.cachedIcon,
                 icon: actions.icon,
                 choose: { launcher.setAssignment($0, for: row.gesture) },
-                chooseOther: { actions.chooseOtherApp { launcher.setAssignment(.appBundle(at: $0), for: row.gesture) } })
+                chooseOther: { completion in
+                    actions.chooseOtherApp { completion(launcher.setAssignment(.appBundle(at: $0), for: row.gesture)) }
+                },
+                pickAnimation: actions.pickAnimation)
         }
         // Above the next row, so the guide's arrows draw over it.
         .zIndex(row.gesture == .one ? 1 : 0)

@@ -13,6 +13,10 @@ import SwiftUI
 /// menus when it opens.
 ///
 /// The button shortens a long name itself, so the cut is always at the end of the name with an ellipsis.
+///
+/// The icon is drawn by a layer of the picker's own, over the button's image slot, which holds a clear image of the
+/// icon's size: the button lays out and shortens the name exactly as if it drew the icon, and the pick animation
+/// scales that layer alone, never the name or the chevron. Picking an app plays the pick animation on it.
 struct AppPicker: NSViewRepresentable {
     let current: RowApp
     let installedApps: InstalledApps
@@ -20,9 +24,12 @@ struct AppPicker: NSViewRepresentable {
     let cachedIcon: (URL) -> NSImage
     /// Draws a missing icon on the spot: the button's icon only.
     let icon: (URL) -> NSImage
-    /// nil = None.
-    let choose: (AppChoice?) -> Void
-    let chooseOther: () -> Void
+    /// nil = None. Answers the app the row now shows present, which is what plays the pick animation.
+    let choose: (AppChoice?) -> AppEntry?
+    /// Hands the completion to the model's Other… path; the completion gets the app the row now shows present, or nil.
+    let chooseOther: (@escaping (AppEntry?) -> Void) -> Void
+    /// The pick animation to play for a pick now, or nil to swap the icon at once.
+    let pickAnimation: () -> PickAnimation?
 
     static let maxWidth: CGFloat = 128
     /// What the pop-up button may take: the whole width less the gap and the chevron badge.
@@ -30,25 +37,29 @@ struct AppPicker: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeNSView(context: Context) -> PickerView {
+    func makeNSView(context: Context) -> PickerView { makeView(coordinator: context.coordinator) }
+
+    func updateNSView(_ view: PickerView, context: Context) { update(view, coordinator: context.coordinator) }
+
+    func makeView(coordinator: Coordinator) -> PickerView {
         let view = PickerView()
         let button = view.button
         button.menu?.autoenablesItems = false
         // The delegate checks the row's app itself: the selected item is always the first, see `menuNeedsUpdate`.
         (button.cell as? NSPopUpButtonCell)?.altersStateOfSelectedItem = false
-        button.menu?.delegate = context.coordinator
-        context.coordinator.button = button
+        button.menu?.delegate = coordinator
+        coordinator.pickerView = view
         return view
     }
 
-    func updateNSView(_ view: PickerView, context: Context) {
-        let coordinator = context.coordinator
+    func update(_ view: PickerView, coordinator: Coordinator) {
         coordinator.current = current
         coordinator.installedApps = installedApps
         coordinator.cachedIcon = cachedIcon
         coordinator.icon = icon
         coordinator.choose = choose
         coordinator.chooseOther = chooseOther
+        coordinator.pickAnimation = pickAnimation
         guard !coordinator.isMenuOpen else { return }
         coordinator.showCurrentOnly()
         view.invalidateIntrinsicContentSize()
@@ -59,22 +70,29 @@ struct AppPicker: NSViewRepresentable {
     }
 
     @MainActor final class Coordinator: NSObject, NSMenuDelegate {
-        weak var button: NSPopUpButton?
+        weak var pickerView: PickerView?
+        var button: NSPopUpButton? { pickerView?.button }
         var current = RowApp.unassigned
         var installedApps = InstalledApps.empty
         var cachedIcon: (URL) -> NSImage = { _ in NSImage() }
         var icon: (URL) -> NSImage = { _ in NSImage() }
-        var choose: (AppChoice?) -> Void = { _ in }
-        var chooseOther: () -> Void = {}
+        var choose: (AppChoice?) -> AppEntry? = { _ in nil }
+        var chooseOther: (@escaping (AppEntry?) -> Void) -> Void = { _ in }
+        var pickAnimation: () -> PickAnimation? = { nil }
         private(set) var isMenuOpen = false
 
         func showCurrentOnly() {
-            guard let button else { return }
+            guard let button, let pickerView else { return }
             button.removeAllItems()
             let item = closedItem(current)
             button.menu?.addItem(item)
             button.selectItem(at: 0)
             shortenToFit(item, in: button)
+            if case .present(let entry) = current {
+                pickerView.showIcon(icon(entry.url))
+            } else {
+                pickerView.showIcon(nil)
+            }
             // A missing app's name takes the button's whole width, so "not found" is in the tooltip.
             if case .missing(let name) = current { button.toolTip = "\(name) not found" } else { button.toolTip = nil }
         }
@@ -123,7 +141,7 @@ struct AppPicker: NSViewRepresentable {
                 return titledItem("Choose app…")
             case .present(let entry):
                 let item = titledItem(entry.name)
-                item.image = Self.spaced(icon(entry.url))
+                item.image = Self.clearImage(sized: Self.spacedSize(icon(entry.url)))
                 return item
             case .missing(let name):
                 let item = titledItem(name, color: .tertiaryLabelColor)
@@ -146,19 +164,40 @@ struct AppPicker: NSViewRepresentable {
             return item
         }
 
-        /// An item without a represented app is None. The button shows the pick at once rather than at the model's
-        /// next update.
+        /// An item without a represented app is None: it plays nothing. The button shows the pick at once rather than
+        /// at the model's next update.
         @objc private func pick(_ sender: NSMenuItem) {
             let entry = sender.representedObject as? AppEntry
-            current = entry.map(RowApp.present) ?? .unassigned
-            showCurrentOnly()
-            choose(entry.map(AppChoice.app))
+            let answer = choose(entry.map(AppChoice.app))
+            if let answer {
+                show(picked: answer)
+            } else if entry == nil {
+                current = .unassigned
+                pickerView?.stopPickAnimation()
+                showCurrentOnly()
+            }
         }
 
-        /// Other… is not an app: the button goes back to what it showed.
+        /// Other… is not an app: the button goes back to what it showed, and only an app the model accepts shows and
+        /// plays. A cancelled chooser never calls back.
         @objc private func pickOther() {
-            chooseOther()
+            chooseOther { [weak self] answer in
+                guard let answer else { return }
+                self?.show(picked: answer)
+            }
             showCurrentOnly()
+        }
+
+        /// The picked app in the button, with the pick animation unless the supplier has none (Reduce motion).
+        private func show(picked entry: AppEntry) {
+            current = .present(entry)
+            showCurrentOnly()
+            if let animation = pickAnimation() {
+                pickerView?.play(animation)
+            } else {
+                pickerView?.stopPickAnimation()
+            }
+            pickerView?.invalidateIntrinsicContentSize()
         }
 
         /// The window's labels: 13 pt medium.
@@ -166,10 +205,19 @@ struct AppPicker: NSViewRepresentable {
         /// Clear room after the icon, on top of the pop-up button's own gap: 6 pt between icon and name in all.
         private static let iconTrailingSpace: CGFloat = 1
 
+        private static func spacedSize(_ image: NSImage) -> NSSize {
+            NSSize(width: image.size.width + iconTrailingSpace, height: image.size.height)
+        }
+
+        /// What holds the icon's slot in the button while the picker's icon layer draws the icon.
+        private static func clearImage(sized size: NSSize) -> NSImage {
+            NSImage(size: size, flipped: false) { _ in true }
+        }
+
         /// `image` with `iconTrailingSpace` of clear room on its right. A template image stays one, so the symbol
         /// still takes the button's colour.
         private static func spaced(_ image: NSImage) -> NSImage {
-            let size = NSSize(width: image.size.width + iconTrailingSpace, height: image.size.height)
+            let size = spacedSize(image)
             let spaced = NSImage(size: size, flipped: false) { _ in
                 image.draw(in: NSRect(origin: .zero, size: image.size))
                 return true
@@ -206,7 +254,7 @@ struct AppPicker: NSViewRepresentable {
 }
 
 /// The pop-up button without its arrows, then the chevron badge. Every click inside goes to the button, so the badge
-/// opens the menu too.
+/// opens the menu too. The present app's icon is drawn by `iconLayer`, over the button's image slot.
 final class PickerView: NSView {
     /// 12 pt from the name to the badge, less the clear room the arrowless pop-up button keeps after its title
     /// (4 pt, measured on macOS 26).
@@ -214,11 +262,30 @@ final class PickerView: NSView {
     static let badgeSize: CGFloat = 16
     static let chevronSpace = chevronGap + badgeSize
 
+    /// The icon's side.
+    static let iconSide: CGFloat = 16
+    /// The key the pick animation runs under, so a new one replaces a running one.
+    static let pickKey = "pick"
+    /// Samples a second of the pick animation, like the launch animation's.
+    private static let keyframesPerSecond: Double = 240
+
     let button = NSPopUpButton(frame: .zero, pullsDown: false)
-    private let badge = ChevronBadge()
+    let badge = ChevronBadge()
+    /// The icon's own layer. Its implicit actions are off: the pick animation is the only animation it plays.
+    let iconLayer = CALayer()
 
     init() {
         super.init(frame: .zero)
+        wantsLayer = true
+        // The pick animation's peak is bigger than the icon's slot and draws past it.
+        layer?.masksToBounds = false
+        iconLayer.masksToBounds = false
+        iconLayer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        iconLayer.isHidden = true
+        iconLayer.actions = [
+            "contents": NSNull(), "bounds": NSNull(), "position": NSNull(), "hidden": NSNull(),
+            "transform": NSNull(), "opacity": NSNull(), "contentsScale": NSNull(),
+        ]
         button.isBordered = false
         (button.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
         for view in [button, badge] as [NSView] {
@@ -234,6 +301,8 @@ final class PickerView: NSView {
             badge.widthAnchor.constraint(equalToConstant: Self.badgeSize),
             badge.heightAnchor.constraint(equalToConstant: Self.badgeSize),
         ])
+        layer?.addSublayer(iconLayer)
+        updateContentsScale()
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
@@ -244,6 +313,55 @@ final class PickerView: NSView {
             width: min(natural.width, AppPicker.buttonMaxWidth) + Self.chevronSpace,
             height: max(natural.height, Self.badgeSize))
     }
+
+    override func layout() {
+        super.layout()
+        placeIconLayer()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateContentsScale()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        updateContentsScale()
+    }
+
+    private func updateContentsScale() {
+        iconLayer.contentsScale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+    }
+
+    /// The leading square of the button cell's image slot, where the cell would draw the icon.
+    private func placeIconLayer() {
+        guard let cell = button.cell as? NSPopUpButtonCell else { return }
+        let slot = convert(cell.imageRect(forBounds: button.bounds), from: button)
+        iconLayer.bounds = CGRect(x: 0, y: 0, width: Self.iconSide, height: Self.iconSide)
+        iconLayer.position = CGPoint(x: slot.minX + Self.iconSide / 2, y: slot.minY + Self.iconSide / 2)
+    }
+
+    /// The icon in its slot with nothing playing, or hidden for nil. A running pick animation is left alone.
+    func showIcon(_ image: NSImage?) {
+        iconLayer.contents = image
+        iconLayer.isHidden = image == nil
+        placeIconLayer()
+        needsLayout = true
+    }
+
+    /// Plays `animation` on the icon alone from its start; a running one is replaced. The model transform stays
+    /// identity, so when it ends the icon rests at full size with nothing to clean up.
+    func play(_ animation: PickAnimation) {
+        let frames = animation.keyframes(perSecond: Self.keyframesPerSecond)
+        let grow = CAKeyframeAnimation(keyPath: "transform")
+        grow.values = frames.scales.map { NSValue(caTransform3D: CATransform3DMakeScale($0, $0, 1)) }
+        grow.keyTimes = frames.keyTimes.map { NSNumber(value: $0) }
+        grow.duration = animation.duration
+        grow.calculationMode = .linear
+        iconLayer.add(grow, forKey: Self.pickKey)
+    }
+
+    func stopPickAnimation() { iconLayer.removeAnimation(forKey: Self.pickKey) }
 
     override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? button : nil }
 }

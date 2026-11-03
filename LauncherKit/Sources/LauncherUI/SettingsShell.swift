@@ -3,6 +3,14 @@ import LauncherCore
 import Observation
 import UniformTypeIdentifiers
 
+#if DEBUG
+    /// A reference the shell and its actions share, so the actions, built before the shell exists, read the hook at call
+    /// time.
+    private final class TuningHook {
+        var read: (() -> (animation: PickAnimation, simulateReduceMotion: Bool))?
+    }
+#endif
+
 /// The thin AppKit shell: maps AppKit signals to `Launcher` intents and renders `Launcher` state.
 /// Create it before `Launcher.start()`: its first icon pass must finish before gestures run.
 ///
@@ -17,12 +25,28 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     private let window: SettingsWindow
     private var isShown = false
     private var observations: [Task<Void, Never>] = []
+    #if DEBUG
+        /// The Debug tuner's pick animation and Reduce motion switch, read at every pick. The composition root sets it;
+        /// Release builds carry none of it.
+        public var pickTuning: (() -> (animation: PickAnimation, simulateReduceMotion: Bool))? {
+            get { tuningHook.read }
+            set { tuningHook.read = newValue }
+        }
+        private let tuningHook = TuningHook()
+    #endif
 
     public init(launcher: Launcher, quit: @escaping () -> Void) {
         self.launcher = launcher
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let window = SettingsWindow()
-        let actions = Self.makeActions(launcher: launcher, icons: icons, window: window, quit: quit)
+        #if DEBUG
+            let hook = tuningHook
+            let tuned: () -> (animation: PickAnimation, simulateReduceMotion: Bool)? = { hook.read?() }
+        #else
+            let tuned: () -> (animation: PickAnimation, simulateReduceMotion: Bool)? = { nil }
+        #endif
+        let actions = Self.makeActions(
+            launcher: launcher, icons: icons, window: window, quit: quit, tuned: tuned)
         window.install(content: SettingsView(launcher: launcher, actions: actions))
         self.window = window
         switcherPresenter = SwitcherPresenter(launcher: launcher)
@@ -146,8 +170,19 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             NSPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2))
     }
 
+    /// What the pick animation plays now: nothing under Reduce motion, the system's or the tuner's simulated one;
+    /// otherwise the tuner's values when it is wired, else the shipped ones.
+    static func pickAnimation(
+        reduceMotion: Bool, tuned: (animation: PickAnimation, simulateReduceMotion: Bool)?
+    ) -> PickAnimation? {
+        if reduceMotion { return nil }
+        guard let tuned else { return .shipped }
+        return tuned.simulateReduceMotion ? nil : tuned.animation
+    }
+
     private static func makeActions(
-        launcher: Launcher, icons: AppIcons, window: SettingsWindow, quit: @escaping () -> Void
+        launcher: Launcher, icons: AppIcons, window: SettingsWindow, quit: @escaping () -> Void,
+        tuned: @escaping () -> (animation: PickAnimation, simulateReduceMotion: Bool)?
     ) -> LauncherActions {
         LauncherActions(
             cachedIcon: { icons.cachedIcon(for: $0) },
@@ -162,6 +197,10 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                 chooser.beginSheetModal(for: window) { response in
                     if response == .OK, let url = chooser.url { completion(url) }
                 }
+            },
+            pickAnimation: {
+                pickAnimation(
+                    reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, tuned: tuned())
             },
             openSettings: { pane in NSWorkspace.shared.open(pane.url) },
             quit: quit)
