@@ -1,0 +1,17 @@
+{
+  "identifier": "com.domasgru.TrackpadLauncherUpdateFixture",
+  "manifest": {
+    "Contents": "dir",
+    "Contents/CodeResources": "7893aed913484bb7736313b74841a73aae9c7b5c4b5c6fb5b12952174c0663a8",
+    "Contents/Info.plist": "8c90f7053e9db04d4a3115d2e0ce506ac70f15a284c6d92c96a08f7334962381",
+    "Contents/MacOS": "dir",
+    "Contents/MacOS/TrackpadLauncher": "2041c3ac7eca8a4093b23291fd0b1e4e7ccecf8837d01fe5bc00e3cdbabf19a0",
+    "Contents/Resources": "dir",
+    "Contents/Resources/fixture.txt": "66c09fdb193d9dc9b6b966e6bedba7f9d8f3a2de10440b81fc644bafbb0b0646",
+    "Contents/_CodeSignature": "dir",
+    "Contents/_CodeSignature/CodeResources": "6edb5d9e2d482ed4695a0579dfa53f054977b21e050017f62d16d05cd41816ce"
+  },
+  "minimumMacOS": "26.0",
+  "team": "CQK27876UL",
+  "version": "1.0.0"
+}
