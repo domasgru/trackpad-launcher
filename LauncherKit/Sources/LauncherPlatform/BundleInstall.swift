@@ -7,7 +7,9 @@ import System
 /// script.
 enum BundleInstall {
     private static let quarantine = "com.apple.quarantine"
-    private static let bundleName = "TrackpadLauncher.app"
+    /// The one bundle an update archive holds: a contract with every shipped version. It is not the installed copy's
+    /// name; an update goes over this copy, whatever it is named.
+    private static let archivedBundleName = "TrackpadLauncher.app"
 
     /// A fresh temporary folder on the volume of `destination`.
     private static func newFolder(near destination: URL) throws -> URL {
@@ -76,7 +78,7 @@ enum BundleInstall {
         let folder = try newFolder(near: destination)
         do {
             try extract(archive, into: folder)
-            let bundle = folder.appending(path: bundleName)
+            let bundle = folder.appending(path: archivedBundleName)
             guard files.fileExists(atPath: bundle.path) else { throw CocoaError(.fileReadCorruptFile) }
             try clearQuarantine(under: bundle)
             return bundle
@@ -92,7 +94,7 @@ enum BundleInstall {
     static func admits(path: String, kind: ArchiveEntryKind, linkTarget: String?) -> Bool {
         guard !path.hasPrefix("/") else { return false }
         let parts = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
-        guard parts.first == bundleName, !parts.contains(".."), !parts.contains(".") else { return false }
+        guard parts.first == archivedBundleName, !parts.contains(".."), !parts.contains(".") else { return false }
         switch kind {
         case .directory, .file: return true
         case .other: return false

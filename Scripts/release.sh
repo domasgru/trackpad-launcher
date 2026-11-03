@@ -32,11 +32,17 @@ set -euo pipefail
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TEAM_ID="${TEAM_ID:-CQK27876UL}"
-APP_NAME="TrackpadLauncher"
+PROJECT_NAME="TrackpadLauncher"
+# The bundle as users get it: Finder, the Dock and Spotlight show its file name, not CFBundleDisplayName.
+BUNDLE_NAME="Trackpad Launcher.app"
+# The update archive's asset prefix and the one bundle name inside it: a contract with every shipped version, which
+# refuses any other entry and installs the bundle over its own copy, whatever that copy is named.
+ARCHIVE_PREFIX="TrackpadLauncher"
+ARCHIVED_BUNDLE_NAME="TrackpadLauncher.app"
 VOLUME_NAME="Trackpad Launcher"
 OUT="${RELEASE_OUT:-$ROOT/build/release}"
 BACKGROUND="$ROOT/Scripts/release/dmg-background.png"
-DMG="$OUT/$APP_NAME.dmg"
+DMG="$OUT/$PROJECT_NAME.dmg"
 REPOSITORY="domasgru/trackpad-launcher"
 VERSION_FILE="$ROOT/Config/Version.xcconfig"
 NOTARY_PROFILE="${NOTARY_PROFILE:-trackpad-launcher}"
@@ -47,7 +53,7 @@ NUMERIC='^[0-9]{1,9}(\.[0-9]{1,9})*$'
 EXPECTED_VERSION=""
 AAR=""
 STAGE="$OUT/dmg-stage"
-RW_DMG="$OUT/$APP_NAME-rw.dmg"
+RW_DMG="$OUT/$PROJECT_NAME-rw.dmg"
 
 # Window content size in points; matches the background picture.
 WINDOW_WIDTH=600
@@ -186,17 +192,17 @@ archive_and_check() {
   [ -z "$EXPECTED_VERSION" ] || [ "$version" = "$EXPECTED_VERSION" ] ||
     fail "app version $version differs from Config/Version.xcconfig's $EXPECTED_VERSION."
 
-  AAR="$OUT/$APP_NAME-$version-macOS-$minimum.aar"
+  AAR="$OUT/$ARCHIVE_PREFIX-$version-macOS-$minimum.aar"
   local source unpacked copy
   source="$(mktemp -d)"
   unpacked="$(mktemp -d)"
-  ditto "$app" "$source/$APP_NAME.app"
+  ditto "$app" "$source/$ARCHIVED_BUNDLE_NAME"
   mkdir -p "$OUT"
   rm -f "$AAR"
-  aa archive -d "$source" -subdir "$APP_NAME.app" -exclude-field uid,gid,xat,acl,flg -o "$AAR"
+  aa archive -d "$source" -subdir "$ARCHIVED_BUNDLE_NAME" -exclude-field uid,gid,xat,acl,flg -o "$AAR"
   aa extract -d "$unpacked" -i "$AAR"
-  copy="$unpacked/$APP_NAME.app"
-  [ -d "$copy" ] || fail "the archive does not unpack to $APP_NAME.app."
+  copy="$unpacked/$ARCHIVED_BUNDLE_NAME"
+  [ -d "$copy" ] || fail "the archive does not unpack to $ARCHIVED_BUNDLE_NAME."
 
   codesign --verify --strict --deep --verbose=2 "$copy" || fail "the unpacked app fails codesign verification."
   local before after
@@ -248,7 +254,7 @@ build_image() {
 
   rm -rf "$STAGE" "$RW_DMG" "$DMG"
   mkdir -p "$STAGE/.background"
-  ditto "$app" "$STAGE/$APP_NAME.app"
+  ditto "$app" "$STAGE/$BUNDLE_NAME"
   ln -s /Applications "$STAGE/Applications"
   cp "$BACKGROUND" "$STAGE/.background/dmg-background.png"
 
@@ -283,7 +289,7 @@ tell application "Finder"
     set arrangement of viewOptions to not arranged
     set icon size of viewOptions to 128
     set background picture of viewOptions to file ".background:dmg-background.png"
-    set position of item "$APP_NAME.app" of container window to {150, 190}
+    set position of item "$BUNDLE_NAME" of container window to {150, 190}
     set position of item "Applications" of container window to {450, 190}
     update without registering applications
     delay 2
@@ -302,7 +308,7 @@ APPLESCRIPT
 }
 
 if [ "${1:-}" = "--image-only" ]; then
-  [ -n "${2:-}" ] || fail "usage: release.sh --image-only <path to TrackpadLauncher.app>"
+  [ -n "${2:-}" ] || fail "usage: release.sh --image-only <path to Trackpad Launcher.app>"
   mkdir -p "$OUT"
   build_image "$2"
   echo "Unsigned test image: $DMG"
@@ -310,7 +316,7 @@ if [ "${1:-}" = "--image-only" ]; then
 fi
 
 if [ "${1:-}" = "--archive-only" ]; then
-  [ -n "${2:-}" ] || fail "usage: release.sh --archive-only <path to TrackpadLauncher.app>"
+  [ -n "${2:-}" ] || fail "usage: release.sh --archive-only <path to Trackpad Launcher.app>"
   archive_and_check "$2" lenient
   exit 0
 fi
@@ -331,11 +337,11 @@ mkdir -p "$OUT"
 (cd "$ROOT" && xcodegen generate)
 
 xcodebuild archive \
-  -project "$ROOT/$APP_NAME.xcodeproj" \
-  -scheme "$APP_NAME" \
+  -project "$ROOT/$PROJECT_NAME.xcodeproj" \
+  -scheme "$PROJECT_NAME" \
   -configuration Release \
   -destination 'generic/platform=macOS' \
-  -archivePath "$OUT/$APP_NAME.xcarchive" \
+  -archivePath "$OUT/$PROJECT_NAME.xcarchive" \
   CODE_SIGN_STYLE=Manual \
   "CODE_SIGN_IDENTITY=Developer ID Application" \
   DEVELOPMENT_TEAM="$TEAM_ID"
@@ -354,11 +360,11 @@ cat > "$OUT/ExportOptions.plist" <<PLIST
 PLIST
 
 xcodebuild -exportArchive \
-  -archivePath "$OUT/$APP_NAME.xcarchive" \
+  -archivePath "$OUT/$PROJECT_NAME.xcarchive" \
   -exportOptionsPlist "$OUT/ExportOptions.plist" \
   -exportPath "$OUT/export"
 
-APP="$OUT/export/$APP_NAME.app"
+APP="$OUT/export/$BUNDLE_NAME"
 [ -d "$APP" ] || fail "export did not produce $APP"
 
 codesign --verify --strict --verbose=2 "$APP"
@@ -369,7 +375,7 @@ grep -q "flags=0x10000(runtime)" <<<"$SIGNATURE" ||
   fail "exported app lacks the hardened runtime flag."
 
 # The app is stapled before it goes into the image so a copy dragged out opens offline.
-ZIP="$OUT/$APP_NAME-notarize.zip"
+ZIP="$OUT/$PROJECT_NAME-notarize.zip"
 ditto -c -k --keepParent "$APP" "$ZIP"
 xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
 xcrun stapler staple "$APP"
