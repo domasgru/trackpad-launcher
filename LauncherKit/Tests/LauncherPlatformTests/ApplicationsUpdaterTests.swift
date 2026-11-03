@@ -56,12 +56,13 @@ import Testing
         let log = EventLog()
         /// The name of a file in the ad-hoc release app, to find an unpacked copy of it.
         let marker = BundleFixture.newMarker()
-        let downloadFilesBefore = BundleFixture.downloadFiles()
+        let downloadFilesBefore: [String]
 
         init(
             administrator: TestAdministrator = TestAdministrator(answer: nil), signer: Signer = ApplicationsUpdaterTests.signer,
             stall: TimeInterval = 10, download: ApplicationsUpdater.Download? = nil
         ) async throws {
+            downloadFilesBefore = await BundleFixture.downloadFiles()
             fixture = try BundleFixture()
             applications = try fixture.folder("Applications")
             old = try fixture.makeBundle(named: "TrackpadLauncher.app", in: applications, version: "1.0.0")
@@ -109,16 +110,16 @@ import Testing
             updater.update(to: release(size: size)) { log.record($0) }
         }
 
-        func expectOldBundleUntouched() throws {
+        func expectOldBundleUntouched() async throws {
             #expect(try BundleFixture.manifest(of: old) == oldManifest)
             #expect(try BundleFixture.appNames(in: applications) == ["TrackpadLauncher.app"])
             #expect(administrator.calls.isEmpty)
-            expectNothingOfTheUpdateOnDisk()
+            await expectNothingOfTheUpdateOnDisk()
         }
 
-        func expectNothingOfTheUpdateOnDisk() {
-            #expect(BundleFixture.downloadFiles() == downloadFilesBefore)
-            #expect(BundleFixture.copies(carrying: marker) == [])
+        func expectNothingOfTheUpdateOnDisk() async {
+            #expect(await BundleFixture.downloadFiles() == downloadFilesBefore)
+            #expect(await BundleFixture.copies(carrying: marker) == [])
         }
     }
 
@@ -157,7 +158,7 @@ import Testing
         #expect(progress.last == 1.0)
         #expect(rig.log.events.suffix(2) == [.downloaded, .failed])
         #expect(rig.log.followsTheContract)
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
     }
 
     @Test func anArchiveThatIsNotGenuineIsRefusedBeforeAnyPromptEvenWhereThePromptWouldBeNeeded() async throws {
@@ -172,7 +173,7 @@ import Testing
 
         #expect(rig.log.events.suffix(2) == [.downloaded, .failed])
         #expect(rig.log.followsTheContract)
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
     }
 
     @Test(arguments: [3999, 4001])
@@ -187,7 +188,7 @@ import Testing
 
         #expect(!rig.log.events.contains(.downloaded))
         #expect(rig.log.followsTheContract)
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
     }
 
     @Test func aConnectionClosedAfterFortyPercentFails() async throws {
@@ -207,7 +208,7 @@ import Testing
         #expect(rig.log.progress.last == 0.4)
         #expect(!rig.log.events.contains(.downloaded))
         #expect(rig.log.followsTheContract)
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
     }
 
     @Test(arguments: [false, true])
@@ -236,7 +237,7 @@ import Testing
         #expect(rig.log.events.suffix(2) == [.downloaded, .failed])
         #expect(rig.log.progress.last == 1.0)
         #expect(rig.log.followsTheContract)
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
     }
 
     @Test(arguments: [404, 500])
@@ -249,7 +250,7 @@ import Testing
         await rig.log.until { $0.contains(.failed) }
 
         #expect(rig.log.events == [.failed])
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
     }
 
     @Test func aServerThatStopsSendingFailsAfterTheStall() async throws {
@@ -267,7 +268,7 @@ import Testing
         #expect(rig.log.progress.last == 0.4)
         #expect(!rig.log.events.contains(.downloaded))
         #expect(rig.log.followsTheContract)
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
     }
 
     @Test func cancellingAtFortyPercentClosesTheConnectionAndLeavesNothingAndTheNextUpdateWorks() async throws {
@@ -288,7 +289,7 @@ import Testing
         #expect(seen)
         #expect(rig.log.progress.last == 0.4)
         #expect(rig.log.events == rig.log.progress.map { .progress($0) })
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
 
         rig.server.script(Self.archivePath, .respond(status: 200, body: archive))
         let again = EventLog()
@@ -313,7 +314,7 @@ import Testing
         try await Task.sleep(for: .milliseconds(500))
 
         #expect(rig.log.events.isEmpty)
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
     }
 
     @Test func cancellingFromInsideTheDownloadedEventChangesNothingAndOneOutcomeFollows() async throws {
@@ -333,7 +334,7 @@ import Testing
         await log.until { $0.contains(.failed) }
 
         #expect(log.events == [.downloaded, .failed])
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
     }
 
     @Test func cancellingStopsTheDownloadAndNothingMoreIsReported() async throws {
@@ -351,7 +352,7 @@ import Testing
         try await Task.sleep(for: .milliseconds(400))
 
         #expect(rig.log.events == [.progress(0.25)])
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
     }
 
     @Test func everyRequestOfTheDownloadCarriesTheSameConstantHeadersAcrossTheRedirectAndNoCookie() async throws {
@@ -483,8 +484,8 @@ import Testing
         #expect(log.events.suffix(2) == [.downloaded, .failed])
         #expect(log.followsTheContract)
         #expect(rig.administrator.calls.isEmpty, "the administrator is never asked about an archive that is not the one offered")
-        #expect(BundleFixture.bundles(identifiedBy: record.identifier) == [])
-        try rig.expectOldBundleUntouched()
+        #expect(await BundleFixture.bundles(identifiedBy: record.identifier) == [])
+        try await rig.expectOldBundleUntouched()
     }
 
     /// False, with an issue recorded, when the fixture app has no sealed resource file to change.
@@ -534,7 +535,7 @@ import Testing
         #expect(rig.log.events.suffix(2) == [.downloaded, .failed])
         #expect(rig.administrator.calls.isEmpty, "the administrator is never asked about an archive holding more than the app")
         #expect(try FileManager.default.contentsOfDirectory(atPath: sentinel.path) == [])
-        try rig.expectOldBundleUntouched()
+        try await rig.expectOldBundleUntouched()
         #expect(!FileManager.default.fileExists(atPath: rig.fixture.root.appending(path: "escape").path))
     }
 

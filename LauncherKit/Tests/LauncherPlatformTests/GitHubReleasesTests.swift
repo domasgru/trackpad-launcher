@@ -138,18 +138,44 @@ import Testing
     }
 
     @Test func aFailedRequestAnswersNothingAtOnce() async throws {
-        let silent = try await LocalReleaseServer()
-        let closedPort = silent.port
-        silent.stop()
-        try await Task.sleep(for: .milliseconds(100))
-        let nothingListening = GitHubReleases(endpoint: URL(string: "http://127.0.0.1:\(closedPort)\(Self.listPath)")!, stall: 5)
+        // A port that resets every connection the moment it arrives, and stays ours for the whole test: a port freed
+        // instead could be taken by a server of a test running alongside, which would then answer or stall, and on
+        // macOS a port bound but not listening drops connections silently rather than refusing them.
+        let socket = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+        try #require(socket >= 0)
+        let resetting = DispatchSource.makeReadSource(fileDescriptor: socket, queue: DispatchQueue(label: "resetting"))
+        resetting.setEventHandler { @Sendable in
+            let connection = accept(socket, nil, nil)
+            guard connection >= 0 else { return }
+            var abort = linger(l_onoff: 1, l_linger: 0)
+            setsockopt(connection, SOL_SOCKET, SO_LINGER, &abort, socklen_t(MemoryLayout<linger>.size))
+            close(connection)
+        }
+        resetting.setCancelHandler { @Sendable in close(socket) }
+        defer { resetting.cancel() }
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        address.sin_port = 0
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let bound = withUnsafeMutablePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(socket, $0, length) == 0 && getsockname(socket, $0, &length) == 0
+            }
+        }
+        try #require(bound && listen(socket, 8) == 0)
+        resetting.resume()
+        let closedPort = UInt16(bigEndian: address.sin_port)
+        // A stall far longer than any wait the main actor sees while other suites run alongside: a refused request answers
+        // well inside it, one that waited for the stall could not.
+        let nothingListening = GitHubReleases(endpoint: URL(string: "http://127.0.0.1:\(closedPort)\(Self.listPath)")!, stall: 45)
 
         let started = ContinuousClock.now
         let (list, answers) = await Self.fetch(nothingListening)
 
         #expect(list.isEmpty)
         #expect(answers == 1)
-        #expect(ContinuousClock.now - started < .seconds(4))
+        #expect(ContinuousClock.now - started < .seconds(20))
     }
 
     @Test(arguments: [

@@ -107,7 +107,7 @@ final class BundleFixture: @unchecked Sendable {
 
     /// Where an unpacked update can sit outside any fixture's folder: the item-replacement folders on the temporary
     /// volume, and the temporary folder itself.
-    private static func unpackedBundles() -> [URL] {
+    nonisolated private static func unpackedBundles() -> [URL] {
         let files = FileManager.default
         let temporary = files.temporaryDirectory
         let replacements = (try? files.contentsOfDirectory(atPath: temporary.appending(path: "TemporaryItems").path)) ?? []
@@ -116,19 +116,26 @@ final class BundleFixture: @unchecked Sendable {
     }
 
     /// Unpacked copies, outside any fixture's folder, of the bundle that carries `marker`.
-    static func copies(carrying marker: String) -> [URL] {
+    @concurrent static func copies(carrying marker: String) async -> [URL] {
         unpackedBundles().filter { FileManager.default.fileExists(atPath: $0.appending(path: "Contents/Resources/\(marker)").path) }
     }
 
-    /// App bundles outside any fixture's folder whose identifier is `identifier`.
-    static func bundles(identifiedBy identifier: String) -> [URL] {
-        unpackedBundles().filter {
-            (NSDictionary(contentsOf: $0.appending(path: "Contents/Info.plist"))?["CFBundleIdentifier"] as? String) == identifier
+    /// App bundles outside any fixture's folder whose identifier is `identifier`, once none is left or `limit` has
+    /// passed. Other suites unpack the same committed fixture alongside, each copy only for a moment, so a bundle seen
+    /// once proves nothing; one this test's update left behind is still there when the limit runs out.
+    @concurrent static func bundles(identifiedBy identifier: String, within limit: Duration = .seconds(10)) async -> [URL] {
+        let deadline = ContinuousClock.now + limit
+        while true {
+            let left = unpackedBundles().filter {
+                (NSDictionary(contentsOf: $0.appending(path: "Contents/Info.plist"))?["CFBundleIdentifier"] as? String) == identifier
+            }
+            if left.isEmpty || ContinuousClock.now >= deadline { return left }
+            try? await Task.sleep(for: .milliseconds(100))
         }
     }
 
     /// The partial files a download task leaves in the temporary folder when it writes to disk.
-    static func downloadFiles() -> [String] {
+    @concurrent static func downloadFiles() async -> [String] {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)) ?? []
         return names.filter { $0.hasPrefix("CFNetworkDownload_") }
     }
