@@ -149,7 +149,7 @@ public enum Permission: Hashable, Sendable {
 
 /// The running Trackpad Launcher processes. Real: SystemRunningCopies. Test: InMemoryRunningCopies.
 @MainActor public protocol RunningCopies: AnyObject {
-    /// Every other process with this bundle identifier, read now.
+    /// Every other running Trackpad Launcher, Debug or release, read now.
     func others() -> [RunningCopy]
     /// Stops each at once without asking: a copy can neither refuse, nor ask its user, nor hang the stop. Calls
     /// `exited` once, on the main actor, when every listed copy has exited; synchronously when none still runs. The

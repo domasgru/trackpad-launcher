@@ -32,7 +32,7 @@ Run `make` to list them. Each one calls a script in `Scripts/`.
 | `make release` | Releases the version already set in `Config/Version.xcconfig`: the first release, or a retry after a failed publish. |
 
 A development build (`make run`, or Xcode) never checks for updates and never shows the move to Applications dialog.
-Debug builds also open the launch animation tuner.
+Debug builds also open the launch animation tuner. A Debug build runs as `com.domasgru.TrackpadLauncherApp.debug`: System Settings lists it as a second *Trackpad Launcher* under Privacy & Security, and it keeps its own settings, apart from the installed release's.
 
 ## Releasing
 

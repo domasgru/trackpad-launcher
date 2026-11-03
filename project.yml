@@ -44,7 +44,11 @@ targets:
         # The bundle's file name is the name Finder, the Dock and Spotlight show; CFBundleDisplayName cannot override it.
         PRODUCT_NAME: Trackpad Launcher
         PRODUCT_MODULE_NAME: TrackpadLauncher
-        PRODUCT_BUNDLE_IDENTIFIER: com.domasgru.TrackpadLauncherApp
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ONLY_ACTIVE_ARCH: NO
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.domasgru.TrackpadLauncherApp.debug
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: com.domasgru.TrackpadLauncherApp

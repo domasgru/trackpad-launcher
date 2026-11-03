@@ -5,11 +5,17 @@ import LauncherCore
     /// The observations of a stop under way, alive until every listed copy has exited.
     private var watches: [NSKeyValueObservation] = []
 
-    public init() {}
+    private let bundleIdentifier: String?
+
+    public convenience init() { self.init(bundleIdentifier: Bundle.main.bundleIdentifier) }
+
+    init(bundleIdentifier: String?) { self.bundleIdentifier = bundleIdentifier }
 
     public func others() -> [RunningCopy] {
         let own = NSRunningApplication.current
-        return NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
+        guard let bundleIdentifier else { return [] }
+        return Self.family(of: bundleIdentifier)
+            .flatMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0) }
             .filter { $0.processIdentifier != own.processIdentifier }
             .map {
                 RunningCopy(
@@ -62,6 +68,14 @@ private final class Remaining: @unchecked Sendable {
 }
 
 extension SystemRunningCopies {
+    /// The identifiers of every build of the app a bundle identifier belongs to: the release one and its `.debug`
+    /// twin, whichever of the two is given. Pure.
+    static func family(of bundleIdentifier: String) -> Set<String> {
+        let suffix = ".debug"
+        let release = bundleIdentifier.hasSuffix(suffix) ? String(bundleIdentifier.dropLast(suffix.count)) : bundleIdentifier
+        return [release, release + suffix]
+    }
+
     /// The one start order, a strict total order so two copies always give mirror-image answers: launch date first,
     /// a missing date counting as later than any date, then the lower pid. Pure; a test runs it over pairs.
     static func started(_ a: (launched: Date?, pid: pid_t), before b: (launched: Date?, pid: pid_t)) -> Bool {

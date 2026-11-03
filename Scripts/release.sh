@@ -26,7 +26,8 @@
 #   Scripts/release.sh --archive-only <app> write the .aar for an existing app and self-check it the way an
 #                                          older version will, without notarisation or GitHub. Here the
 #                                          stapler and Team ID checks are only reported; in the full
-#                                          release they are fatal
+#                                          release they are fatal. The bundle identifier check is fatal
+#                                          in both
 set -euo pipefail
 
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
@@ -39,6 +40,7 @@ BUNDLE_NAME="Trackpad Launcher.app"
 # refuses any other entry and installs the bundle over its own copy, whatever that copy is named.
 ARCHIVE_PREFIX="TrackpadLauncher"
 ARCHIVED_BUNDLE_NAME="TrackpadLauncher.app"
+BUNDLE_ID="com.domasgru.TrackpadLauncherApp"
 VOLUME_NAME="Trackpad Launcher"
 OUT="${RELEASE_OUT:-$ROOT/build/release}"
 BACKGROUND="$ROOT/Scripts/release/dmg-background.png"
@@ -180,7 +182,8 @@ preflight_version() {
 }
 
 # Archives the app as the update asset, unpacks it as an older version will and checks the result. Sets AAR.
-# With mode "lenient" the stapler and Team ID checks are reported instead of fatal.
+# With mode "lenient" the stapler and Team ID checks are reported instead of fatal; the bundle identifier check is
+# fatal in both modes.
 archive_and_check() {
   local app="$1" mode="$2"
   [ -d "$app" ] || fail "no app at $app"
@@ -209,6 +212,11 @@ archive_and_check() {
   before="$(codesign -dv --verbose=2 "$app" 2>&1 | grep -E '^(Identifier|TeamIdentifier)=' | sort)"
   after="$(codesign -dv --verbose=2 "$copy" 2>&1 | grep -E '^(Identifier|TeamIdentifier)=' | sort)"
   [ "$before" = "$after" ] || fail "identifier or team changed by the archive: '$before' vs '$after'."
+
+  # Under another identifier a release would be a different app to macOS (fresh grants, settings and login item), and
+  # no installed copy would accept it as an update, since the update's genuineness check pins the signer's identifier.
+  grep -qxF "Identifier=$BUNDLE_ID" <<<"$after" ||
+    fail "the app is not signed with the identifier $BUNDLE_ID (found: $(grep '^Identifier=' <<<"$after" | tr '\n' ' '))."
 
   local stapled=true signed=true
   xcrun stapler validate "$copy" >/dev/null 2>&1 || stapled=false
