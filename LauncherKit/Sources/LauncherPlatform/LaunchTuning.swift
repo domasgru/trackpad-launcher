@@ -46,6 +46,9 @@ struct LaunchTuning: Equatable, Sendable {
     /// The launch bounce's numbers.
     var bounce = Bounce()
 
+    /// The pick animation's numbers: an app picker's icon growing into place.
+    var pick: PickAnimation = .shipped
+
     static let shipped = LaunchTuning()
 
     #if DEBUG
@@ -88,6 +91,70 @@ extension LaunchTuning: Codable {
         swipePointsPerStep = try c.decode(.swipePointsPerStep, or: s.swipePointsPerStep)
         swipeTrackingSpeed = try c.decode(.swipeTrackingSpeed, or: s.swipeTrackingSpeed)
         bounce = try c.decode(.bounce, or: s.bounce)
+        pick = try c.decode(.pick, or: s.pick)
+    }
+}
+
+extension PickAnimation: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case startScale, peakScale, growTime, settleTime
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let s = PickAnimation.shipped
+        self.init(
+            startScale: try c.decode(.startScale, or: s.startScale),
+            peakScale: try c.decode(.peakScale, or: s.peakScale),
+            growTime: try c.decode(.growTime, or: s.growTime),
+            settleTime: try c.decode(.settleTime, or: s.settleTime))
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(startScale, forKey: .startScale)
+        try c.encode(peakScale, forKey: .peakScale)
+        try c.encode(growTime, forKey: .growTime)
+        try c.encode(settleTime, forKey: .settleTime)
+    }
+}
+
+/// The tuner's tabs. Each owns a disjoint part of a tuning, except Simulate Reduce motion, which belongs to none.
+enum TunerTab: String, CaseIterable, Sendable {
+    case launch, bounce, pick, swipe
+}
+
+extension LaunchTuning {
+    /// The shipped values for `tab`'s fields only.
+    func resettingToShipped(_ tab: TunerTab) -> LaunchTuning {
+        let s = LaunchTuning.shipped
+        var t = self
+        switch tab {
+        case .launch:
+            t.iconSide = s.iconSide
+            t.duration = s.duration
+            t.popSize = s.popSize
+            t.popTime = s.popTime
+            t.rise = s.rise
+            t.riseCurve = s.riseCurve
+            t.shrink = s.shrink
+            t.shrinkCurve = s.shrinkCurve
+            t.fadeCurve = s.fadeCurve
+            t.maximumSway = s.maximumSway
+            t.minimumSway = s.minimumSway
+            t.swayCurve = s.swayCurve
+            t.maximumTilt = s.maximumTilt
+            t.tiltCurve = s.tiltCurve
+        case .bounce:
+            t.bounce = s.bounce
+        case .pick:
+            t.pick = s.pick
+        case .swipe:
+            t.swipeFollowsCursor = s.swipeFollowsCursor
+            t.swipePointsPerStep = s.swipePointsPerStep
+            t.swipeTrackingSpeed = s.swipeTrackingSpeed
+        }
+        return t
     }
 }
 

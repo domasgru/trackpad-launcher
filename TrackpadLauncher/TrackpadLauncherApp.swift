@@ -68,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shell = SettingsShell(launcher: launcher, quit: { [unowned self] in lifecycle.quit() })
         #if DEBUG
         system = actions
+        shell?.pickTuning = { [unowned actions] in actions.pickTuning }
         showAnimationTuner()
         #endif
         return launcher
@@ -86,7 +87,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showAnimationTuner() {
         guard tunerWanted, let system else { return }
         tunerWanted = false
-        system.showAnimationTuner()
+        system.showAnimationTuner(
+            previewPick: { [weak self] in self?.shell?.previewPickAnimation() },
+            canPreviewPick: { [weak self] in self?.shell?.canPreviewPickAnimation ?? false })
     }
     #endif
 }

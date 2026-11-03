@@ -33,6 +33,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             set { tuningHook.read = newValue }
         }
         private let tuningHook = TuningHook()
+        private let currentPickAnimation: () -> PickAnimation?
     #endif
 
     public init(launcher: Launcher, quit: @escaping () -> Void) {
@@ -48,6 +49,9 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         let actions = Self.makeActions(
             launcher: launcher, icons: icons, window: window, quit: quit, tuned: tuned)
         window.install(content: SettingsView(launcher: launcher, actions: actions))
+        #if DEBUG
+            currentPickAnimation = actions.pickAnimation
+        #endif
         self.window = window
         switcherPresenter = SwitcherPresenter(launcher: launcher)
         windowSwitcherPresenter = WindowSwitcherPresenter(launcher: launcher)
@@ -169,6 +173,30 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         window.setFrameOrigin(
             NSPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2))
     }
+
+    #if DEBUG
+        /// Debug builds' tuner button: plays the pick animation, as a pick would (so Reduce motion, the system's or
+        /// the tuner's simulated one, applies), on every picker showing an installed app's icon in the open settings
+        /// window. No assignment changes.
+        public func previewPickAnimation() {
+            guard case .open = launcher.window, let animation = currentPickAnimation() else { return }
+            for picker in pickers(in: window.contentView) where !picker.iconLayer.isHidden {
+                picker.play(animation)
+            }
+        }
+
+        /// True while the settings window is open and some row shows an installed app. Reads observed state, so a
+        /// SwiftUI body calling it follows the model.
+        public var canPreviewPickAnimation: Bool {
+            guard case .open = launcher.window else { return false }
+            return launcher.rows.contains { if case .present = $0.app { true } else { false } }
+        }
+
+        private func pickers(in view: NSView?) -> [PickerView] {
+            guard let view else { return [] }
+            return (view as? PickerView).map { [$0] } ?? view.subviews.flatMap { pickers(in: $0) }
+        }
+    #endif
 
     /// What the pick animation plays now: nothing under Reduce motion, the system's or the tuner's simulated one;
     /// otherwise the tuner's values when it is wired, else the shipped ones.
