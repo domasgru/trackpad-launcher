@@ -65,7 +65,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hardware: MultitouchTrackpads(), preferences: SystemTrackpadPreferences(), permissions: SystemPermissions(),
             system: actions, catalog: catalog, scanner: SystemAppScanner(catalog: catalog),
             store: SettingsStore(defaults: .standard), startAtLogin: startAtLogin)
-        shell = SettingsShell(launcher: launcher, quit: { [unowned self] in lifecycle.quit() })
+        shell = SettingsShell(
+            launcher: launcher, liquidLook: { LiquidTuning.current }, quit: { [unowned self] in lifecycle.quit() })
         #if DEBUG
         system = actions
         showAnimationTuner()

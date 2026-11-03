@@ -18,14 +18,15 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     private var isShown = false
     private var observations: [Task<Void, Never>] = []
 
-    public init(launcher: Launcher, quit: @escaping () -> Void) {
+    public init(
+        launcher: Launcher, liquidLook: @escaping () -> LiquidLook = { .shipped }, quit: @escaping () -> Void) {
         self.launcher = launcher
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let window = SettingsWindow()
         let actions = Self.makeActions(launcher: launcher, icons: icons, window: window, quit: quit)
         window.install(content: SettingsView(launcher: launcher, actions: actions))
         self.window = window
-        switcherPresenter = SwitcherPresenter(launcher: launcher)
+        switcherPresenter = SwitcherPresenter(launcher: launcher, liquidLook: liquidLook)
         windowSwitcherPresenter = WindowSwitcherPresenter(launcher: launcher)
         super.init()
 

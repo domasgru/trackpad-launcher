@@ -46,6 +46,9 @@ struct LaunchTuning: Equatable, Sendable {
     /// The launch bounce's numbers.
     var bounce = Bounce()
 
+    /// The switcher's liquid look.
+    var liquid = LiquidLook.shipped
+
     static let shipped = LaunchTuning()
 
     #if DEBUG
@@ -88,6 +91,7 @@ extension LaunchTuning: Codable {
         swipePointsPerStep = try c.decode(.swipePointsPerStep, or: s.swipePointsPerStep)
         swipeTrackingSpeed = try c.decode(.swipeTrackingSpeed, or: s.swipeTrackingSpeed)
         bounce = try c.decode(.bounce, or: s.bounce)
+        liquid = try c.decode(.liquid, or: s.liquid)
     }
 }
 
@@ -118,6 +122,15 @@ extension LaunchTuning.Bounce: Codable {
     }
 }
 #endif
+
+/// The switcher's liquid look: the tuner's override in Debug builds, always `shipped` in Release.
+public enum LiquidTuning {
+    #if DEBUG
+    public static var current: LiquidLook { LaunchTuning.current.liquid }
+    #else
+    public static var current: LiquidLook { .shipped }
+    #endif
+}
 
 extension LaunchTuning {
     /// Every number that shapes a launch bounce. The defaults are the shipped bounce.

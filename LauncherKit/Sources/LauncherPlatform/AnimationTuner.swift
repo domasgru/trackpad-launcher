@@ -208,6 +208,7 @@ struct TunerView: View {
                     Text("Applies from the next swipe. Off: 12 mm of finger per icon, no acceleration.")
                 }
                 bounceSection
+                liquidSection
                 presetsSection
             }
             .formStyle(.grouped)
@@ -266,6 +267,44 @@ struct TunerView: View {
             Text("Launch bounce")
         } footer: {
             Text("Applies from the next bounce. Preview keeps Finder's icon bouncing at the pointer, restarting it on every change, and floats it away when turned off.")
+        }
+    }
+
+    private var liquidSection: some View {
+        Section {
+            knob("Swell rise", \.liquid.swellRise, 0...20, step: 0.5, unit: "pt",
+                 hint: "how far the swell rises beyond the band; 3 is subtle")
+            knob("Swell corner", \.liquid.swellCorner, 0.1...0.5, step: 0.01, hint: "share of the swell's height")
+            knob("Room", \.liquid.room, 20...60, step: 1, unit: "pt", hint: "panel margin the swell, pull and wave live in")
+            knob("Icon body", \.liquid.iconBody, 40...80, step: 1, unit: "pt", hint: "visible body of an icon")
+            knob("Bead side", \.liquid.beadSide, 50...110, step: 1, unit: "pt")
+            knob("Bead corner", \.liquid.beadCorner, 0.1...0.5, step: 0.01, hint: "share of the side")
+            knob("Neck thickness", \.liquid.bandThickness, 20...80, step: 1, unit: "pt")
+            knob("Neck softness", \.liquid.spacing, 5...80, step: 1, unit: "pt", hint: "merge distance of the necks")
+            knob("Reach", \.liquid.reach, 0...1.5, step: 0.05, hint: "leading-edge stretch per item of lean")
+            knob("Follow time", \.liquid.followTime, 0.005...0.1, step: 0.005, unit: "s")
+            knob("Flow time", \.liquid.flowTime, 0.05...0.2, step: 0.01, unit: "s", hint: "capped at 0.2")
+            knob("Lead share", \.liquid.leadShare, 0...1, step: 0.05)
+            knob("Thinning", \.liquid.thinning, 0...1, step: 0.01, hint: "swell height lost per point of stretch")
+            knob("End pull", \.liquid.endPull, 0...40, step: 1, unit: "pt")
+            knob("End pull rate", \.liquid.endPullMM, 0.2...4, step: 0.1, unit: "mm", hint: "e-fold per step-mm")
+            knob("Pull hold", \.liquid.pullHold, 0...0.3, step: 0.01, unit: "s", hint: "before the pull springs back")
+            knob("Wobble", \.liquid.wobble, 0...12, step: 0.5, unit: "pt")
+            knob("Wobble frequency", \.liquid.wobbleHz, 1...12, step: 0.1, unit: "Hz")
+            knob("Wobble damping", \.liquid.wobbleDamping, 0.05...1.5, step: 0.05)
+            knob("Wave height", \.liquid.waveHeight, 0...20, step: 0.5, unit: "pt", hint: "crest at full speed")
+            knob("Wave full speed", \.liquid.waveFullSpeed, 1...20, step: 0.5, hint: "items per second")
+            knob("Wave max", \.liquid.waveMax, 0...30, step: 0.5, unit: "pt", hint: "cap on a wave's rise; fits Room")
+            knob("Wave reach", \.liquid.waveReach, 0.5...8, step: 0.1, hint: "items to 1/e")
+            knob("Wave speed", \.liquid.waveSpeed, 2...40, step: 0.5, hint: "items per second along the band")
+            knob("Wave frequency", \.liquid.waveHz, 1...12, step: 0.1, unit: "Hz")
+            knob("Wave damping", \.liquid.waveDamping, 0.05...1.5, step: 0.05)
+            knob("Wave behind", \.liquid.waveBehind, 0...1, step: 0.05)
+            knob("Wave every", \.liquid.waveEvery, 0.1...2, step: 0.05)
+        } header: {
+            Text("Liquid switcher")
+        } footer: {
+            Text("Applies from the next swipe.")
         }
     }
 

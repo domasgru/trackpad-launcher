@@ -1,4 +1,5 @@
 import Foundation
+import LauncherCore
 import Testing
 
 @testable import LauncherPlatform
@@ -68,5 +69,43 @@ struct TunerCodingTests {
         expected.height = 55
         expected.gap = 3
         #expect(tuning.bounce == expected)
+    }
+
+    @Test func `presets saved before the liquid switcher keep the shipped look`() throws {
+        let presets = try JSONDecoder().decode([TuningPreset].self, from: Data(Self.presetsBeforeBounce.utf8))
+
+        #expect(presets.allSatisfy { $0.tuning.liquid == .shipped })
+    }
+
+    @Test func `a saved look with only the swell rise keeps every other knob shipped`() throws {
+        let json = #"{"liquid":{"swellRise":3}}"#
+
+        let tuning = try JSONDecoder().decode(LaunchTuning.self, from: Data(json.utf8))
+
+        var expected = LiquidLook.shipped
+        expected.swellRise = 3
+        #expect(tuning.liquid == expected)
+    }
+
+    @Test func `every liquid knob survives a save and load`() throws {
+        var look = LiquidLook()
+        look.beadSide = 71; look.beadCorner = 0.21; look.bandThickness = 47; look.spacing = 33
+        look.swellRise = 5; look.swellCorner = 0.27; look.room = 44; look.iconBody = 61
+        look.reach = 0.7; look.followTime = 0.03; look.flowTime = 0.15; look.leadShare = 0.5
+        look.endPull = 17; look.endPullMM = 1.3; look.pullHold = 0.09; look.thinning = 0.2
+        look.wobble = 3; look.wobbleHz = 5.5; look.wobbleDamping = 0.45
+        look.waveHeight = 7; look.waveFullSpeed = 9; look.waveMax = 10; look.waveReach = 2.1
+        look.waveSpeed = 12; look.waveHz = 6; look.waveDamping = 0.5; look.waveBehind = 0.2; look.waveEvery = 0.4
+        let changed = Mirror(reflecting: look).children.filter { child in
+            Mirror(reflecting: LiquidLook.shipped).children.contains { $0.label == child.label && "\($0.value)" != "\(child.value)" }
+        }
+        try #require(changed.count == Mirror(reflecting: look).children.count)
+        var tuning = LaunchTuning()
+        tuning.liquid = look
+        let presets = [TuningPreset(name: "Liquid", tuning: tuning)]
+
+        let loaded = try JSONDecoder().decode([TuningPreset].self, from: JSONEncoder().encode(presets))
+
+        #expect(loaded == presets)
     }
 }

@@ -36,3 +36,42 @@ public struct LiquidLook: Equatable, Sendable {
     public static let shipped = LiquidLook()
     public init() {}
 }
+
+#if DEBUG
+/// The animation tuner saves looks as JSON. Keys missing from an older save keep their shipped values.
+extension LiquidLook: Codable {
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let s = LiquidLook.shipped
+        self.init()
+        beadSide = try c.decodeIfPresent(Double.self, forKey: .beadSide) ?? s.beadSide
+        beadCorner = try c.decodeIfPresent(Double.self, forKey: .beadCorner) ?? s.beadCorner
+        bandThickness = try c.decodeIfPresent(Double.self, forKey: .bandThickness) ?? s.bandThickness
+        spacing = try c.decodeIfPresent(Double.self, forKey: .spacing) ?? s.spacing
+        swellRise = try c.decodeIfPresent(Double.self, forKey: .swellRise) ?? s.swellRise
+        swellCorner = try c.decodeIfPresent(Double.self, forKey: .swellCorner) ?? s.swellCorner
+        room = try c.decodeIfPresent(Double.self, forKey: .room) ?? s.room
+        iconBody = try c.decodeIfPresent(Double.self, forKey: .iconBody) ?? s.iconBody
+        reach = try c.decodeIfPresent(Double.self, forKey: .reach) ?? s.reach
+        followTime = try c.decodeIfPresent(Double.self, forKey: .followTime) ?? s.followTime
+        flowTime = try c.decodeIfPresent(Double.self, forKey: .flowTime) ?? s.flowTime
+        leadShare = try c.decodeIfPresent(Double.self, forKey: .leadShare) ?? s.leadShare
+        endPull = try c.decodeIfPresent(Double.self, forKey: .endPull) ?? s.endPull
+        endPullMM = try c.decodeIfPresent(Double.self, forKey: .endPullMM) ?? s.endPullMM
+        pullHold = try c.decodeIfPresent(Double.self, forKey: .pullHold) ?? s.pullHold
+        thinning = try c.decodeIfPresent(Double.self, forKey: .thinning) ?? s.thinning
+        wobble = try c.decodeIfPresent(Double.self, forKey: .wobble) ?? s.wobble
+        wobbleHz = try c.decodeIfPresent(Double.self, forKey: .wobbleHz) ?? s.wobbleHz
+        wobbleDamping = try c.decodeIfPresent(Double.self, forKey: .wobbleDamping) ?? s.wobbleDamping
+        waveHeight = try c.decodeIfPresent(Double.self, forKey: .waveHeight) ?? s.waveHeight
+        waveFullSpeed = try c.decodeIfPresent(Double.self, forKey: .waveFullSpeed) ?? s.waveFullSpeed
+        waveMax = try c.decodeIfPresent(Double.self, forKey: .waveMax) ?? s.waveMax
+        waveReach = try c.decodeIfPresent(Double.self, forKey: .waveReach) ?? s.waveReach
+        waveSpeed = try c.decodeIfPresent(Double.self, forKey: .waveSpeed) ?? s.waveSpeed
+        waveHz = try c.decodeIfPresent(Double.self, forKey: .waveHz) ?? s.waveHz
+        waveDamping = try c.decodeIfPresent(Double.self, forKey: .waveDamping) ?? s.waveDamping
+        waveBehind = try c.decodeIfPresent(Double.self, forKey: .waveBehind) ?? s.waveBehind
+        waveEvery = try c.decodeIfPresent(Double.self, forKey: .waveEvery) ?? s.waveEvery
+    }
+}
+#endif
