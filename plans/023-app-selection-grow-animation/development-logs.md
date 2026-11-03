@@ -1,6 +1,19 @@
 # Development logs: Pick animation and a per-animation tuner
 
 ## Specify
+- R4 contradicted the tuner's preview animating unpicked pickers → R4 names the tuner previews as the one exception.
+- R11's scenario left out the shared controls → R11 lists what shows on every tab; "Release builds have no tuner" dropped.
+- No scenario for a first assignment from "Choose app…" or a cancelled *Other…* → both added to R1.
+- *Simulate Reduce motion* had no pick behaviour → R9 says it turns picks and Pick previews off, with a scenario.
+- Easing source was ambiguous → R6 says the curve is fixed and the Launch tab does not affect it; the settle slows into 100%.
+- R7 claimed the overshoot reaches the name, which the numbers may not allow → R7 now only requires the whole icon uncut.
+- Hand-mode toggle named without a scenario → scenario added to R4.
+- Pick preview with no installed app's icon, and the "not found" case, were unspecified → R14 disables the button then and skips "not found" and "Choose app…"; the Pick button reads *Preview in settings*.
+- No default tab on first open → R12 opens on Launch.
+- Preset play button on the Pick tab was undefined → R16 makes it play on the pickers, hidden on Bounce and Swipe.
+- R12 did not trace to the problem → problem statement mentions the tuner forgetting its place.
+- Haptic or sound on pick a likely assumption → added as a non-goal.
+- Not applied: the scenario-restatement and multi-clause suggestions; each requirement stays testable as written.
 
 ## Plan
 - Review: R1–R5, R8 and R9 rested on a World row that could not fail if the picker ignored the model's answer, never played or played on every render, with the visible behaviour left to a "by feel" checkbox → a `LauncherUITests` target is added. The representable's make and update become two internal functions taking the coordinator, which the tests call as SwiftUI does; picks go through the real menu (the coordinator builds it, the test fires the item's action at its target); the icon layer's keyframes are read back as `LaunchFlightTests` reads a stage's. Rows T7–T15 prove R1–R5, R8, R9 and R6's layer facts; T3 stays as the model's answer. A planning probe (`.temp/picker-seam-probe.swift`) confirmed this works with no window and no running application, and that `performActionForItem` does not, so the rows name the action.
