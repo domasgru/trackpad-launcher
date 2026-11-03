@@ -105,12 +105,16 @@ final class BundleFixture: @unchecked Sendable {
     /// A file name no other bundle carries, to find an unpacked copy of one bundle.
     static func newMarker() -> String { "marker-\(UUID().uuidString)" }
 
-    /// Where an unpacked update can sit outside any fixture's folder: the item-replacement folders on the temporary
-    /// volume, and the temporary folder itself.
+    /// Where an unpacked update can sit outside any fixture's folder: the item-replacement folders this process made on
+    /// the temporary volume ("NSIRD_<process name>_…"), and the temporary folder itself. Only this process stages an
+    /// update, and the machine-wide folder holds thousands of other tools' folders: checking each of those on every
+    /// poll, from many tests at once, starved the cooperative pool and made timed tests fail.
     nonisolated private static func unpackedBundles() -> [URL] {
         let files = FileManager.default
         let temporary = files.temporaryDirectory
-        let replacements = (try? files.contentsOfDirectory(atPath: temporary.appending(path: "TemporaryItems").path)) ?? []
+        let ours = "NSIRD_\(ProcessInfo.processInfo.processName)_"
+        let replacements = ((try? files.contentsOfDirectory(atPath: temporary.appending(path: "TemporaryItems").path)) ?? [])
+            .filter { $0.hasPrefix(ours) }
         let folders = [temporary] + replacements.map { temporary.appending(path: "TemporaryItems/\($0)") }
         return folders.map { $0.appending(path: "TrackpadLauncher.app") }.filter { files.fileExists(atPath: $0.path) }
     }
@@ -132,12 +136,6 @@ final class BundleFixture: @unchecked Sendable {
             if left.isEmpty || ContinuousClock.now >= deadline { return left }
             try? await Task.sleep(for: .milliseconds(100))
         }
-    }
-
-    /// The partial files a download task leaves in the temporary folder when it writes to disk.
-    @concurrent static func downloadFiles() async -> [String] {
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)) ?? []
-        return names.filter { $0.hasPrefix("CFNetworkDownload_") }
     }
 
     static func appNames(in folder: URL) throws -> [String] {

@@ -56,13 +56,11 @@ import Testing
         let log = EventLog()
         /// The name of a file in the ad-hoc release app, to find an unpacked copy of it.
         let marker = BundleFixture.newMarker()
-        let downloadFilesBefore: [String]
 
         init(
             administrator: TestAdministrator = TestAdministrator(answer: nil), signer: Signer = ApplicationsUpdaterTests.signer,
             stall: TimeInterval = 10, download: ApplicationsUpdater.Download? = nil
         ) async throws {
-            downloadFilesBefore = await BundleFixture.downloadFiles()
             fixture = try BundleFixture()
             applications = try fixture.folder("Applications")
             old = try fixture.makeBundle(named: "TrackpadLauncher.app", in: applications, version: "1.0.0")
@@ -118,7 +116,6 @@ import Testing
         }
 
         func expectNothingOfTheUpdateOnDisk() async {
-            #expect(await BundleFixture.downloadFiles() == downloadFilesBefore)
             #expect(await BundleFixture.copies(carrying: marker) == [])
         }
     }

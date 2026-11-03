@@ -25,6 +25,8 @@ import Testing
         Entry(token: "String(contentsOf:", rule: "network"),
         Entry(token: "NSURLConnection", rule: "network"),
         Entry(token: "NSURLDownload", rule: "network"),
+        Entry(token: "downloadTask", rule: "the update archive is received into memory, never into a file"),
+        Entry(token: ".download(", rule: "the update archive is received into memory, never into a file"),
         Entry(token: "CFHTTP", rule: "network"),
         Entry(token: "import WebKit", rule: "network"),
         Entry(token: "WKWebView", rule: "network"),
@@ -186,7 +188,7 @@ import Testing
         let listed = Set(Self.banned.map(\.token))
         let required: Set<String> = [
             "URLSession.shared", "URLSessionConfiguration.default", ".background(withIdentifier", "String(contentsOf:",
-            "NSURLConnection", "NSURLDownload", "CFHTTP", "import WebKit", "WKWebView", "curl", "NSAppleScript",
+            "NSURLConnection", "NSURLDownload", "downloadTask", ".download(", "CFHTTP", "import WebKit", "WKWebView", "curl", "NSAppleScript",
             "import Network", "NWConnection", "CFSocket", "CFStream", "Process()", "Process.run(", "executableURL",
             "NSTask", "posix_spawn", "Timer", "asyncAfter", "Task.sleep", ".write(to:", "FileHandle(forWriting",
             "createFile(atPath",
