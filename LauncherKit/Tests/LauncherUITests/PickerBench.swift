@@ -127,6 +127,21 @@ final class PickerBench {
         #expect(scales == frames.scales.map { CGFloat($0) }, sourceLocation: sourceLocation)
         let keyTimes = animation?.keyTimes?.map(\.doubleValue)
         #expect(keyTimes == frames.keyTimes, sourceLocation: sourceLocation)
+
+        let transforms = animation?.values?.compactMap { ($0 as? NSValue)?.caTransform3DValue } ?? []
+        #expect(transforms.count == 85, sourceLocation: sourceLocation)
+        #expect(keyTimes?.count == 85, sourceLocation: sourceLocation)
+        #expect(keyTimes?.first == 0 && keyTimes?.last == 1, sourceLocation: sourceLocation)
+        #expect(
+            transforms.allSatisfy { $0.m11 == $0.m22 && $0.m33 == 1 }, "uniform scales", sourceLocation: sourceLocation)
+        #expect(abs((transforms.first?.m11 ?? 0) - 0.4) < 1e-9, sourceLocation: sourceLocation)
+        #expect(abs((transforms.last?.m11 ?? 0) - 1.0) < 1e-9, sourceLocation: sourceLocation)
+        let peak = keyTimes?.indices.first { abs(keyTimes![$0] * 0.35 - 0.2) < 1e-9 }
+        #expect(peak != nil, "a sample at 0.2 s", sourceLocation: sourceLocation)
+        if let peak, peak < transforms.count {
+            #expect(abs(transforms[peak].m11 - 1.1) < 1e-9, sourceLocation: sourceLocation)
+            #expect(transforms.allSatisfy { $0.m11 <= transforms[peak].m11 + 1e-9 }, sourceLocation: sourceLocation)
+        }
         #expect(otherLayersAreStill, sourceLocation: sourceLocation)
     }
 }

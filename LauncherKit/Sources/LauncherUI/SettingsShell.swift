@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
     /// A reference the shell and its actions share, so the actions, built before the shell exists, read the hook at call
     /// time.
     private final class TuningHook {
-        var read: (() -> (animation: PickAnimation, simulateReduceMotion: Bool))?
+        var read: (() -> SettingsShell.PickTuning)?
     }
 #endif
 
@@ -18,6 +18,8 @@ import UniformTypeIdentifiers
 /// Dock and ⌘-Tab; closing it removes both. It is the only place the activation policy changes. The window closes
 /// only through the model: the close button, ⌘W, Escape and Close Settings (⌘Q) all send `closeWindow()`.
 public final class SettingsShell: NSObject, NSWindowDelegate {
+    /// What the Debug tuner hands each pick: the animation to play and whether to pretend Reduce motion is on.
+    public typealias PickTuning = (animation: PickAnimation, simulateReduceMotion: Bool)
     private let launcher: Launcher
     private let icons = AppIcons()
     private let switcherPresenter: SwitcherPresenter
@@ -28,7 +30,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     #if DEBUG
         /// The Debug tuner's pick animation and Reduce motion switch, read at every pick. The composition root sets it;
         /// Release builds carry none of it.
-        public var pickTuning: (() -> (animation: PickAnimation, simulateReduceMotion: Bool))? {
+        public var pickTuning: (() -> PickTuning)? {
             get { tuningHook.read }
             set { tuningHook.read = newValue }
         }
@@ -42,9 +44,9 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         let window = SettingsWindow()
         #if DEBUG
             let hook = tuningHook
-            let tuned: () -> (animation: PickAnimation, simulateReduceMotion: Bool)? = { hook.read?() }
+            let tuned: () -> PickTuning? = { hook.read?() }
         #else
-            let tuned: () -> (animation: PickAnimation, simulateReduceMotion: Bool)? = { nil }
+            let tuned: () -> PickTuning? = { nil }
         #endif
         let actions = Self.makeActions(
             launcher: launcher, icons: icons, window: window, quit: quit, tuned: tuned)
@@ -201,7 +203,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     /// What the pick animation plays now: nothing under Reduce motion, the system's or the tuner's simulated one;
     /// otherwise the tuner's values when it is wired, else the shipped ones.
     static func pickAnimation(
-        reduceMotion: Bool, tuned: (animation: PickAnimation, simulateReduceMotion: Bool)?
+        reduceMotion: Bool, tuned: PickTuning?
     ) -> PickAnimation? {
         if reduceMotion { return nil }
         guard let tuned else { return .shipped }
@@ -210,7 +212,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
 
     private static func makeActions(
         launcher: Launcher, icons: AppIcons, window: SettingsWindow, quit: @escaping () -> Void,
-        tuned: @escaping () -> (animation: PickAnimation, simulateReduceMotion: Bool)?
+        tuned: @escaping () -> PickTuning?
     ) -> LauncherActions {
         LauncherActions(
             cachedIcon: { icons.cachedIcon(for: $0) },

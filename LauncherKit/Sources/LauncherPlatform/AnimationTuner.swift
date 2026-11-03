@@ -236,7 +236,10 @@ struct TunerView: View {
         }
         .frame(minWidth: 380, minHeight: 500)
         .onChange(of: model.tab) { old, _ in
-            if old == .bounce { isPreviewingBounce = false }
+            if old == .bounce, isPreviewingBounce {
+                previewBounce(false)
+                isPreviewingBounce = false
+            }
         }
     }
 

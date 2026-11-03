@@ -84,15 +84,13 @@ struct AppPicker: NSViewRepresentable {
         func showCurrentOnly() {
             guard let button, let pickerView else { return }
             button.removeAllItems()
-            let item = closedItem(current)
+            let presentIcon: NSImage?
+            if case .present(let entry) = current { presentIcon = icon(entry.url) } else { presentIcon = nil }
+            let item = closedItem(current, icon: presentIcon)
             button.menu?.addItem(item)
             button.selectItem(at: 0)
             shortenToFit(item, in: button)
-            if case .present(let entry) = current {
-                pickerView.showIcon(icon(entry.url))
-            } else {
-                pickerView.showIcon(nil)
-            }
+            pickerView.showIcon(presentIcon)
             // A missing app's name takes the button's whole width, so "not found" is in the tooltip.
             if case .missing(let name) = current { button.toolTip = "\(name) not found" } else { button.toolTip = nil }
         }
@@ -135,13 +133,13 @@ struct AppPicker: NSViewRepresentable {
         }
 
         /// The closed button's only item; never in the open menu.
-        private func closedItem(_ app: RowApp) -> NSMenuItem {
+        private func closedItem(_ app: RowApp, icon: NSImage?) -> NSMenuItem {
             switch app {
             case .unassigned:
                 return titledItem("Choose app…")
             case .present(let entry):
                 let item = titledItem(entry.name)
-                item.image = Self.clearImage(sized: Self.spacedSize(icon(entry.url)))
+                item.image = icon.map { Self.clearImage(sized: Self.spacedSize($0)) }
                 return item
             case .missing(let name):
                 let item = titledItem(name, color: .tertiaryLabelColor)

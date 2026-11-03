@@ -17,7 +17,7 @@ import Testing
         bench.expectPlaysPickAnimation(of: "Mail")
     }
 
-    @Test func otherPlaysOnlyWhenTheModelAcceptsTheChosenApp() {
+    @Test func otherPlaysOnlyWhenTheModelAcceptsTheChosenApp() throws {
         let bench = PickerBench(showing: "Safari")
 
         bench.pick("Other…")
@@ -25,26 +25,31 @@ import Testing
         #expect(bench.closedItem.title == "Safari")
         #expect(bench.noLayerAnimates)
 
-        bench.otherCompletion?(bench.entry("Calendar"))
+        let completion = try #require(bench.otherCompletion)
+        completion(bench.entry("Calendar"))
         #expect(bench.closedItem.title == "Calendar")
         bench.expectPlaysPickAnimation(of: "Calendar")
     }
 
-    @Test func aCancelledOtherLeavesTheIconAlone() {
+    @Test func aCancelledOtherLeavesTheIconAlone() throws {
         let bench = PickerBench(showing: "Safari")
 
         bench.pick("Other…")
+        #expect(bench.otherCalls == 1)
+        _ = try #require(bench.otherCompletion)
 
         #expect(bench.closedItem.title == "Safari")
         #expect(bench.iconLayerContents === bench.icon("Safari"))
         #expect(bench.noLayerAnimates)
     }
 
-    @Test func anOtherPickTheModelIgnoresChangesNothing() {
+    @Test func anOtherPickTheModelIgnoresChangesNothing() throws {
         let bench = PickerBench(showing: "Safari")
 
         bench.pick("Other…")
-        bench.otherCompletion?(nil)
+        #expect(bench.otherCalls == 1)
+        let completion = try #require(bench.otherCompletion)
+        completion(nil)
 
         #expect(bench.closedItem.title == "Safari")
         #expect(bench.iconLayerContents === bench.icon("Safari"))
@@ -131,13 +136,14 @@ import Testing
     @Test func aQuickSecondPickReplacesTheIconAndPlaysFromTheStart() {
         let bench = PickerBench(showing: "Safari")
         bench.pick("Mail")
+        bench.expectPlaysPickAnimation(of: "Mail")
 
         bench.pick("Music")
 
         bench.expectPlaysPickAnimation(of: "Music")
     }
 
-    @Test func withoutAnAnimationAPickSwapsTheIconAtOnce() {
+    @Test func withoutAnAnimationAPickSwapsTheIconAtOnce() throws {
         let menu = PickerBench(showing: "Safari", animation: nil)
         menu.pick("Mail")
         #expect(menu.closedItem.title == "Mail")
@@ -146,7 +152,9 @@ import Testing
 
         let other = PickerBench(showing: "Safari", animation: nil)
         other.pick("Other…")
-        other.otherCompletion?(other.entry("Calendar"))
+        #expect(other.otherCalls == 1)
+        let completion = try #require(other.otherCompletion)
+        completion(other.entry("Calendar"))
         #expect(other.closedItem.title == "Calendar")
         #expect(other.iconLayerContents === other.icon("Calendar"))
         #expect(other.noLayerAnimates)

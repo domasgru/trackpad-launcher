@@ -21,3 +21,14 @@
 - Rejected: none of the fifteen findings; all were applied in some form.
 
 ## Implement
+- No `AGENTS.md` in the repo → full gate taken as a clean `Scripts/test.sh` plus `xcodegen generate` and a Debug `xcodebuild` of the app, as in plans 012 and 021. No `.claude/skills/verify-*` → verification-skill step skipped. The local `main` is stale, so the review used `origin/main` (`c9125b6`) as its fixed point.
+- S1: a pick whose supplier gives nil (Reduce motion) or a pick of None also removes a running pick animation, so the swap is at once. `PickAnimation.scale(at:)` snaps times within 1e-9 of the peak and the end, so the sampled peak is exactly 1.1 and the last sample exactly 1.0.
+- S2: the `PickAnimation` JSON conformance is a plain extension, not `@retroactive` (the compiler rejects it within one package); still inside the tuner's `#if DEBUG` block.
+- Full gate after S2: green (15 + 153 + 574 tests, Debug app builds), only the existing `quinaryLabel` deprecation warning.
+- Review: the picker bench compared the layer's keyframes only with `PickAnimation.keyframes`, restating the implementation → it also asserts R6's literals (85 samples, 0.4 first, 1.1 largest at 0.2 s, 1.0 last, uniform scales).
+- Review: leaving the Bounce tab only cleared the flag, so the bounce preview could keep running depending on SwiftUI's ordering → the tab handler stops the preview itself; a second stop is a no-op.
+- Review: T8's Other… runs could pass with no completion captured, and T13 never checked Mail's animation before the second pick → both asserted.
+- Review: the pick-tuning tuple was spelled out at every site in the shell → `SettingsShell.PickTuning`; `showCurrentOnly` asked for the icon twice → once.
+- Review, not fixed: the tuner's footer and preset play buttons' two per-tab switches (a shared helper would still switch at both sites); `tuned:` shipping in Release (D5's one pure rule, T15's seam); layer-detail assertions (the plan's R7, D2 and D3 checks); multi-step T3 and T12 tests (one scenario each); `TuningHook` and the wiring across files (D5, D6).
+- Full gate after fixes: green (15 + 153 + 574 tests, Debug app builds, `swift build -c release` builds), no warnings from the branch.
+- Not run (manual, needs a person at a running Debug app): R7's uncut overshoot on screen, R11, R12, R14, the by-feel checks of S1 and S2, and R9 under System Settings' Reduce motion.
