@@ -81,6 +81,6 @@ Plan 014's budget (0.088 ms per frame) is this no-tap figure plus 0.03 ms.
 
 ## Decisions
 - **Gate the event tap: done (plan 014).** The always-on active session tap made every scroll, drag and system gesture event on the Mac a synchronous round trip through the app. It cost about 2.3% of a core whenever a finger was down, and put the app in the latency path of all scrolling.
-- **Fewer redraws in `SwitcherPanel.show`: rejected.** It would save a few milliseconds per swipe, and skipping unchanged transforms would likely change the icon-grow animation, which plan 013 keeps unchanged.
+- **Fewer redraws in `SwitcherPanel.show`: rejected.** It would save a few milliseconds per swipe, and skipping unchanged transforms would likely change the icon-grow animation, which plan 013 keeps unchanged. (Superseded by plan 024: `show` and the highlight are gone.)
 - **Release the settings window's content on close (about 15 MB): rejected.** Plan 003 keeps pickers instant on every open, and freed small-heap memory is often not returned to the system, so the saving is uncertain. Measure what the 15 MB is before revisiting.
 - **Per-frame allocations in the recognizer and the frame parser: not worth it.** They are a few percent of a cost that is now near the floor.

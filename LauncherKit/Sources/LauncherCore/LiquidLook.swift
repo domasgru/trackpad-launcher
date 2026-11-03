@@ -8,9 +8,9 @@ public struct LiquidLook: Equatable, Sendable {
     public var bandThickness = 52.0  // the neck
     public var spacing = 40.0  // the container's merge distance: how soft the necks' fillets are
     /// THE swell setting: how far the swell rises beyond a bead on each side. 3 is subtle. It moves nothing else: the
-    /// scale and the panel come from `room`; the rise is clamped to fit it with the pull.
+    /// scale and the window come from `room`; the rise is clamped to fit it with the pull.
     public var swellRise = 12.0, swellCorner = 0.32
-    /// The panel's clear margin beyond the beads on every side: the swell's rise, the end pull and the wave's cap live
+    /// The switcher's window margin, clear, beyond the beads on every side: the swell's rise, the end pull and the wave's cap live
     /// in it.
     public var room = 40.0
     /// The visible body of an 80 pt icon. A wave never dips a bead within 4 pt of it at the selected icon's grown size, and the swell never thins below

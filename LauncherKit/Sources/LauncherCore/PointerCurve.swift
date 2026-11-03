@@ -138,7 +138,7 @@ public enum SwipeTravel: Equatable, Sendable {
     /// As far as the cursor would move along the slide: `pointsPerStep` cursor points make one item.
     case cursor(PointerCurve, pointsPerStep: Double)
 
-    /// 100 cursor points per step: the app switcher's icon pitch (80 pt icons with 20 pt between), so its highlight
+    /// 100 cursor points per step: the app switcher's icon pitch (icons 100 pt apart, centre to centre), so its swell
     /// moves exactly like the cursor over the row. For a window switcher's rows the match is not literal: a row is one
     /// step whatever its size on screen.
     public static let shippedPointsPerStep = 100.0

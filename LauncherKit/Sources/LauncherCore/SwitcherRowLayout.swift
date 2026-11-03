@@ -1,6 +1,6 @@
 import Foundation
 
-/// A rectangle in panel points, y up from the panel's bottom.
+/// A rectangle in window points, y up from the window's bottom.
 public struct LiquidRect: Equatable, Sendable {
     public var minX, minY, width, height: Double
 
@@ -30,6 +30,8 @@ public struct LiquidRect: Equatable, Sendable {
 /// Every length scales by one factor when the row at full size would not fit the display.
 public struct SwitcherRowLayout: Equatable, Sendable {
     public static let fullIconSide = 80.0, fullPitch = 100.0, selectedIconScale = 1.12
+    /// The least clear space, in points at full size, between an icon and the bead around it.
+    static let iconMargin = 4.0
 
     public let iconCount: Int
     /// One snapshot per swipe.
@@ -54,7 +56,7 @@ public struct SwitcherRowLayout: Equatable, Sendable {
 
     /// The rise actually drawn: the look's, clamped to fit the room with the end pull.
     public var swellRise: Double {
-        let ceiling = max(look.room - min(look.endPull, 0.2 * Self.fullPitch), 0)
+        let ceiling = max(look.room - min(look.endPull, Liquid.endPullBound * Self.fullPitch), 0)
         return min(max(look.swellRise, 0), ceiling) * scale
     }
 
@@ -62,12 +64,12 @@ public struct SwitcherRowLayout: Equatable, Sendable {
         (Self.fullWidth(iconCount: iconCount, look: look) * scale, (look.beadSide + 2 * look.room) * scale)
     }
 
-    /// The horizontal centre, from the panel's left edge, of a position counted in icons from the first.
+    /// The horizontal centre, from the window's left edge, of a position counted in icons from the first.
     public func centreX(at position: Double) -> Double {
         (look.room + look.beadSide / 2) * scale + position * pitch
     }
 
-    /// The vertical centre of icons and band: half the panel's height.
+    /// The vertical centre of icons and band: half the window's height.
     public var centreY: Double { panelSize.height / 2 }
 
     private var beadSide: Double { look.beadSide * scale }
@@ -108,6 +110,6 @@ public struct SwitcherRowLayout: Equatable, Sendable {
     /// selected icon's grown body: an icon may be growing or shrinking while a wave passes its bead.
     public var beadLimits: ClosedRange<Double> {
         let body = look.iconBody * Self.selectedIconScale
-        return max(body + 4, look.bandThickness) * scale...(look.beadSide + 2 * min(look.waveMax, look.room)) * scale
+        return max(body + Self.iconMargin, look.bandThickness) * scale...(look.beadSide + 2 * min(look.waveMax, look.room)) * scale
     }
 }

@@ -275,7 +275,7 @@ struct TunerView: View {
             knob("Swell rise", \.liquid.swellRise, 0...20, step: 0.5, unit: "pt",
                  hint: "how far the swell rises beyond the band; 3 is subtle")
             knob("Swell corner", \.liquid.swellCorner, 0.1...0.5, step: 0.01, hint: "share of the swell's height")
-            knob("Room", \.liquid.room, 20...60, step: 1, unit: "pt", hint: "panel margin the swell, pull and wave live in")
+            knob("Room", \.liquid.room, 20...60, step: 1, unit: "pt", hint: "window margin the swell, pull and wave live in")
             knob("Icon body", \.liquid.iconBody, 40...80, step: 1, unit: "pt", hint: "visible body of an icon")
             knob("Bead side", \.liquid.beadSide, 50...110, step: 1, unit: "pt")
             knob("Bead corner", \.liquid.beadCorner, 0.1...0.5, step: 0.01, hint: "share of the side")

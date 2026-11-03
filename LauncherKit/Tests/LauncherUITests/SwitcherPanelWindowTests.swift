@@ -155,7 +155,36 @@ private nonisolated let hasDisplay: Bool = {
         #expect(spares.count == 6 && spares.allSatisfy { liquidKeys($0).isEmpty })
     }
 
-    @Test func aRebuiltElementCostsOneSwipeItsMotionAndTheNextSwipeGetsItBack() throws {
+    @Test(arguments: [3, 2, 1])
+    func aShortRowAfterALongOneStillGetsItsSwellMotion(count: Int) throws {
+        let panel = SwitcherPanel()
+        open(panel, count: 5)
+        #expect(panel.checkMirror())
+        let long = frames(count: 5)
+        panel.apply(long.open)
+        panel.apply(long.step)
+        panel.orderOut(nil)
+        panel.emptied()
+
+        open(panel, count: count)
+        #expect(panel.checkMirror())
+        let swipe = frames(count: count)
+        panel.apply(swipe.open)
+        panel.apply(swipe.step)
+        CATransaction.flush()
+        let swell = swipe.step.swell ?? layout(count).swell(at: 0)
+        let swellTracks = swipe.step.tracks.filter { $0.channel.element == .swell }
+        try #require(!swellTracks.isEmpty)
+        let swellElement = try #require(element(at: NSRect(swell), in: panel))
+        #expect(Set(liquidKeys(swellElement)) == Set(swellTracks.map { "liquid.swell.\($0.channel.property)" }))
+        #expect(panel.swellView.frame == NSRect(swell))
+
+        panel.orderOut(nil)
+        panel.emptied()
+        expectNoTracks(panel)
+    }
+
+    @Test func aRebuiltElementCostsNoSwipeItsMotionBecauseTheNextSwipeMatchesAgain() throws {
         let panel = SwitcherPanel()
         open(panel, count: 5)
         #expect(panel.checkMirror())
@@ -170,20 +199,23 @@ private nonisolated let hasDisplay: Bool = {
 
         panel.orderOut(nil)
         open(panel, count: 5)
-        #expect(panel.checkMirror() == false)
+        #expect(panel.checkMirror())
         let swipe = frames(count: 5)
         panel.apply(swipe.open)
         panel.apply(swipe.step)
         CATransaction.flush()
-        #expect(panel.swellView.frame == NSRect(try #require(swipe.step.swell)))
-        expectNoTracks(panel)
+        let swell = try #require(swipe.step.swell)
+        #expect(panel.swellView.frame == NSRect(swell))
+        let swellElement = try #require(element(at: NSRect(swell), in: panel))
+        #expect(
+            Set(liquidKeys(swellElement)) == ["liquid.swell.centreX", "liquid.swell.width", "liquid.swell.height"])
+        let bead = try #require(element(at: NSRect(layout(5).bead(at: 2)), in: panel))
+        #expect(liquidKeys(bead) == ["liquid.bead.2.height"])
 
         panel.orderOut(nil)
         panel.emptied()
-        let template = layout(GestureRules.switcherMaxApps)
-        let frames = glassViews(of: panel).map(\.frame)
-        #expect(frames == [NSRect(template.band)] + (0..<10).map { NSRect(template.bead(at: $0)) } + [NSRect(template.swell(at: 0))])
-        #expect(Set(frames.map { "\($0)" }).count == 12)
+        expectNoTracks(panel)
+        expectLayoutKept(panel, count: 5)
 
         open(panel, count: 4)
         #expect(panel.checkMirror())

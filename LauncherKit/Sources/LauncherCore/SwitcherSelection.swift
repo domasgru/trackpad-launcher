@@ -41,7 +41,7 @@ public struct SwitcherSelection: Equatable, Sendable {
         return min(max(Int(steps), 0), count - 1)
     }
 
-    /// Where the highlight rests, in items: travel / 12 mm, clamped to the list. Between two items it sits between
+    /// Where the swell rests, in items: travel / 12 mm, clamped to the list. Between two items it sits between
     /// them in proportion.
     public var position: Double { min(max(unclampedPosition, 0), Double(count - 1)) }
 

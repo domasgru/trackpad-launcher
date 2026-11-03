@@ -70,6 +70,10 @@ struct LiquidRun {
 
     var opened: LiquidTime { calls[0].time }
     var last: LiquidTime { calls[calls.count - 1].time }
+    /// The last call that fed a selection different from the one before it: the fingers' last movement.
+    var lastMove: LiquidTime {
+        Array(zip(calls, calls.dropFirst())).last { $0.selection != $1.selection }?.1.time ?? opened
+    }
     var nonEmptyFrames: [LiquidFrame] { calls.map(\.frame).filter { !$0.isEmpty } }
 
     /// Every millisecond from the open to 2 s after the last call.

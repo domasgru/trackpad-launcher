@@ -19,7 +19,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     private var observations: [Task<Void, Never>] = []
 
     public init(
-        launcher: Launcher, liquidLook: @escaping () -> LiquidLook = { .shipped }, quit: @escaping () -> Void) {
+        launcher: Launcher, liquidLook: @escaping () -> LiquidLook, quit: @escaping () -> Void) {
         self.launcher = launcher
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let window = SettingsWindow()

@@ -58,16 +58,28 @@ final class SwitcherPanel: OverlayPanel {
         CATransaction.commit()
         orderFrontRegardless()
         CATransaction.flush()
-        mirror = GlassMirror.matched(
-            in: container, views: [(nil, band)] + beads.enumerated().map { (.bead($0), $1) } + [(.swell, swellView)])
+        mirror = matchMirror(iconCount: GestureRules.switcherMaxApps)
         orderOut(nil)
     }
 
-    /// Once per swipe, after `present`: whether the mirror still matches, for the whole swipe. The flush makes every
-    /// element hold its view's frame; liveness is never read inside `apply`'s transaction.
+    /// The mirror of the views that animate: the swell and the real beads. The band and the spares never animate and
+    /// may coincide. With one icon its bead coincides with them, so it has no layer of its own.
+    private func matchMirror(iconCount: Int) -> GlassMirror? {
+        let animating = iconCount >= 2 ? iconCount : 0
+        return GlassMirror.matched(
+            in: container,
+            views: [(nil, band)]
+                + beads.enumerated().map { (index, bead) in (index < animating ? .bead(index) : nil, bead) }
+                + [(.swell, swellView)])
+    }
+
+    /// Once per swipe, after `present`: whether the mirror matches this layout, for the whole swipe. The flush makes
+    /// every element hold its view's frame; liveness is never read inside `apply`'s transaction. A mirror that went
+    /// stale (AppKit rebuilt its elements) is matched again here, once, never waited for.
     func checkMirror() -> Bool {
         CATransaction.flush()
-        liveMirror = mirror?.isLive == true ? mirror : nil
+        if mirror?.isLive != true { mirror = matchMirror(iconCount: layout.iconCount) }
+        liveMirror = mirror
         return liveMirror != nil
     }
 
@@ -130,14 +142,14 @@ final class SwitcherPanel: OverlayPanel {
         if let icon = frame.icon { grow(icon) }
         if let liveMirror {
             for track in frame.tracks {
-                let layer = liveMirror.layer(for: track.channel.element)
+                guard let layer = liveMirror.layer(for: track.channel.element) else { continue }
                 layer.add(
                     LiquidKeyframes.animation(track, beginTime: layer.convertTime(track.begin.seconds, from: nil)),
                     forKey: LiquidKeyframes.key(track.channel))
             }
         }
         CATransaction.commit()
-        if !frame.isEmpty { invalidateShadow() }
+        if frame.swell != nil { invalidateShadow() }
     }
 
     /// Duration 0 grows at once; otherwise linearly over it.
@@ -154,17 +166,13 @@ final class SwitcherPanel: OverlayPanel {
     }
 
     /// The panel is out: no track outlives the swipe and the swell goes back to the first icon, ready for the next. The
-    /// mirror is checked directly, not through `liveMirror`, which stays nil all swipe under Reduce Motion: only a
-    /// mirror that is gone is rebuilt, so a failed check costs that one swipe its motion, not every later one.
+    /// next swipe's `checkMirror()` matches again if AppKit rebuilt the mirror meanwhile.
     override func emptied() {
-        CATransaction.flush()
-        let live = mirror?.isLive == true
         mirror?.removeLiquidAnimations()
         liveMirror = nil
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         swellView.frame = NSRect(layout.swell(at: 0))
         CATransaction.commit()
-        if !live { prewarm() }
     }
 }

@@ -132,7 +132,7 @@ struct EdgeCurve: Sendable {
             guard wd > 0, arrival != 0 else { return (0, 0) }
             let span = Liquid.settleBound - begin - approach
             let x = u / span
-            let window = 1 - (3 - 2 * x) * x * x
+            let window = Liquid.window(x)
             let windowSlope = -(6 * x - 6 * x * x) / span
             let decay = exp(-damping * omega * u), sine = sin(wd * u), cosine = cos(wd * u)
             let amplitude = arrival / wd
@@ -154,7 +154,7 @@ struct EdgeCurve: Sendable {
         first.from = rest
         limit = max(wobble, 0)
         omega = 2 * .pi * max(hertz, 0)
-        self.damping = min(max(damping, 0), 0.95)
+        self.damping = Liquid.clampedDamping(damping)
     }
 
     private var dampedOmega: Double { omega * (1 - damping * damping).squareRoot() }
@@ -216,20 +216,38 @@ public struct Liquid: Sendable {
     private let motion: LiquidMotion
     private var last: SwitcherSelection?
     private var lastTime = LiquidTime(seconds: 0)
-    private var left: EdgeCurve
-    private var right: EdgeCurve
-    /// Where each edge was last sent: the finger velocity is how fast this moves.
-    private var leftTarget = 0.0, rightTarget = 0.0
-    /// The edge was last sent out past an end, so a return to its rest springs back instead of following.
-    private var leftPulled = false, rightPulled = false
-    /// When each edge's flow is due to arrive: a later retarget may not make it arrive sooner.
-    private var leftDue = -Double.infinity, rightDue = -Double.infinity
+    private var left: Edge
+    private var right: Edge
     private var flowDirection = 1.0
     private var waves: WaveTrain
 
     static let flowBound = 0.2, settleBound = 1.0, endPullBound = 0.2, sampleRate = 120.0
-    /// The shortest time between two events that the finger velocity is estimated over.
-    private static let velocityFloor = 0.008
+    /// The shortest time between two events that a finger's speed is estimated over.
+    static let speedFloor = 0.008
+
+    /// 1 with zero slope at `x = 0`, falling to 0 with zero slope at `x = 1`: what ends a tail at its deadline.
+    static func window(_ x: Double) -> Double { 1 - (3 - 2 * x) * x * x }
+
+    /// A wobble's damping ratio kept below critical, so it still rings.
+    static func clampedDamping(_ damping: Double) -> Double { min(max(damping, 0), 0.95) }
+
+    /// One swell edge with what the next event needs to know of it.
+    private struct Edge {
+        var curve: EdgeCurve
+        /// Where the edge was last sent: the finger velocity is how fast this moves.
+        var target: Double
+        /// The edge was last sent out past an end, so a return to its rest springs back instead of following.
+        var pulled = false
+        /// When the edge's flow is due to arrive: a later retarget may not make it arrive sooner.
+        var due = -Double.infinity
+
+        init(rest: Double, layout: SwitcherRowLayout) {
+            let look = layout.look
+            curve = EdgeCurve(
+                rest: rest, wobble: look.wobble * layout.scale, hertz: look.wobbleHz, damping: look.wobbleDamping)
+            target = rest
+        }
+    }
 
     public init(layout: SwitcherRowLayout, motion: LiquidMotion) {
         self.layout = layout
@@ -238,12 +256,8 @@ public struct Liquid: Sendable {
         waves = WaveTrain(layout: layout)
     }
 
-    private static func edges(resting rest: LiquidRect, layout: SwitcherRowLayout) -> (EdgeCurve, EdgeCurve) {
-        let look = layout.look
-        func edge(_ x: Double) -> EdgeCurve {
-            EdgeCurve(rest: x, wobble: look.wobble * layout.scale, hertz: look.wobbleHz, damping: look.wobbleDamping)
-        }
-        return (edge(rest.minX), edge(rest.maxX))
+    private static func edges(resting rest: LiquidRect, layout: SwitcherRowLayout) -> (Edge, Edge) {
+        (Edge(rest: rest.minX, layout: layout), Edge(rest: rest.maxX, layout: layout))
     }
 
     /// Takes the selection as an absolute target, never an increment: the caller may coalesce values.
@@ -259,7 +273,7 @@ public struct Liquid: Sendable {
         guard let previous = last else {
             let rest = layout.swell(at: selection.selected)
             (left, right) = Self.edges(resting: rest, layout: layout)
-            (leftTarget, rightTarget, lastTime) = (rest.minX, rest.maxX, time)
+            lastTime = time
             waves.open(at: selection.position, time: time)
             return jump(to: selection.selected)
         }
@@ -278,7 +292,7 @@ public struct Liquid: Sendable {
         let rest = layout.swell(at: last?.selected ?? 0)
         var swell = rest
         if motion == .flowing {
-            let l = left.value(at: time), r = right.value(at: time)
+            let l = left.curve.value(at: time), r = right.curve.value(at: time)
             let h = height(stretchedBy: (r - rest.maxX) - (l - rest.minX), rest: rest)
             swell = LiquidRect(minX: l, minY: rest.minY + (rest.height - h) / 2, width: r - l, height: h)
         }
@@ -297,12 +311,12 @@ public struct Liquid: Sendable {
     private var followTime: Double { max(layout.look.followTime, 0.001) }
 
     /// The approach for an edge retargeted at `time` while its flow may still be under way.
-    private func approach(due: Double, at time: LiquidTime) -> Double { max(followTime, due - time.seconds) }
+    private func approach(_ edge: Edge, at time: LiquidTime) -> Double { max(followTime, edge.due - time.seconds) }
 
     /// An edge still inside its flow keeps arriving with the flow's push past the target, so the wobble survives the
     /// retargets of a moving finger; after the deadline it arrives with its target's velocity.
-    private func arrival(due: Double, targetVelocity: Double, at time: LiquidTime) -> Double {
-        time.seconds < due ? flowDirection * .infinity : targetVelocity
+    private func arrival(_ edge: Edge, targetVelocity: Double, at time: LiquidTime) -> Double {
+        time.seconds < edge.due ? flowDirection * .infinity : targetVelocity
     }
 
     /// Where each edge of the swell around `selection.selected` is headed inside the row: the edge on the lean's side
@@ -322,16 +336,17 @@ public struct Liquid: Sendable {
         let direction: Double = selected > previous ? 1 : -1
         let total = settleTime
         let lead = max(min(max(look.leadShare, 0), 1) * total, step)
-        func pull(_ edge: inout EdgeCurve, to target: Double, over approach: Double) {
-            let distance = abs(target - edge.value(at: time))
-            edge.retarget(to: target, arriving: direction * 1.5 * distance / approach, over: approach, at: time)
+        func pull(_ edge: inout Edge, to target: Double, over approach: Double) {
+            let distance = abs(target - edge.curve.value(at: time))
+            edge.curve.retarget(to: target, arriving: direction * 1.5 * distance / approach, over: approach, at: time)
+            edge.target = target
+            edge.pulled = false
+            edge.due = time.seconds + approach
         }
         pull(&left, to: goal.left, over: direction > 0 ? total : lead)
         pull(&right, to: goal.right, over: direction > 0 ? lead : total)
-        (leftTarget, rightTarget, lastTime) = (goal.left, goal.right, time)
-        (leftPulled, rightPulled) = (false, false)
+        lastTime = time
         flowDirection = direction
-        (leftDue, rightDue) = (time.seconds + (direction > 0 ? total : lead), time.seconds + (direction > 0 ? lead : total))
         return LiquidFrame(
             swell: rest, icon: IconChange(selected: selected, duration: lead),
             tracks: tracks(over: rest, from: time) + waveTracks(for: selection, at: time))
@@ -364,20 +379,23 @@ public struct Liquid: Sendable {
     /// Both edges glide to their targets over `followTime`, each arriving with its target's velocity. An edge coming
     /// back from a pull springs back instead.
     private mutating func lean(to goal: (left: Double, right: Double), rest: LiquidRect, at time: LiquidTime) {
-        let dt = max(time.seconds - lastTime.seconds, Self.velocityFloor)
+        let dt = max(time.seconds - lastTime.seconds, Self.speedFloor)
         let bound = pullBounds(rest: rest)
-        if leftPulled && abs(left.value(at: time) - goal.left) > 1e-6 {
-            left.retarget(to: goal.left, arriving: .infinity, over: settleTime, at: time, within: bound.left)
-        } else {
-            left.retarget(to: goal.left, arriving: arrival(due: leftDue, targetVelocity: (goal.left - leftTarget) / dt, at: time), over: approach(due: leftDue, at: time), at: time)
+        func leaned(_ edge: Edge, to target: Double, springingIn inward: Double, within bounds: ClosedRange<Double>) -> Edge {
+            var edge = edge
+            if edge.pulled && abs(edge.curve.value(at: time) - target) > 1e-6 {
+                edge.curve.retarget(to: target, arriving: inward * .infinity, over: settleTime, at: time, within: bounds)
+            } else {
+                edge.curve.retarget(
+                    to: target, arriving: arrival(edge, targetVelocity: (target - edge.target) / dt, at: time),
+                    over: approach(edge, at: time), at: time)
+            }
+            edge.target = target
+            edge.pulled = false
+            return edge
         }
-        if rightPulled && abs(right.value(at: time) - goal.right) > 1e-6 {
-            right.retarget(to: goal.right, arriving: -.infinity, over: settleTime, at: time, within: bound.right)
-        } else {
-            right.retarget(to: goal.right, arriving: arrival(due: rightDue, targetVelocity: (goal.right - rightTarget) / dt, at: time), over: approach(due: rightDue, at: time), at: time)
-        }
-        (leftTarget, rightTarget) = goal
-        (leftPulled, rightPulled) = (false, false)
+        left = leaned(left, to: goal.left, springingIn: 1, within: bound.left)
+        right = leaned(right, to: goal.right, springingIn: -1, within: bound.right)
     }
 
     /// The most the outer edges may be beyond their rests.
@@ -396,24 +414,24 @@ public struct Liquid: Sendable {
         let reach = pullLimit * (1 - exp(-o / max(look.endPullMM, 0.001)))
         let hold = min(max(look.pullHold, 0), Self.settleBound / 2)
         let bound = pullBounds(rest: rest)
-        let leftApproach = approach(due: leftDue, at: time), rightApproach = approach(due: rightDue, at: time)
+        let leftApproach = approach(left, at: time), rightApproach = approach(right, at: time)
         if outerRight {
-            right.retarget(to: rest.maxX + reach, arriving: 0, over: rightApproach, at: time, within: bound.right)
-            right.springBack(to: rest.maxX, after: hold, over: settleTime)
-            left.retarget(to: rest.minX, arriving: 0, over: leftApproach, at: time)
+            right.curve.retarget(to: rest.maxX + reach, arriving: 0, over: rightApproach, at: time, within: bound.right)
+            right.curve.springBack(to: rest.maxX, after: hold, over: settleTime)
+            left.curve.retarget(to: rest.minX, arriving: 0, over: leftApproach, at: time)
         } else {
-            left.retarget(to: rest.minX - reach, arriving: 0, over: leftApproach, at: time, within: bound.left)
-            left.springBack(to: rest.minX, after: hold, over: settleTime)
-            right.retarget(to: rest.maxX, arriving: 0, over: rightApproach, at: time)
+            left.curve.retarget(to: rest.minX - reach, arriving: 0, over: leftApproach, at: time, within: bound.left)
+            left.curve.springBack(to: rest.minX, after: hold, over: settleTime)
+            right.curve.retarget(to: rest.maxX, arriving: 0, over: rightApproach, at: time)
         }
-        (leftTarget, rightTarget) = (rest.minX, rest.maxX)
-        (leftPulled, rightPulled) = (!outerRight, outerRight)
+        (left.target, right.target) = (rest.minX, rest.maxX)
+        (left.pulled, right.pulled) = (!outerRight, outerRight)
     }
 
     /// The swell's height when it is `stretch` wider than its rest: thinner as it stretches, never below the grown
     /// icon body plus a margin.
     private func height(stretchedBy stretch: Double, rest: LiquidRect) -> Double {
-        let floor = layout.selectedIconBody + 4 * layout.scale
+        let floor = layout.selectedIconBody + SwitcherRowLayout.iconMargin * layout.scale
         return min(max(rest.height - layout.look.thinning * max(0, stretch), floor), rest.height)
     }
 
@@ -425,7 +443,7 @@ public struct Liquid: Sendable {
         var centre: [Double] = [], width: [Double] = [], height: [Double] = []
         for index in 0..<count {
             let at = index < count - 1 ? time + Double(index) * step : time + 2 * Self.settleBound
-            let l = left.value(at: at) - rest.minX, r = right.value(at: at) - rest.maxX
+            let l = left.curve.value(at: at) - rest.minX, r = right.curve.value(at: at) - rest.maxX
             centre.append((l + r) / 2)
             width.append(r - l)
             height.append(self.height(stretchedBy: r - l, rest: rest) - rest.height)

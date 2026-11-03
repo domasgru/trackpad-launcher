@@ -99,8 +99,8 @@ import LauncherCore
             #expect(abs(swell.minX - rest.minX) < 1e-6)
             #expect(swell.maxX >= rest.maxX - layout.look.wobble)
         }
-        #expect(abs(run.played(at: run.last + 1).swell.maxX - rest.maxX) < 1e-6)
-        for instant in instants(of: run, from: run.last + 1) {
+        #expect(abs(run.played(at: run.lastMove + 1).swell.maxX - rest.maxX) < 1e-6)
+        for instant in instants(of: run, from: run.lastMove + 1) {
             #expect(run.played(at: instant) == run.played(at: run.opened))
         }
     }
@@ -172,7 +172,7 @@ import LauncherCore
         let springBack = instants(of: run, from: seconds(pushEnd)).map { pull(run, end, at: $0) }
         #expect(crossings(springBack) >= 2)
         #expect(springBack.min()! >= -wobble)
-        for instant in instants(of: run, from: seconds(pushEnd + 60 + 1000)) {
+        for instant in instants(of: run, from: run.lastMove + 1) {
             #expect(pull(run, end, at: instant) == 0)
         }
         for call in run.calls where call.time > seconds(pushStart) {
@@ -255,11 +255,10 @@ import LauncherCore
         #expect(hand.world.launcher.switcher == nil)
     }
 
-    @Test func theLeadingEdgeIsNeverAFrameBehindTheFingers() {
+    @Test func theLeadingEdgeIsNeverAFrameBehindTheFingersRockingInsideOneSelection() {
         let hand = World.liquidSwipe(apps: World.tenApps)
         hand.begin()
         var travel = 0.0
-        var checked = 0
         for _ in 0..<24 {
             travel += 1
             hand.move(toMM: travel, atMS: hand.nowMS + 10)
@@ -274,7 +273,32 @@ import LauncherCore
             }
         }
         hand.rest(forMS: 2000)
-        let run = hand.run, wobble = run.layout.look.wobble
+        expectLeadingEdgeKeepsUp(hand.run, checkedAtLeast: 100)
+    }
+
+    @Test func theLeadingEdgeIsNeverAFrameBehindTheFingersSlidingThirtyMillimetresBackAndForth() {
+        let hand = World.liquidSwipe(apps: World.tenApps)
+        hand.begin()
+        var travel = 0.0
+        for _ in 0..<4 {
+            for direction in [1.0, -1.0] {
+                for _ in 0..<30 {
+                    travel += direction
+                    hand.move(toMM: travel, atMS: hand.nowMS + 10)
+                }
+            }
+        }
+        hand.rest(forMS: 2000)
+        expectLeadingEdgeKeepsUp(hand.run, checkedAtLeast: 1)
+    }
+
+    /// For every event, in the played history of the frames up to that event alone, the swell's leading edge is within
+    /// `wobble` of where it would settle one 60 Hz frame after the event. Events inside a running flow are skipped.
+    private func expectLeadingEdgeKeepsUp(
+        _ run: LiquidRun, checkedAtLeast minimum: Int, sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        var checked = 0
+        let wobble = run.layout.look.wobble
         var previous = run.calls[0]
         var direction = 1.0
         var flowDue = -Double.infinity
@@ -291,9 +315,9 @@ import LauncherCore
             let edge: (Played) -> Double = { direction > 0 ? $0.swell.maxX : $0.swell.minX }
             let soon = edge(known.played(at: call.time + 1.0 / 60))
             let settled = edge(known.played(at: call.time + 2))
-            #expect(abs(soon - settled) <= wobble)
+            #expect(abs(soon - settled) <= wobble, sourceLocation: sourceLocation)
             checked += 1
         }
-        #expect(checked > 100)
+        #expect(checked >= minimum, sourceLocation: sourceLocation)
     }
 }

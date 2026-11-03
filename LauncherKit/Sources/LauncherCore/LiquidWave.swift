@@ -19,9 +19,6 @@ struct WaveTrain: Sendable {
     private var reference: (position: Double, time: LiquidTime)?
     private var moved = false
 
-    /// The shortest span the finger speed is measured over.
-    private static let speedFloor = 0.008
-
     init(layout: SwitcherRowLayout) {
         self.layout = layout
     }
@@ -39,7 +36,7 @@ struct WaveTrain: Sendable {
         let look = layout.look
         let travelled = position - reference.position
         guard travelled != 0, !moved || abs(travelled) >= look.waveEvery else { return false }
-        let speed = abs(travelled) / max(time.seconds - reference.time.seconds, Self.speedFloor)
+        let speed = abs(travelled) / max(time.seconds - reference.time.seconds, Liquid.speedFloor)
         let strength = look.waveHeight * layout.scale * tanh(speed / max(look.waveFullSpeed, 1e-9))
         crests.removeAll { time.seconds >= $0.emitted.seconds + Liquid.settleBound }
         crests.append(Crest(emitted: time, origin: position, direction: travelled > 0 ? 1 : -1, strength: strength))
@@ -51,7 +48,7 @@ struct WaveTrain: Sendable {
     /// Bead `bead`'s height beyond its rest at `t`, within the layout's limits.
     func offset(bead: Int, at t: LiquidTime) -> Double {
         let look = layout.look
-        let omega = 2 * Double.pi * max(look.waveHz, 0), damping = min(max(look.waveDamping, 0), 0.95)
+        let omega = 2 * Double.pi * max(look.waveHz, 0), damping = Liquid.clampedDamping(look.waveDamping)
         let speed = max(look.waveSpeed, 1e-6), reach = max(look.waveReach, 1e-6)
         var sum = 0.0
         for crest in crests {
@@ -61,7 +58,7 @@ struct WaveTrain: Sendable {
             let tau = age - distance / speed
             guard x < 1, tau > 0 else { continue }
             let behind = (Double(bead) - crest.origin) * crest.direction < 0 ? look.waveBehind : 1
-            let window = 1 - (3 - 2 * x) * x * x
+            let window = Liquid.window(x)
             let ripple = exp(-damping * omega * tau) * sin(omega * tau) * window
             sum += crest.strength * exp(-distance / reach) * behind * ripple
         }

@@ -50,3 +50,23 @@
 - User answer, the private mirror and the `docs/architecture.md` wording are accepted → S3 unblocked.
 - User answer, light over white is fine as is, and a tint stays a non-goal unless the hand check fails → kept as a hand-check risk.
 - User answer, keep the DEBUG tuner (S6) → no change.
+
+## Implement
+- No `AGENTS.md` in the repo → quick gate is `Scripts/test.sh`. The full gate is a clean `Scripts/test.sh`, plus `xcodegen generate` and a Debug `xcodebuild` of the app, as in plans 012 and 021. No `.claude/skills/verify-*` → the verification-skill step was skipped.
+- S1 to S6 were implemented one commit each. The real-window suite (`LauncherUITests`) ran on this Mac every time; it was never skipped.
+- S3 builds the swell thinning, which the plan lists under S4, because the height channel exists from S3 on.
+- S4: the finger follow cut a running flow short, collapsing it into a 17 ms jump in any real slide. The implementer had hidden this by changing T8's hand → a follow-up made each edge's flow arrival a deadline that later follows never shorten, and restored T8 to the plan's hand. Edges still inside their flow arrive with the flow's push, so the wobble stays.
+- T28 cannot hold for events inside a running flow (R6 allows up to 200 ms) → it skips calls inside a flow window, and checks the follow lag on a ±5 mm rock within one selection as well as on the plan's 30 mm hand.
+- T10 asserts the swell's centre is less than pitch + `wobble` behind. At a change instant it starts exactly one pitch behind by construction.
+- T11 reads "beads 0 to 2 at rest" as "keep their rest x and width and stay out of the swell", because the flick's wave rings for up to 1 s (R8). T30's left case slides 7 mm: after the setup move, 5 mm is under the half-item crest threshold.
+- S5: `beadLimits`' lower bound became max(`iconBody` × 1.12 + 4, `bandThickness`) × scale. With `iconBody` + 4, the hardest flick left the growing selected icon outside its thinned bead before the swell arrived (T31). The cost: a wave dips a bead by only about 4 pt and mostly bulges.
+- S5, open risk: finger speed is measured from the last crest, so the first crest after a long rest is weak. Judge it by feel on hardware (the plan's remedy, driver frame times on the event, stays available).
+- T34 samples the bounds every 4 ms instead of 1 ms, for suite time. Its closed-form check runs at every track sample instant.
+- Full gate after S6: green (595 core + 149 platform + 10 UI tests; Debug app builds). The one warning, in `SettingsView.swift`, predates the branch.
+- Review, serious: on rows of three apps or fewer, laying out the band narrow makes AppKit rebuild every mirrored element. Those swipes got no motion, and every hide re-ran the pre-warm (against R16) → reproduced in a new real-window row for 3, 2 and 1 icons. `checkMirror()` now re-matches whenever the kept mirror is stale, requiring a unique element only for the views that animate (the swell and the real beads), and `emptied()` never re-runs the pre-warm. This departs from D2's "matched once, kept by identity": a stale swipe re-matches by one tree walk instead of losing its motion. T21 now expects the next swipe to get its motion back.
+- Review: `apply` invalidated the window shadow on every move event → only when a view frame changes (a selection change).
+- Review: docs drift (`docs/architecture.md`'s module list and DEBUG tuner sentence, `docs/performance.md`'s `SwitcherPanel.show` decision marked superseded, stale highlight and "panel" comments) → fixed.
+- Review: T24, T25 and T34 were weaker than the plan's table (stillness checked late; T34's far edge was the trailing edge) → tightened, and green without loosening.
+- Review: duplicated constants unified across `Liquid` and `LiquidWave`. The per-edge state became a private `Edge` struct. The unused `liquidLook` defaults were removed.
+- Rejected from the review: the test-style judgement calls (asserting animation keys and fill modes is the only way to observe what the render server will play); the `checkMirror()` and `lay(out:)` names; recomputing the overshoot outside `SwitcherSelection`, which the plan keeps untouched.
+- Left for the human, on hardware: every check under Verified without a test, and the dated perf results for phase 04 and the new `04b_switcher_resting` phase.

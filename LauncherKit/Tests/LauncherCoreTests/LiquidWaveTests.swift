@@ -314,7 +314,7 @@ import LauncherCore
             let next = position + 1 < staging.count ? staging[position + 1].element.time : nil
             let known = LiquidRun(layout: layout, calls: Array(run.calls.prefix(index + 1)))
             let direction = call.selection.selected > run.calls[index - 1].selection.selected ? 1.0 : -1.0
-            let far: (Played) -> Double = { direction > 0 ? $0.swell.minX : $0.swell.maxX }
+            let far: (Played) -> Double = { direction > 0 ? $0.swell.maxX : $0.swell.minX }
             let settled = far(known.played(at: call.time + 2))
             let from = call.time + 0.2
             if let next, next < from { continue }

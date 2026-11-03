@@ -21,7 +21,7 @@ final class SwitcherPresenter {
     private let look: () -> LiquidLook
 
     /// `liquidLook` is read once per swipe.
-    init(launcher: Launcher, liquidLook: @escaping () -> LiquidLook = { .shipped }) {
+    init(launcher: Launcher, liquidLook: @escaping () -> LiquidLook) {
         self.launcher = launcher
         look = liquidLook
         if launcher.isSwipeOn { startIconPasses(waiting: true) }
