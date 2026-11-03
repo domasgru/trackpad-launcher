@@ -11,7 +11,7 @@ final class PickerBench {
     let buttonIcons: [URL: NSImage]
     let menuIcons: [URL: NSImage]
     let coordinator: AppPicker.Coordinator
-    let view: PickerView
+    let view: PickerButton
 
     /// The app each `choose` call named; nil for None.
     var chosen: [String?] = []
@@ -24,15 +24,15 @@ final class PickerBench {
 
     init(showing name: String?, animation: PickAnimation? = .shipped, installed: [String] = PickerBench.names) {
         var entries: [String: AppEntry] = [:]
-        for name in Self.names {
+        for name in Set(Self.names + installed) {
             entries[name] = AppEntry(
-                bundleID: BundleID(rawValue: "com.test.\(name.lowercased())"), name: name,
+                bundleID: BundleID(rawValue: "com.test.\(name.lowercased().replacingOccurrences(of: " ", with: "-"))"), name: name,
                 url: URL(filePath: "/Applications/\(name).app"))
         }
         self.entries = entries
         self.installed = InstalledApps(recent: [], others: installed.map { entries[$0]! })
-        buttonIcons = Dictionary(uniqueKeysWithValues: entries.values.map { ($0.url, NSImage(size: NSSize(width: 16, height: 16))) })
-        menuIcons = Dictionary(uniqueKeysWithValues: entries.values.map { ($0.url, NSImage(size: NSSize(width: 16, height: 16))) })
+        buttonIcons = Dictionary(uniqueKeysWithValues: entries.values.map { ($0.url, Self.solidIcon()) })
+        menuIcons = Dictionary(uniqueKeysWithValues: entries.values.map { ($0.url, Self.solidIcon()) })
         current = name.map { .present(entries[$0]!) } ?? .unassigned
         self.animation = animation
         let coordinator = AppPicker.Coordinator()
@@ -42,6 +42,15 @@ final class PickerBench {
             choose: { _ in nil }, chooseOther: { _ in }, pickAnimation: { nil }
         ).makeView(coordinator: coordinator)
         render(current)
+    }
+
+    /// A 16 pt icon with every pixel painted, so a drawn icon is never mistaken for a clear slot holder.
+    static func solidIcon() -> NSImage {
+        NSImage(size: NSSize(width: 16, height: 16), flipped: false) { rect in
+            NSColor.systemBlue.setFill()
+            rect.fill()
+            return true
+        }
     }
 
     private func picker() -> AppPicker {
@@ -78,20 +87,21 @@ final class PickerBench {
     }
 
     func layOut() {
-        view.frame = NSRect(origin: .zero, size: view.intrinsicContentSize)
+        view.setFrameSize(view.intrinsicContentSize)
         view.layoutSubtreeIfNeeded()
     }
 
     /// Picks the menu item titled `title`, as a click on it does.
     func pick(_ title: String) {
-        let menu = view.button.menu!
+        let menu = view.menu!
         coordinator.menuNeedsUpdate(menu)
         let item = menu.items.first { $0.title == title }!
         _ = item.target?.perform(item.action, with: item)
         layOut()
     }
 
-    var closedItem: NSMenuItem { view.button.menu!.items[0] }
+    /// What the button draws: its display item, never one of the menu's.
+    var displayItem: NSMenuItem { (view.cell as! NSPopUpButtonCell).menuItem! }
 
     func entry(_ name: String) -> AppEntry { entries[name]! }
 
@@ -101,7 +111,7 @@ final class PickerBench {
 
     /// Every layer the picker owns apart from the icon layer: none may ever animate.
     var otherLayersAreStill: Bool {
-        [view.button.layer, view.badge.layer, view.layer].allSatisfy { ($0?.animationKeys() ?? []).isEmpty }
+        [view.layer, view.iconLayer.superlayer].allSatisfy { ($0?.animationKeys() ?? []).isEmpty }
     }
 
     var iconLayerAnimationKeys: [String] { view.iconLayer.animationKeys() ?? [] }
@@ -118,8 +128,8 @@ final class PickerBench {
         #expect(layer.anchorPoint == CGPoint(x: 0.5, y: 0.5), sourceLocation: sourceLocation)
         #expect(layer.opacity == 1, sourceLocation: sourceLocation)
         #expect(CATransform3DIsIdentity(layer.transform), sourceLocation: sourceLocation)
-        #expect(iconLayerAnimationKeys == [PickerView.pickKey], sourceLocation: sourceLocation)
-        let animation = layer.animation(forKey: PickerView.pickKey) as? CAKeyframeAnimation
+        #expect(iconLayerAnimationKeys == [PickerButton.pickKey], sourceLocation: sourceLocation)
+        let animation = layer.animation(forKey: PickerButton.pickKey) as? CAKeyframeAnimation
         #expect(animation?.keyPath == "transform", sourceLocation: sourceLocation)
         #expect(animation?.duration == 0.35, sourceLocation: sourceLocation)
         let frames = PickAnimation.shipped.keyframes(perSecond: 240)

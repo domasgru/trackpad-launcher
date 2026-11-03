@@ -194,9 +194,9 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             return launcher.rows.contains { if case .present = $0.app { true } else { false } }
         }
 
-        private func pickers(in view: NSView?) -> [PickerView] {
+        private func pickers(in view: NSView?) -> [PickerButton] {
             guard let view else { return [] }
-            return (view as? PickerView).map { [$0] } ?? view.subviews.flatMap { pickers(in: $0) }
+            return (view as? PickerButton).map { [$0] } ?? view.subviews.flatMap { pickers(in: $0) }
         }
     #endif
 

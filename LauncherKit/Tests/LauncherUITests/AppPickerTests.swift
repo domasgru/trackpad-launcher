@@ -10,9 +10,9 @@ import Testing
         bench.pick("Mail")
 
         #expect(bench.chosen == ["Mail"])
-        #expect(bench.closedItem.title == "Mail")
-        let image = bench.closedItem.image
-        #expect(image?.size == NSSize(width: 17, height: 16))
+        #expect(bench.displayItem.title == "Mail")
+        let image = bench.displayItem.image
+        #expect(image?.size == NSSize(width: 20, height: 16))
         #expect(image !== bench.icon("Mail"))
         bench.expectPlaysPickAnimation(of: "Mail")
     }
@@ -22,12 +22,12 @@ import Testing
 
         bench.pick("Other…")
         #expect(bench.otherCalls == 1)
-        #expect(bench.closedItem.title == "Safari")
+        #expect(bench.displayItem.title == "Safari")
         #expect(bench.noLayerAnimates)
 
         let completion = try #require(bench.otherCompletion)
         completion(bench.entry("Calendar"))
-        #expect(bench.closedItem.title == "Calendar")
+        #expect(bench.displayItem.title == "Calendar")
         bench.expectPlaysPickAnimation(of: "Calendar")
     }
 
@@ -38,7 +38,7 @@ import Testing
         #expect(bench.otherCalls == 1)
         _ = try #require(bench.otherCompletion)
 
-        #expect(bench.closedItem.title == "Safari")
+        #expect(bench.displayItem.title == "Safari")
         #expect(bench.iconLayerContents === bench.icon("Safari"))
         #expect(bench.noLayerAnimates)
     }
@@ -51,7 +51,7 @@ import Testing
         let completion = try #require(bench.otherCompletion)
         completion(nil)
 
-        #expect(bench.closedItem.title == "Safari")
+        #expect(bench.displayItem.title == "Safari")
         #expect(bench.iconLayerContents === bench.icon("Safari"))
         #expect(bench.noLayerAnimates)
     }
@@ -62,26 +62,26 @@ import Testing
 
         bench.pick("Calendar")
 
-        #expect(bench.closedItem.title == "Calendar")
+        #expect(bench.displayItem.title == "Calendar")
         bench.expectPlaysPickAnimation(of: "Calendar")
 
         let settled = PickerBench(showing: "Calendar")
-        #expect(bench.view.button.frame == settled.view.button.frame)
-        #expect(bench.view.badge.frame == settled.view.badge.frame)
+        #expect(bench.view.frame == settled.view.frame)
         #expect(bench.view.intrinsicContentSize == settled.view.intrinsicContentSize)
         #expect(bench.view.iconLayer.position == settled.view.iconLayer.position)
         #expect(bench.view.iconLayer.bounds == settled.view.iconLayer.bounds)
     }
 
-    @Test func theIconSitsOnTheLeadingSquareOfTheButtonsImageSlot() {
+    @Test func theIconSitsOnTheLeadingSquareOfTheButtonsImageSlot() throws {
         let bench = PickerBench(showing: "Safari")
         let layer = bench.view.iconLayer
-        let slot = bench.view.convert(
-            (bench.view.button.cell as! NSPopUpButtonCell).imageRect(forBounds: bench.view.button.bounds),
-            from: bench.view.button)
+        let slot = (bench.view.cell as! NSPopUpButtonCell).imageRect(forBounds: bench.view.bounds)
+        // The icon's view fills the button and is flipped like it, so the layer's coordinates are the button's.
+        let iconView = try #require(bench.view.subviews.last)
+        #expect(iconView.frame == bench.view.bounds && iconView.isFlipped == bench.view.isFlipped)
 
         #expect(layer.bounds.size == CGSize(width: 16, height: 16))
-        #expect(layer.position == CGPoint(x: slot.minX + 8, y: slot.minY + 8))
+        #expect(layer.position == CGPoint(x: slot.minX + 8, y: slot.midY))
     }
 
     @Test func pickingTheAppAlreadyShownPlaysItAgain() {
@@ -101,7 +101,7 @@ import Testing
         bench.pick("None")
 
         #expect(bench.chosen == [nil])
-        #expect(bench.closedItem.title == "Choose app…")
+        #expect(bench.displayItem.title == "Choose app…")
         #expect(bench.view.iconLayer.isHidden)
         #expect(bench.noLayerAnimates)
     }
@@ -146,7 +146,7 @@ import Testing
     @Test func withoutAnAnimationAPickSwapsTheIconAtOnce() throws {
         let menu = PickerBench(showing: "Safari", animation: nil)
         menu.pick("Mail")
-        #expect(menu.closedItem.title == "Mail")
+        #expect(menu.displayItem.title == "Mail")
         #expect(menu.iconLayerContents === menu.icon("Mail"))
         #expect(menu.noLayerAnimates)
 
@@ -155,7 +155,7 @@ import Testing
         #expect(other.otherCalls == 1)
         let completion = try #require(other.otherCompletion)
         completion(other.entry("Calendar"))
-        #expect(other.closedItem.title == "Calendar")
+        #expect(other.displayItem.title == "Calendar")
         #expect(other.iconLayerContents === other.icon("Calendar"))
         #expect(other.noLayerAnimates)
     }
@@ -174,9 +174,11 @@ import Testing
     @Test func theIconLayerNeverClipsOrAnimatesOnItsOwn() {
         let bench = PickerBench(showing: "Safari")
 
-        #expect(bench.view.layer?.masksToBounds == false)
+        #expect(bench.view.layer?.masksToBounds ?? false == false)
+        #expect(bench.view.iconLayer.superlayer?.masksToBounds == false)
         #expect(bench.view.iconLayer.masksToBounds == false)
         #expect(bench.view.clipsToBounds == false)
+        #expect(bench.view.subviews.last?.clipsToBounds == false)
         #expect(bench.view.iconLayer.action(forKey: "contents") == nil)
         #expect(bench.view.iconLayer.action(forKey: "position") == nil)
         #expect(bench.view.iconLayer.action(forKey: "hidden") == nil)
