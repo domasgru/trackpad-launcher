@@ -3,6 +3,14 @@ import LauncherCore
 import Observation
 import UniformTypeIdentifiers
 
+#if DEBUG
+    /// A reference the shell and its actions share, so the actions, built before the shell exists, read the hook at call
+    /// time.
+    private final class TuningHook {
+        var read: (() -> SettingsShell.PickTuning)?
+    }
+#endif
+
 /// The thin AppKit shell: maps AppKit signals to `Launcher` intents and renders `Launcher` state.
 /// Create it before `Launcher.start()`: its first icon pass must finish before gestures run.
 ///
@@ -10,6 +18,8 @@ import UniformTypeIdentifiers
 /// Dock and ⌘-Tab; closing it removes both. It is the only place the activation policy changes. The window closes
 /// only through the model: the close button, ⌘W, Escape and Close Settings (⌘Q) all send `closeWindow()`.
 public final class SettingsShell: NSObject, NSWindowDelegate {
+    /// What the Debug tuner hands each pick: the animation to play and whether to pretend Reduce motion is on.
+    public typealias PickTuning = (animation: PickAnimation, simulateReduceMotion: Bool)
     private let launcher: Launcher
     private let updater: Updater?
     private let icons = AppIcons()
@@ -18,6 +28,16 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     private let window: SettingsWindow
     private var isShown = false
     private var observations: [Task<Void, Never>] = []
+    #if DEBUG
+        /// The Debug tuner's pick animation and Reduce motion switch, read at every pick. The composition root sets it;
+        /// Release builds carry none of it.
+        public var pickTuning: (() -> PickTuning)? {
+            get { tuningHook.read }
+            set { tuningHook.read = newValue }
+        }
+        private let tuningHook = TuningHook()
+        private let currentPickAnimation: () -> PickAnimation?
+    #endif
 
     /// Everything that decides the window's height.
     private struct Fit: Equatable {
@@ -33,8 +53,18 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         self.updater = updater
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let window = SettingsWindow()
-        let actions = Self.makeActions(launcher: launcher, icons: icons, window: window, quit: quit)
+        #if DEBUG
+            let hook = tuningHook
+            let tuned: () -> PickTuning? = { hook.read?() }
+        #else
+            let tuned: () -> PickTuning? = { nil }
+        #endif
+        let actions = Self.makeActions(
+            launcher: launcher, icons: icons, window: window, quit: quit, tuned: tuned)
         window.install(content: SettingsView(launcher: launcher, updater: updater, actions: actions))
+        #if DEBUG
+            currentPickAnimation = actions.pickAnimation
+        #endif
         self.window = window
         switcherPresenter = SwitcherPresenter(launcher: launcher)
         windowSwitcherPresenter = WindowSwitcherPresenter(launcher: launcher)
@@ -161,8 +191,43 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             NSPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2))
     }
 
+    #if DEBUG
+        /// Debug builds' tuner button: plays the pick animation, as a pick would (so Reduce motion, the system's or
+        /// the tuner's simulated one, applies), on every picker showing an installed app's icon in the open settings
+        /// window. No assignment changes.
+        public func previewPickAnimation() {
+            guard case .open = launcher.window, let animation = currentPickAnimation() else { return }
+            for picker in pickers(in: window.contentView) where !picker.iconLayer.isHidden {
+                picker.play(animation)
+            }
+        }
+
+        /// True while the settings window is open and some row shows an installed app. Reads observed state, so a
+        /// SwiftUI body calling it follows the model.
+        public var canPreviewPickAnimation: Bool {
+            guard case .open = launcher.window else { return false }
+            return launcher.rows.contains { if case .present = $0.app { true } else { false } }
+        }
+
+        private func pickers(in view: NSView?) -> [PickerButton] {
+            guard let view else { return [] }
+            return (view as? PickerButton).map { [$0] } ?? view.subviews.flatMap { pickers(in: $0) }
+        }
+    #endif
+
+    /// What the pick animation plays now: nothing under Reduce motion, the system's or the tuner's simulated one;
+    /// otherwise the tuner's values when it is wired, else the shipped ones.
+    static func pickAnimation(
+        reduceMotion: Bool, tuned: PickTuning?
+    ) -> PickAnimation? {
+        if reduceMotion { return nil }
+        guard let tuned else { return .shipped }
+        return tuned.simulateReduceMotion ? nil : tuned.animation
+    }
+
     private static func makeActions(
-        launcher: Launcher, icons: AppIcons, window: SettingsWindow, quit: @escaping () -> Void
+        launcher: Launcher, icons: AppIcons, window: SettingsWindow, quit: @escaping () -> Void,
+        tuned: @escaping () -> PickTuning?
     ) -> LauncherActions {
         LauncherActions(
             cachedIcon: { icons.cachedIcon(for: $0) },
@@ -177,6 +242,10 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                 chooser.beginSheetModal(for: window) { response in
                     if response == .OK, let url = chooser.url { completion(url) }
                 }
+            },
+            pickAnimation: {
+                pickAnimation(
+                    reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, tuned: tuned())
             },
             openSettings: { pane in NSWorkspace.shared.open(pane.url) },
             quit: quit)

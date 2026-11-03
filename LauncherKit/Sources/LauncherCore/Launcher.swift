@@ -116,16 +116,21 @@ public final class Launcher {
         resolveRows()
     }
 
-    /// App picker; nil = None. The same app on two gestures is fine.
-    public func setAssignment(_ choice: AppChoice?, for gesture: Gesture) {
+    /// App picker; nil = None. The same app on two gestures is fine. Answers the gesture's app when its row now shows
+    /// it present, so the picker knows whether to play the pick animation: nil for None, for a bundle that is no app,
+    /// and for an app the catalog cannot locate, whose row shows "not found".
+    @discardableResult
+    public func setAssignment(_ choice: AppChoice?, for gesture: Gesture) -> AppEntry? {
         if let choice {
-            guard let entry = entry(for: choice) else { return }
+            guard let entry = entry(for: choice) else { return nil }
             settings.assignments[gesture] = AssignedApp(entry)
         } else {
             settings.assignments[gesture] = nil
         }
         store.save(settings)
         resolveRows()
+        if case .present(let entry) = rows.first(where: { $0.gesture == gesture })?.app { return entry }
+        return nil
     }
 
     private func entry(for choice: AppChoice) -> AppEntry? {

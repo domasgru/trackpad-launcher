@@ -27,6 +27,8 @@ struct LauncherActions {
     /// Other…: runs the file chooser for applications as a sheet on the settings window and hands the chosen app to the
     /// completion. Cancel, or closing the window, hands nothing over.
     let chooseOtherApp: (@escaping (URL) -> Void) -> Void
+    /// The pick animation to play for an app pick now, or nil for none (Reduce motion).
+    let pickAnimation: () -> PickAnimation?
     /// Opens the System Settings pane; the settings window stays open.
     let openSettings: (SettingsPane) -> Void
     /// The *Quit Trackpad Launcher* button.

@@ -2,15 +2,22 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// A gesture row's app picker: the app's icon and name, then, 12 pt after, the chevron in a 16 pt badge, as wide as
-/// they need up to 128 pt. A click anywhere on it opens the menu. It shows the row's app and checks it in the menu;
-/// the menu ends in Other… and None. An app picked through Other… from outside the list, and a missing app, show in
-/// the button without joining the menu.
+/// A gesture row's app picker: System Settings' own pop-up button, its content as wide as it needs up to 128 pt. It shows the
+/// row's app's icon and name and checks the app in the menu; the menu ends in Other… and None. An app picked through
+/// Other… from outside the list, and a missing app, show in the button without joining the menu.
 ///
-/// The icon and name are the system's borderless pop-up button with its arrows turned off; the delegate builds the
-/// items from the launcher's list each time the menu opens, from values already in memory: no disk, Spotlight or icon
-/// drawing runs on the click path. Between openings the button holds only the item it shows, so the window builds no
-/// menus when it opens.
+/// Everything the user sees and touches is the system's: the bezel that shows on hover, the chevrons, the font, the
+/// click target, the menu and where it opens (the row's app over the button, checked). The picker changes three
+/// things only:
+/// - The menu is built from values already in memory, no disk, Spotlight or icon drawing: whenever the row's app or
+///   the list changes, with the row's app selected, because AppKit places the menu from the selection before it
+///   asks for the items; and again as it opens, for icons drawn since (about 0.3 ms for 60 apps).
+/// - The button draws a display item of the picker's own rather than the menu's selected item, so it is always as wide
+///   as the row's app needs, and a pick shows nothing until the picker shows it. The display item's image has clear
+///   room after it: 6 pt between icon and name.
+/// - The icon is drawn by a layer of the picker's own, over the display item's image slot, which holds a clear image
+///   of the same size: the button lays out exactly as if it drew the icon, and the pick animation scales that layer
+///   alone. Picking an app plays it.
 ///
 /// The button shortens a long name itself, so the cut is always at the end of the name with an ellipsis.
 struct AppPicker: NSViewRepresentable {
@@ -20,90 +27,100 @@ struct AppPicker: NSViewRepresentable {
     let cachedIcon: (URL) -> NSImage
     /// Draws a missing icon on the spot: the button's icon only.
     let icon: (URL) -> NSImage
-    /// nil = None.
-    let choose: (AppChoice?) -> Void
-    let chooseOther: () -> Void
+    /// nil = None. Answers the app the row now shows present, which is what plays the pick animation.
+    let choose: (AppChoice?) -> AppEntry?
+    /// Hands the completion to the model's Other… path; the completion gets the app the row now shows present, or nil.
+    let chooseOther: (@escaping (AppEntry?) -> Void) -> Void
+    /// The pick animation to play for a pick now, or nil to swap the icon at once.
+    let pickAnimation: () -> PickAnimation?
 
-    static let maxWidth: CGFloat = 128
-    /// What the pop-up button may take: the whole width less the gap and the chevron badge.
-    static let buttonMaxWidth = maxWidth - PickerView.chevronSpace
+    /// The widest the content may be, from the icon's or name's leading edge to the chevrons' trailing one.
+    static let maxContentWidth: CGFloat = 128
+    /// The button's frame around its content (measured on macOS 26): 12 pt before it, where the bezel shown on hover
+    /// pads it, and 3.5 pt after the chevrons.
+    static let contentInsets = (leading: CGFloat(12), trailing: CGFloat(3.5))
+    /// The widest the button may be.
+    static let maxWidth = maxContentWidth + contentInsets.leading + contentInsets.trailing
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeNSView(context: Context) -> PickerView {
-        let view = PickerView()
-        let button = view.button
-        button.menu?.autoenablesItems = false
-        // The delegate checks the row's app itself: the selected item is always the first, see `menuNeedsUpdate`.
-        (button.cell as? NSPopUpButtonCell)?.altersStateOfSelectedItem = false
-        button.menu?.delegate = context.coordinator
-        context.coordinator.button = button
-        return view
+    func makeNSView(context: Context) -> PickerButton { makeView(coordinator: context.coordinator) }
+
+    func updateNSView(_ button: PickerButton, context: Context) { update(button, coordinator: context.coordinator) }
+
+    func makeView(coordinator: Coordinator) -> PickerButton {
+        let button = PickerButton()
+        button.menu?.delegate = coordinator
+        coordinator.button = button
+        return button
     }
 
-    func updateNSView(_ view: PickerView, context: Context) {
-        let coordinator = context.coordinator
+    func update(_ button: PickerButton, coordinator: Coordinator) {
         coordinator.current = current
         coordinator.installedApps = installedApps
         coordinator.cachedIcon = cachedIcon
         coordinator.icon = icon
         coordinator.choose = choose
         coordinator.chooseOther = chooseOther
-        guard !coordinator.isMenuOpen else { return }
-        coordinator.showCurrentOnly()
-        view.invalidateIntrinsicContentSize()
+        coordinator.pickAnimation = pickAnimation
+        coordinator.showCurrent()
+        coordinator.buildMenuIfChanged()
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView view: PickerView, context: Context) -> CGSize? {
-        view.intrinsicContentSize
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView button: PickerButton, context: Context) -> CGSize? {
+        button.intrinsicContentSize
     }
 
     @MainActor final class Coordinator: NSObject, NSMenuDelegate {
-        weak var button: NSPopUpButton?
+        weak var button: PickerButton?
         var current = RowApp.unassigned
         var installedApps = InstalledApps.empty
         var cachedIcon: (URL) -> NSImage = { _ in NSImage() }
         var icon: (URL) -> NSImage = { _ in NSImage() }
-        var choose: (AppChoice?) -> Void = { _ in }
-        var chooseOther: () -> Void = {}
-        private(set) var isMenuOpen = false
+        var choose: (AppChoice?) -> AppEntry? = { _ in nil }
+        var chooseOther: (@escaping (AppEntry?) -> Void) -> Void = { _ in }
+        var pickAnimation: () -> PickAnimation? = { nil }
 
-        func showCurrentOnly() {
+        /// The row's app in the button. A running pick animation is left alone.
+        func showCurrent() {
             guard let button else { return }
-            button.removeAllItems()
-            let item = closedItem(current)
-            button.menu?.addItem(item)
-            button.selectItem(at: 0)
-            shortenToFit(item, in: button)
+            let presentIcon: NSImage?
+            if case .present(let entry) = current { presentIcon = icon(entry.url) } else { presentIcon = nil }
+            button.show(displayItem(current), icon: presentIcon)
             // A missing app's name takes the button's whole width, so "not found" is in the tooltip.
             if case .missing(let name) = current { button.toolTip = "\(name) not found" } else { button.toolTip = nil }
         }
 
-        func menuWillOpen(_ menu: NSMenu) { isMenuOpen = true }
+        /// The row's app and the list the menu was last built from.
+        private var builtFrom: (app: RowApp, list: InstalledApps)?
 
-        /// Deferred so a chosen item's action still finds its item; the closed button goes back to holding only the
-        /// row's app.
-        func menuDidClose(_ menu: NSMenu) {
-            isMenuOpen = false
-            Task { @MainActor [weak self] in
-                guard let self, !isMenuOpen else { return }
-                showCurrentOnly()
-            }
+        /// Builds the menu when the row's app or the list changed since it was last built.
+        func buildMenuIfChanged() {
+            guard let menu = button?.menu, builtFrom?.app != current || builtFrom?.list != installedApps else { return }
+            build(menu)
         }
 
-        /// Runs each time the menu is about to open. A list that arrived while a menu was open is applied here. The
-        /// row's app, matched by bundle identifier, is checked. The pop-up button opens its menu with the selected
-        /// item over itself, so the first item is the selected one: the list opens at its top whatever the row holds.
-        func menuNeedsUpdate(_ menu: NSMenu) {
+        /// Runs each time the menu is about to open, once AppKit has placed it: the same items again, with any icon
+        /// drawn since the last build.
+        func menuNeedsUpdate(_ menu: NSMenu) { build(menu) }
+
+        /// The menu for the row's app and the list. The row's app, matched by bundle identifier, is checked and
+        /// selected, so the menu opens with it over the button; with no row app in the menu, it opens at its top.
+        private func build(_ menu: NSMenu) {
             guard let button else { return }
+            builtFrom = (current, installedApps)
             menu.removeAllItems()
+            var selected = 0
             for pickerItem in installedApps.pickerMenu(checking: current) {
                 switch pickerItem {
                 case .app(let entry, let state):
                     let item = actionItem(title: entry.name, action: #selector(pick(_:)))
                     item.representedObject = entry
                     item.image = cachedIcon(entry.url)
-                    item.state = state == .current ? .on : .off
+                    if state == .current {
+                        item.state = .on
+                        selected = menu.numberOfItems
+                    }
                     menu.addItem(item)
                 case .divider:
                     menu.addItem(.separator())
@@ -113,31 +130,26 @@ struct AppPicker: NSViewRepresentable {
                     menu.addItem(actionItem(title: "None", action: #selector(pick(_:))))
                 }
             }
-            button.selectItem(at: 0)
+            button.selectItem(at: selected)
         }
 
-        /// The closed button's only item; never in the open menu.
-        private func closedItem(_ app: RowApp) -> NSMenuItem {
+        /// What the button draws for `app`; never in the menu.
+        private func displayItem(_ app: RowApp) -> NSMenuItem {
             switch app {
             case .unassigned:
-                return titledItem("Choose app…")
+                return NSMenuItem(title: "Choose app…", action: nil, keyEquivalent: "")
             case .present(let entry):
-                let item = titledItem(entry.name)
-                item.image = Self.spaced(icon(entry.url))
+                let item = NSMenuItem(title: entry.name, action: nil, keyEquivalent: "")
+                item.image = PickerButton.clearIconSlot
                 return item
             case .missing(let name):
-                let item = titledItem(name, color: .tertiaryLabelColor)
+                let item = NSMenuItem(title: name, action: nil, keyEquivalent: "")
+                item.attributedTitle = NSAttributedString(
+                    string: name, attributes: [.foregroundColor: NSColor.tertiaryLabelColor])
                 item.image = NSImage(systemSymbolName: "questionmark.app.dashed", accessibilityDescription: "not found")
-                    .map(Self.spaced)
+                    .map(PickerButton.spaced)
                 return item
             }
-        }
-
-        private func titledItem(_ title: String, color: NSColor = .labelColor) -> NSMenuItem {
-            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-            item.attributedTitle = NSAttributedString(
-                string: title, attributes: [.foregroundColor: color, .font: Self.font])
-            return item
         }
 
         private func actionItem(title: String, action: Selector) -> NSMenuItem {
@@ -146,135 +158,212 @@ struct AppPicker: NSViewRepresentable {
             return item
         }
 
-        /// An item without a represented app is None. The button shows the pick at once rather than at the model's
-        /// next update.
+        /// An item without a represented app is None: it plays nothing. The button shows the pick at once rather than
+        /// at the model's next update.
         @objc private func pick(_ sender: NSMenuItem) {
             let entry = sender.representedObject as? AppEntry
-            current = entry.map(RowApp.present) ?? .unassigned
-            showCurrentOnly()
-            choose(entry.map(AppChoice.app))
-        }
-
-        /// Other… is not an app: the button goes back to what it showed.
-        @objc private func pickOther() {
-            chooseOther()
-            showCurrentOnly()
-        }
-
-        /// The window's labels: 13 pt medium.
-        private static let font = NSFont.systemFont(ofSize: 13, weight: .medium)
-        /// Clear room after the icon, on top of the pop-up button's own gap: 6 pt between icon and name in all.
-        private static let iconTrailingSpace: CGFloat = 1
-
-        /// `image` with `iconTrailingSpace` of clear room on its right. A template image stays one, so the symbol
-        /// still takes the button's colour.
-        private static func spaced(_ image: NSImage) -> NSImage {
-            let size = NSSize(width: image.size.width + iconTrailingSpace, height: image.size.height)
-            let spaced = NSImage(size: size, flipped: false) { _ in
-                image.draw(in: NSRect(origin: .zero, size: image.size))
-                return true
+            let answer = choose(entry.map(AppChoice.app))
+            if let answer {
+                show(picked: answer)
+            } else if entry == nil {
+                current = .unassigned
+                button?.stopPickAnimation()
+                showCurrent()
+                buildMenuIfChanged()
             }
-            spaced.isTemplate = image.isTemplate
-            spaced.accessibilityDescription = image.accessibilityDescription
-            return spaced
         }
 
-        /// Cuts the closed item's name until the button fits `maxWidth`. Everything around the name (the icon, the
-        /// gaps, the chevron) keeps its width, so the name gets what the button is over by taken off.
-        private func shortenToFit(_ item: NSMenuItem, in button: NSPopUpButton) {
-            let over = button.intrinsicContentSize.width - AppPicker.buttonMaxWidth
-            guard over > 0, let attributes = item.attributedTitle?.attributes(at: 0, effectiveRange: nil) else { return }
-            let name = item.title
-            let fitted = Self.fitted(name, within: Self.textWidth(name) - over)
-            item.title = fitted
-            item.attributedTitle = NSAttributedString(string: fitted, attributes: attributes)
-            button.synchronizeTitleAndSelectedItem()
+        /// Other… is not an app: the button keeps what it shows, and only an app the model accepts shows and plays. A
+        /// cancelled chooser never calls back.
+        @objc private func pickOther() {
+            chooseOther { [weak self] answer in
+                guard let answer else { return }
+                self?.show(picked: answer)
+            }
         }
 
-        private static func textWidth(_ text: String) -> CGFloat {
-            (text as NSString).size(withAttributes: [.font: font]).width
-        }
-
-        /// `name`, cut at the end with an ellipsis until it fits `width`.
-        private static func fitted(_ name: String, within width: CGFloat) -> String {
-            guard textWidth(name) > width else { return name }
-            var kept = name
-            while !kept.isEmpty, textWidth(kept + "…") > width { kept.removeLast() }
-            return kept.trimmingCharacters(in: .whitespaces) + "…"
+        /// The picked app in the button, with the pick animation unless the supplier has none (Reduce motion).
+        private func show(picked entry: AppEntry) {
+            current = .present(entry)
+            showCurrent()
+            buildMenuIfChanged()
+            if let animation = pickAnimation() {
+                button?.play(animation)
+            } else {
+                button?.stopPickAnimation()
+            }
         }
     }
 }
 
-/// The pop-up button without its arrows, then the chevron badge. Every click inside goes to the button, so the badge
-/// opens the menu too.
-final class PickerView: NSView {
-    /// 12 pt from the name to the badge, less the clear room the arrowless pop-up button keeps after its title
-    /// (4 pt, measured on macOS 26).
-    static let chevronGap: CGFloat = 12 - 4
-    static let badgeSize: CGFloat = 16
-    static let chevronSpace = chevronGap + badgeSize
+/// The system's pop-up button in System Settings' style, drawing a display item of the picker's own, with the present
+/// app's icon drawn by `iconLayer` over the display item's image slot.
+final class PickerButton: NSPopUpButton {
+    /// The icon's side.
+    static let iconSide: CGFloat = 16
+    /// Clear room after the icon, on top of the button's own 2 pt: 6 pt between the icon and the name's text box
+    /// (measured on macOS 26).
+    static let iconTrailingSpace: CGFloat = 4
+    /// The key the pick animation runs under, so a new one replaces a running one.
+    static let pickKey = "pick"
+    /// Samples a second of the pick animation, like the launch animation's.
+    private static let keyframesPerSecond: Double = 240
+    /// AppKit's semantic context for a grouped form, which SwiftUI's grouped Form sets: the pop-up then draws as in
+    /// System Settings, chevrons in a round badge and the bezel only on hover. AppKit has no public way to set it
+    /// outside a SwiftUI Form; without the private setter the button keeps the standard bordered look.
+    private static let formSemanticContext = 8
 
-    let button = NSPopUpButton(frame: .zero, pullsDown: false)
-    private let badge = ChevronBadge()
+    /// What holds the icon's slot in the display item while `iconLayer` draws the icon.
+    static let clearIconSlot = NSImage(
+        size: NSSize(width: iconSide + iconTrailingSpace, height: iconSide), flipped: false
+    ) { _ in true }
+
+    /// The icon's own layer. Its implicit actions are off: the pick animation is the only animation it plays.
+    var iconLayer: CALayer { iconView.iconLayer }
+    private let iconView = IconView()
 
     init() {
-        super.init(frame: .zero)
-        button.isBordered = false
-        (button.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
-        for view in [button, badge] as [NSView] {
-            view.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(view)
-        }
-        NSLayoutConstraint.activate([
-            button.leadingAnchor.constraint(equalTo: leadingAnchor),
-            button.centerYAnchor.constraint(equalTo: centerYAnchor),
-            button.trailingAnchor.constraint(equalTo: badge.leadingAnchor, constant: -Self.chevronGap),
-            badge.trailingAnchor.constraint(equalTo: trailingAnchor),
-            badge.centerYAnchor.constraint(equalTo: centerYAnchor),
-            badge.widthAnchor.constraint(equalToConstant: Self.badgeSize),
-            badge.heightAnchor.constraint(equalToConstant: Self.badgeSize),
-        ])
+        super.init(frame: .zero, pullsDown: false)
+        guard let cell = cell as? NSPopUpButtonCell else { preconditionFailure("NSPopUpButton without its cell") }
+        cell.usesItemFromMenu = false
+        // The delegate checks the row's app itself, so a missing app selects the first item without checking it.
+        cell.altersStateOfSelectedItem = false
+        menu?.autoenablesItems = false
+        Self.setFormSemanticContext(on: self)
+        iconView.frame = bounds
+        iconView.autoresizingMask = [.width, .height]
+        addSubview(iconView)
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
 
-    override var intrinsicContentSize: NSSize {
-        let natural = button.intrinsicContentSize
-        return NSSize(
-            width: min(natural.width, AppPicker.buttonMaxWidth) + Self.chevronSpace,
-            height: max(natural.height, Self.badgeSize))
+    private static func setFormSemanticContext(on view: NSView) {
+        let setter = NSSelectorFromString("_setSemanticContext:")
+        guard view.responds(to: setter) else { return }
+        typealias Setter = @convention(c) (AnyObject, Selector, Int) -> Void
+        unsafeBitCast(view.method(for: setter), to: Setter.self)(view, setter, formSemanticContext)
     }
 
-    override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? button : nil }
+    /// `item` drawn by the button, its name shortened to fit; `icon` drawn over its image slot, or no icon for nil. A
+    /// running pick animation is left alone.
+    func show(_ item: NSMenuItem, icon: NSImage?) {
+        guard let cell = cell as? NSPopUpButtonCell else { return }
+        cell.menuItem = item
+        shortenToFit(item)
+        iconLayer.contents = icon
+        iconLayer.isHidden = icon == nil
+        invalidateIntrinsicContentSize()
+        needsLayout = true
+        placeIconLayer()
+    }
+
+    override func layout() {
+        super.layout()
+        // Above whatever AppKit adds to draw the button, which it may add or re-add as the button changes.
+        if subviews.last !== iconView { addSubview(iconView, positioned: .above, relativeTo: nil) }
+        placeIconLayer()
+    }
+
+    /// The leading square of the display item's image slot, where the button would draw the icon.
+    private func placeIconLayer() {
+        guard let cell = cell as? NSPopUpButtonCell else { return }
+        let slot = iconView.convert(cell.imageRect(forBounds: bounds), from: self)
+        iconLayer.bounds = CGRect(x: 0, y: 0, width: Self.iconSide, height: Self.iconSide)
+        iconLayer.position = CGPoint(x: slot.minX + Self.iconSide / 2, y: slot.midY)
+    }
+
+    /// Plays `animation` on the icon alone from its start; a running one is replaced. The model transform stays
+    /// identity, so when it ends the icon rests at full size with nothing to clean up.
+    func play(_ animation: PickAnimation) {
+        let frames = animation.keyframes(perSecond: Self.keyframesPerSecond)
+        let grow = CAKeyframeAnimation(keyPath: "transform")
+        grow.values = frames.scales.map { NSValue(caTransform3D: CATransform3DMakeScale($0, $0, 1)) }
+        grow.keyTimes = frames.keyTimes.map { NSNumber(value: $0) }
+        grow.duration = animation.duration
+        grow.calculationMode = .linear
+        iconLayer.add(grow, forKey: Self.pickKey)
+    }
+
+    func stopPickAnimation() { iconLayer.removeAnimation(forKey: Self.pickKey) }
+
+    /// `image` with `iconTrailingSpace` of clear room on its right. A template image stays one, so the symbol still
+    /// takes the button's colour.
+    static func spaced(_ image: NSImage) -> NSImage {
+        let spaced = NSImage(
+            size: NSSize(width: image.size.width + iconTrailingSpace, height: image.size.height), flipped: false
+        ) { _ in
+            image.draw(in: NSRect(origin: .zero, size: image.size))
+            return true
+        }
+        spaced.isTemplate = image.isTemplate
+        spaced.accessibilityDescription = image.accessibilityDescription
+        return spaced
+    }
+
+    /// Cuts the display item's name until the button fits `AppPicker.maxWidth`. Everything around the name (the
+    /// icon, the gaps, the chevrons) keeps its width, so the name gets what the button is over by taken off.
+    private func shortenToFit(_ item: NSMenuItem) {
+        let over = intrinsicContentSize.width - AppPicker.maxWidth
+        guard over > 0 else { return }
+        let attributes = item.attributedTitle?.attributes(at: 0, effectiveRange: nil) ?? [:]
+        let font = font ?? .systemFont(ofSize: NSFont.systemFontSize)
+        let fitted = Self.fitted(item.title, within: Self.textWidth(item.title, font: font) - over, font: font)
+        item.title = fitted
+        if item.attributedTitle != nil { item.attributedTitle = NSAttributedString(string: fitted, attributes: attributes) }
+        (cell as? NSPopUpButtonCell)?.menuItem = item
+    }
+
+    private static func textWidth(_ text: String, font: NSFont) -> CGFloat {
+        (text as NSString).size(withAttributes: [.font: font]).width
+    }
+
+    /// `name`, cut at the end with an ellipsis until it fits `width`.
+    private static func fitted(_ name: String, within width: CGFloat, font: NSFont) -> String {
+        guard textWidth(name, font: font) > width else { return name }
+        var kept = name
+        while !kept.isEmpty, textWidth(kept + "…", font: font) > width { kept.removeLast() }
+        return kept.trimmingCharacters(in: .whitespaces) + "…"
+    }
 }
 
-/// `chevron.up.chevron.down`, 11 pt bold, centred in a 16 pt circle of the faint fill pop-up buttons use.
-final class ChevronBadge: NSView {
-    private let chevron = NSImageView()
+/// Holds the icon layer above the button's own drawing. Never takes a click or the pointer, so the button keeps its
+/// hover, its click target and its menu; never clips, so the pick animation's peak draws past the icon's slot.
+private final class IconView: NSView {
+    let iconLayer = CALayer()
 
     init() {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = PickerView.badgeSize / 2
-        chevron.image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 11, weight: .bold))
-        chevron.contentTintColor = .labelColor
-        chevron.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(chevron)
-        NSLayoutConstraint.activate([
-            chevron.centerXAnchor.constraint(equalTo: centerXAnchor),
-            chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
-        ])
+        clipsToBounds = false
+        layer?.masksToBounds = false
+        iconLayer.masksToBounds = false
+        iconLayer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        iconLayer.isHidden = true
+        iconLayer.actions = [
+            "contents": NSNull(), "bounds": NSNull(), "position": NSNull(), "hidden": NSNull(),
+            "transform": NSNull(), "opacity": NSNull(), "contentsScale": NSNull(),
+        ]
+        layer?.addSublayer(iconLayer)
+        updateContentsScale()
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
 
-    override var wantsUpdateLayer: Bool { true }
+    override var isFlipped: Bool { true }
 
-    /// Resolved here so the fill follows light and dark.
-    override func updateLayer() {
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            layer?.backgroundColor = NSColor.tertiarySystemFill.cgColor
-        }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateContentsScale()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        updateContentsScale()
+    }
+
+    private func updateContentsScale() {
+        iconLayer.contentsScale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
     }
 }

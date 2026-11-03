@@ -18,6 +18,11 @@ let package = Package(
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         .testTarget(name: "LauncherCoreTests", dependencies: ["LauncherCore"]),
+        .testTarget(
+            name: "LauncherUITests",
+            dependencies: ["LauncherUI", "LauncherCore"],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
         .testTarget(name: "LauncherPlatformTests", dependencies: ["LauncherPlatform", "LauncherCore"]),
     ],
     swiftLanguageModes: [.v6]

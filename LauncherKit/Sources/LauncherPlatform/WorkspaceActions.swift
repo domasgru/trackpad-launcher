@@ -95,16 +95,26 @@ import LauncherCore
     #if DEBUG
     private var tuner: AnimationTuner?
 
-    /// Debug builds only. Opens the launch animation and bounce tuner; its previews play Finder's icon at the pointer.
+    /// The tuner's pick animation and Simulate Reduce motion switch now; during a preset's preview, that preset's
+    /// pick animation.
+    public var pickTuning: (animation: PickAnimation, simulateReduceMotion: Bool) {
+        let tuning = LaunchTuning.current
+        return (tuning.pick, tuning.forceReduceMotion)
+    }
 
-    public func showAnimationTuner() {
+    /// Debug builds only. Opens the animation tuner; its launch and bounce previews play Finder's icon at the pointer,
+    /// and its pick preview plays on the settings window's pickers, through the closures.
+    public func showAnimationTuner(
+        previewPick: @escaping @MainActor () -> Void, canPreviewPick: @escaping @MainActor () -> Bool
+    ) {
         if tuner == nil {
             let finder = AppEntry(
                 bundleID: BundleID(rawValue: "com.apple.finder"), name: "Finder",
                 url: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"))
             tuner = AnimationTuner(
                 preview: { [overlay] in overlay.play(for: finder) },
-                previewBounce: { [bounces] isOn in isOn ? bounces.preview(finder) : bounces.stopPreview(finder) })
+                previewBounce: { [bounces] isOn in isOn ? bounces.preview(finder) : bounces.stopPreview(finder) },
+                previewPick: previewPick, canPreviewPick: canPreviewPick)
         }
         tuner?.show()
     }

@@ -8,20 +8,27 @@ import Synchronization
 /// The tuning Debug builds' flights read. Starts as the shipped one; the tuner writes it.
 let tunerOverride = Mutex(LaunchTuning.shipped)
 
-/// Debug builds only: a floating window with a slider per `LaunchTuning` knob, for polishing the launch animation and
-/// the launch bounce. Changes apply to the next gesture or bounce at once. The current tuning and named presets persist in user defaults. To
-/// ship a tuning, copy its values into `LaunchTuning`'s defaults.
+/// Debug builds only: a floating window with a slider per `LaunchTuning` knob, for polishing the launch animation, the
+/// launch bounce, the pick animation and the switcher swipe. A segmented control shows one of those four tabs at a
+/// time; presets cover all of them. Changes apply to the next gesture, bounce or pick at once. The current tuning, the
+/// shown tab and named presets persist in user defaults. To ship a tuning, copy its values into `LaunchTuning`'s
+/// defaults.
 @MainActor final class AnimationTuner {
     private let panel: NSPanel
 
-    init(preview: @escaping @MainActor () -> Void, previewBounce: @escaping @MainActor (Bool) -> Void) {
+    init(
+        preview: @escaping @MainActor () -> Void, previewBounce: @escaping @MainActor (Bool) -> Void,
+        previewPick: @escaping @MainActor () -> Void, canPreviewPick: @escaping @MainActor () -> Bool
+    ) {
         let model = TunerModel()
         let content = NSHostingView(
-            rootView: TunerView(model: model, preview: preview, previewBounce: previewBounce))
+            rootView: TunerView(
+                model: model, preview: preview, previewBounce: previewBounce, previewPick: previewPick,
+                canPreviewPick: canPreviewPick))
         panel = TunerPanel(
             contentRect: CGRect(x: 0, y: 0, width: 420, height: 760),
             styleMask: [.titled, .resizable, .utilityWindow, .miniaturizable], backing: .buffered, defer: false)
-        panel.title = "Launch animation & bounce tuner"
+        panel.title = "Animation tuner"
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
@@ -71,6 +78,7 @@ struct TuningPreset: Codable, Identifiable, Equatable {
     private static let currentKey = "AnimationTuner.current"
     private static let presetsKey = "AnimationTuner.presets"
     private static let selectedKey = "AnimationTuner.selected"
+    private static let tabKey = "AnimationTuner.tab"
 
     var tuning: LaunchTuning {
         didSet {
@@ -88,18 +96,26 @@ struct TuningPreset: Codable, Identifiable, Equatable {
         didSet { UserDefaults.standard.set(selected, forKey: Self.selectedKey) }
     }
 
+    var tab: TunerTab {
+        didSet { UserDefaults.standard.set(tab.rawValue, forKey: Self.tabKey) }
+    }
+
     var newName = ""
 
     init() {
+        tab = UserDefaults.standard.string(forKey: Self.tabKey).flatMap(TunerTab.init(rawValue:)) ?? .launch
         tuning = Self.load(LaunchTuning.self, key: Self.currentKey) ?? .shipped
         presets = Self.load([TuningPreset].self, key: Self.presetsKey) ?? []
         selected = UserDefaults.standard.string(forKey: Self.selectedKey)
         tunerOverride.withLock { $0 = tuning }
     }
 
-    /// Plays `tuning` once at the pointer without loading it.
+    /// Plays `tuning` once without loading it. Simulate Reduce motion belongs to no tab, so the preview keeps the
+    /// switch as it is now.
     func preview(_ tuning: LaunchTuning, play: @MainActor () -> Void) {
-        tunerOverride.withLock { $0 = tuning }
+        var previewed = tuning
+        previewed.forceReduceMotion = self.tuning.forceReduceMotion
+        tunerOverride.withLock { $0 = previewed }
         play()
         tunerOverride.withLock { $0 = self.tuning }
     }
@@ -111,7 +127,12 @@ struct TuningPreset: Codable, Identifiable, Equatable {
         return preset.tuning != tuning
     }
 
-    func resetToShipped() {
+    /// Resets the shown tab's values alone; a selected preset then shows as modified.
+    func resetShownTabToShipped() {
+        tuning = tuning.resettingToShipped(tab)
+    }
+
+    func loadShipped() {
         tuning = .shipped
         selected = nil
     }
@@ -160,67 +181,148 @@ struct TunerView: View {
     let preview: @MainActor () -> Void
     /// On: bounces Finder's icon at the pointer, or restarts it with the current tuning. Off: ends it.
     let previewBounce: @MainActor (Bool) -> Void
+    /// Plays the pick animation on the settings window's pickers.
+    let previewPick: @MainActor () -> Void
+    /// False while the settings window is closed or no picker shows an installed app's icon.
+    let canPreviewPick: @MainActor () -> Bool
     @State private var isPreviewingBounce = false
 
     var body: some View {
         VStack(spacing: 0) {
+            Picker("Tab", selection: $model.tab) {
+                Text("Launch").tag(TunerTab.launch)
+                Text("Bounce").tag(TunerTab.bounce)
+                Text("Pick").tag(TunerTab.pick)
+                Text("Swipe").tag(TunerTab.swipe)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding([.top, .horizontal], 12)
+
             Form {
-                Section("Size & timing") {
-                    knob("Icon size", \.iconSide, 16...128, step: 1, unit: "pt")
-                    knob("Duration", \.duration, 0.1...2, step: 0.01, unit: "s")
+                switch model.tab {
+                case .launch:
+                    launchSections
+                    reduceMotionSection
+                case .bounce:
+                    bounceSection
+                    reduceMotionSection
+                case .pick:
+                    pickSection
+                    reduceMotionSection
+                case .swipe:
+                    swipeSection
                 }
-                Section("Pop") {
-                    knob("Pop size", \.popSize, 0...0.6, step: 0.01, hint: "extra size at the peak; 0.15 = 15% bigger")
-                    knob("Pop time", \.popTime, 0.005...0.15, step: 0.005, unit: "s", hint: "time to reach the peak")
-                }
-                Section("Rise") {
-                    knob("Rise", \.rise, 0...200, step: 1, unit: "pt")
-                    knob("Rise curve", \.riseCurve, 0.3...5, step: 0.05, hint: "1 = steady, >1 accelerates")
-                }
-                Section("Shrink") {
-                    knob("Shrink", \.shrink, 0...1, step: 0.01, hint: "share of size lost")
-                    knob("Shrink curve", \.shrinkCurve, 0.2...5, step: 0.05, hint: "<1 early, >1 late")
-                }
-                Section("Fade") {
-                    knob("Fade curve", \.fadeCurve, 0.3...10, step: 0.05, hint: "higher stays opaque longer")
-                }
-                Section("Sway") {
-                    knob("Max sway", \.maximumSway, 0...1.5, step: 0.01, hint: "sideways per point of rise")
-                    knob("Min sway", \.minimumSway, 0...1, step: 0.01, hint: "share of max")
-                    knob("Sway curve", \.swayCurve, 0...5, step: 0.05, hint: "higher veers later")
-                }
-                Section("Tilt") {
-                    knob("Max tilt", \.maximumTilt, 0...45, step: 0.5, unit: "°")
-                    knob("Tilt curve", \.tiltCurve, 0.2...5, step: 0.05)
-                }
-                Section {
-                    Toggle("Simulate Reduce motion", isOn: $model.tuning.forceReduceMotion)
-                }
-                Section {
-                    Toggle("Move like the cursor", isOn: $model.tuning.swipeFollowsCursor)
-                    knob("Points per step", \.swipePointsPerStep, 20...300, step: 1, unit: "pt",
-                         hint: "cursor travel per step; 100 = the icon pitch, lower reaches farther")
-                    knob("Tracking speed", \.swipeTrackingSpeed, -1...3, step: 0.0625,
-                         hint: "−1 = your System Settings value; default notch is 0.6875")
-                } header: {
-                    Text("Switcher swipe")
-                } footer: {
-                    Text("Applies from the next swipe. Off: 12 mm of finger per icon, no acceleration.")
-                }
-                bounceSection
                 presetsSection
             }
             .formStyle(.grouped)
 
             HStack {
-                Button("Reset to shipped") { model.resetToShipped() }
+                Button("Reset to shipped") { model.resetShownTabToShipped() }
                 Spacer()
-                Button("Preview at pointer") { preview() }
-                    .buttonStyle(.borderedProminent)
+                switch model.tab {
+                case .launch:
+                    Button("Preview at pointer") { preview() }
+                        .buttonStyle(.borderedProminent)
+                case .pick:
+                    Button("Preview in settings") { previewPick() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!canPreviewPick())
+                case .bounce, .swipe:
+                    EmptyView()
+                }
             }
             .padding(12)
         }
         .frame(minWidth: 380, minHeight: 500)
+        .onChange(of: model.tab) { old, _ in
+            if old == .bounce, isPreviewingBounce {
+                previewBounce(false)
+                isPreviewingBounce = false
+            }
+        }
+    }
+
+    @ViewBuilder private var launchSections: some View {
+        Section("Size & timing") {
+            knob("Icon size", \.iconSide, 16...128, step: 1, unit: "pt")
+            knob("Duration", \.duration, 0.1...2, step: 0.01, unit: "s")
+        }
+        Section("Pop") {
+            knob("Pop size", \.popSize, 0...0.6, step: 0.01, hint: "extra size at the peak; 0.15 = 15% bigger")
+            knob("Pop time", \.popTime, 0.005...0.15, step: 0.005, unit: "s", hint: "time to reach the peak")
+        }
+        Section("Rise") {
+            knob("Rise", \.rise, 0...200, step: 1, unit: "pt")
+            knob("Rise curve", \.riseCurve, 0.3...5, step: 0.05, hint: "1 = steady, >1 accelerates")
+        }
+        Section("Shrink") {
+            knob("Shrink", \.shrink, 0...1, step: 0.01, hint: "share of size lost")
+            knob("Shrink curve", \.shrinkCurve, 0.2...5, step: 0.05, hint: "<1 early, >1 late")
+        }
+        Section("Fade") {
+            knob("Fade curve", \.fadeCurve, 0.3...10, step: 0.05, hint: "higher stays opaque longer")
+        }
+        Section("Sway") {
+            knob("Max sway", \.maximumSway, 0...1.5, step: 0.01, hint: "sideways per point of rise")
+            knob("Min sway", \.minimumSway, 0...1, step: 0.01, hint: "share of max")
+            knob("Sway curve", \.swayCurve, 0...5, step: 0.05, hint: "higher veers later")
+        }
+        Section("Tilt") {
+            knob("Max tilt", \.maximumTilt, 0...45, step: 0.5, unit: "°")
+            knob("Tilt curve", \.tiltCurve, 0.2...5, step: 0.05)
+        }
+    }
+
+    private var reduceMotionSection: some View {
+        Section {
+            Toggle("Simulate Reduce motion", isOn: $model.tuning.forceReduceMotion)
+        }
+    }
+
+    private var pickSection: some View {
+        Section {
+            knob("Start size", \.pick.startScale, 0.1...1, step: 0.01,
+                 hint: "share of the icon's side; 0.4 = 40%")
+            knob("Peak size", \.pick.peakScale, 1...1.6, step: 0.01,
+                 hint: "share of the icon's side; 1.1 = 110%")
+            knob("Grow time", \.pick.growTime, 0.05...1, step: 0.01, unit: "s", hint: "from the pick to the peak")
+            knob("Settle time", \.pick.settleTime, 0.05...1, step: 0.01, unit: "s", hint: "from the peak to rest")
+        } header: {
+            Text("Pick animation")
+        } footer: {
+            Text("Applies from the next pick in the settings window.")
+        }
+    }
+
+    private var swipeSection: some View {
+        Section {
+            Toggle("Move like the cursor", isOn: $model.tuning.swipeFollowsCursor)
+            knob("Points per step", \.swipePointsPerStep, 20...300, step: 1, unit: "pt",
+                 hint: "cursor travel per step; 100 = the icon pitch, lower reaches farther")
+            knob("Tracking speed", \.swipeTrackingSpeed, -1...3, step: 0.0625,
+                 hint: "−1 = your System Settings value; default notch is 0.6875")
+        } header: {
+            Text("Switcher swipe")
+        } footer: {
+            Text("Applies from the next swipe. Off: 12 mm of finger per icon, no acceleration.")
+        }
+    }
+
+    /// The play button of a preset row (or the Shipped row) on the shown tab: at the pointer on Launch, in the
+    /// settings window on Pick, absent on Bounce and Swipe.
+    @ViewBuilder private func playButton(_ tuning: LaunchTuning) -> some View {
+        switch model.tab {
+        case .launch:
+            Button { model.preview(tuning, play: preview) } label: { Image(systemName: "play.fill") }
+                .help("Play once at the pointer without loading")
+        case .pick:
+            Button { model.preview(tuning, play: previewPick) } label: { Image(systemName: "play.fill") }
+                .help("Play once on the settings window's pickers without loading")
+                .disabled(!canPreviewPick())
+        case .bounce, .swipe:
+            EmptyView()
+        }
     }
 
     private var bounceSection: some View {
@@ -290,9 +392,8 @@ struct TunerView: View {
                     .foregroundStyle(model.selected == nil ? Color.accentColor : .secondary)
                 Text("Shipped")
                 Spacer()
-                Button { model.preview(.shipped, play: preview) } label: { Image(systemName: "play.fill") }
-                    .help("Play once at the pointer without loading")
-                Button("Load") { model.resetToShipped() }
+                playButton(.shipped)
+                Button("Load") { model.loadShipped() }
             }
             ForEach(model.presets) { preset in
                 HStack {
@@ -300,8 +401,7 @@ struct TunerView: View {
                         .foregroundStyle(model.selected == preset.name ? Color.accentColor : .secondary)
                     Text(preset.name)
                     Spacer()
-                    Button { model.preview(preset.tuning, play: preview) } label: { Image(systemName: "play.fill") }
-                        .help("Play once at the pointer without loading")
+                    playButton(preset.tuning)
                     Button("Load") { model.load(preset) }
                     Button(role: .destructive) { model.delete(preset) } label: { Image(systemName: "trash") }
                         .buttonStyle(.borderless)
