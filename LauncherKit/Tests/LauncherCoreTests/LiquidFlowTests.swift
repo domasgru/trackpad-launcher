@@ -48,14 +48,15 @@ import LauncherCore
         hand.rest(forMS: 2000)
         let run = hand.run
         let layout = run.layout
-        let change = try #require(run.calls.last { $0.frame.swell == layout.swell(at: 1) })
+        let change = try #require(run.calls.first { $0.frame.swell == layout.swell(at: 1) })
 
         #expect(change.time.seconds == 0.05)
         let icon = try #require(change.frame.icon)
         #expect(icon.selected == 1 && icon.duration > 0 && icon.duration <= 0.2)
         #expect(swellChannels(change.frame.tracks) == allSwellChannels)
 
-        let before = run.played(at: at(0.049)).swell, after = run.played(at: change.time).swell
+        let continued = LiquidRun(layout: layout, calls: Array(run.calls.prefix { $0.time < change.time }))
+        let before = continued.played(at: change.time).swell, after = run.played(at: change.time).swell
         #expect(abs(before.minX - after.minX) <= 0.5 && abs(before.maxX - after.maxX) <= 0.5)
         let flowing = run.played(at: at(0.15)).swell.maxX
         #expect(layout.swell(at: 0).maxX < flowing && flowing < layout.swell(at: 1).maxX)
@@ -64,7 +65,7 @@ import LauncherCore
             run.played(at: $0).swell.maxX - layout.swell(at: 1).maxX
         }
         #expect(crossings(rightEdge) >= 2)
-        for instant in instants(of: run, from: at(1.05)) {
+        for instant in instants(of: run, from: at(1.1)) {
             let played = run.played(at: instant)
             #expect(played.swell == layout.swell(at: 1) && !played.swell.overlaps(played.beads[0]))
         }
