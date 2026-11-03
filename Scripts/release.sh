@@ -215,7 +215,7 @@ archive_and_check() {
 
   # Under another identifier a release would be a different app to macOS (fresh grants, settings and login item), and
   # no installed copy would accept it as an update, since the update's genuineness check pins the signer's identifier.
-  grep -qx "Identifier=$BUNDLE_ID" <<<"$after" ||
+  grep -qxF "Identifier=$BUNDLE_ID" <<<"$after" ||
     fail "the app is not signed with the identifier $BUNDLE_ID (found: $(grep '^Identifier=' <<<"$after" | tr '\n' ' '))."
 
   local stapled=true signed=true

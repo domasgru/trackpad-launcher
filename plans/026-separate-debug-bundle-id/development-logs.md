@@ -18,4 +18,6 @@
 - The README did not mention the second entry → one line added after the animation tuner's.
 
 ## Implement
-- (pending)
+- Review: T3 looped over the two identifiers and T1/T2 were two tests differing only in input (swift-testing-pro: prefer parameterized tests) → T3 is parameterized over `com.apple.finder.debug` and `com.apple.finder`, T1 and T2 are one parameterized test over R1's two literals.
+- Review: the release guard's `grep -qx "Identifier=$BUNDLE_ID"` read the identifier as a regex, so the match was not exact → `grep -qxF`.
+- Review, not fixed: keeping the release identifier in `base` with only a Debug override (the plan chose two per-configuration values, prototyped); a `BundleID` type in the adapter (the strings never cross the port); failing the identifier earlier in a full release (the plan places the guard in the archive check).
