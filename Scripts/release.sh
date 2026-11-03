@@ -1,20 +1,25 @@
 #!/bin/bash
-# Builds a release: refuses a version that is not above every earlier release, archives, exports with the
-# developer-id method, notarizes and staples the app, archives it as the update asset, lays out a disk image,
-# signs, notarizes and staples it, and publishes a GitHub release carrying both.
+# Releases main: checks every credential and that main is clean and current, runs the tests, optionally raises the
+# version, refuses a version that is not above every earlier release, archives, exports with the developer-id
+# method, notarizes and staples the app, archives it as the update asset, lays out a disk image, signs, notarizes
+# and staples it, and publishes a GitHub release carrying both.
 # Output: build/release/TrackpadLauncher.dmg
 #         build/release/TrackpadLauncher-<version>-macOS-<minimum>.aar
 #         the release v<version> on GitHub, published and marked latest: every older copy offers it the next
 #         time its settings window opens. gh uploads the assets before it publishes, so no copy sees a half-made one.
 #
-# Needs gh authenticated for the repository, a clean worktree whose HEAD is on origin,
-# a "Developer ID Application" identity in the keychain, a notarytool
-# keychain profile (xcrun notarytool store-credentials) named by NOTARY_PROFILE,
+# Needs gh authenticated for the repository, the main branch checked out, clean and equal to origin's,
+# a "Developer ID Application" identity in the keychain, a notarytool keychain profile
+# (xcrun notarytool store-credentials) named by NOTARY_PROFILE (default: trackpad-launcher),
 # and xcodegen on the PATH. The Finder layout step needs the Automation
 # permission for Finder (asked once). Signing of the app is left to xcodebuild,
 # which signs nested code first and the main executable last; --deep is never used.
 #
-#   Scripts/release.sh                     full release
+#   Scripts/release.sh patch|minor|major   raise the version (1.2.3 → 1.2.4 | 1.3.0 | 2.0.0) and the build number by
+#                                          one, commit that, release it, and push the commit just before publishing.
+#                                          Should anything fail before the push, the version commit is undone, so
+#                                          the same command tries the same version again
+#   Scripts/release.sh                     release the version already in Config/Version.xcconfig
 #   Scripts/release.sh --image-only <app>  lay out an UNSIGNED image around an
 #                                          existing app, to check the layout
 #                                          without a certificate
@@ -33,6 +38,10 @@ OUT="${RELEASE_OUT:-$ROOT/build/release}"
 BACKGROUND="$ROOT/Scripts/release/dmg-background.png"
 DMG="$OUT/$APP_NAME.dmg"
 REPOSITORY="domasgru/trackpad-launcher"
+VERSION_FILE="$ROOT/Config/Version.xcconfig"
+NOTARY_PROFILE="${NOTARY_PROFILE:-trackpad-launcher}"
+# True from the version commit until it is pushed: should the script stop in between, the commit is undone.
+UNPUSHED_BUMP=false
 # Dotted whole numbers of one to nine digits each: exactly what the app's Version parses.
 NUMERIC='^[0-9]{1,9}(\.[0-9]{1,9})*$'
 EXPECTED_VERSION=""
@@ -56,6 +65,11 @@ cleanup() {
   fi
   rm -f "$RW_DMG"
   rm -rf "$STAGE"
+  if $UNPUSHED_BUMP; then
+    UNPUSHED_BUMP=false
+    git -C "$ROOT" reset --quiet --keep HEAD~1 &&
+      echo "release.sh: nothing was published; the version commit was undone, so the same command retries it." >&2
+  fi
 }
 trap cleanup EXIT
 
@@ -96,16 +110,56 @@ first_not_below() {
   done
 }
 
-# Refuses to start unless the version in Config/Version.xcconfig is above every earlier tag and release,
-# drafts included. Sets EXPECTED_VERSION.
-preflight() {
-  gh auth status >/dev/null 2>&1 || fail "gh is not authenticated; run 'gh auth login' and retry."
-  git -C "$ROOT" fetch --quiet --tags origin || fail "cannot fetch origin."
-  [ -z "$(git -C "$ROOT" status --porcelain)" ] || fail "the worktree is not clean; commit or stash everything and retry."
-  [ -n "$(git -C "$ROOT" branch --remotes --contains HEAD)" ] ||
-    fail "HEAD is not on origin; push it first, the release targets this commit."
+# A setting's value in Config/Version.xcconfig.
+read_setting() {
+  sed -n "s/^$1 *= *//p" "$VERSION_FILE" | tr -d '[:space:]'
+}
 
-  EXPECTED_VERSION="$(sed -n 's/^MARKETING_VERSION *= *//p' "$ROOT/Config/Version.xcconfig" | tr -d '[:space:]')"
+# Refuses to start, before anything changes, unless every credential works and the checkout is main, clean and equal
+# to origin's main: the release targets this commit, and a version commit goes on top of it.
+preflight_checkout() {
+  gh auth status >/dev/null 2>&1 || fail "gh is not authenticated; run 'gh auth login' and retry."
+  security find-identity -v -p codesigning | grep -q "Developer ID Application" ||
+    fail "no 'Developer ID Application' signing identity in the keychain; install the certificate and retry."
+  xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 ||
+    fail "notarytool cannot use keychain profile '$NOTARY_PROFILE'; create it with 'xcrun notarytool store-credentials $NOTARY_PROFILE' or set NOTARY_PROFILE."
+  command -v xcodegen >/dev/null ||
+    fail "xcodegen is not on the PATH; install it (brew install xcodegen) and retry."
+
+  git -C "$ROOT" fetch --quiet --tags origin || fail "cannot fetch origin."
+  [ "$(git -C "$ROOT" branch --show-current)" = main ] || fail "check out main first; releases are made from main."
+  [ -z "$(git -C "$ROOT" status --porcelain)" ] || fail "the worktree is not clean; commit or stash everything and retry."
+  [ "$(git -C "$ROOT" rev-parse HEAD)" = "$(git -C "$ROOT" rev-parse origin/main)" ] ||
+    fail "main differs from origin's main; pull or push first, so the release is exactly what is on GitHub."
+}
+
+# Raises the version in Config/Version.xcconfig by `patch`, `minor` or `major`, and the build number by one, and
+# commits it on main without pushing.
+bump_version() {
+  local part="$1" current build next major minor patch
+  current="$(read_setting MARKETING_VERSION)"
+  build="$(read_setting CURRENT_PROJECT_VERSION)"
+  [[ "$current" =~ ^[0-9]{1,9}(\.[0-9]{1,9}){0,2}$ ]] ||
+    fail "MARKETING_VERSION '$current' is not one to three dotted whole numbers; raise it by hand and run release.sh alone."
+  [[ "$build" =~ ^[0-9]{1,9}$ ]] || fail "CURRENT_PROJECT_VERSION '$build' is not a whole number."
+  IFS=. read -r major minor patch <<<"$current"
+  major=$((10#$major)) minor=$((10#${minor:-0})) patch=$((10#${patch:-0}))
+  case "$part" in
+    major) next="$((major + 1)).0.0" ;;
+    minor) next="$major.$((minor + 1)).0" ;;
+    patch) next="$major.$minor.$((patch + 1))" ;;
+  esac
+  sed -i '' -e "s/^MARKETING_VERSION *=.*/MARKETING_VERSION = $next/" \
+    -e "s/^CURRENT_PROJECT_VERSION *=.*/CURRENT_PROJECT_VERSION = $((build + 1))/" "$VERSION_FILE"
+  git -C "$ROOT" commit --quiet -m "Version $next" -- "$VERSION_FILE"
+  UNPUSHED_BUMP=true
+  echo "Version $current → $next, build $build → $((build + 1)), committed on main (pushed just before publishing)."
+}
+
+# Refuses to go on unless the version in Config/Version.xcconfig is above every earlier tag and release,
+# drafts included. Sets EXPECTED_VERSION.
+preflight_version() {
+  EXPECTED_VERSION="$(read_setting MARKETING_VERSION)"
   [[ "$EXPECTED_VERSION" =~ $NUMERIC ]] ||
     fail "MARKETING_VERSION '$EXPECTED_VERSION' in Config/Version.xcconfig is not dotted whole numbers."
   [ -z "$(git -C "$ROOT" tag --list "v$EXPECTED_VERSION")" ] || fail "tag v$EXPECTED_VERSION already exists."
@@ -116,7 +170,7 @@ preflight() {
   tags="$(git -C "$ROOT" tag --list 'v*')"
   clash="$(printf '%s\n%s\n' "$tags" "$releases" | first_not_below "$EXPECTED_VERSION")"
   [ -z "$clash" ] ||
-    fail "version $EXPECTED_VERSION is not above every earlier release ($clash exists); raise Config/Version.xcconfig."
+    fail "version $EXPECTED_VERSION is not above every earlier release ($clash exists); run 'release.sh patch' or raise Config/Version.xcconfig."
 }
 
 # Archives the app as the update asset, unpacks it as an older version will and checks the result. Sets AAR.
@@ -244,19 +298,15 @@ if [ "${1:-}" = "--archive-only" ]; then
   exit 0
 fi
 
-preflight
+case "${1:-}" in
+  "" | patch | minor | major) ;;
+  *) fail "usage: release.sh [patch|minor|major]   (or --image-only <app>, --archive-only <app>)" ;;
+esac
 
-security find-identity -v -p codesigning | grep -q "Developer ID Application" ||
-  fail "no 'Developer ID Application' signing identity in the keychain; install the certificate and retry."
-
-[ -n "${NOTARY_PROFILE:-}" ] ||
-  fail "NOTARY_PROFILE is not set; create a profile with 'xcrun notarytool store-credentials <name>' and export its name."
-
-xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 ||
-  fail "notarytool cannot use keychain profile '$NOTARY_PROFILE'; check the profile name and credentials."
-
-command -v xcodegen >/dev/null ||
-  fail "xcodegen is not on the PATH; install it (brew install xcodegen) and retry."
+preflight_checkout
+"$ROOT/Scripts/test.sh" || fail "the tests fail; nothing was changed or published."
+[ -z "${1:-}" ] || bump_version "$1"
+preflight_version
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
@@ -324,8 +374,14 @@ spctl --assess --type open --context context:primary-signature -vv "$DMG"
 spctl --assess --type execute -vv "$APP"
 
 MIN_MACOS="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist")"
+if $UNPUSHED_BUMP; then
+  git -C "$ROOT" push --quiet origin HEAD:main ||
+    fail "cannot push the version commit to origin's main (did main move?); nothing was published."
+  UNPUSHED_BUMP=false
+fi
 gh release create "v$EXPECTED_VERSION" "$DMG" "$AAR" --repo "$REPOSITORY" --latest \
   --target "$(git -C "$ROOT" rev-parse HEAD)" \
-  --title "Trackpad Launcher $EXPECTED_VERSION" --notes "Requires macOS $MIN_MACOS or later."
+  --title "Trackpad Launcher $EXPECTED_VERSION" --notes "Requires macOS $MIN_MACOS or later." ||
+  fail "publishing v$EXPECTED_VERSION failed; main already holds its version, so run release.sh with no argument to retry."
 echo "Release artifacts: $DMG $AAR"
 echo "Published v$EXPECTED_VERSION."
