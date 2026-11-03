@@ -17,9 +17,11 @@ public enum ThisCopy {
         return marker == OSType(keyAELaunchedAsLogInItem) ? .atLogin : .byHand
     }
 
-    /// CFBundleShortVersionString as this process started with it.
-    public static func version() -> String? {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    /// CFBundleShortVersionString as this process started with it; nil when it is missing or is not dotted whole numbers.
+    public static func version() -> Version? { version(of: .main) }
+
+    static func version(of bundle: Bundle) -> Version? {
+        (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String).flatMap(Version.init)
     }
 
     /// ProcessInfo's operatingSystemVersion (major, minor, patch).

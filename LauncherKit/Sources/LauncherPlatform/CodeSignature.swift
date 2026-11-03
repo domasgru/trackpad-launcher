@@ -73,9 +73,7 @@ public enum CodeSignature {
         let strict = SecCSFlags(
             rawValue: kSecCSStrictValidate | kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | noNetworkAccess)
         guard SecStaticCodeCheckValidity(code, strict, requirement) == errSecSuccess else { return false }
-        var information: CFDictionary?
-        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,
-            let values = information as? [String: Any],
+        guard let values = signingInformation(of: code),
             let plist = values[kSecCodeInfoPList as String] as? [String: Any],
             let version = (plist["CFBundleShortVersionString"] as? String).flatMap(Version.init),
             let minimum = (plist["LSMinimumSystemVersion"] as? String).flatMap(Version.init)
@@ -83,10 +81,15 @@ public enum CodeSignature {
         return version == release.version && minimum == release.minimumMacOS
     }
 
-    private static func signer(of code: SecStaticCode) -> Signer? {
+    private static func signingInformation(of code: SecStaticCode) -> [String: Any]? {
         var information: CFDictionary?
-        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,
-            let values = information as? [String: Any],
+        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess
+        else { return nil }
+        return information as? [String: Any]
+    }
+
+    private static func signer(of code: SecStaticCode) -> Signer? {
+        guard let values = signingInformation(of: code),
             let team = values[kSecCodeInfoTeamIdentifier as String] as? String,
             let identifier = values[kSecCodeInfoIdentifier as String] as? String
         else { return nil }

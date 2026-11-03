@@ -97,9 +97,9 @@ enum RunningBuild {
     func installed(at placement: Placement) -> InstalledRelease? {
         switch self {
         case .release(let version, let macOS):
-            InstalledRelease(placement: placement, developerIDSigned: true, version: version, macOS: Version(macOS)!)
+            InstalledRelease(placement: placement, developerIDSigned: true, version: Version(version), macOS: Version(macOS)!)
         case .development:
-            InstalledRelease(placement: placement, developerIDSigned: false, version: "1.0.0", macOS: Version(26, 0))
+            InstalledRelease(placement: placement, developerIDSigned: false, version: Version(1, 0, 0), macOS: Version(26, 0))
         }
     }
 }

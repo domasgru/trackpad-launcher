@@ -36,21 +36,22 @@ final class TestAdministrator: Administrator {
         process.executableURL = URL(filePath: "/bin/sh")
         process.arguments = ["-c", script, "sh"] + arguments
         process.currentDirectoryURL = workingDirectory
-        do { try process.run() } catch { return .failed }
-        process.waitUntilExit()
+        let waitForExit: @Sendable () -> Void
+        do { waitForExit = try process.start() } catch { return .failed }
+        waitForExit()
         return .ran(exitStatus: process.terminationStatus)
     }
 }
 
-@MainActor @Suite struct PrivilegedInstallTests {
+@MainActor @Suite(.timeLimit(.minutes(1))) struct PrivilegedInstallTests {
     private func location(running: URL) -> Location {
         Location(running: running, original: running, isTranslocated: false, diskImage: nil)
     }
 
     private func install(_ installer: ApplicationsInstaller) async -> InstallOutcome {
-        await withCheckedContinuation { continuation in
-            installer.install { continuation.resume(returning: $0) }
-        }
+        await awaiting("the install's outcome") { (resume: @escaping @Sendable (InstallOutcome) -> Void) in
+            installer.install { resume($0) }
+        } ?? .failed(reason: "no outcome")
     }
 
     /// The staged copy `$2` the administrator was handed, as the installer made it.
@@ -235,9 +236,9 @@ final class TestAdministrator: Administrator {
     }
 }
 
-/// Off the main actor: these block for seconds and would starve main-actor work in other suites.
-@Suite struct PrivilegedSwapAtomicityTests {
-    @Test func killingTheRealScriptAtAnyMomentLeavesAWholeCopyAndTheNewOneOnceItExitedZero() throws {
+/// These block for seconds, so each runs its work on a thread of its own and records what it found afterwards.
+@Suite(.timeLimit(.minutes(1))) struct PrivilegedSwapAtomicityTests {
+    @Test func killingTheRealScriptAtAnyMomentLeavesAWholeCopyAndTheNewOneOnceItExitedZero() async throws {
         let fixture = try BundleFixture()
         let old = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Templates/old"), version: "1.0.0")
         let new = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Templates/new"), version: "1.1.0")
@@ -245,36 +246,45 @@ final class TestAdministrator: Administrator {
         let newManifest = try BundleFixture.manifest(of: new)
         let applications = try fixture.folder("Applications")
         let destination = applications.appending(path: "Trackpad Launcher.app")
-        let files = FileManager.default
 
-        func prepare(_ round: Int) throws -> URL {
-            try? files.removeItem(at: destination)
-            try files.copyItem(at: old, to: destination)
-            let staged = try fixture.folder("Staging \(round)").appending(path: "Trackpad Launcher.app")
-            try files.copyItem(at: new, to: staged)
-            return staged
+        let failures = try await onItsOwnThread("the script to be killed in 100 rounds") { () throws -> [String] in
+            let files = FileManager.default
+            var failures: [String] = []
+
+            func prepare(_ round: Int) throws -> URL {
+                try? files.removeItem(at: destination)
+                try files.copyItem(at: old, to: destination)
+                let staged = try fixture.folder("Staging \(round)").appending(path: "Trackpad Launcher.app")
+                try files.copyItem(at: new, to: staged)
+                return staged
+            }
+
+            let clock = ContinuousClock()
+            let started = clock.now
+            let firstStatus = try ScriptRun.start(destination: destination, staged: try prepare(0)).finish(killAfter: .seconds(60))
+            let runTime = started.duration(to: clock.now)
+            if firstStatus != 0 { failures.append("the unkilled script exited with \(String(describing: firstStatus))") }
+            if try BundleFixture.manifest(of: destination) != newManifest { failures.append("the unkilled script left no new copy") }
+            let limit = max(runTime.seconds * 2, 0.05)
+
+            for round in 1...100 {
+                let staged = try prepare(round)
+                let status = try ScriptRun.start(destination: destination, staged: staged)
+                    .finish(killAfter: .seconds(Double.random(in: 0...limit)))
+                let held = try BundleFixture.manifest(of: destination)
+                if held != oldManifest && held != newManifest { failures.append("round \(round): neither the old copy nor the new one") }
+                if status == 0 && held != newManifest { failures.append("round \(round): exited 0 without the new copy") }
+                if try BundleFixture.appNames(in: applications) != ["Trackpad Launcher.app"] {
+                    failures.append("round \(round): the Applications folder holds something else")
+                }
+            }
+            return failures
         }
 
-        let clock = ContinuousClock()
-        let started = clock.now
-        let firstStatus = try ScriptRun.start(destination: destination, staged: try prepare(0)).finish(killAfter: .seconds(60))
-        let runTime = started.duration(to: clock.now)
-        #expect(firstStatus == 0)
-        #expect(try BundleFixture.manifest(of: destination) == newManifest)
-        let limit = max(runTime.seconds * 2, 0.05)
-
-        for round in 1...100 {
-            let staged = try prepare(round)
-            let status = try ScriptRun.start(destination: destination, staged: staged)
-                .finish(killAfter: .seconds(Double.random(in: 0...limit)))
-            let held = try BundleFixture.manifest(of: destination)
-            #expect(held == oldManifest || held == newManifest, "round \(round): neither the old copy nor the new one")
-            if status == 0 { #expect(held == newManifest, "round \(round): exited 0 without the new copy") }
-            #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher.app"], "round \(round)")
-        }
+        for failure in failures ?? [] { Issue.record(Comment(rawValue: failure)) }
     }
 
-    @Test func anObserverNeverFindsTheDestinationMissingOrMixedWhilePutAlternatesTwoVersionsIn() throws {
+    @Test func anObserverNeverFindsTheDestinationMissingOrMixedWhilePutAlternatesTwoVersionsIn() async throws {
         let fixture = try BundleFixture()
         let applications = try fixture.folder("Applications")
         let destination = applications.appending(path: "Trackpad Launcher.app")
@@ -283,22 +293,26 @@ final class TestAdministrator: Administrator {
             try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Templates/new"), version: "1.1.0"),
         ]
         try FileManager.default.copyItem(at: sources[0], to: destination)
-        let observer = DestinationObserver(folder: applications, appName: "Trackpad Launcher.app")
-        observer.start()
 
-        for round in 0..<200 {
-            let staged = try BundleInstall.stage(sources[(round + 1) % 2], near: destination)
-            let outcome = ApplicationsInstaller.put(staged, at: destination, by: TestAdministrator.refusing)
-            #expect(outcome == .installed, "round \(round)")
+        let found = try await onItsOwnThread("200 swaps under observation") { () throws -> (DestinationObserver.Report, [String]) in
+            let observer = DestinationObserver(folder: applications, appName: "Trackpad Launcher.app")
+            observer.start()
+            var failures: [String] = []
+            for round in 0..<200 {
+                let staged = try BundleInstall.stage(sources[(round + 1) % 2], near: destination)
+                let outcome = ApplicationsInstaller.put(staged, at: destination, by: TestAdministrator.refusing)
+                if outcome != .installed { failures.append("round \(round): \(outcome)") }
+            }
+            return (observer.stop(), failures)
         }
-        let report = observer.stop()
+        guard let (report, failures) = found else { return }
 
+        for failure in failures { Issue.record(Comment(rawValue: failure)) }
         #expect(report.observations > 0)
         #expect(report.missing == 0, "destination missing in \(report.missing) of \(report.observations) observations")
         #expect(report.unreadable == 0, "unreadable in \(report.unreadable) observations")
         #expect(report.mixed == 0, "mixed in \(report.mixed) observations")
     }
-
 }
 
 extension Duration {

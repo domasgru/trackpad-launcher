@@ -26,14 +26,15 @@ public struct Release: Equatable, Sendable {
 }
 
 /// The running copy as an update check sees it. The gate, whole: exists only for a copy truly signed with a Developer
-/// ID, in /Applications (`Placement.installed`), whose version parses. The composition root and the tests call this one
-/// rule. Read once at start: after a swap, `Bundle.main` would read the new bundle.
+/// ID, in /Applications (`Placement.installed`), whose version the adapter could read (`version` nil when it could
+/// not). The composition root and the tests call this one rule. Read once at start: after a swap, `Bundle.main` would
+/// read the new bundle.
 public struct InstalledRelease: Equatable, Sendable {
     public let version: Version
     public let macOS: Version
 
-    public init?(placement: Placement, developerIDSigned: Bool, version: String?, macOS: Version) {
-        guard developerIDSigned, placement == .installed, let version = version.flatMap(Version.init) else { return nil }
+    public init?(placement: Placement, developerIDSigned: Bool, version: Version?, macOS: Version) {
+        guard developerIDSigned, placement == .installed, let version else { return nil }
         self.version = version
         self.macOS = macOS
     }

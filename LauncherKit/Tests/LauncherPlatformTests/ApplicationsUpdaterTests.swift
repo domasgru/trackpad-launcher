@@ -8,18 +8,22 @@ import Testing
 /// The events an update reported, with a way to wait for one.
 @MainActor private final class EventLog {
     private(set) var events: [UpdateEvent] = []
-    private var waiters: [(check: ([UpdateEvent]) -> Bool, continuation: CheckedContinuation<Void, Never>)] = []
+    private var waiters: [(check: ([UpdateEvent]) -> Bool, resume: @Sendable (()) -> Void)] = []
 
     func record(_ event: UpdateEvent) {
         events.append(event)
         let ready = waiters.filter { $0.check(events) }
         waiters = waiters.filter { !$0.check(events) }
-        ready.forEach { $0.continuation.resume() }
+        ready.forEach { $0.resume(()) }
     }
 
-    func until(_ check: @escaping ([UpdateEvent]) -> Bool) async {
+    /// Returns once `check` holds of the events so far; fails the test when it never does.
+    func until(_ check: @escaping ([UpdateEvent]) -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async {
         if check(events) { return }
-        await withCheckedContinuation { waiters.append((check, $0)) }
+        _ = await awaiting("an expected update event", sourceLocation: sourceLocation) {
+            (resume: @escaping @Sendable (()) -> Void) in
+            waiters.append((check, resume))
+        }
     }
 
     var progress: [Double] {
@@ -37,7 +41,7 @@ import Testing
     }
 }
 
-@MainActor @Suite(.timeLimit(.minutes(2))) struct ApplicationsUpdaterTests {
+@MainActor @Suite(.timeLimit(.minutes(1))) struct ApplicationsUpdaterTests {
     private static let archivePath = "/downloads/TrackpadLauncher-1.1.0-macOS-26.0.aar"
     private static let signer = Signer(team: "ABCDE12345", identifier: BundleFixture.identifier)
 
@@ -56,7 +60,7 @@ import Testing
 
         init(
             administrator: TestAdministrator = TestAdministrator(answer: nil), signer: Signer = ApplicationsUpdaterTests.signer,
-            download: ApplicationsUpdater.Download? = nil
+            stall: TimeInterval = 10, download: ApplicationsUpdater.Download? = nil
         ) async throws {
             fixture = try BundleFixture()
             applications = try fixture.folder("Applications")
@@ -66,7 +70,7 @@ import Testing
             self.administrator = administrator
             updater = ApplicationsUpdater(
                 replacing: old, signer: signer, administrator: administrator,
-                download: download ?? GitHubReleases.ArchiveDownload(stall: 1).archive)
+                download: download ?? GitHubReleases.ArchiveDownload(stall: stall).archive)
         }
 
         /// An ad-hoc signed 1.1.0 app carrying the marker, archived as release.sh does.
@@ -118,6 +122,18 @@ import Testing
         }
     }
 
+    /// Lets the chunks of a body go one at a time, waiting after each for the progress the bytes so far amount to.
+    private static func release(_ chunks: [Data], through gate: LocalReleaseServer.ChunkGate, untilReportedBy log: EventLog) async {
+        let total = chunks.reduce(0) { $0 + $1.count }
+        var received = 0
+        for chunk in chunks {
+            gate.release()
+            received += chunk.count
+            let expected = Double(received * 100 / total) / 100
+            await log.until { $0.contains(.progress(expected)) }
+        }
+    }
+
     private static func quarters(of data: Data) -> [Data] {
         let size = data.count / 4
         return (0..<4).map { data[($0 * size)..<(($0 == 3) ? data.count : ($0 + 1) * size)] }
@@ -128,14 +144,11 @@ import Testing
         defer { rig.server.stop() }
         let junk = Data(repeating: 7, count: 4000)
         let gate = LocalReleaseServer.ChunkGate()
-        rig.server.script(
-            Self.archivePath, .stream(length: junk.count, chunks: Self.quarters(of: junk), gate: gate))
+        let quarters = Self.quarters(of: junk)
+        rig.server.script(Self.archivePath, .stream(length: junk.count, chunks: quarters, gate: gate))
 
         rig.update(size: junk.count)
-        for quarter in [0.25, 0.5, 0.75, 1.0] {
-            gate.release()
-            await rig.log.until { events in events.contains(.progress(quarter)) }
-        }
+        await Self.release(quarters, through: gate, untilReportedBy: rig.log)
         await rig.log.until { $0.contains(.failed) }
 
         let progress = rig.log.progress
@@ -183,9 +196,11 @@ import Testing
         let archive = try rig.adHocArchive()
         let cut = (archive.count * 40 + 99) / 100
         let gate = LocalReleaseServer.ChunkGate()
-        rig.server.script(Self.archivePath, .stream(length: archive.count, chunks: [Data(archive.prefix(cut))], gate: gate))
+        rig.server.script(Self.archivePath, .stream(length: archive.count, chunks: [Data(archive.prefix(cut)), Data()], gate: gate))
 
         rig.update(size: archive.count)
+        gate.release()
+        await rig.log.until { $0.contains(.progress(0.4)) }
         gate.release()
         await rig.log.until { $0.contains(.failed) }
 
@@ -238,7 +253,7 @@ import Testing
     }
 
     @Test func aServerThatStopsSendingFailsAfterTheStall() async throws {
-        let rig = try await Rig()
+        let rig = try await Rig(stall: 1)
         defer { rig.server.stop() }
         let archive = try rig.adHocArchive()
         let gate = rig.stream(archive, firstChunkPercent: 40)
@@ -291,7 +306,7 @@ import Testing
         let archive = try rig.adHocArchive()
         chmod(rig.applications.path, 0o555)
         rig.update(size: archive.count)
-        while !hold.isWaiting { try await Task.sleep(for: .milliseconds(20)) }
+        await hold.untilWaiting()
 
         hold.release(archive)
         rig.updater.cancelDownload()
@@ -312,7 +327,7 @@ import Testing
             if event == .downloaded { updater.cancelDownload() }
             log.record(event)
         }
-        while !hold.isWaiting { try await Task.sleep(for: .milliseconds(20)) }
+        await hold.untilWaiting()
 
         hold.release(archive)
         await log.until { $0.contains(.failed) }
@@ -384,14 +399,15 @@ import Testing
                 try FileManager.default.copyItem(at: UpdateFixtures.developerIDApp, to: rig.old)
             }
             let gate = LocalReleaseServer.ChunkGate()
-            rig.server.script(Self.archivePath, .stream(length: archive.count, chunks: Self.quarters(of: archive), gate: gate))
+            let quarters = Self.quarters(of: archive)
+            rig.server.script(Self.archivePath, .stream(length: archive.count, chunks: quarters, gate: gate))
             let offered = Release(
                 version: Version(record.version)!, minimumMacOS: Version(record.minimumMacOS)!,
                 archive: rig.server.url(path: Self.archivePath), archiveSize: archive.count)
             let log = rig.log
             rig.updater.update(to: offered) { log.record($0) }
 
-            for _ in 0..<4 { gate.release() }
+            await Self.release(quarters, through: gate, untilReportedBy: log)
             await log.until { $0.contains(.installed) || $0.contains(.failed) }
 
             #expect(log.events.suffix(2) == [.downloaded, .installed])
@@ -453,7 +469,7 @@ import Testing
             let folder = try rig.fixture.folder("Tampered")
             let copy = folder.appending(path: "TrackpadLauncher.app")
             try FileManager.default.copyItem(at: UpdateFixtures.developerIDApp, to: copy)
-            try Self.changeOneByteOfAResource(in: copy)
+            guard try Self.changeOneByteOfAResource(in: copy) else { return }
             archive = try BundleFixture.archive("TrackpadLauncher.app", in: folder)
         }
         rig.server.script(Self.archivePath, .respond(status: 200, body: archive))
@@ -466,23 +482,22 @@ import Testing
 
         #expect(log.events.suffix(2) == [.downloaded, .failed])
         #expect(log.followsTheContract)
+        #expect(rig.administrator.calls.isEmpty, "the administrator is never asked about an archive that is not the one offered")
         #expect(BundleFixture.bundles(identifiedBy: record.identifier) == [])
         try rig.expectOldBundleUntouched()
     }
 
-    private static func changeOneByteOfAResource(in app: URL) throws {
-        let files = FileManager.default
-        let resources = app.appending(path: "Contents/Resources")
-        for case let item as URL in files.enumerator(at: resources, includingPropertiesForKeys: [.isRegularFileKey])! {
-            guard (try item.resourceValues(forKeys: [.isRegularFileKey])).isRegularFile == true else { continue }
-            var bytes = try Data(contentsOf: item)
-            guard !bytes.isEmpty else { continue }
-            bytes[bytes.startIndex] ^= 0xFF
-            chmod(item.path, 0o644)
-            try bytes.write(to: item)
-            return
+    /// False, with an issue recorded, when the fixture app has no sealed resource file to change.
+    private static func changeOneByteOfAResource(in app: URL) throws -> Bool {
+        let resource = app.appending(path: "Contents/Resources/fixture.txt")
+        guard var bytes = try? Data(contentsOf: resource), !bytes.isEmpty else {
+            Issue.record("The fixture app has no Contents/Resources/fixture.txt to tamper with; run Scripts/make-update-fixtures.sh")
+            return false
         }
-        throw CocoaError(.fileNoSuchFile)
+        bytes[bytes.startIndex] ^= 0xFF
+        chmod(resource.path, 0o644)
+        try bytes.write(to: resource)
+        return true
     }
 
     enum Crafted: CaseIterable {
@@ -517,6 +532,7 @@ import Testing
         await rig.log.until { $0.contains(.failed) || $0.contains(.declined) || $0.contains(.installed) }
 
         #expect(rig.log.events.suffix(2) == [.downloaded, .failed])
+        #expect(rig.administrator.calls.isEmpty, "the administrator is never asked about an archive holding more than the app")
         #expect(try FileManager.default.contentsOfDirectory(atPath: sentinel.path) == [])
         try rig.expectOldBundleUntouched()
         #expect(!FileManager.default.fileExists(atPath: rig.fixture.root.appending(path: "escape").path))
@@ -547,7 +563,7 @@ import Testing
     @Test(
         .enabled(if: UpdateFixtures.arePresent, "run Scripts/make-update-fixtures.sh to generate the fixtures"),
         arguments: PromptCase.allCases)
-    func theAdministratorIsAskedOnceAfterTheDownloadIsVerifiedAndCancellingDeclinesWhileApprovingInstalls(_ row: PromptCase) async throws {
+    func theAdministratorIsAskedOnceAfterTheDownloadedEventAndCancellingDeclinesWhileApprovingInstalls(_ row: PromptCase) async throws {
         let record = try UpdateFixtures.loadRecord()
         let happenings = Happenings()
         let applicationsPath = Mutex<String>("")
@@ -612,6 +628,12 @@ private final class Hold: @unchecked Sendable {
         return continuation != nil
     }
 
+    /// Returns once the update has begun waiting here; fails the test when it has not within half a minute.
+    func untilWaiting(sourceLocation: SourceLocation = #_sourceLocation) async {
+        for _ in 0..<600 where !isWaiting { try? await Task.sleep(for: .milliseconds(50)) }
+        if !isWaiting { Issue.record("The update never started its download", sourceLocation: sourceLocation) }
+    }
+
     func release(_ archive: Data) {
         lock.lock()
         let next = continuation
@@ -636,17 +658,19 @@ private final class Hold: @unchecked Sendable {
         let release = Release(version: Version(1, 1, 0), minimumMacOS: Version(26, 0), archive: server.url(path: "/archive"), archiveSize: 4000)
 
         let lastByte = Mutex<ContinuousClock.Instant?>(nil)
-        let failedAt: ContinuousClock.Instant = await withCheckedContinuation { done in
+        let failure = await awaiting("the stalled download to fail", within: .seconds(60)) {
+            (done: @escaping @Sendable (ContinuousClock.Instant) -> Void) in
             Task { @MainActor in
                 let updater = ApplicationsUpdater(replacing: old, signer: Signer(team: "ABCDE12345", identifier: BundleFixture.identifier))
                 updater.update(to: release) { event in
-                    if event == .failed { done.resume(returning: .now) }
+                    if event == .failed { done(.now) }
                     _ = updater
                 }
                 lastByte.withLock { $0 = .now }
                 gate.release()
             }
         }
+        guard let failedAt = failure else { return }
 
         let elapsed = failedAt - lastByte.withLock { $0 }!
         #expect(elapsed >= .seconds(30))

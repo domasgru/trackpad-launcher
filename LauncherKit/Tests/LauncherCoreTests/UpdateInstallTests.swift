@@ -246,6 +246,7 @@ import Testing
 
     @Test func aKillAtAnyEffectOfTheUpdateLeavesAMacThatOpensWholeAndUntouched() throws {
         let world = LifecycleWorld(record: [.one: "Arc"], loginItemOn: true)
+        let seeded = try #require(world.mac.freshStore().load())
         let process = world.launch(.byHand, placement: .installed, running: .release("1.0.0"))
         process.deliver([.version("1.1.0")])
         process.updateNow()
@@ -263,7 +264,7 @@ import Testing
 
             #expect(reopened.window == .open(request: 1))
             #expect(reopened.releases.fetches == 1)
-            #expect(restored.mac.freshStore().load() != nil)
+            #expect(restored.mac.freshStore().load() == seeded)
             #expect(restored.loginItem.isOn)
             #expect(restored.loginItem.calls.isEmpty)
             #expect(restored.permissions.asks.isEmpty)

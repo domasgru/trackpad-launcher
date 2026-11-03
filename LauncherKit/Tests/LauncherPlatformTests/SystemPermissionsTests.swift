@@ -6,7 +6,7 @@ import notify
 
 @testable import LauncherPlatform
 
-@MainActor @Suite struct SystemPermissionsTests {
+@MainActor @Suite(.timeLimit(.minutes(1))) struct SystemPermissionsTests {
     /// True when `onChange` ran within `seconds` of `action`; the push is awaited, never polled.
     private func changeArrives(
         on adapter: SystemPermissions, within seconds: Int, after action: () -> Void

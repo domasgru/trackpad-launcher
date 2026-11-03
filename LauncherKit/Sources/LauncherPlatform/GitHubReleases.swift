@@ -30,12 +30,7 @@ import LauncherCore
     @concurrent static func list(at url: URL, stall: TimeInterval) async -> [Release]? {
         let session = session(accept: "application/vnd.github+json", stall: stall)
         defer { session.finishTasksAndInvalidate() }
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = stall
-        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-        request.httpShouldHandleCookies = false
-        guard let (data, response) = try? await session.data(for: request),
+        guard let (data, response) = try? await session.data(for: request(for: url, stall: stall)),
             (response as? HTTPURLResponse)?.statusCode == 200
         else { return nil }
         return parse(data)
@@ -55,11 +50,7 @@ import LauncherCore
         @concurrent func archive(of release: Release, progress: @escaping @MainActor (Double) -> Void) async -> Data? {
             let session = GitHubReleases.session(accept: "application/octet-stream", stall: stall)
             defer { session.finishTasksAndInvalidate() }
-            var request = URLRequest(url: release.archive)
-            request.httpMethod = "GET"
-            request.timeoutInterval = stall
-            request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-            request.httpShouldHandleCookies = false
+            let request = GitHubReleases.request(for: release.archive, stall: stall)
 
             let (percents, push) = AsyncStream.makeStream(of: Int.self, bufferingPolicy: .unbounded)
             let reporter = Task { @MainActor in
@@ -172,5 +163,15 @@ import LauncherCore
         configuration.timeoutIntervalForRequest = stall
         configuration.httpAdditionalHeaders = headers.merging(["Accept": accept]) { _, new in new }
         return URLSession(configuration: configuration)
+    }
+
+    /// A plain GET with no cookie, no cache and `stall` as its idle timeout.
+    nonisolated private static func request(for url: URL, stall: TimeInterval) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = stall
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        request.httpShouldHandleCookies = false
+        return request
     }
 }

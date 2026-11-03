@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 /// A throwaway folder with app bundles made in it. The folder is removed with the fixture, read-only folders included.
-final class BundleFixture {
+final class BundleFixture: @unchecked Sendable {
     static let identifier = "com.example.TrackpadLauncherFixture"
 
     let root: URL
@@ -56,7 +56,8 @@ final class BundleFixture {
     private func quarantineEveryItem(of app: URL) throws {
         let items = [app] + (FileManager.default.enumerator(at: app, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? [])
         for item in items where (try? FileManager.default.destinationOfSymbolicLink(atPath: item.path)) == nil {
-            _ = try Self.run("/usr/bin/xattr", ["-w", "com.apple.quarantine", "0081;00000000;Fixture;", item.path])
+            let value = Array("0081;00000000;Fixture;".utf8)
+            guard setxattr(item.path, "com.apple.quarantine", value, value.count, 0, 0) == 0 else { throw CocoaError(.fileWriteUnknown) }
         }
     }
 
@@ -143,9 +144,9 @@ final class BundleFixture {
         process.arguments = arguments
         let output = Pipe()
         process.standardOutput = output
-        try process.run()
+        let waitForExit = try process.start()
         let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+        waitForExit()
         guard process.terminationStatus == 0 else { throw CocoaError(.fileWriteUnknown) }
         return String(decoding: data, as: UTF8.self)
     }

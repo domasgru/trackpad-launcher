@@ -48,6 +48,7 @@ EOF
 </dict>
 </plist>
 EOF
+  printf 'a sealed resource\n' > "$app/Contents/Resources/fixture.txt"
   echo "$app"
 }
 

@@ -5,7 +5,7 @@ import Testing
 
 @testable import LauncherPlatform
 
-@MainActor @Suite struct GitHubReleasesTests {
+@MainActor @Suite(.timeLimit(.minutes(1))) struct GitHubReleasesTests {
     private static let listPath = "/repos/domasgru/trackpad-launcher/releases"
     private static let downloads = "https://github.com/domasgru/trackpad-launcher/releases/download"
 
@@ -16,14 +16,14 @@ import Testing
     /// The list `done` was first given, and how many times `done` ran once the main actor had turns to spare.
     private static func fetch(_ releases: GitHubReleases) async -> (list: [Release], answers: Int) {
         let answers = Answers()
-        let list: [Release] = await withCheckedContinuation { continuation in
+        let list: [Release]? = await awaiting("the release list's answer") { (resume: @escaping @Sendable ([Release]) -> Void) in
             releases.fetch { list in
                 answers.count += 1
-                if answers.count == 1 { continuation.resume(returning: list) }
+                if answers.count == 1 { resume(list) }
             }
         }
         for _ in 0..<20 { await Task.yield() }
-        return (list, answers.count)
+        return (list ?? [], answers.count)
     }
 
     private static func asset(_ name: String, state: String = "uploaded", size: Int = 4_000_000, base: String? = nil) -> String {

@@ -33,7 +33,8 @@ OUT="${RELEASE_OUT:-$ROOT/build/release}"
 BACKGROUND="$ROOT/Scripts/release/dmg-background.png"
 DMG="$OUT/$APP_NAME.dmg"
 REPOSITORY="domasgru/trackpad-launcher"
-NUMERIC='^[0-9]+(\.[0-9]+)*$'
+# Dotted whole numbers of one to nine digits each: exactly what the app's Version parses.
+NUMERIC='^[0-9]{1,9}(\.[0-9]{1,9})*$'
 EXPECTED_VERSION=""
 AAR=""
 STAGE="$OUT/dmg-stage"
@@ -58,6 +59,43 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Drops trailing ".0" parts, as the app's Version does when it compares: 1.1.0 is 1.1.
+normalise_version() {
+  local version="$1"
+  while [[ "$version" == *.0 ]]; do version="${version%.0}"; done
+  echo "$version"
+}
+
+# Prints -1, 0 or 1 as version $1 is below, equal to or above version $2, part by part as numbers.
+compare_versions() {
+  local -a first second
+  IFS=. read -ra first <<<"$(normalise_version "$1")"
+  IFS=. read -ra second <<<"$(normalise_version "$2")"
+  local count=${#first[@]} index left right
+  [ "${#second[@]}" -le "$count" ] || count=${#second[@]}
+  for ((index = 0; index < count; index++)); do
+    left=$((10#${first[index]:-0}))
+    right=$((10#${second[index]:-0}))
+    if [ "$left" -lt "$right" ]; then echo -1; return; fi
+    if [ "$left" -gt "$right" ]; then echo 1; return; fi
+  done
+  echo 0
+}
+
+# Reads tag names, one per line, and prints the first whose version is not below version $1; prints nothing when $1 is
+# above all of them. A name that is not "v" and dotted whole numbers is not a version the app reads: it is skipped.
+first_not_below() {
+  local version="$1" name earlier
+  while IFS= read -r name; do
+    earlier="${name#v}"
+    [[ "$earlier" =~ $NUMERIC ]] || continue
+    if [ "$(compare_versions "$version" "$earlier")" -le 0 ]; then
+      echo "$name"
+      return
+    fi
+  done
+}
+
 # Refuses to start unless the version in Config/Version.xcconfig is above every earlier tag and release,
 # drafts included. Sets EXPECTED_VERSION.
 preflight() {
@@ -72,13 +110,13 @@ preflight() {
     fail "MARKETING_VERSION '$EXPECTED_VERSION' in Config/Version.xcconfig is not dotted whole numbers."
   [ -z "$(git -C "$ROOT" tag --list "v$EXPECTED_VERSION")" ] || fail "tag v$EXPECTED_VERSION already exists."
 
-  local releases tags highest
+  local releases tags clash
   releases="$(gh release list --repo "$REPOSITORY" --limit 1000 --json tagName --jq '.[].tagName')" ||
     fail "cannot list the releases of $REPOSITORY."
   tags="$(git -C "$ROOT" tag --list 'v*')"
-  highest="$(printf '%s\n%s\n%s\n' "v$EXPECTED_VERSION" "$tags" "$releases" | grep -v '^$' | sort -V | tail -n 1)"
-  [ "$highest" = "v$EXPECTED_VERSION" ] ||
-    fail "version $EXPECTED_VERSION is not above every earlier release (${highest#v} exists); raise Config/Version.xcconfig."
+  clash="$(printf '%s\n%s\n' "$tags" "$releases" | first_not_below "$EXPECTED_VERSION")"
+  [ -z "$clash" ] ||
+    fail "version $EXPECTED_VERSION is not above every earlier release ($clash exists); raise Config/Version.xcconfig."
 }
 
 # Archives the app as the update asset, unpacks it as an older version will and checks the result. Sets AAR.

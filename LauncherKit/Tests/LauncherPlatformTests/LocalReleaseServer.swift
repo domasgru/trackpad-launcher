@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Testing
 
 /// A test-only HTTP/1.1 server on 127.0.0.1. Per path it answers a scripted status, headers and body, or accepts and
 /// never answers; it records each request's line, headers and body. One request per connection, closed after the
@@ -75,20 +76,25 @@ final class LocalReleaseServer: @unchecked Sendable {
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         let listener = try NWListener(using: parameters)
         let queue = queue
-        port = try await withCheckedThrowingContinuation { continuation in
-            let once = Once()
+        let bound: Result<UInt16, any Error>? = await awaiting("the listener to be ready") {
+            (done: @escaping @Sendable (Result<UInt16, any Error>) -> Void) in
             listener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    if once.first(), let port = listener.port?.rawValue { continuation.resume(returning: port) }
+                    if let port = listener.port?.rawValue { done(.success(port)) }
                 case .failed(let error):
-                    if once.first() { continuation.resume(throwing: error) }
+                    done(.failure(error))
                 default: break
                 }
             }
             listener.newConnectionHandler = { $0.cancel() }
             listener.start(queue: queue)
         }
+        guard let bound else {
+            listener.cancel()
+            throw CocoaError(.fileReadUnknown)
+        }
+        port = try bound.get()
         self.listener = listener
         listener.newConnectionHandler = { [unowned self] connection in accept(connection) }
     }
@@ -232,17 +238,5 @@ final class LocalReleaseServer: @unchecked Sendable {
         connection.send(
             content: Data(head.utf8) + body, contentContext: .finalMessage, isComplete: true,
             completion: .contentProcessed { [self] _ in close(connection) })
-    }
-}
-
-private final class Once: @unchecked Sendable {
-    private let lock = NSLock()
-    private var fired = false
-
-    func first() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        defer { fired = true }
-        return !fired
     }
 }
