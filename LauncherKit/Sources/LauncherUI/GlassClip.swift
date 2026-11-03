@@ -19,3 +19,12 @@ func roundedClip(_ glass: NSGlassEffectView, cornerRadius: CGFloat) -> NSView {
     ])
     return clip
 }
+
+/// `.regular` Liquid Glass around `content`, clipped to `cornerRadius` by `roundedClip`.
+func roundedGlass(_ content: NSView, cornerRadius: CGFloat) -> NSView {
+    let glass = NSGlassEffectView()
+    glass.style = .regular
+    glass.cornerRadius = cornerRadius
+    glass.contentView = content
+    return roundedClip(glass, cornerRadius: cornerRadius)
+}

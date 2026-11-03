@@ -31,7 +31,7 @@ final class WindowSwitcherPanel: OverlayPanel {
     init(look: WindowSwitcherLook = .shipped) {
         self.look = look
         rowViews = (0..<GestureRules.windowSwitcherMaxRows).map { _ in WindowRowView(look: look) }
-        super.init(cornerRadius: look.panelRadius, content: content)
+        super.init(content: roundedGlass(content, cornerRadius: look.panelRadius))
         content.wantsLayer = true
         highlight.style = .clear
         highlight.tintColor = .labelColor.withAlphaComponent(look.highlightTint)

@@ -11,7 +11,7 @@ struct OverlayAppear {
 }
 
 /// Both switchers' window: borderless, non-activating, click-through, screen-saver level on every Space and beside
-/// full-screen apps, never key. Its content is Liquid Glass under `roundedClip`. Presents at once, or with an
+/// full-screen apps, never key. The subclass supplies the content. Presents at once, or with an
 /// `OverlayAppear` when one is given; dismisses with a 150 ms fade (at once with Reduce motion) unless presented again
 /// meanwhile.
 class OverlayPanel: NSPanel {
@@ -24,7 +24,7 @@ class OverlayPanel: NSPanel {
     /// Bumped by every present and dismiss, so a fade's completion that a later one outlived does nothing.
     private var generation = 0
 
-    init(cornerRadius: CGFloat, content: NSView) {
+    init(content: NSView) {
         super.init(
             contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         isOpaque = false
@@ -37,11 +37,7 @@ class OverlayPanel: NSPanel {
         animationBehavior = .none
         isReleasedWhenClosed = false
 
-        let glass = NSGlassEffectView()
-        glass.style = .regular
-        glass.cornerRadius = cornerRadius
-        glass.contentView = content
-        contentView = roundedClip(glass, cornerRadius: cornerRadius)
+        contentView = content
     }
 
     override var canBecomeKey: Bool { false }

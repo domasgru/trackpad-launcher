@@ -16,7 +16,7 @@ final class SwitcherPanel: OverlayPanel {
     init() {
         let content = NSView()
         self.content = content
-        super.init(cornerRadius: Self.cornerRadius, content: content)
+        super.init(content: roundedGlass(content, cornerRadius: Self.cornerRadius))
 
         content.wantsLayer = true
         iconsHost.wantsLayer = true
