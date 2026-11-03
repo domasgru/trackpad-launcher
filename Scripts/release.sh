@@ -220,14 +220,31 @@ archive_and_check() {
   echo "Archive self-check passed: $AAR"
 }
 
+# Ejects every disk image mounted as $VOLUME_NAME (or as "$VOLUME_NAME 1", "$VOLUME_NAME 2"…, the names macOS gives a
+# second volume of the same name), typically an earlier release opened from Downloads or a leftover of a stopped run.
+# The layout step addresses its disk by name in Finder, so another disk of the same name could take its layout.
+# Only disk images are ejected; a volume of that name that is not one, or an image in use, stops the release.
+eject_same_named_images() {
+  local mount_point
+  while IFS= read -r mount_point; do
+    [ -n "$mount_point" ] || continue
+    echo "Ejecting the disk image mounted at $mount_point"
+    hdiutil detach "$mount_point" >/dev/null 2>&1 ||
+      { sleep 2; hdiutil detach "$mount_point" >/dev/null 2>&1; } ||
+      fail "cannot eject the disk image at '$mount_point'; something on it is in use (a running Trackpad Launcher?). Quit it and retry."
+  done < <(hdiutil info | awk -F'\t' -v name="/Volumes/$VOLUME_NAME" \
+    '$NF == name || index($NF, name " ") == 1 && substr($NF, length(name) + 2) ~ /^[0-9]+$/ { print $NF }')
+  [ ! -e "/Volumes/$VOLUME_NAME" ] ||
+    fail "a volume named '$VOLUME_NAME' is mounted and is not a disk image; eject it and retry."
+}
+
 # Stages the app, an Applications link and the background, then writes an
 # unsigned compressed image to $DMG.
 build_image() {
   local app="$1"
   [ -d "$app" ] || fail "no app at $app"
   [ -f "$BACKGROUND" ] || fail "missing $BACKGROUND; run Scripts/release/make-dmg-background.swift"
-  [ ! -e "/Volumes/$VOLUME_NAME" ] ||
-    fail "a volume named '$VOLUME_NAME' is already mounted; eject it and retry."
+  eject_same_named_images
 
   rm -rf "$STAGE" "$RW_DMG" "$DMG"
   mkdir -p "$STAGE/.background"
