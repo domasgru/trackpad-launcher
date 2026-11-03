@@ -104,8 +104,10 @@ public struct SwitcherRowLayout: Equatable, Sendable {
 
     public var spacing: Double { look.spacing * scale }
 
-    /// How tall a wave may make a bead.
+    /// How tall a wave may make a bead. It never leaves the bead within 4 pt of the icon at its largest, which is the
+    /// selected icon's grown body: an icon may be growing or shrinking while a wave passes its bead.
     public var beadLimits: ClosedRange<Double> {
-        max(look.iconBody + 4, look.bandThickness) * scale...(look.beadSide + 2 * min(look.waveMax, look.room)) * scale
+        let body = look.iconBody * Self.selectedIconScale
+        return max(body + 4, look.bandThickness) * scale...(look.beadSide + 2 * min(look.waveMax, look.room)) * scale
     }
 }

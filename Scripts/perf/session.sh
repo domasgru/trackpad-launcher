@@ -24,6 +24,7 @@ phase 01_idle_hands_off 60 "Phase one. Take your hands off the trackpad and keyb
 phase 02_pointer_scroll 40 "Phase two. Move the pointer and scroll web pages. No launcher gestures. Forty seconds."
 phase 03_taps 40 "Phase three. Launcher taps. Thumb in the corner, then tap with one to four fingers. About ten taps."
 phase 04_app_swipe 30 "Phase four. App switcher. Thumb in the corner, two fingers sideways, lift. About six times."
+phase 04b_switcher_resting 15 "Phase four b. Open the app switcher, then rest your fingers on it without moving for ten seconds."
 phase 05_window_swipe 30 "Phase five. Window switcher, in an app with several windows. About six times."
 phase 06_swap 20 "Phase six. Swap. Rest two fingers, then tap your thumb in the corner a few times."
 phase 07_menu_window 25 "Phase seven. Open the menu bar window and one app picker, scroll its list, then close it."

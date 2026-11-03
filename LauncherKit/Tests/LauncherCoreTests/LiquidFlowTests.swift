@@ -36,7 +36,7 @@ import LauncherCore
     }
 
     private func swellChannels(_ tracks: [LiquidTrack]) -> Set<LiquidChannel> {
-        Set(tracks.map(\.channel))
+        Set(tracks.map(\.channel).filter { $0.element == .swell })
     }
 
     private let allSwellChannels = Set(
@@ -146,7 +146,9 @@ import LauncherCore
             let played = run.played(at: instant)
             #expect(played.swell.contains(body))
             for index in 0..<3 {
-                #expect(played.beads[index] == layout.bead(at: index) && !played.beads[index].overlaps(played.swell))
+                let rest = layout.bead(at: index), bead = played.beads[index]
+                #expect(bead.minX == rest.minX && bead.width == rest.width && abs(bead.midY - rest.midY) < 1e-9)
+                #expect(!bead.overlaps(played.swell))
             }
         }
     }

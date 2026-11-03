@@ -51,13 +51,21 @@ struct Played: Equatable {
 struct LiquidRun {
     let layout: SwitcherRowLayout
     let calls: [LiquidCall]
-    /// The calls that staged something: all that can change what is played.
-    private let staging: [LiquidCall]
+    /// Per channel, every track staged in call order, with the time of the call that staged it.
+    private let trackLog: [LiquidChannel: [(time: LiquidTime, track: LiquidTrack)]]
+    private let swellLog: [(time: LiquidTime, rest: LiquidRect)]
+    private let iconLog: [(time: LiquidTime, change: IconChange)]
 
     init(layout: SwitcherRowLayout, calls: [LiquidCall]) {
         self.layout = layout
         self.calls = calls
-        staging = calls.filter { !$0.frame.isEmpty }
+        var tracks: [LiquidChannel: [(time: LiquidTime, track: LiquidTrack)]] = [:]
+        for call in calls {
+            for track in call.frame.tracks { tracks[track.channel, default: []].append((call.time, track)) }
+        }
+        trackLog = tracks
+        swellLog = calls.compactMap { call in call.frame.swell.map { (call.time, $0) } }
+        iconLog = calls.compactMap { call in call.frame.icon.map { (call.time, $0) } }
     }
 
     var opened: LiquidTime { calls[0].time }
@@ -70,17 +78,29 @@ struct LiquidRun {
         return (from...to).map { LiquidTime(seconds: Double($0) / 1000) }
     }
 
+    /// How many of `log`'s entries were staged at or before `instant`.
+    private func count<Entry>(in log: [Entry], time: (Entry) -> LiquidTime, through instant: LiquidTime) -> Int {
+        var low = 0, high = log.count
+        while low < high {
+            let middle = (low + high) / 2
+            if time(log[middle]) <= instant { low = middle + 1 } else { high = middle }
+        }
+        return low
+    }
+
     /// By Core Animation's rules, from the staged frames alone: a swell frame is the swell's rest from its call on; an
     /// icon change runs linearly over its duration from wherever the icon was. Per channel the latest track added at
     /// or before the instant is interpolated linearly between its samples, then holds its last offset if it holds and
     /// is 0 otherwise; the offsets add to the rests.
     func played(at instant: LiquidTime) -> Played {
-        let staged = staging.filter { $0.time <= instant }
-        let swellRest = staged.compactMap { call in call.frame.swell }.last ?? layout.swell(at: 0)
+        let swellCount = count(in: swellLog, time: \.time, through: instant)
+        let swellRest = swellCount > 0 ? swellLog[swellCount - 1].rest : layout.swell(at: 0)
         func offset(_ element: LiquidElement, _ property: LiquidProperty) -> Double {
             let channel = LiquidChannel(element: element, property: property)
-            guard let track = staged.reversed().lazy.compactMap({ $0.frame.tracks.first { $0.channel == channel } }).first
-            else { return 0 }
+            guard let log = trackLog[channel] else { return 0 }
+            let latest = count(in: log, time: \.time, through: instant)
+            guard latest > 0 else { return 0 }
+            let track = log[latest - 1].track
             let elapsed = instant.seconds - track.begin.seconds
             let end = Double(track.offsets.count - 1) * track.step
             if elapsed >= end { return track.holds ? track.offsets[track.offsets.count - 1] : 0 }
@@ -95,23 +115,29 @@ struct LiquidRun {
                 minX: rest.minX + centre - width / 2, minY: rest.minY - height / 2, width: rest.width + width,
                 height: rest.height + height)
         }
-        let scales = (0..<layout.iconCount).map { index in iconScale(index, at: instant, among: staged) }
+        let changes = count(in: iconLog, time: \.time, through: instant)
+        let scales = (0..<layout.iconCount).map { index in iconScale(index, at: instant, changes: changes) }
         return Played(
             band: layout.band, beads: (0..<layout.iconCount).map { shown(layout.bead(at: $0), .bead($0)) },
             swell: shown(swellRest, .swell), iconScales: scales)
     }
 
-    private func iconScale(_ index: Int, at instant: LiquidTime, among staged: [LiquidCall]) -> Double {
+    private func iconScale(_ index: Int, at instant: LiquidTime, changes: Int) -> Double {
         var from = 1.0, target = 1.0, began = opened, duration = 0.0
         func value(at time: LiquidTime) -> Double {
             guard duration > 0 else { return target }
             return from + (target - from) * min(max((time.seconds - began.seconds) / duration, 0), 1)
         }
-        for call in staged {
-            guard let change = call.frame.icon else { continue }
-            from = value(at: call.time)
+        // A change over a second old has finished, so the replay starts from the latest such change's target.
+        var first = 0
+        if let settled = iconLog[..<changes].lastIndex(where: { $0.time.seconds <= instant.seconds - 1 }) {
+            target = iconLog[settled].change.selected == index ? SwitcherRowLayout.selectedIconScale : 1
+            first = settled + 1
+        }
+        for (time, change) in iconLog[first..<changes] {
+            from = value(at: time)
             target = change.selected == index ? SwitcherRowLayout.selectedIconScale : 1
-            began = call.time
+            began = time
             duration = change.duration
         }
         return value(at: instant)

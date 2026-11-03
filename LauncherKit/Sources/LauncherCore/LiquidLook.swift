@@ -13,7 +13,7 @@ public struct LiquidLook: Equatable, Sendable {
     /// The panel's clear margin beyond the beads on every side: the swell's rise, the end pull and the wave's cap live
     /// in it.
     public var room = 40.0
-    /// The visible body of an 80 pt icon. A wave never dips a bead within 4 pt of it, and the swell never thins below
+    /// The visible body of an 80 pt icon. A wave never dips a bead within 4 pt of it at the selected icon's grown size, and the swell never thins below
     /// the grown body plus 4 pt. Checked by hand against real icons.
     public var iconBody = 64.0
     // Stretch, flow, end pull

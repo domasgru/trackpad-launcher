@@ -93,7 +93,10 @@ private nonisolated let hasDisplay: Bool = {
         let swellElement = try #require(element(at: NSRect(swell), in: panel))
         #expect(
             Set(liquidKeys(swellElement)) == ["liquid.swell.centreX", "liquid.swell.width", "liquid.swell.height"])
-        #expect(elements(of: panel).filter { $0 !== swellElement }.allSatisfy { liquidKeys($0).isEmpty })
+        let beadElements = try (0..<5).map { try #require(element(at: NSRect(layout(5).bead(at: $0)), in: panel)) }
+        for (index, bead) in beadElements.enumerated() { #expect(liquidKeys(bead) == ["liquid.bead.\(index).height"]) }
+        let others = elements(of: panel).filter { $0 !== swellElement && !beadElements.contains($0) }
+        #expect(others.count == 6 && others.allSatisfy { liquidKeys($0).isEmpty })
         let before = Set(elements(of: panel).map(ObjectIdentifier.init))
         #expect(before.count == 12)
 
@@ -123,6 +126,33 @@ private nonisolated let hasDisplay: Bool = {
         expectNoTracks(panel)
         expectLayoutKept(panel, count: 5)
         #expect(Set(elements(of: panel).map(ObjectIdentifier.init)) == before)
+    }
+
+    @Test func aCrestFrameGivesEachRealBeadItsHeightTrackAndNoSpareAny() throws {
+        let panel = SwitcherPanel()
+        open(panel, count: 5)
+        #expect(panel.checkMirror())
+        var liquid = Liquid(layout: layout(5), motion: .flowing)
+        var selection = SwitcherSelection(count: 5)
+        let now = LiquidTime(seconds: CACurrentMediaTime())
+        panel.apply(liquid.follow(selection, at: now))
+        selection.follow(3)
+        let crest = liquid.follow(selection, at: now + 0.01)
+        panel.apply(crest)
+        CATransaction.flush()
+
+        try #require(crest.tracks.filter { if case .bead = $0.channel.element { true } else { false } }.count == 5)
+        for index in 0..<5 {
+            let bead = try #require(element(at: NSRect(layout(5).bead(at: index)), in: panel))
+            #expect(liquidKeys(bead) == ["liquid.bead.\(index).height"])
+            let staged = try #require(bead.animation(forKey: "liquid.bead.\(index).height") as? CAKeyframeAnimation)
+            let expected = try #require(crest.tracks.first { $0.channel == LiquidChannel(element: .bead(index), property: .height) })
+            #expect((staged.values as? [NSNumber])?.map(\.doubleValue) == expected.offsets)
+            #expect(staged.keyPath == "bounds.size.height")
+        }
+        let band = NSRect(layout(5).band)
+        let spares = elements(of: panel).filter { isNear($0.frame, band) }
+        #expect(spares.count == 6 && spares.allSatisfy { liquidKeys($0).isEmpty })
     }
 
     @Test func aRebuiltElementCostsOneSwipeItsMotionAndTheNextSwipeGetsItBack() throws {

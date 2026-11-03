@@ -16,7 +16,13 @@ How much of the Mac Trackpad Launcher uses, measured on Release builds, and how 
 - `footprint -p <pid>`, `vmmap --summary <pid>` and `heap <pid>` for memory composition.
 
 ### Scenarios
-`Scripts/perf/session.sh <pid> <outdir>` runs them in order: hands off (60 s), pointer and scroll (40 s), launcher taps, app switcher swipes, window switcher swipes, swaps, the settings window, hands off again (60 s). A person at the trackpad follows the spoken cues.
+`Scripts/perf/session.sh <pid> <outdir>` runs them in order: hands off (60 s), pointer and scroll (40 s), launcher taps, app switcher swipes, fingers resting on the open switcher, window switcher swipes, swaps, the settings window, hands off again (60 s). A person at the trackpad follows the spoken cues.
+
+Fingers resting on an open switcher (phase `04b_switcher_resting`): open the app switcher and rest the fingers on it without moving for ten seconds. Once the liquid has settled the switcher must cost nothing:
+- After the first second, the app's CPU and wake-ups match the same fingers resting under the thumb with no switcher showing.
+- WindowServer CPU over 5 s matches the hidden switcher's.
+- Quartz Debug's "Flash screen updates" shows no update over the settled switcher.
+- Phase 08 (hands off) still has 0 idle wake-ups.
 
 The headline number is **CPU per trackpad frame during ordinary pointer and scroll use**: the user touches the trackpad all day, and every frame reaches the app. Report it with the share of one core it adds up to while touching. Measure attribution as an A/B: the app against `mtidle` over the same touches, or the app against a build with one component removed.
 

@@ -157,7 +157,9 @@ import LauncherCore
                 #expect(played.band == layout.band && (0..<5).allSatisfy { played.beads[$0] == layout.bead(at: $0) })
             }
         }
-        #expect(run.nonEmptyFrames.allSatisfy { $0.tracks.allSatisfy { $0.channel.element == .swell } })
+        for call in run.calls where seconds(pushStart) < call.time {
+            #expect(call.frame.tracks.allSatisfy { $0.channel.element == .swell })
+        }
         #expect(pull(run, end, at: seconds(threeMM + 10)) >= 10)
         for call in run.calls where seconds(pushStart) < call.time && call.time <= seconds(pushEnd) {
             #expect(!call.frame.isEmpty)

@@ -209,7 +209,8 @@ struct EdgeCurve: Sendable {
 /// The switcher's liquid during one swipe: a band under the icons, a bead around each, and a swell around the selected
 /// one. Fed the selection on every input event, it answers what the render server must change. Under `.flowing` the
 /// swell's two edges flow to the newly selected icon and wobble to rest, lean towards the fingers between changes and
-/// pull past the ends, all staged whole as sampled tracks; under `.still` the swell jumps.
+/// pull past the ends, and the fingers' movement sends a wave of bead heights through the band, all staged whole as
+/// sampled tracks; under `.still` the swell jumps.
 public struct Liquid: Sendable {
     private let layout: SwitcherRowLayout
     private let motion: LiquidMotion
@@ -224,6 +225,7 @@ public struct Liquid: Sendable {
     /// When each edge's flow is due to arrive: a later retarget may not make it arrive sooner.
     private var leftDue = -Double.infinity, rightDue = -Double.infinity
     private var flowDirection = 1.0
+    private var waves: WaveTrain
 
     static let flowBound = 0.2, settleBound = 1.0, endPullBound = 0.2, sampleRate = 120.0
     /// The shortest time between two events that the finger velocity is estimated over.
@@ -233,6 +235,7 @@ public struct Liquid: Sendable {
         self.layout = layout
         self.motion = motion
         (left, right) = Self.edges(resting: layout.swell(at: 0), layout: layout)
+        waves = WaveTrain(layout: layout)
     }
 
     private static func edges(resting rest: LiquidRect, layout: SwitcherRowLayout) -> (EdgeCurve, EdgeCurve) {
@@ -257,6 +260,7 @@ public struct Liquid: Sendable {
             let rest = layout.swell(at: selection.selected)
             (left, right) = Self.edges(resting: rest, layout: layout)
             (leftTarget, rightTarget, lastTime) = (rest.minX, rest.maxX, time)
+            waves.open(at: selection.position, time: time)
             return jump(to: selection.selected)
         }
         guard selection != previous else { return .empty }
@@ -278,7 +282,11 @@ public struct Liquid: Sendable {
             let h = height(stretchedBy: (r - rest.maxX) - (l - rest.minX), rest: rest)
             swell = LiquidRect(minX: l, minY: rest.minY + (rest.height - h) / 2, width: r - l, height: h)
         }
-        return LiquidShape(band: layout.band, beads: (0..<layout.iconCount).map { layout.bead(at: $0) }, swell: swell)
+        let beads = (0..<layout.iconCount).map { index in
+            let bead = layout.bead(at: index), grown = waves.offset(bead: index, at: time)
+            return LiquidRect(minX: bead.minX, minY: bead.minY - grown / 2, width: bead.width, height: bead.height + grown)
+        }
+        return LiquidShape(band: layout.band, beads: beads, swell: swell)
     }
 
     private func jump(to selected: Int) -> LiquidFrame {
@@ -325,7 +333,8 @@ public struct Liquid: Sendable {
         flowDirection = direction
         (leftDue, rightDue) = (time.seconds + (direction > 0 ? total : lead), time.seconds + (direction > 0 ? lead : total))
         return LiquidFrame(
-            swell: rest, icon: IconChange(selected: selected, duration: lead), tracks: tracks(over: rest, from: time))
+            swell: rest, icon: IconChange(selected: selected, duration: lead),
+            tracks: tracks(over: rest, from: time) + waveTracks(for: selection, at: time))
     }
 
     /// The selection moved without changing: the swell leans towards the fingers, or is pulled past an end.
@@ -333,15 +342,23 @@ public struct Liquid: Sendable {
         let selected = selection.selected
         let rest = layout.swell(at: selected)
         let pastLast = selection.travelMM - Double(selection.count - 1) * GestureRules.switcherStepMM
+        var waving = false
         if selected == selection.count - 1 && pastLast > 0 {
             endPull(outerRight: true, by: pastLast, rest: rest, at: time)
         } else if selected == 0 && selection.travelMM < 0 {
             endPull(outerRight: false, by: -selection.travelMM, rest: rest, at: time)
         } else {
             lean(to: targets(for: selection, rest: rest), rest: rest, at: time)
+            waving = true
         }
         lastTime = time
-        return LiquidFrame(tracks: tracks(over: rest, from: time))
+        return LiquidFrame(
+            tracks: tracks(over: rest, from: time) + (waving ? waveTracks(for: selection, at: time) : []))
+    }
+
+    /// The beads' height tracks when the fingers' movement sends a crest through the band, else none.
+    private mutating func waveTracks(for selection: SwitcherSelection, at time: LiquidTime) -> [LiquidTrack] {
+        waves.emit(at: selection.position, time: time) ? waves.tracks(from: time) : []
     }
 
     /// Both edges glide to their targets over `followTime`, each arriving with its target's velocity. An edge coming
