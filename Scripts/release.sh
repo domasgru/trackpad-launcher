@@ -1,11 +1,11 @@
 #!/bin/bash
 # Builds a release: refuses a version that is not above every earlier release, archives, exports with the
 # developer-id method, notarizes and staples the app, archives it as the update asset, lays out a disk image,
-# signs, notarizes and staples it, and creates a DRAFT GitHub release carrying both.
+# signs, notarizes and staples it, and publishes a GitHub release carrying both.
 # Output: build/release/TrackpadLauncher.dmg
 #         build/release/TrackpadLauncher-<version>-macOS-<minimum>.aar
-#         a draft release v<version> on GitHub; publishing is a separate, deliberate step:
-#         gh release edit v<version> --draft=false --latest
+#         the release v<version> on GitHub, published and marked latest: every older copy offers it the next
+#         time its settings window opens. gh uploads the assets before it publishes, so no copy sees a half-made one.
 #
 # Needs gh authenticated for the repository, a clean worktree whose HEAD is on origin,
 # a "Developer ID Application" identity in the keychain, a notarytool
@@ -324,8 +324,8 @@ spctl --assess --type open --context context:primary-signature -vv "$DMG"
 spctl --assess --type execute -vv "$APP"
 
 MIN_MACOS="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist")"
-gh release create "v$EXPECTED_VERSION" "$DMG" "$AAR" --repo "$REPOSITORY" --draft \
+gh release create "v$EXPECTED_VERSION" "$DMG" "$AAR" --repo "$REPOSITORY" --latest \
   --target "$(git -C "$ROOT" rev-parse HEAD)" \
   --title "Trackpad Launcher $EXPECTED_VERSION" --notes "Requires macOS $MIN_MACOS or later."
 echo "Release artifacts: $DMG $AAR"
-echo "Draft v$EXPECTED_VERSION created. Publish with: gh release edit v$EXPECTED_VERSION --draft=false --latest"
+echo "Published v$EXPECTED_VERSION."

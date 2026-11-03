@@ -338,8 +338,7 @@ Call site 4, the release process (R14):
 
 ```sh
 # raise MARKETING_VERSION and CURRENT_PROJECT_VERSION in Config/Version.xcconfig, commit, push
-NOTARY_PROFILE=<profile> Scripts/release.sh     # builds, notarises, staples, archives, creates the draft release v1.1.0
-gh release edit v1.1.0 --draft=false --latest   # publishing is the deliberate second step
+NOTARY_PROFILE=<profile> Scripts/release.sh     # builds, notarises, staples, archives, publishes the release v1.1.0
 ```
 
 ### Shape
@@ -1006,9 +1005,9 @@ aa archive -d "$OUT/export" -subdir "$APP_NAME.app" -exclude-field uid,gid,xat,a
 # Self-check, as an older version will: unpack the archive, then codesign --verify --strict --deep,
 # stapler validate, and the identifier and TeamIdentifier from codesign -dv.
 # ... disk image: as today (stays TrackpadLauncher.dmg, so .../releases/latest/download/TrackpadLauncher.dmg is stable) ...
-gh release create "v$VERSION" "$DMG" "$AAR" --draft --target "$(git rev-parse HEAD)" \
+gh release create "v$VERSION" "$DMG" "$AAR" --latest --target "$(git rev-parse HEAD)" \
   --title "Trackpad Launcher $VERSION" --notes "Requires macOS $MIN_MACOS or later."
-echo "Draft v$VERSION created. Publish with: gh release edit v$VERSION --draft=false --latest"
+echo "Published v$VERSION."
 ```
 
 `project.yml` sets `LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)`, so the declared minimum has one source.
@@ -1089,7 +1088,7 @@ This is shipped as the consensus.
 - We accept a request's own idle timeout as the one deadline that is not a Core Animation animation, in exchange for the app having no timer of its own.
 - We accept that only a real Developer ID build in /Applications can exercise the network path by hand; `--as-release-build` cannot. Development builds are covered by the local-listener platform tests.
 - We accept that a staging folder left in the system's temporary items after a crash mid-install stays until macOS clears that folder. This is assumed, not probed. In exchange, there is no startup sweep of our own.
-- We accept that a release takes two commands (build and draft, then publish), in exchange for the developer inspecting the assets before every older copy sees them.
+- A release is published in one command. The developer tests the build before running it; once published, every older copy sees it at its next opening, and with immutable releases a broken one is fixed only by a higher version.
 
 ### Alternatives considered
 
@@ -1109,7 +1108,7 @@ This is shipped as the consensus.
 1. **The login item (O2).** Does the `SMAppService.mainApp` login item survive a same-path, same-team replacement? If the first real update shows it was lost, should the update adopt the move's `suspend()` / `resume()` hand-over, accepting a possible "login item added" notice per update? The fallback is one effect inserted before `openNewVersion`.
 2. **The permissions (O3).** Do the Accessibility and Screen Recording grants survive in practice? The designated requirement says yes on paper. A loss could not be re-asked under R10, so should the release checklist require a hand check on the first real update?
 3. **The atomic administrator swap.** Does `osascript -l JavaScript` run as root through `AuthorizationExecuteWithPrivileges` without a further prompt? It was probed only unprivileged. Is changing the move's script in this plan acceptable, or should the move keep its two `mv`s until the new script has run by hand?
-4. **Publishing.** Should `release.sh` stop at a draft, as designed, or publish in the same command?
+4. **Publishing.** Decided by the human: `release.sh` publishes in the same command (gh uploads the assets to a draft, then publishes it).
 5. **Immutable releases.** Should the repository turn on GitHub's immutable releases, so a published archive can never be swapped afterwards?
 6. **The card's look (O1).** The Figma node was not inspected in this session. Should its downloading, installing and failed states be confirmed before the UI slice?
 7. **Risk, accepted: an old copy whose new version macOS will not open keeps running over the new bundle** (R12's last case). A check after fan-out (`checks/after-swap/after-swap.out`) shows such a process keeps running. It reads every resource's contents afresh from the new bundle, still believes a resource only the old version had exists, and keeps its cached Info.plist. Gestures live in memory, so only illustrations read afresh can show the new version's art or none. No row covers it, because macOS cannot be made to refuse the open on demand.
@@ -1272,10 +1271,9 @@ Model rows run on this Mac's macOS 26.0 and use releases that need macOS 26.0, u
   4. Repeat, and enter an administrator's name and password. Expected: vN is installed and opens. This runs the `osascript` exchange as root.
 - **C8, R14: the release process.** Expected:
   - With `Config/Version.xcconfig` unchanged since the last release, `release.sh` exits non-zero in its preflight, before building.
-  - With a raised version, it prints its self-check's success and creates a draft vX holding `TrackpadLauncher.dmg` and `TrackpadLauncher-X-macOS-26.0.aar`. Confirm with `gh release view vX --json assets,isDraft`.
+  - With a raised version, it prints its self-check's success and publishes vX holding `TrackpadLauncher.dmg` and `TrackpadLauncher-X-macOS-26.0.aar`, marked latest. Confirm with `gh release view vX --json assets,isDraft,isImmutable`.
   - The built app's `LSMinimumSystemVersion`, read with PlistBuddy, equals `MACOSX_DEPLOYMENT_TARGET`.
-  - While vX is a draft, an older copy shows no card.
-  - After `gh release edit vX --draft=false --latest`, the older copy shows "App version X is available", and C6 completes.
+  - Once vX is published, the older copy shows "App version X is available", and C6 completes.
 - **C9, the docs.**
   - `docs/product-overview.md` names the update check as the one network exception, and says that an update also stops the old version and opens the new one.
   - `docs/domain-model.md` gains *Update check*, *Newer version* and *Update card*.
