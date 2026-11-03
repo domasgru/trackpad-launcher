@@ -67,8 +67,8 @@ import Testing
         let world = LifecycleWorld(accessGranted: false)
         var atRegistration: [Settings?] = []
         var atAsk: [Settings?] = []
-        world.loginItem.onRegister = { [mac = world.mac] in atRegistration.append(mac.freshStore().load()) }
-        world.permissions.onAsk = { [mac = world.mac] in atAsk.append(mac.freshStore().load()) }
+        world.loginItem.onRegister = { [unowned mac = world.mac] in atRegistration.append(mac.freshStore().load()) }
+        world.permissions.onAsk = { [unowned mac = world.mac] in atAsk.append(mac.freshStore().load()) }
 
         let process = world.launch(.atLogin)
 
@@ -101,8 +101,8 @@ import Testing
         let world = LifecycleWorld(accessGranted: false)
         var atRegistration: [Settings?] = []
         var atAsk: [Settings?] = []
-        world.loginItem.onRegister = { [mac = world.mac] in atRegistration.append(mac.freshStore().load()) }
-        world.permissions.onAsk = { [mac = world.mac] in atAsk.append(mac.freshStore().load()) }
+        world.loginItem.onRegister = { [unowned mac = world.mac] in atRegistration.append(mac.freshStore().load()) }
+        world.permissions.onAsk = { [unowned mac = world.mac] in atAsk.append(mac.freshStore().load()) }
 
         let process = world.launch(.byHand)
 

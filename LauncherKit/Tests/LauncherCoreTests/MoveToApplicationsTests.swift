@@ -116,8 +116,8 @@ import Testing
 
         var atRegistration: [Settings?] = []
         var atAsk: [Settings?] = []
-        world.loginItem.onRegister = { [mac = world.mac] in atRegistration.append(mac.freshStore().load()) }
-        world.permissions.onAsk = { [mac = world.mac] in atAsk.append(mac.freshStore().load()) }
+        world.loginItem.onRegister = { [unowned mac = world.mac] in atRegistration.append(mac.freshStore().load()) }
+        world.permissions.onAsk = { [unowned mac = world.mac] in atAsk.append(mac.freshStore().load()) }
 
         let installed = world.launch(.byHand, placement: .installed)
 
