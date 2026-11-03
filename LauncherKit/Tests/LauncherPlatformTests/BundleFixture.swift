@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 /// A throwaway folder with app bundles made in it. The folder is removed with the fixture, read-only folders included.
-final class BundleFixture {
+final class BundleFixture: @unchecked Sendable {
     static let identifier = "com.example.TrackpadLauncherFixture"
 
     let root: URL
@@ -28,7 +28,7 @@ final class BundleFixture {
 
     /// An app with nested files and a symlink, the quarantine set on every item.
     @discardableResult
-    func makeBundle(named name: String, in folder: URL, version: String) throws -> URL {
+    func makeBundle(named name: String, in folder: URL, version: String, marker: String? = nil) throws -> URL {
         let files = FileManager.default
         let app = folder.appending(path: name)
         let contents = app.appending(path: "Contents")
@@ -42,6 +42,11 @@ final class BundleFixture {
         try (info as NSDictionary).write(to: contents.appending(path: "Info.plist"))
         try Data("binary \(version)".utf8).write(to: contents.appending(path: "MacOS/fixture"))
         try Data("deep \(version)".utf8).write(to: nested.appending(path: "deep.txt"))
+        if let marker {
+            // Large enough that a download of the archive arrives in many reads.
+            let filler = Data((0..<300_000).map { _ in UInt8.random(in: 0...255) })
+            try (Data(marker.utf8) + filler).write(to: contents.appending(path: "Resources/\(marker)"))
+        }
         try files.createSymbolicLink(
             atPath: contents.appending(path: "Resources/link").path, withDestinationPath: "nested/deep.txt")
         try quarantineEveryItem(of: app)
@@ -51,7 +56,8 @@ final class BundleFixture {
     private func quarantineEveryItem(of app: URL) throws {
         let items = [app] + (FileManager.default.enumerator(at: app, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? [])
         for item in items where (try? FileManager.default.destinationOfSymbolicLink(atPath: item.path)) == nil {
-            _ = try Self.run("/usr/bin/xattr", ["-w", "com.apple.quarantine", "0081;00000000;Fixture;", item.path])
+            let value = Array("0081;00000000;Fixture;".utf8)
+            guard setxattr(item.path, "com.apple.quarantine", value, value.count, 0, 0) == 0 else { throw CocoaError(.fileWriteUnknown) }
         }
     }
 
@@ -78,6 +84,62 @@ final class BundleFixture {
         try run("/usr/bin/xattr", ["-r", app.path])
     }
 
+    /// `folder`'s `subdirectory` archived by release.sh's own line, read back whole.
+    static func archive(_ subdirectory: String, in folder: URL) throws -> Data {
+        let output = FileManager.default.temporaryDirectory.appending(path: "tl-archive-\(UUID().uuidString).aar")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try run(
+            "/usr/bin/aa",
+            ["archive", "-d", folder.path, "-subdir", subdirectory, "-exclude-field", "uid,gid,xat,acl,flg", "-o", output.path])
+        return try Data(contentsOf: output)
+    }
+
+    /// Everything in `folder`, archived without a subdirectory, so entries sit beside the app.
+    static func archiveEverything(in folder: URL) throws -> Data {
+        let output = FileManager.default.temporaryDirectory.appending(path: "tl-archive-\(UUID().uuidString).aar")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try run("/usr/bin/aa", ["archive", "-d", folder.path, "-exclude-field", "uid,gid,xat,acl,flg", "-o", output.path])
+        return try Data(contentsOf: output)
+    }
+
+    /// A file name no other bundle carries, to find an unpacked copy of one bundle.
+    static func newMarker() -> String { "marker-\(UUID().uuidString)" }
+
+    /// Where an unpacked update can sit outside any fixture's folder: the item-replacement folders on the temporary
+    /// volume, and the temporary folder itself.
+    nonisolated private static func unpackedBundles() -> [URL] {
+        let files = FileManager.default
+        let temporary = files.temporaryDirectory
+        let replacements = (try? files.contentsOfDirectory(atPath: temporary.appending(path: "TemporaryItems").path)) ?? []
+        let folders = [temporary] + replacements.map { temporary.appending(path: "TemporaryItems/\($0)") }
+        return folders.map { $0.appending(path: "TrackpadLauncher.app") }.filter { files.fileExists(atPath: $0.path) }
+    }
+
+    /// Unpacked copies, outside any fixture's folder, of the bundle that carries `marker`.
+    @concurrent static func copies(carrying marker: String) async -> [URL] {
+        unpackedBundles().filter { FileManager.default.fileExists(atPath: $0.appending(path: "Contents/Resources/\(marker)").path) }
+    }
+
+    /// App bundles outside any fixture's folder whose identifier is `identifier`, once none is left or `limit` has
+    /// passed. Other suites unpack the same committed fixture alongside, each copy only for a moment, so a bundle seen
+    /// once proves nothing; one this test's update left behind is still there when the limit runs out.
+    @concurrent static func bundles(identifiedBy identifier: String, within limit: Duration = .seconds(10)) async -> [URL] {
+        let deadline = ContinuousClock.now + limit
+        while true {
+            let left = unpackedBundles().filter {
+                (NSDictionary(contentsOf: $0.appending(path: "Contents/Info.plist"))?["CFBundleIdentifier"] as? String) == identifier
+            }
+            if left.isEmpty || ContinuousClock.now >= deadline { return left }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    /// The partial files a download task leaves in the temporary folder when it writes to disk.
+    @concurrent static func downloadFiles() async -> [String] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)) ?? []
+        return names.filter { $0.hasPrefix("CFNetworkDownload_") }
+    }
+
     static func appNames(in folder: URL) throws -> [String] {
         try FileManager.default.contentsOfDirectory(atPath: folder.path).filter { $0.hasSuffix(".app") }.sorted()
     }
@@ -89,9 +151,9 @@ final class BundleFixture {
         process.arguments = arguments
         let output = Pipe()
         process.standardOutput = output
-        try process.run()
+        let waitForExit = try process.start()
         let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+        waitForExit()
         guard process.terminationStatus == 0 else { throw CocoaError(.fileWriteUnknown) }
         return String(decoding: data, as: UTF8.self)
     }

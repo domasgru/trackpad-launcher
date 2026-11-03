@@ -1,0 +1,39 @@
+REQUEST GET /echo?a
+  HEADER Host: 127.0.0.1:18765
+  HEADER Accept: */*
+  HEADER Accept-Language: en-US,en;q=0.9
+  HEADER Connection: keep-alive
+  HEADER Accept-Encoding: gzip, deflate
+  HEADER User-Agent: swift-frontend (unknown version) CFNetwork/3860.700.1 Darwin/25.6.0
+REQUEST GET /echo?b
+  HEADER Host: 127.0.0.1:18765
+  HEADER Accept: */*
+  HEADER Accept-Language: en
+  HEADER Connection: keep-alive
+  HEADER Accept-Encoding: gzip, deflate
+  HEADER User-Agent: TrackpadLauncher
+REQUEST GET /echo?b2
+  HEADER Host: 127.0.0.1:18765
+  HEADER Accept: */*
+  HEADER Accept-Language: en
+  HEADER Connection: keep-alive
+  HEADER Accept-Encoding: gzip, deflate
+  HEADER User-Agent: TrackpadLauncher
+REQUEST GET /echo?after-redirect
+  HEADER Host: 127.0.0.1:18765
+  HEADER Accept: */*
+  HEADER Accept-Language: en-US,en;q=0.9
+  HEADER Connection: keep-alive
+  HEADER Accept-Encoding: gzip, deflate
+  HEADER User-Agent: TrackpadLauncher
+== (a) ephemeral session, request with no headers set
+== (b) per-request User-Agent and Accept-Language set
+== (b2) httpAdditionalHeaders on the configuration
+== (e) redirect followed, with per-request headers
+== (c) /stall with timeoutIntervalForRequest = 3
+stall: error after 3.1 s: NSURLErrorDomain -1001
+== (c2) /slow (1 byte/s for 6 s) with timeoutIntervalForRequest = 3
+slow: finished after 5.0 s
+== (d) download(for:) file attributes
+downloaded to /var/folders/xl/flbx9ljs3y7g872bp2s4b9540000gn/T/CFNetworkDownload_nJkAdr.tmp
+xattrs: ["com.apple.provenance"]

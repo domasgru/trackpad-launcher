@@ -2,17 +2,23 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// One 326 pt column, 16 pt inside the window, of rounded groups 10 pt apart: the five gesture rows and the Animate app
+/// One 326 pt column, 16 pt inside the window, of rounded groups 10 pt apart: the update card, while a newer version is
+/// known; the five gesture rows and the Animate app
 /// launch switch; the switcher section; the thumb picker; then, while any applies, the trackpad settings notice, the
 /// Accessibility hint and the screen recording hint, one group each. Rows are at least 42 pt tall, with a hairline
 /// between them. The illustrations are 45 × 28 pt. The guide naming the two marks sits over the first illustration in
 /// right-hand mode, where its arrows meet the thumb. *Quit Trackpad Launcher* and *Close* end it, aligned right.
 struct SettingsView: View {
     let launcher: Launcher
+    let updater: Updater?
     let actions: LauncherActions
 
     var body: some View {
         VStack(spacing: 10) {
+            if let card = updater?.card {
+                UpdateCardView(
+                    card: card, updateNow: { updater?.updateNow() }, cancel: { updater?.cancel() })
+            }
             FormGroup {
                 ForEach(launcher.rows) { row in
                     GestureRowView(row: row, launcher: launcher, actions: actions)
@@ -52,6 +58,7 @@ struct SettingsView: View {
                 Spacer(minLength: 0)
                 Button(Copy.quitButton, action: actions.quit)
                     .buttonStyle(TintedButtonStyle(tint: .red))
+                    .disabled(updater?.isInstalling == true)
                 Button("Close") { launcher.closeWindow() }
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.roundedRectangle(radius: 6))
@@ -275,19 +282,31 @@ struct SettingsNotice: View {
     }
 }
 
-/// A regular-size push button drawn in `tint`: the label in it, on a fifth-strength wash of it.
+/// A regular-size push button drawn in `tint`: the label in it, on a fifth-strength wash of it. Greyed while disabled.
 struct TintedButtonStyle: ButtonStyle {
     let tint: Color
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 16)
-            .frame(height: 24)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(tint.mix(with: .black, by: 0.1).opacity(configuration.isPressed ? 0.3 : 0.2)))
-            .contentShape(.rect(cornerRadius: 6))
+        Face(tint: tint, configuration: configuration)
+    }
+
+    /// A style does not grey itself, and reads the environment only through a view of its own.
+    private struct Face: View {
+        let tint: Color
+        let configuration: ButtonStyleConfiguration
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            let shade = isEnabled ? tint : Color.secondary
+            configuration.label
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(shade)
+                .padding(.horizontal, 16)
+                .frame(height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(shade.mix(with: .black, by: 0.1).opacity(isEnabled && configuration.isPressed ? 0.3 : 0.2)))
+                .contentShape(.rect(cornerRadius: 6))
+        }
     }
 }

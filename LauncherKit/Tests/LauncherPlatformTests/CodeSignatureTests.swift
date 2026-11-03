@@ -45,4 +45,77 @@ private final class Anchor {}
             #expect(CodeSignature.build(of: app) == (isDeveloperID ? .release : .development), "\(app.lastPathComponent)")
         }
     }
+
+    @Test func theAdHocSignedTestRunnerHasNoDeveloperIDSignerEvenWhenItIsToldItIsARelease() {
+        #expect(CodeSignature.developerIDSigner() == nil)
+        #expect(CodeSignature.buildOfThisProcess(arguments: ["--as-release-build"]) == .release)
+    }
+
+    private static func line(_ name: String, in report: String) -> String? {
+        report.split(separator: "\n").first { $0.hasPrefix("\(name)=") }.map { String($0.dropFirst(name.count + 1)) }
+    }
+
+    private static func expectedSigner(_ report: String) -> Signer? {
+        guard report.contains("Authority=Developer ID Application"), let team = line("TeamIdentifier", in: report),
+            let identifier = line("Identifier", in: report)
+        else { return nil }
+        return Signer(team: team, identifier: identifier)
+    }
+
+    @Test func everyAppInApplicationsAndSystemApplicationsHasASignerExactlyWhenCodesignNamesADeveloperID() throws {
+        let apps = try ["/Applications", "/System/Applications"].flatMap {
+            try FileManager.default.contentsOfDirectory(at: URL(filePath: $0), includingPropertiesForKeys: nil)
+        }.filter { $0.pathExtension == "app" }
+        let readings = apps.compactMap { app in Self.codesignAuthorities(of: app).map { (app, $0) } }
+        guard readings.contains(where: { $0.1.contains("Authority=Developer ID Application") }) else { return }
+
+        for (app, report) in readings {
+            #expect(CodeSignature.developerIDSigner(of: app) == Self.expectedSigner(report), "\(app.lastPathComponent)")
+        }
+    }
+
+    @Test(.enabled(if: UpdateFixtures.arePresent, "run Scripts/make-update-fixtures.sh to generate the fixtures"))
+    func theCommittedDeveloperIDFixtureHasTheRecordedSignerAndTheAppleDevelopmentCopyHasNone() throws {
+        let record = try UpdateFixtures.loadRecord()
+        #expect(
+            CodeSignature.developerIDSigner(of: UpdateFixtures.developerIDApp)
+                == Signer(team: record.team, identifier: record.identifier))
+        let report = try #require(Self.codesignAuthorities(of: UpdateFixtures.developerIDApp))
+        #expect(Self.expectedSigner(report) == Signer(team: record.team, identifier: record.identifier))
+        #expect(CodeSignature.developerIDSigner(of: UpdateFixtures.appleDevelopmentApp) == nil)
+    }
+
+    private static func release(_ version: String, needs macOS: String = "26.0") -> Release {
+        Release(
+            version: Version(version)!, minimumMacOS: Version(macOS)!,
+            archive: URL(string: "https://example.invalid/a.aar")!, archiveSize: 1)
+    }
+
+    @Test func anUnsignedBundleIsNeverGenuine() throws {
+        let fixture = try BundleFixture()
+        let app = try fixture.makeBundle(named: "TrackpadLauncher.app", in: fixture.folder("Release"), version: "1.1.0")
+
+        #expect(!CodeSignature.isGenuine(app, as: Self.release("1.1.0"), signer: Signer(team: "ABCDE12345", identifier: BundleFixture.identifier)))
+    }
+
+    @Test func aSignerWhoseNamesCouldBreakOutOfTheRequirementIsNeverMatched() throws {
+        let fixture = try BundleFixture()
+        let app = try fixture.makeBundle(named: "TrackpadLauncher.app", in: fixture.folder("Release"), version: "1.1.0")
+
+        #expect(!CodeSignature.isGenuine(app, as: Self.release("1.1.0"), signer: Signer(team: "x\" or anchor apple or \"", identifier: "y")))
+    }
+
+    @Test(.enabled(if: UpdateFixtures.arePresent, "run Scripts/make-update-fixtures.sh to generate the fixtures"))
+    func onlyTheNotarisedDeveloperIDFixtureOfTheOfferedVersionAndSignerIsGenuine() throws {
+        let record = try UpdateFixtures.loadRecord()
+        let signer = Signer(team: record.team, identifier: record.identifier)
+        let offered = Self.release(record.version, needs: record.minimumMacOS)
+
+        #expect(CodeSignature.isGenuine(UpdateFixtures.developerIDApp, as: offered, signer: signer))
+        #expect(!CodeSignature.isGenuine(UpdateFixtures.developerIDApp, as: Self.release("9.9.9", needs: record.minimumMacOS), signer: signer))
+        #expect(!CodeSignature.isGenuine(UpdateFixtures.developerIDApp, as: Self.release(record.version, needs: "99.0"), signer: signer))
+        #expect(!CodeSignature.isGenuine(UpdateFixtures.developerIDApp, as: offered, signer: Signer(team: "AAAAAAAAAA", identifier: record.identifier)))
+        #expect(!CodeSignature.isGenuine(UpdateFixtures.developerIDApp, as: offered, signer: Signer(team: record.team, identifier: "com.example.other")))
+        #expect(!CodeSignature.isGenuine(UpdateFixtures.appleDevelopmentApp, as: offered, signer: signer))
+    }
 }

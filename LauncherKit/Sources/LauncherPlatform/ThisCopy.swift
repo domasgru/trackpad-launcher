@@ -17,6 +17,19 @@ public enum ThisCopy {
         return marker == OSType(keyAELaunchedAsLogInItem) ? .atLogin : .byHand
     }
 
+    /// CFBundleShortVersionString as this process started with it; nil when it is missing or is not dotted whole numbers.
+    public static func version() -> Version? { version(of: .main) }
+
+    static func version(of bundle: Bundle) -> Version? {
+        (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String).flatMap(Version.init)
+    }
+
+    /// ProcessInfo's operatingSystemVersion (major, minor, patch).
+    public static func macOS() -> Version {
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        return Version(version.majorVersion, version.minorVersion, version.patchVersion)
+    }
+
     /// Where this copy lies: a quarantined copy macOS translocated is traced back to the bundle the user opened. The
     /// disk image holding the original, if any, comes from `DiskImages.image(holding:)`.
     public static func location() -> Location {
