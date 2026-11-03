@@ -22,7 +22,7 @@ package enum GestureRules {
     /// Clicks are blocked for this long after a thumb anchors. Strictly less blocks.
     static let clickBlockingWindow = Duration.seconds(3)
     /// The most icons a switcher row holds: the frontmost app and the most recently used others.
-    static let switcherMaxApps = 10
+    package static let switcherMaxApps = 10
     /// The most rows a window switcher holds: the front window, the other visible ones, then the minimised ones.
     package static let windowSwitcherMaxRows = 10
     /// Items are this many step millimetres apart in travel; the selection is the nearest item.

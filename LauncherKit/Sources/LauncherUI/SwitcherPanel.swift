@@ -2,56 +2,81 @@ import AppKit
 import LauncherCore
 import QuartzCore
 
-/// The app switcher's window: an overlay panel holding the icon layers and the glass highlight under them;
-/// `SwitcherPresenter` decides everything shown.
-final class SwitcherPanel: OverlayPanel {
-    private static let cornerRadius: CGFloat = 34
+extension NSRect {
+    init(_ rect: LiquidRect) {
+        self.init(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height)
+    }
+}
 
-    private let content: NSView
-    private let highlight = NSGlassEffectView()
+/// The app switcher's window: an overlay panel holding one Liquid Glass shape (a band, a bead per icon and a swell)
+/// with the icon layers above it. It renders `LiquidFrame`s and decides nothing; every number comes from the layout or
+/// the frame.
+final class SwitcherPanel: OverlayPanel {
+    /// Internal, not private, so tests can reach the twelve glass views. They are created with the panel and never
+    /// added, removed or hidden.
+    let container = NSGlassEffectContainerView()
+    let band = NSGlassEffectView()
+    let beads = (0..<GestureRules.switcherMaxApps).map { _ in NSGlassEffectView() }
+    let swellView = NSGlassEffectView()
+
+    private let root: NSView
     private let iconsHost = NSView()
+    private let glassHost = NSView()
     private var iconLayers: [CALayer] = []
     private var layout = SwitcherRowLayout(iconCount: 0, displayWidth: 0)
 
     init() {
-        let content = NSView()
-        self.content = content
-        super.init(content: roundedGlass(content, cornerRadius: Self.cornerRadius))
-
-        content.wantsLayer = true
+        let root = NSView()
+        self.root = root
+        super.init(content: root)
+        root.wantsLayer = true
         iconsHost.wantsLayer = true
-        highlight.style = .clear
-        highlight.cornerRadius = 24
-        highlight.wantsLayer = true
-        content.addSubview(highlight)
-        content.addSubview(iconsHost)
+        container.contentView = glassHost
+        for glass in [band] + beads + [swellView] {
+            glass.style = .regular
+            glassHost.addSubview(glass)
+        }
+        root.addSubview(container)
+        root.addSubview(iconsHost)
     }
 
-    /// Replaces the icon layers with one layer per image, left to right, sized and spaced by `layout`, and centres
-    /// the panel on `screen`.
-    func layoutRow(_ images: [NSImage], layout: SwitcherRowLayout, on screen: NSRect, scale: CGFloat) {
+    /// Whether the glass mirror is live. There is no mirror yet.
+    func checkMirror() -> Bool { false }
+
+    /// Once per swipe: centres the window on `screen`, sizes every glass view from `layout`, and replaces the icon
+    /// layers with one per image. Laying out twice is harmless.
+    func lay(out images: [NSImage], layout: SwitcherRowLayout, on screen: NSRect, backingScale: CGFloat) {
         self.layout = layout
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         let panelSize = layout.panelSize
         let size = CGSize(width: panelSize.width, height: panelSize.height)
         setFrame(
             NSRect(x: screen.midX - size.width / 2, y: screen.midY - size.height / 2, width: size.width, height: size.height),
             display: false)
-        content.frame = NSRect(origin: .zero, size: size)
-        iconsHost.frame = content.bounds
-        highlight.frame.size = CGSize(width: layout.highlightSide, height: layout.highlightSide)
-        highlight.frame.origin.y = layout.centreY - layout.highlightSide / 2
+        let bounds = NSRect(origin: .zero, size: size)
+        root.frame = bounds
+        container.frame = bounds
+        glassHost.frame = bounds
+        iconsHost.frame = bounds
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
+        let radii = layout.radii
+        place(band, at: layout.band, radius: radii.band)
+        for (index, bead) in beads.enumerated() {
+            place(bead, at: layout.bead(at: index), radius: index < layout.iconCount ? radii.bead : radii.band)
+        }
+        place(swellView, at: layout.swell(at: 0), radius: radii.swell)
+        container.spacing = layout.spacing
+
         iconLayers.forEach { $0.removeFromSuperlayer() }
         iconLayers = images.enumerated().map { index, image in
             let layer = CALayer()
             layer.bounds = CGRect(x: 0, y: 0, width: layout.iconSide, height: layout.iconSide)
             layer.position = CGPoint(x: layout.centreX(at: Double(index)), y: layout.centreY)
-            let bitmapSide = SwitcherRowLayout.fullIconSide * scale
+            let bitmapSide = SwitcherRowLayout.fullIconSide * backingScale
             var proposed = CGRect(x: 0, y: 0, width: bitmapSide, height: bitmapSide)
             layer.contents = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil)
-            layer.contentsScale = scale
+            layer.contentsScale = backingScale
             layer.minificationFilter = .trilinear
             iconsHost.layer?.addSublayer(layer)
             return layer
@@ -60,36 +85,39 @@ final class SwitcherPanel: OverlayPanel {
         invalidateShadow()
     }
 
-    /// Where the highlight sits, in icons from the first, and which icon is drawn larger. Stretch past an end is
-    /// animated by `springHighlight`.
-    func show(position: CGFloat, selected: Int, animatesSize: Bool) {
+    private func place(_ glass: NSGlassEffectView, at rect: LiquidRect, radius: Double) {
+        glass.frame = NSRect(rect)
+        glass.cornerRadius = radius
+    }
+
+    /// Applies what one `follow` changed: the swell's new frame, and which icon is drawn larger.
+    func apply(_ frame: LiquidFrame) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        highlight.frame.origin.x = layout.centreX(at: Double(position)) - layout.highlightSide / 2
+        if let swell = frame.swell { swellView.frame = NSRect(swell) }
+        if let icon = frame.icon { grow(icon) }
         CATransaction.commit()
+        if !frame.isEmpty { invalidateShadow() }
+    }
 
+    /// Duration 0 grows at once; otherwise linearly over it.
+    private func grow(_ change: IconChange) {
         CATransaction.begin()
-        CATransaction.setDisableActions(!animatesSize)
-        CATransaction.setAnimationDuration(0.12)
+        CATransaction.setDisableActions(change.duration <= 0)
+        CATransaction.setAnimationDuration(change.duration)
+        CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .linear))
         for (index, layer) in iconLayers.enumerated() {
-            let scale = index == selected ? CGFloat(SwitcherRowLayout.selectedIconScale) : 1
+            let scale = index == change.selected ? CGFloat(SwitcherRowLayout.selectedIconScale) : 1
             layer.transform = CATransform3DMakeScale(scale, scale, 1)
         }
         CATransaction.commit()
     }
 
-    /// An additive spring from `offset` points past the highlight's resting place back to it; keyed, so each one
-    /// replaces the one before.
-    func springHighlight(from offset: CGFloat) {
-        guard let layer = highlight.layer else { return }
-        let spring = CASpringAnimation(keyPath: "position.x")
-        spring.isAdditive = true
-        spring.fromValue = offset
-        spring.toValue = 0
-        spring.mass = 1
-        spring.stiffness = 420
-        spring.damping = 22
-        spring.duration = spring.settlingDuration
-        layer.add(spring, forKey: "stretch")
+    /// The panel is out: the swell goes back to the first icon, ready for the next swipe. Nothing else runs while hidden.
+    override func emptied() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        swellView.frame = NSRect(layout.swell(at: 0))
+        CATransaction.commit()
     }
 }

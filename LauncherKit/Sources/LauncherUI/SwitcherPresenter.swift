@@ -1,6 +1,7 @@
 import AppKit
 import LauncherCore
 import Observation
+import QuartzCore
 
 /// Renders `launcher.switcher` and holds nothing the model holds. Owned by `SettingsShell`.
 ///
@@ -16,11 +17,13 @@ final class SwitcherPresenter {
     private var workspaceObservers: [NSObjectProtocol] = []
     private var appearanceObservation: NSKeyValueObservation?
     private var laidOutRow: [AppEntry] = []
-    private var layout = SwitcherRowLayout(iconCount: 0, displayWidth: 0)
-    private var lastStretch = 0.0
+    private var liquid: Liquid?
+    private let look: () -> LiquidLook
 
-    init(launcher: Launcher) {
+    /// `liquidLook` is read once per swipe.
+    init(launcher: Launcher, liquidLook: @escaping () -> LiquidLook = { .shipped }) {
         self.launcher = launcher
+        look = liquidLook
         if launcher.isSwipeOn { startIconPasses(waiting: true) }
         observations.append(
             Task { [weak self] in
@@ -111,31 +114,31 @@ final class SwitcherPresenter {
         NSWorkspace.shared.runningApplications.compactMap { app in dockLocation(app).map { (app, $0) } }
     }
 
-    /// nil hides: opacity to 0 over 150 ms, then out, unless a switcher opened meanwhile (Reduce motion: at once).
-    /// A switcher that is not on screen yet, or whose row differs from the laid-out one, is laid out and shown first.
+    /// nil hides: the shape fades out over 150 ms (at once with Reduce motion). A switcher that is not on screen yet,
+    /// or whose row differs from the laid-out one, is laid out and shown settled first.
     private func render(_ switcher: Switcher?) {
         guard let switcher else {
-            panel.dismiss()
-            return
+            liquid = nil
+            return panel.dismiss()
         }
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        if !panel.isPresented || switcher.row != laidOutRow { open(switcher.row) }
-        let selection = switcher.selection
-        panel.show(position: CGFloat(selection.position), selected: selection.selected, animatesSize: !reduceMotion)
-        if selection.stretch != lastStretch, selection.stretch != 0, !reduceMotion {
-            panel.springHighlight(from: CGFloat(selection.stretch) * layout.pitch)
-        }
-        lastStretch = selection.stretch
+        let now = LiquidTime(seconds: CACurrentMediaTime())
+        if !panel.isPresented || switcher.row != laidOutRow { return open(switcher, at: now) }
+        guard let frame = liquid?.follow(switcher.selection, at: now), !frame.isEmpty else { return }
+        panel.apply(frame)
     }
 
-    private func open(_ row: [AppEntry]) {
+    private func open(_ switcher: Switcher, at now: LiquidTime) {
         let screen = Displays.screen(under: NSEvent.mouseLocation)
-        layout = SwitcherRowLayout(iconCount: row.count, displayWidth: Double(screen?.frame.width ?? 0))
-        panel.layoutRow(
-            row.map { icons.icon(forSwitcher: $0) }, layout: layout, on: screen?.frame ?? .zero,
-            scale: screen?.backingScaleFactor ?? 2)
-        laidOutRow = row
-        lastStretch = 0
+        let layout = SwitcherRowLayout(
+            iconCount: switcher.row.count, displayWidth: Double(screen?.frame.width ?? 0), look: look())
+        panel.lay(
+            out: switcher.row.map { icons.icon(forSwitcher: $0) }, layout: layout, on: screen?.frame ?? .zero,
+            backingScale: screen?.backingScaleFactor ?? 2)
         panel.present(appear: nil)
+        let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || !panel.checkMirror()
+        var liquid = Liquid(layout: layout, motion: still ? .still : .flowing)
+        panel.apply(liquid.follow(switcher.selection, at: now))
+        self.liquid = liquid
+        laidOutRow = switcher.row
     }
 }
