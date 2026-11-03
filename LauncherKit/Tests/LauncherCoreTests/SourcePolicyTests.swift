@@ -79,6 +79,7 @@ import Testing
     }
 
     static let confined: [Confined] = [
+        Confined(token: "CASDFElementLayer", onlyIn: ["GlassMirror.swift"], rule: "the glass mirror is reached in one file"),
         Confined(token: "AXIsProcessTrusted", onlyIn: ["SystemPermissions.swift"], rule: "R9 one permission, one adapter"),
         Confined(token: "notify_register", onlyIn: ["SystemPermissions.swift"], rule: "R7 the trust push"),
         Confined(

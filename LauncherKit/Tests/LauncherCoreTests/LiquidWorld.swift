@@ -39,7 +39,7 @@ struct LiquidCall {
 }
 
 /// What the render server shows at an instant.
-struct Played {
+struct Played: Equatable {
     let band: LiquidRect
     let beads: [LiquidRect]
     let swell: LiquidRect
@@ -51,6 +51,14 @@ struct Played {
 struct LiquidRun {
     let layout: SwitcherRowLayout
     let calls: [LiquidCall]
+    /// The calls that staged something: all that can change what is played.
+    private let staging: [LiquidCall]
+
+    init(layout: SwitcherRowLayout, calls: [LiquidCall]) {
+        self.layout = layout
+        self.calls = calls
+        staging = calls.filter { !$0.frame.isEmpty }
+    }
 
     var opened: LiquidTime { calls[0].time }
     var last: LiquidTime { calls[calls.count - 1].time }
@@ -63,14 +71,34 @@ struct LiquidRun {
     }
 
     /// By Core Animation's rules, from the staged frames alone: a swell frame is the swell's rest from its call on; an
-    /// icon change runs linearly over its duration from wherever the icon was. Tracks would add to these rests.
+    /// icon change runs linearly over its duration from wherever the icon was. Per channel the latest track added at
+    /// or before the instant is interpolated linearly between its samples, then holds its last offset if it holds and
+    /// is 0 otherwise; the offsets add to the rests.
     func played(at instant: LiquidTime) -> Played {
-        let staged = calls.filter { $0.time <= instant }
-        let swell = staged.compactMap { call in call.frame.swell }.last ?? layout.swell(at: 0)
+        let staged = staging.filter { $0.time <= instant }
+        let swellRest = staged.compactMap { call in call.frame.swell }.last ?? layout.swell(at: 0)
+        func offset(_ element: LiquidElement, _ property: LiquidProperty) -> Double {
+            let channel = LiquidChannel(element: element, property: property)
+            guard let track = staged.reversed().lazy.compactMap({ $0.frame.tracks.first { $0.channel == channel } }).first
+            else { return 0 }
+            let elapsed = instant.seconds - track.begin.seconds
+            let end = Double(track.offsets.count - 1) * track.step
+            if elapsed >= end { return track.holds ? track.offsets[track.offsets.count - 1] : 0 }
+            let position = elapsed / track.step
+            let index = Int(position)
+            let fraction = position - Double(index)
+            return track.offsets[index] + (track.offsets[index + 1] - track.offsets[index]) * fraction
+        }
+        func shown(_ rest: LiquidRect, _ element: LiquidElement) -> LiquidRect {
+            let centre = offset(element, .centreX), width = offset(element, .width), height = offset(element, .height)
+            return LiquidRect(
+                minX: rest.minX + centre - width / 2, minY: rest.minY - height / 2, width: rest.width + width,
+                height: rest.height + height)
+        }
         let scales = (0..<layout.iconCount).map { index in iconScale(index, at: instant, among: staged) }
         return Played(
-            band: layout.band, beads: (0..<layout.iconCount).map { layout.bead(at: $0) }, swell: swell,
-            iconScales: scales)
+            band: layout.band, beads: (0..<layout.iconCount).map { shown(layout.bead(at: $0), .bead($0)) },
+            swell: shown(swellRest, .swell), iconScales: scales)
     }
 
     private func iconScale(_ index: Int, at instant: LiquidTime, among staged: [LiquidCall]) -> Double {
@@ -90,7 +118,7 @@ struct LiquidRun {
     }
 }
 
-private struct SeededGenerator: RandomNumberGenerator {
+struct SeededGenerator: RandomNumberGenerator {
     var state: UInt64
     mutating func next() -> UInt64 {
         state &+= 0x9E37_79B9_7F4A_7C15
@@ -179,6 +207,7 @@ private struct SeededGenerator: RandomNumberGenerator {
         if liquid == nil {
             let layout = SwitcherRowLayout(iconCount: switcher.row.count, displayWidth: displayWidth, look: look)
             self.layout = layout
+            calls = []
             liquid = Liquid(layout: layout, motion: motion)
         }
         let index = delivered
