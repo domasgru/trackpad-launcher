@@ -61,21 +61,22 @@ import LauncherCore
         world.launcher.start()
         var seen = [world.launcher.screenRecordingHint]
 
-        world.launcher.setWindowSwipe(on: false)
-        seen.append(world.launcher.screenRecordingHint)
         world.launcher.setWindowSwipe(on: true)
         seen.append(world.launcher.screenRecordingHint)
         world.permissions.set(.screenRecording, granted: true)
         seen.append(world.launcher.screenRecordingHint)
         world.permissions.set(.screenRecording, granted: false)
         seen.append(world.launcher.screenRecordingHint)
+        world.launcher.setWindowSwipe(on: false)
+        seen.append(world.launcher.screenRecordingHint)
 
-        #expect(seen == [.ask, nil, .ask, nil, .ask])
+        #expect(seen == [nil, .ask, nil, .ask, nil])
     }
 
     @Test func theFirstPressAsksMacOSOnceAndLaterPressesOpenSystemSettingsAcrossARelaunchUntilTheGrant() {
         let world = World(accessGranted: true)
         world.launcher.start()
+        world.launcher.setWindowSwipe(on: true)
         #expect(world.launcher.screenRecordingHint == .ask)
         var storedDuringAsk: [Bool?] = []
         world.permissions.onAsk = { [unowned world] in

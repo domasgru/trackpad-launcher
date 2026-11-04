@@ -313,7 +313,7 @@ extension World {
 
     /// Safari, Mail, Preview, TextEdit and Notes installed and running, `frontmost` in front (Finder is the copy in
     /// CoreServices) with these windows, Accessibility and Screen Recording granted unless `accessGranted` or
-    /// `screenRecording` is false, started. `untitled` names windows that have no title.
+    /// `screenRecording` is false, started with the window swipe turned on. `untitled` names windows that have no title.
     static func windowWorld(
         visible: [String] = [], minimised: [String] = [], fullScreenFront: Bool = false, untitled: Set<String> = [],
         frontmost: String? = "Safari", accessGranted: Bool = true, screenRecording: Bool = true,
@@ -322,6 +322,7 @@ extension World {
         let apps = ["Safari", "Mail", "Preview", "TextEdit", "Notes"]
         let world = World(apps: apps, attached: attached, accessGranted: accessGranted, screenRecording: screenRecording)
         world.launcher.start()
+        world.launcher.setWindowSwipe(on: true)
         world.makeRunning(apps)
         world.system.frontmost = frontmost.map { $0 == "Finder" ? world.app("Finder", in: world.coreServices) : world.app($0) }
         world.system.windows.set(

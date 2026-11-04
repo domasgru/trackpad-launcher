@@ -15,7 +15,7 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Whether a thumb tap under two resting fingers swaps apps. The key is this field's name, permanently.
     public var isSwapOn = true
     /// Whether two fingers sliding up or down under the thumb switch windows. The key is this field's name, permanently.
-    public var isWindowSwipeOn = true
+    public var isWindowSwipeOn = false
     /// Whether the screen recording hint's button has asked macOS for the permission. The key is this field's name,
     /// permanently.
     public var hasAskedForScreenRecording = false
