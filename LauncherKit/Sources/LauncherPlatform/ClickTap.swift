@@ -94,7 +94,10 @@ final class ClickTap: Sendable {
     }
 
     /// Tap thread: the trackpads as the real tap can see them, read before any of the tap's locks.
-    private func context() -> TapContext { TapContext.estimated(from: mergedBlocking()) }
+    private func context() -> TapContext {
+        let merged = mergedTapState(at: .now)
+        return TapContext.estimated(from: merged.blocking, liftWindowIsOpen: merged.liftWindowIsOpen)
+    }
 
     /// Tap thread, also the wake-up source's perform.
     fileprivate func follow() {

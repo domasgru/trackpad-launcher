@@ -109,6 +109,7 @@ import Testing
         Confined(token: "ScreenCaptureKit", onlyIn: ["PreviewCapture.swift"], rule: "one file captures the screen"),
         Confined(token: "SCShareableContent", onlyIn: ["PreviewCapture.swift"], rule: "one file captures the screen"),
         Confined(token: "SCScreenshotManager", onlyIn: ["PreviewCapture.swift"], rule: "one file captures the screen"),
+        Confined(token: "systemUptime", onlyIn: ["UptimeNow.swift"], rule: "the process's clock is read in one place"),
         Confined(token: "tapCreate", onlyIn: ["ClickTap.swift"], rule: "the click tap's event taps, one file"),
         Confined(token: "CGEventTapCreate", onlyIn: ["ClickTap.swift"], rule: "the click tap's event taps, one file"),
         Confined(token: "tapEnable", onlyIn: ["ClickTap.swift"], rule: "the click tap's event taps, one file"),

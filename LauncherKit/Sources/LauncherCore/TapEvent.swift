@@ -44,17 +44,23 @@ public struct TapDecision: Equatable, Sendable {
 public struct TapContext: Equatable, Sendable {
     /// The highest level of any running trackpad.
     public let blocking: Blocking
+    /// Whether any trackpad's lift window is open: presses are blocked when the run blocks tap clicks, and the gated
+    /// port stays on. It never raises the scroll estimate or opens a closed gate by itself.
+    public let liftWindowIsOpen: Bool
     /// Whether a scroll gesture may be under way that the gated port was never sent. Read only when the gate opens.
     public let scrollMayBeUnderWay: Bool
 
-    public init(blocking: Blocking, scrollMayBeUnderWay: Bool) {
+    public init(blocking: Blocking, liftWindowIsOpen: Bool, scrollMayBeUnderWay: Bool) {
         self.blocking = blocking
+        self.liftWindowIsOpen = liftWindowIsOpen
         self.scrollMayBeUnderWay = scrollMayBeUnderWay
     }
 
     /// The real tap's view: it cannot see what it was not sent, so it takes fingers down beside a thumb (the openings
     /// with no warning frame) as "a scroll may be under way". The in-memory adapter knows what it withheld instead.
-    public static func estimated(from blocking: Blocking) -> TapContext {
-        TapContext(blocking: blocking, scrollMayBeUnderWay: blocking >= .dockSwipes)
+    /// A window never opens a closed gate (the lifting contact was down, so the port was already on), so the estimate
+    /// comes from the level alone.
+    public static func estimated(from blocking: Blocking, liftWindowIsOpen: Bool) -> TapContext {
+        TapContext(blocking: blocking, liftWindowIsOpen: liftWindowIsOpen, scrollMayBeUnderWay: blocking >= .dockSwipes)
     }
 }

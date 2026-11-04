@@ -4,7 +4,7 @@ import Testing
 @Suite struct TapFiltersTests {
     private let p = PressID(button: 0, number: 7)
 
-    private func at(_ level: Blocking) -> TapContext { TapContext(blocking: level, scrollMayBeUnderWay: false) }
+    private func at(_ level: Blocking) -> TapContext { TapContext(blocking: level, liftWindowIsOpen: false, scrollMayBeUnderWay: false) }
 
     private func decision(_ verdict: TapVerdict, _ gate: GateChange?) -> TapDecision {
         TapDecision(verdict: verdict, gate: gate)
@@ -52,7 +52,7 @@ import Testing
 
     @Test func aStragglerBeforeAPendingWakeIsDecidedAfterTheReopenRules() {
         var filters = TapFilters()
-        let context = TapContext.estimated(from: .clicks)
+        let context = TapContext.estimated(from: .clicks, liftWindowIsOpen: false)
         #expect(filters.decide(.scroll(.fingers(.changed)), in: context) == decision(.scroll(.passStill), .open))
     }
 
@@ -83,7 +83,7 @@ import Testing
     @Test func thePressPortReadingOffForgetsHeldPressesAndLeavesTheGate() {
         var filters = busy()
         let change = filters.portsWereDisabled(
-            pressPortIsOn: false, gatedPortIsOn: true, in: TapContext.estimated(from: .none))
+            pressPortIsOn: false, gatedPortIsOn: true, in: TapContext.estimated(from: .none, liftWindowIsOpen: false))
         #expect(change == nil)
         #expect(filters.holding == .nothing)
         #expect(filters.gateIsOpen)
@@ -92,7 +92,7 @@ import Testing
 
     @Test func anUnseenScrollSurvivesAnEchoWithBothPortsOn() {
         var filters = TapFilters()
-        _ = filters.follow(TapContext.estimated(from: .dockSwipes))
+        _ = filters.follow(TapContext.estimated(from: .dockSwipes, liftWindowIsOpen: false))
         #expect(filters.portsWereDisabled(pressPortIsOn: true, gatedPortIsOn: true, in: at(.clicks)) == nil)
         #expect(filters.decide(.scroll(.fingers(.began)), in: at(.clicks)).verdict == .scroll(.passStill))
     }

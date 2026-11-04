@@ -1,7 +1,7 @@
 import Foundation
 
 /// The click tap's filters and the gate over its busy event types, as one pure value. Clock-free, device-free.
-/// Invariant: after every call, `gateIsOpen` == some trackpad wants the tap, or a press is withheld, or a scroll is
+/// Invariant: after every call, `gateIsOpen` == some trackpad wants the tap, or a lift window is open, or a press is withheld, or a scroll is
 /// dropped or stilled (through its momentum), or a Dock swipe is dropped. It closes only when nothing is altered in
 /// flight, so a press, scroll gesture or Dock swipe is never started in the app's view and then cut short, or the
 /// reverse. The one exception is a system disable not yet noticed. A fresh value is closed.
@@ -24,7 +24,11 @@ public struct TapFilters: Sendable {
         let verdict: TapVerdict
         switch event {
         case .pointer(let pointer):
-            verdict = .pointer(click.decide(pointer, trackpadBlocking: context.blocking.blocksClicks))
+            // Under a thumb rested past 3 s the level is `.dockSwipes`, where a physical press passes, so a tap's click is
+            // caught only by the lift window: its lift frame reaches the session before the click reaches the tap
+            // (measured: every click came after its lift frame, the smallest gap 1.7 ms).
+            let blocked = context.blocking.blocksClicks || (blocksTapClicks && context.liftWindowIsOpen)
+            verdict = .pointer(click.decide(pointer, trackpadBlocking: blocked))
         case .scroll(let scrollEvent):
             verdict = .scroll(scroll.decide(scrollEvent, trackpadBlocking: context.blocking.blocksClicks))
         case .dockSwipe(let phase, let stream):
@@ -56,7 +60,7 @@ public struct TapFilters: Sendable {
             dock = [:]
         }
         gateIsOpen = gatedPortIsOn
-        settle(gatedBySystem ? TapContext(blocking: context.blocking, scrollMayBeUnderWay: false) : context)
+        settle(gatedBySystem ? TapContext(blocking: context.blocking, liftWindowIsOpen: context.liftWindowIsOpen, scrollMayBeUnderWay: false) : context)
         return change(since: gatedPortIsOn)
     }
 
@@ -66,7 +70,7 @@ public struct TapFilters: Sendable {
 
     private mutating func settle(_ context: TapContext) {
         let wanted =
-            context.blocking.wantsTap || click.isWithholding || scroll.isSuppressing
+            context.blocking.wantsTap || context.liftWindowIsOpen || click.isWithholding || scroll.isSuppressing
             || dock.values.contains { $0.isDropping }
         if wanted && !gateIsOpen {
             scroll.resume(scrollMayBeUnderWay: context.scrollMayBeUnderWay)

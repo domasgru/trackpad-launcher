@@ -69,6 +69,9 @@ import LauncherCore
         #expect(world.hardware.isBlockingClicks)
         world.tap(1)
         #expect(world.system.broughtToFront == [world.app("Arc")])
+        let press = PressID(button: 0, number: 1)
+        #expect(world.hardware.offer(.pointer(.press(press))) == .decided(.pointer(.drop)))
+        #expect(world.hardware.offer(.pointer(.release(press))) == .decided(.pointer(.drop)))
     }
 
     @Test(arguments: [
@@ -94,6 +97,30 @@ import LauncherCore
         #expect(world.system.broughtToFront.isEmpty)
         #expect(world.hardware.pulses.isEmpty)
         #expect(offer == .noTap)
+    }
+
+    @Test func grantingAccessMakesGesturesActiveAtOnceAndRevokingStopsThemAgain() {
+        let world = World(apps: ["Arc"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
+        #expect(world.launcher.activity == inactive(.tapToClick))
+
+        world.permissions.set(.accessibility, granted: true)
+        #expect(world.launcher.activity == .active)
+        #expect(Set(world.hardware.running.keys) == [Trackpad.macBook14.id])
+        #expect(world.hardware.isBlockingClicks)
+        world.tap(1)
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+        let press = PressID(button: 0, number: 1)
+        #expect(world.hardware.offer(.pointer(.press(press))) == .decided(.pointer(.drop)))
+
+        world.permissions.set(.accessibility, granted: false)
+        #expect(world.launcher.activity == inactive(.tapToClick))
+        #expect(world.hardware.running.isEmpty)
+        world.tap(1)
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+        #expect(world.hardware.offer(.pointer(.press(press))) == .noTap)
     }
 
     @Test func settingOnlyOnTheConnectedExternalTrackpadDeactivatesWithoutAccess() {

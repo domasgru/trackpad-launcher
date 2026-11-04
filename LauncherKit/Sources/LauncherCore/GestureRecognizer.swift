@@ -13,6 +13,12 @@ public struct Recognition: Equatable, Sendable {
 
     public let event: Event?
     public let blocking: Blocking
+    /// A contact other than the thumb lifted on this frame inside a thumb touch, and macOS could read it as a tap: it
+    /// had been down for less than `GestureRules.tapActionHoldLimit` since the recognizer saw it land, and no press was
+    /// seen while it was down. Each such lift opens (or restarts) the lift window: the first 0.5 s in which every tap
+    /// action is blocked. The recognizer never reads a clock; the adapter stamps the window's end. Whether the thumb is
+    /// still down changes nothing, and a thumb lifting alone never sets it.
+    public let opensLiftWindow: Bool
     /// This trackpad's half of click blocking: true for the whole of a swipe or a window swipe; otherwise a thumb this
     /// recognizer saw land less than 3 s ago is still anchored and another finger is down. Whether a press is really
     /// blocked also needs the click filter armed (access granted, gestures active), which the recognizer never knows.
@@ -32,9 +38,10 @@ public struct Recognition: Equatable, Sendable {
 
     public var swapStartsSeries: Bool? { if case .swap(let startsSeries)? = event { startsSeries } else { nil } }
 
-    public init(event: Event?, blocking: Blocking) {
+    public init(event: Event?, blocking: Blocking, opensLiftWindow: Bool = false) {
         self.event = event
         self.blocking = blocking
+        self.opensLiftWindow = opensLiftWindow
     }
 }
 
@@ -52,6 +59,7 @@ public enum Blocking: Int, Comparable, Sendable {
     /// thumb touch: the system's swipes are blocked.
     case dockSwipes
     /// Inside the blocking window, a confirmed swipe or window swipe, or a swap series: everything is blocked.
+    /// (A lift window, which can outlast the touch that opened it, is not a level: it is kept beside the level.)
     case clicks
 
     public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
@@ -88,6 +96,8 @@ public struct GestureRecognizer: Sendable {
     public mutating func step(_ frame: TouchFrame) -> Recognition {
         let frame = edgeContacts.fingers(in: frame)
         let isFirstFrame = previouslyDown == nil
+        let wasInThumbTouch = isInThumbTouch
+        let thumbBefore = state.knownThumb
         let before = previouslyDown ?? []
         let down = Dictionary(frame.touches.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let reused = Set(frame.touches.filter { $0.phase == .landing && before.contains($0.id) }.map(\.id))
@@ -102,6 +112,9 @@ public struct GestureRecognizer: Sendable {
             // landed now. Only an already-resting contact (`.down`) has an unknown landing time.
             book[touch.id] = Contact(
                 origin: touch.position, firstSeen: frame.time, isRealLanding: !isFirstFrame || touch.phase == .landing)
+        }
+        if frame.press != nil {
+            for id in down.keys { book[id]?.wasPressedWhileDown = true }
         }
 
         if let anchor = state.anchor,
@@ -223,7 +236,11 @@ public struct GestureRecognizer: Sendable {
         }
         isInThumbTouch = !down.isEmpty && (isInThumbTouch || stateLevel >= .possible)
         let thumbTouchLevel: Blocking = !isInThumbTouch ? .none : down.count >= 2 ? .dockSwipes : .possible
-        return Recognition(event: event, blocking: max(stateLevel, thumbTouchLevel))
+        let opensLiftWindow = wasInThumbTouch && departed.contains { id, contact in
+            id != thumbBefore && contact.isRealLanding && !contact.wasPressedWhileDown
+                && frame.time - contact.firstSeen < GestureRules.tapActionHoldLimit
+        }
+        return Recognition(event: event, blocking: max(stateLevel, thumbTouchLevel), opensLiftWindow: opensLiftWindow)
     }
 
     /// The model's answer to the window swipe start reported on the frame at `began`. true confirms it: from the next
@@ -319,6 +336,8 @@ public struct GestureRecognizer: Sendable {
         let firstSeen: FrameTime
         /// False for a contact already resting on the first frame: when it really landed is unknown.
         let isRealLanding: Bool
+        /// Any frame while it was down carried a press, delivered or withheld: macOS reads no tap from it.
+        var wasPressedWhileDown = false
     }
 
     /// Every contact down after the edge filter: the only source of landing points and times.
@@ -469,6 +488,11 @@ public struct GestureRecognizer: Sendable {
             case .swiping(let swipe): swipe.isConfirmed ? nil : swipe.thumb?.id
             default: anchor?.id
             }
+        }
+
+        /// The thumb whether or not it blocks: a confirmed swipe's thumb included.
+        var knownThumb: TouchID? {
+            if case .swiping(let swipe) = self { swipe.thumb?.id } else { thumb }
         }
     }
 

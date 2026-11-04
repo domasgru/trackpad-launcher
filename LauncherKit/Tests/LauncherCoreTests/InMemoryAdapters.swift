@@ -18,13 +18,16 @@ import LauncherCore
     /// Whether the gated port is on (false with no tap).
     private(set) var isGatedPortOn = false
     private var isPressPortOn = false
-    /// Each running trackpad's latest `Recognition.blocking`.
-    private var levels: [TrackpadID: Blocking] = [:]
+    /// What each running trackpad's frames have told the tap, as the real session keeps it.
+    private var states: [TrackpadID: TrackpadTapState] = [:]
+    /// The process's monotonic clock: never goes backwards, follows the latest frame time handed on any trackpad, and
+    /// moves on its own only through `advanceClock(by:)`.
+    private(set) var clock = Uptime(seconds: 0)
     /// Whether the system's current fingers scroll has events the tap was not sent and has not since seen end. Offered
     /// events update it whether sent or not, and `run` leaves it alone: it describes the system's stream, not the tap.
     private var scrollUnderWayUnseen = false
     /// false: the context is exact, built from what the fake withheld. true: built as the real tap builds it,
-    /// `TapContext.estimated(from:)`, so a row can show the divergence.
+    /// `TapContext.estimated(from:liftWindowIsOpen:)`, so a row can show the divergence.
     var usesEstimatedContext = false
     private enum Turn { case wake, notice }
     private var pendingTurns: [Turn] = []
@@ -66,7 +69,7 @@ import LauncherCore
                 ($0.id, GestureRecognizer(handMode: handMode, surface: $0.surface, slides: slides, swaps: swaps, travel: .linear))
             })
         deaf = []
-        levels = [:]
+        states = [:]
         buttonWasDown = false
         pressInProgress = nil
         pendingTurns = []
@@ -113,9 +116,9 @@ import LauncherCore
                 time: frame.time, touches: frame.touches,
                 press: TouchFrame.Press(holding: tap?.holding, buttonDown: buttonDown))
             guard let recognition = running[id]?.step(sampled) else { return }
-            let previous = levels[id] ?? .none
-            levels[id] = recognition.blocking
-            if previous.wantsTap != recognition.blocking.wantsTap { queue(.wake) }
+            clock = max(clock, Uptime(seconds: frame.time.seconds))
+            let now = clock
+            if states[id, default: TrackpadTapState()].take(recognition, now: { now }) { queue(.wake) }
             guard let event = recognition.event,
                   let answer = confirmation.deliver(TrackpadEvent(event, on: id), to: onEvent) else { continue }
             windowSwipeAnswers.append(answer)
@@ -124,6 +127,9 @@ import LauncherCore
             running[id]?.answerWindowSwipe(began: sampled.time, isWindowSwipe: answer)
         }
     }
+
+    /// Time passing with the pad empty and nothing arriving: no frame, no event.
+    func advanceClock(by duration: Duration) { clock = clock + duration }
 
     private func deliverPressEdge(buttonDown: Bool) {
         defer { buttonWasDown = buttonDown }
@@ -200,10 +206,12 @@ import LauncherCore
     }
 
     private func context() -> TapContext {
-        let merged = levels.values.max() ?? .none
+        let merged = TrackpadTapState.merged(states.values, at: clock)
         return usesEstimatedContext
-            ? TapContext.estimated(from: merged)
-            : TapContext(blocking: merged, scrollMayBeUnderWay: scrollUnderWayUnseen)
+            ? TapContext.estimated(from: merged.blocking, liftWindowIsOpen: merged.liftWindowIsOpen)
+            : TapContext(
+                blocking: merged.blocking, liftWindowIsOpen: merged.liftWindowIsOpen,
+                scrollMayBeUnderWay: scrollUnderWayUnseen)
     }
 
     private func apply(_ change: GateChange?) {

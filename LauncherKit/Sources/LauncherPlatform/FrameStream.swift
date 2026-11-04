@@ -26,7 +26,9 @@ final class DeviceSession: Sendable {
     /// This device's cursor acceleration curves, read once when the session starts.
     private let pointerCurves: [PointerCurve.Point]
     /// Writer: this device's frame callback. Reader: the click tap's thread.
-    private let level = Mutex(Blocking.none)
+    private let state = Mutex(TrackpadTapState())
+    /// The process's clock: read per frame only while a lift window is pending, and by the click tap once per event.
+    private let clock: @Sendable () -> Uptime
     /// Installed by the same `run`, if any.
     private let tap: (any TapLink)?
     /// Writer: the main actor, through a reply. Reader: this device's frame callback, which hands it to the recognizer
@@ -40,13 +42,14 @@ final class DeviceSession: Sendable {
     /// event.
     init(
         trackpad: TrackpadID, recognizer: GestureRecognizer, pointerCurves: [PointerCurve.Point],
-        tap: (any TapLink)?,
+        tap: (any TapLink)?, clock: @escaping @Sendable () -> Uptime,
         deliver: @escaping @Sendable (TrackpadEvent, _ reply: (@Sendable (Bool) -> Void)?) -> Void
     ) {
         self.trackpad = trackpad
         self.recognizer = Mutex(recognizer)
         self.pointerCurves = pointerCurves
         self.tap = tap
+        self.clock = clock
         self.deliver = deliver
     }
 
@@ -63,10 +66,7 @@ final class DeviceSession: Sendable {
             if recognition.beginsSlide { $0.travel = CursorTravel.travel(curves: pointerCurves) }
             return recognition
         }
-        let flipped = level.withLock { was in
-            defer { was = recognition.blocking }
-            return was.wantsTap != recognition.blocking.wantsTap
-        }
+        let flipped = state.withLock { $0.take(recognition, now: clock) }
         if flipped { tap?.wake() }
         if let event = recognition.event {
             var reply: (@Sendable (Bool) -> Void)?
@@ -83,7 +83,13 @@ final class DeviceSession: Sendable {
     var holding: ClickFilter.Holding? { tap?.holding }
 
     /// Click tap thread.
-    var blocking: Blocking { level.withLock { $0 } }
+    var blocking: Blocking { state.withLock { $0.level } }
+
+    /// Click tap thread.
+    func liftWindowIsOpen(at now: Uptime) -> Bool { state.withLock { $0.liftWindowIsOpen(at: now) } }
+
+    /// Click tap thread.
+    var tapState: TrackpadTapState { state.withLock { $0 } }
 
     var blocksClicks: Bool { blocking.blocksClicks }
 }
@@ -105,7 +111,8 @@ func anyMouseButtonDown() -> Bool {
     [CGMouseButton.left, .right, .center].contains { CGEventSource.buttonState(.combinedSessionState, button: $0) }
 }
 
-/// Tap thread: the highest level of any running trackpad. Copies the sessions out first: never two locks at once.
-func mergedBlocking() -> Blocking {
-    Array(sessions.withLock { $0.values }).map(\.blocking).max() ?? .none
+/// Tap thread: the highest level of any running trackpad and whether any lift window is open at `now`. Copies the
+/// sessions out first: never two locks at once.
+func mergedTapState(at now: Uptime) -> (blocking: Blocking, liftWindowIsOpen: Bool) {
+    TrackpadTapState.merged(Array(sessions.withLock { $0.values }).map(\.tapState), at: now)
 }

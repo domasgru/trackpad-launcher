@@ -113,6 +113,7 @@ import LauncherCore
             #expect(world.hardware.offer(.scroll(event)) == .decided(.scroll(.drop)))
             #expect(world.hardware.isGatedPortOn)
         }
+        world.play(swipe.lift().liftThumb().wait(.milliseconds(500)))
         #expect(world.hardware.offer(.scroll(.momentum(.ended))) == .decided(.scroll(.drop)))
         #expect(!world.hardware.isGatedPortOn)
         #expect(world.hardware.offer(.scroll(.fingers(.mayBegin))) == .notSent)
@@ -132,6 +133,7 @@ import LauncherCore
         for event: ScrollEvent in [.fingers(.ended), .momentum(.began), .momentum(.ended)] {
             #expect(world.hardware.offer(.scroll(event)) == .decided(.scroll(.passStill)))
         }
+        world.play(slid.lift().liftThumb().wait(.milliseconds(500)))
         #expect(!world.hardware.isGatedPortOn)
     }
 
@@ -179,6 +181,7 @@ import LauncherCore
         #expect(world.hardware.offer(.dockSwipe(.changed, .gesture)) == .decided(.dockSwipe(.drop)))
         #expect(world.hardware.offer(.dockSwipe(.ended, .gesture)) == .decided(.dockSwipe(.drop)))
         #expect(world.hardware.isGatedPortOn)
+        world.play(hand.lift().liftThumb().wait(.milliseconds(500)))
         #expect(world.hardware.offer(.dockSwipe(.ended, .dockControl)) == .decided(.dockSwipe(.drop)))
         #expect(!world.hardware.isGatedPortOn)
 
@@ -196,7 +199,7 @@ import LauncherCore
         #expect(world.hardware.scroll(.fingers(.mayBegin)) == .pass)
         #expect(world.hardware.scroll(.fingers(.began)) == .pass)
 
-        let lifted = late.lift().liftThumb()
+        let lifted = late.lift().liftThumb().wait(.milliseconds(500))
         world.play(lifted)
         #expect(!world.hardware.isGatedPortOn)
 
@@ -215,7 +218,7 @@ import LauncherCore
         #expect(world.hardware.isGatedPortOn)
         #expect(world.hardware.offer(.scroll(.fingers(.ended))) == .decided(.scroll(.passStill)))
 
-        let lifted = thumbUnder.lift().liftThumb()
+        let lifted = thumbUnder.lift().liftThumb().wait(.milliseconds(500))
         world.play(lifted)
         #expect(world.hardware.offer(.scroll(.momentum(.ended))) == .decided(.scroll(.passStill)))
         #expect(!world.hardware.isGatedPortOn)
@@ -232,7 +235,7 @@ import LauncherCore
         #expect(world.hardware.scroll(.fingers(.began)) == .drop)
         #expect(world.hardware.scroll(.fingers(.ended)) == .drop)
 
-        let lifted = swipe.lift().liftThumb()
+        let lifted = swipe.lift().liftThumb().wait(.milliseconds(500))
         world.play(lifted)
         #expect(world.hardware.isGatedPortOn)
 
@@ -296,8 +299,10 @@ import LauncherCore
         world.play(slid)
         offers.append(world.hardware.offer(.dockSwipe(.began, .gesture)))
         offers.append(world.hardware.offer(.dockSwipe(.changed, .gesture)))
-        world.play(slid.lift().liftThumb())
+        let lifted = slid.lift().liftThumb()
+        world.play(lifted)
         #expect(world.hardware.isGatedPortOn)
+        world.play(lifted.wait(.milliseconds(500)))
         offers.append(world.hardware.offer(.dockSwipe(.ended, .gesture)))
         #expect(offers == Array(repeating: .decided(.dockSwipe(.drop)), count: 4))
         #expect(!world.hardware.isGatedPortOn)
