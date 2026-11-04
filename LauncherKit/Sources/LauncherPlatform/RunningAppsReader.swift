@@ -26,11 +26,10 @@ import LauncherCore
     }
 
     private func fallbackApps() -> [AppEntry] {
-        let own = ProcessInfo.processInfo.processIdentifier
         var entries: [Int32: AppEntry] = [:]
         var running: [(pid: Int32, launched: Date?)] = []
         for app in NSWorkspace.shared.runningApplications
-        where app.activationPolicy == .regular && app.processIdentifier != own {
+        where app.activationPolicy == .regular {
             guard let entry = RunningApp.entry(for: app) else { continue }
             entries[app.processIdentifier] = entry
             running.append((app.processIdentifier, app.launchDate))
@@ -38,10 +37,13 @@ import LauncherCore
         return FallbackOrder.pids(running: running, recency: tracker?.recency ?? []).compactMap { entries[$0] }
     }
 
-    /// Never this process. While it is active (its settings window in front), the app that was in front before it: the
-    /// first ⌘-Tab app, an order this process never enters (LaunchServices drops its pid; the tracker never notes it). Pure.
+    /// The active app. Trackpad Launcher is the frontmost app only while ⌘-Tab lists it (its Dock icon shows), as its
+    /// listed entry. Active without it (the move dialog, the Debug animation tuner, a closing settings window), it stands
+    /// for the app that was in front before it, the first ⌘-Tab app. Pure.
     static func frontmost(activePID: pid_t?, activeEntry: AppEntry?, ownPID: pid_t, apps: [AppEntry]) -> AppEntry? {
         guard let activePID else { return nil }
-        return activePID == ownPID ? apps.first : activeEntry
+        guard activePID == ownPID else { return activeEntry }
+        // LaunchServices lists the active app first, so a spelling mismatch still lands on Trackpad Launcher's own entry.
+        return apps.first { $0.url == activeEntry?.url } ?? apps.first
     }
 }

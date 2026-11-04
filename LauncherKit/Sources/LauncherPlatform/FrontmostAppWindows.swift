@@ -45,10 +45,11 @@ import LauncherCore
     func read() -> FrontmostWindows {
         listed = [:]
         isUnanswering = false
-        guard let running = NSWorkspace.shared.frontmostApplication,
-            running.processIdentifier != ProcessInfo.processInfo.processIdentifier,
-            let entry = RunningApp.entry(for: running)
+        guard let running = NSWorkspace.shared.frontmostApplication, let entry = RunningApp.entry(for: running)
         else { return .noApp }
+        if running.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            return .app(entry, visible: [], minimised: [])
+        }
         let pid = running.processIdentifier
         var value: CFTypeRef?
         let windowsError = AXUIElementCopyAttributeValue(

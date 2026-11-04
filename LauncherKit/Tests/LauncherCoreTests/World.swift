@@ -94,6 +94,11 @@ final class LaunchRecord: Sendable {
             scanner: scanner, store: store, startAtLogin: Self.startAtLogin(item: loginItem, suiteName: suiteName))
         install("Finder", in: coreServices)
         for name in apps { install(name) }
+        system.onBringToFront = { [unowned self] app in
+            guard app.bundleID == Self.bundleID(Self.trackpadLauncherName) else { return }
+            listFirst(app)
+            launcher.openedByHand()
+        }
     }
 
     private static func makeLauncher(
@@ -262,9 +267,37 @@ extension World {
 
     /// The previous swap's activation has landed: `name` is the frontmost app and the first of the running apps.
     func activate(_ name: String) {
-        let entry = app(name)
+        listFirst(app(name))
+    }
+
+    private func listFirst(_ entry: AppEntry) {
         system.frontmost = entry
         system.running = [entry] + system.running.filter { $0.url != entry.url }
+    }
+
+    private static let trackpadLauncherName = "Trackpad Launcher"
+
+    /// The installed Trackpad Launcher bundle, installed on first use.
+    var trackpadLauncher: AppEntry {
+        let bundle = applications.appending(path: "\(Self.trackpadLauncherName).app")
+        if !FileManager.default.fileExists(atPath: bundle.path) { install(Self.trackpadLauncherName) }
+        return app(Self.trackpadLauncherName)
+    }
+
+    /// The user opens Trackpad Launcher by hand: its settings window opens, and LaunchServices lists it first and makes
+    /// it the active app while its Dock icon shows.
+    func openSettings() {
+        let own = trackpadLauncher
+        launcher.openedByHand()
+        listFirst(own)
+    }
+
+    /// The settings window closes: Trackpad Launcher leaves ⌘-Tab, and if it was in front the next app is.
+    func closeSettings() {
+        launcher.closeWindow()
+        let own = trackpadLauncher
+        system.running.removeAll { $0.url == own.url }
+        if system.frontmost?.url == own.url { system.frontmost = system.running.first }
     }
 
     /// Two fingers rest 150 ms, then the thumb taps `taps` times in the anchor corner, then the fingers lift unless

@@ -270,7 +270,13 @@ import LauncherCore
     /// Runs inside `playLaunchAnimation(for:)` so a test can observe the other effects at that moment.
     var onPlayLaunchAnimation: (() -> Void)?
 
-    func bringToFront(_ app: AppEntry) { broughtToFront.append(app) }
+    /// Runs inside `bringToFront`, after recording, as the system acts on the app coming forward.
+    var onBringToFront: ((AppEntry) -> Void)?
+
+    func bringToFront(_ app: AppEntry) {
+        broughtToFront.append(app)
+        onBringToFront?(app)
+    }
 
     func runningApps() -> RunningApps { RunningApps(frontmost: frontmost, apps: running) }
 

@@ -101,9 +101,7 @@ final class SwitcherPresenter {
 
     /// A Dock app's location (regular activation policy and a bundle), spelled as the running-apps read spells it.
     private static func dockLocation(_ app: NSRunningApplication) -> URL? {
-        guard app.activationPolicy == .regular, app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
-            let bundleURL = app.bundleURL
-        else { return nil }
+        guard app.activationPolicy == .regular, let bundleURL = app.bundleURL else { return nil }
         return AppEntry.location(ofBundleAtPath: bundleURL.path)
     }
 

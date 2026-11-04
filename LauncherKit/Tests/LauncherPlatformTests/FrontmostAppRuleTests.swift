@@ -15,11 +15,35 @@ import Testing
     private static let mail = entry("Mail")
     private static let menuBarApp = entry("MenuBarApp")
 
-    @Test func thisProcessActiveHoldsTheFirstCommandTabApp() {
-        let frontmost = RunningAppsReader.frontmost(
-            activePID: Self.own, activeEntry: Self.entry("TrackpadLauncher"), ownPID: Self.own,
-            apps: [Self.safari, Self.mail])
-        #expect(frontmost == Self.safari)
+    private static let trackpadLauncher = entry("TrackpadLauncher")
+
+    private func frontmost(listed apps: [AppEntry], activeEntry: AppEntry? = trackpadLauncher) -> AppEntry? {
+        RunningAppsReader.frontmost(activePID: Self.own, activeEntry: activeEntry, ownPID: Self.own, apps: apps)
+    }
+
+    @Test func thisProcessActiveAndListedIsTheFrontmostAppWhereverTheListHasIt() {
+        let launcher = Self.trackpadLauncher
+        #expect(frontmost(listed: [launcher, Self.safari, Self.mail]) == launcher)
+        #expect(frontmost(listed: [Self.safari, launcher, Self.mail]) == launcher)
+    }
+
+    @Test func thisProcessActiveAndUnlistedStandsForTheFirstCommandTabApp() {
+        #expect(frontmost(listed: [Self.safari, Self.mail]) == Self.safari)
+    }
+
+    @Test func thisProcessListedUnderAnotherSpellingIsTheListedEntry() {
+        let listed = AppEntry(
+            bundleID: Self.trackpadLauncher.bundleID, name: "TrackpadLauncher",
+            url: URL(fileURLWithPath: "/Applications/./TrackpadLauncher.app/"))
+        let spelled = AppEntry(
+            bundleID: Self.trackpadLauncher.bundleID, name: "TrackpadLauncher",
+            url: URL(fileURLWithPath: "/private/Applications/TrackpadLauncher.app"))
+        #expect(frontmost(listed: [listed, Self.safari], activeEntry: spelled) == listed)
+    }
+
+    @Test func thisProcessActiveWithAnUnreadableEntryIsTheFirstListedAppEvenWhenThatIsTrackpadLauncher() {
+        let launcher = Self.trackpadLauncher
+        #expect(frontmost(listed: [launcher, Self.safari], activeEntry: nil) == launcher)
     }
 
     @Test func thisProcessActiveWithNoAppsHoldsNone() {

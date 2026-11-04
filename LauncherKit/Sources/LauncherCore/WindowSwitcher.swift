@@ -24,11 +24,12 @@ public struct AppWindow: Equatable, Sendable, Identifiable {
 
 /// One read of the frontmost app's windows.
 public enum FrontmostWindows: Equatable, Sendable {
-    /// There is no active app, or it is Trackpad Launcher itself.
+    /// There is no active app.
     case noApp
     /// `visible`: its windows on the current Space, front to back; panels, palettes, sheets and other helpers left
     /// out. `minimised`: its minimised windows, in the order the app lists them. Both empty when it has none, when
-    /// Accessibility is missing, or when the app did not answer in time.
+    /// Accessibility is missing, when the app did not answer in time, or when it is Trackpad Launcher, whose one window is
+    /// never listed.
     case app(AppEntry, visible: [AppWindow], minimised: [AppWindow])
 }
 
