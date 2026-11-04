@@ -56,7 +56,10 @@ import LauncherCore
     /// How many times `run` was called.
     private(set) var runCount = 0
 
-    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, slides: Set<SlideKind>, swaps: Bool) {
+    func run(
+        _ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>,
+        swaps: Bool
+    ) {
         runCount += 1
         running = Dictionary(
             uniqueKeysWithValues: trackpads.map {
@@ -69,7 +72,7 @@ import LauncherCore
         pendingTurns = []
         isGatedPortOn = false
         if blockClicks && !trackpads.isEmpty {
-            tap = TapFilters()
+            tap = TapFilters(blocksTapClicks: blockTapClicks)
             isPressPortOn = true
             queue(.wake)
         } else {
@@ -251,7 +254,7 @@ import LauncherCore
     /// A notification for a write that changed nothing this app reads.
     func touch() { onChange?() }
 
-    func set(_ setting: ConflictingSetting, rawValue: Int?, for kind: TrackpadKind) {
+    func set(_ setting: TapBoundSetting, rawValue: Int?, for kind: TrackpadKind) {
         values[kind, default: [:]][setting] = rawValue
         onChange?()
     }

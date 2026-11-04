@@ -4,7 +4,7 @@ import SwiftUI
 
 /// One 326 pt column, 16 pt inside the window, of rounded groups 10 pt apart: the update card, while a newer version is
 /// known; the five gesture rows and the Animate app
-/// launch switch; the switcher section; the thumb picker; then, while any applies, the trackpad settings notice, the
+/// launch switch; the switcher section; the thumb picker; then, while any applies, the no trackpad notice or the tap-bound settings notice, the
 /// Accessibility hint and the screen recording hint, one group each. Rows are at least 42 pt tall, with a hairline
 /// between them. The illustrations are 45 × 28 pt. The guide naming the two marks sits over the first illustration in
 /// right-hand mode, where its arrows meet the thumb. *Quit Trackpad Launcher* and *Close* end it, aligned right.
@@ -36,12 +36,17 @@ struct SettingsView: View {
                 ThumbPicker(launcher: launcher)
                     .padding(.vertical, 8)
             }
-            if case .inactive(let cause) = launcher.activity {
-                SettingsNotice(
-                    message: Copy.inactiveNotice(for: cause), button: Copy.trackpadSettingsButton,
-                    open: { actions.openSettings(.trackpad) })
+            if let notice = launcher.inactiveNotice {
+                switch notice.button {
+                case .openAccessibilitySettings:
+                    SettingsNotice(
+                        message: notice.message, button: Copy.accessibilityButton,
+                        open: { actions.openSettings(.accessibility) })
+                case nil:
+                    SettingsNotice(message: notice.message)
+                }
             }
-            if !launcher.isAccessibilityGranted {
+            if launcher.showsAccessibilityHint {
                 SettingsNotice(
                     message: Copy.accessibilityHint, button: Copy.accessibilityButton,
                     open: { actions.openSettings(.accessibility) })
@@ -264,8 +269,14 @@ struct ThumbPicker: NSViewRepresentable {
 /// recording hint share it.
 struct SettingsNotice: View {
     let message: String
-    let button: String
+    let button: String?
     let open: () -> Void
+
+    init(message: String, button: String? = nil, open: @escaping () -> Void = {}) {
+        self.message = message
+        self.button = button
+        self.open = open
+    }
 
     var body: some View {
         FormGroup {
@@ -275,9 +286,11 @@ struct SettingsNotice: View {
                     .lineSpacing(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
-                Button(button, action: open)
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.roundedRectangle(radius: 6))
+                if let button {
+                    Button(button, action: open)
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.roundedRectangle(radius: 6))
+                }
             }
             .padding(.vertical, 8)
             .frame(minHeight: 42)

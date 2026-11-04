@@ -5,9 +5,6 @@ public enum Copy {
     public static let accessibilityHint = "Allow Accessibility access to make trackpad gestures work reliably."
     public static let accessibilityButton = "Open Accessibility Settings…"
 
-    /// The trackpad settings notice's button.
-    public static let trackpadSettingsButton = "Open Trackpad Settings…"
-
     /// The red button that ends the settings window, beside *Close*.
     public static let quitButton = "Quit Trackpad Launcher"
 
@@ -51,10 +48,11 @@ public enum Copy {
         switch cause {
         case .noTrackpad:
             "No trackpad connected. Connect a trackpad to use gestures."
-        case .settings(let conflicting):
-            "Gestures are off while these trackpad settings are on: "
-                + conflicting.settings.map(\.noticeName).formatted(.list(type: .and).locale(Locale(identifier: "en")))
-                + "."
+        case .settingsNeedAccessibility(let tapBound):
+            "Gestures are off while "
+                + tapBound.settings.map(\.noticeName).formatted(.list(type: .and).locale(Locale(identifier: "en")))
+                + (tapBound.settings.count == 1 ? " is on" : " are on")
+                + ", until Trackpad Launcher has Accessibility access."
         }
     }
 }

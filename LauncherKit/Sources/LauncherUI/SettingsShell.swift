@@ -41,8 +41,8 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
 
     /// Everything that decides the window's height.
     private struct Fit: Equatable {
-        let activity: GestureActivity
-        let isAccessibilityGranted: Bool
+        let inactiveNotice: InactiveNotice?
+        let showsAccessibilityHint: Bool
         let isSwipeOn: Bool
         let screenRecordingHint: ScreenRecordingHint?
         let card: UpdateCard.Layout?
@@ -79,7 +79,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                 var last: Fit?
                 for await fit in Observations({
                     Fit(
-                        activity: launcher.activity, isAccessibilityGranted: launcher.isAccessibilityGranted,
+                        inactiveNotice: launcher.inactiveNotice, showsAccessibilityHint: launcher.showsAccessibilityHint,
                         isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint,
                         card: updater?.card?.layout)
                 }) {

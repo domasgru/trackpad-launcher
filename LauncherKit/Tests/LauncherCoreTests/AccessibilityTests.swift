@@ -2,7 +2,7 @@ import Testing
 import LauncherCore
 
 @MainActor @Suite struct AccessibilityTests {
-    @Test func accessHintFollowsTheGrantLiveAndNeverChangesActivity() {
+    @Test func accessHintFollowsTheGrantLiveAndNeverChangesActivityWhileNoTapBoundSettingIsOn() {
         let world = World()
         world.launcher.start()
         #expect(!world.launcher.isAccessibilityGranted)

@@ -37,7 +37,11 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// The tap needs Accessibility. If the system refuses it, nothing is filtered, presses are sampled as before,
     /// and taps behave exactly as without access. [] = nothing runs. `slides`: the slide kinds each fresh recognizer
     /// recognises; `swaps`: whether it recognises swaps. Replacing the recognizers ends any swipe in progress.
-    func run(_ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, slides: Set<SlideKind>, swaps: Bool)
+    /// `blockTapClicks`: presses that arrive while a lift window is open are blocked; only meaningful together with
+    /// `blockClicks`.
+    func run(
+        _ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>,
+        swaps: Bool)
     /// One pulse of that kind on that trackpad. No-op if it is gone.
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID)
     /// Only while `onEvent` is handling a `.windowSwipe(.began)` from `trackpad`: makes that slide a window swipe.

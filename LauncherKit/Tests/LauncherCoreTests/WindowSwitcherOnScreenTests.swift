@@ -300,7 +300,7 @@ import LauncherCore
     }
 
     @Test func whileGesturesAreInactiveAWindowSwipeShowsNothingEvenIfOneWasInFlight() {
-        let world = World.windowWorld(visible: ["Docs", "Mail"])
+        let world = World.windowWorld(visible: ["Docs", "Mail"], accessGranted: false)
         world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
 
         world.windowSwipe(3.5, 12, lift: false)

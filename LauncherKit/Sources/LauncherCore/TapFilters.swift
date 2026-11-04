@@ -6,7 +6,10 @@ import Foundation
 /// flight, so a press, scroll gesture or Dock swipe is never started in the app's view and then cut short, or the
 /// reverse. The one exception is a system disable not yet noticed. A fresh value is closed.
 public struct TapFilters: Sendable {
-    public init() {}
+    /// Fixed for the life of the tap: whether presses that arrive while a lift window is open are blocked.
+    public let blocksTapClicks: Bool
+
+    public init(blocksTapClicks: Bool = false) { self.blocksTapClicks = blocksTapClicks }
 
     /// Frame threads, through the click tap's lock: the summary `TouchFrame.Press(holding:buttonDown:)` reads.
     public var holding: ClickFilter.Holding { click.holding }

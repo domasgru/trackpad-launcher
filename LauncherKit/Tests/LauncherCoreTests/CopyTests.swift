@@ -12,10 +12,6 @@ import LauncherCore
         #expect(Copy.screenRecordingButton == "Open Screen Recording Settings…")
     }
 
-    @Test func theTrackpadSettingsNoticesButtonNamesThePane() {
-        #expect(Copy.trackpadSettingsButton == "Open Trackpad Settings…")
-    }
-
     @Test func theWindowSwitcherNamesItsBadgeVerbatim() {
         #expect(Copy.minimisedBadge == "Minimised")
     }
@@ -33,12 +29,15 @@ import LauncherCore
 
     @Test(arguments: [
         (cause: InactiveCause.noTrackpad, notice: "No trackpad connected. Connect a trackpad to use gestures."),
-        (cause: .settings(ConflictingSettings([.tapToClick])!),
-         notice: "Gestures are off while these trackpad settings are on: Tap to click."),
-        (cause: .settings(ConflictingSettings([.tapToClick, .lookUpTapWithThreeFingers])!),
-         notice: "Gestures are off while these trackpad settings are on: Tap to click and Look up: Tap with three fingers."),
+        (cause: .settingsNeedAccessibility(TapBoundSettings([.tapToClick])!),
+         notice: "Gestures are off while Tap to click is on, until Trackpad Launcher has Accessibility access."),
+        (cause: .settingsNeedAccessibility(TapBoundSettings([.lookUpTapWithThreeFingers])!),
+         notice: "Gestures are off while Look up: Tap with three fingers is on, until Trackpad Launcher has Accessibility access."),
+        (cause: .settingsNeedAccessibility(TapBoundSettings([.tapToClick, .lookUpTapWithThreeFingers])!),
+         notice: "Gestures are off while Tap to click and Look up: Tap with three fingers are on, until Trackpad Launcher has Accessibility access."),
     ])
     func theInactiveNoticeNamesTheCauseInTheSettingsOwnWords(cause: InactiveCause, notice: String) {
         #expect(Copy.inactiveNotice(for: cause) == notice)
+        #expect(!Copy.inactiveNotice(for: cause).hasPrefix("Gestures are off while these trackpad settings are on"))
     }
 }

@@ -12,7 +12,7 @@ import Synchronization
 /// thread retains the ClickTap, so no callback outlives the object behind its `userInfo`.
 final class ClickTap: Sendable {
     /// Writer: the tap thread. Reader: frame threads (`holding`).
-    private let filters = Mutex(TapFilters())
+    private let filters: Mutex<TapFilters>
     /// Writer: main (install, remove). The tap thread switches `gated` and re-enables `presses`, under this lock.
     private let ports = Mutex<Unchecked<(presses: CFMachPort, gated: CFMachPort)>?>(nil)
     /// Writer: the tap thread, once, before its first turn. Readers: main (remove), frame threads (`wake`).
@@ -21,11 +21,11 @@ final class ClickTap: Sendable {
     /// honoured by the first `follow()`. Writer: main, once in `install`, before any frame thread can see the tap.
     private let wakeUp = Mutex<Unchecked<CFRunLoopSource>?>(nil)
 
-    private init() {}
+    private init(blocksTapClicks: Bool) { filters = Mutex(TapFilters(blocksTapClicks: blocksTapClicks)) }
 
     /// nil when the system refuses either tap (no Accessibility).
-    @MainActor static func install() -> ClickTap? {
-        let tap = ClickTap()
+    @MainActor static func install(blocksTapClicks: Bool) -> ClickTap? {
+        let tap = ClickTap(blocksTapClicks: blocksTapClicks)
         let userInfo = Unmanaged.passUnretained(tap).toOpaque()
         guard
             let presses = CGEvent.tapCreate(
