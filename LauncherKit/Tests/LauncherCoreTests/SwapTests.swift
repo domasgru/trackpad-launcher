@@ -14,7 +14,9 @@ import LauncherCore
 
     @Test func theThumbLiftingSwapsToThePreviousAppWithTheHapticAndNoAnimationAndLeavesTheWindowOpen() {
         let world = World.switcherWorld()
-        world.launcher.openedByHand()
+        world.openSettings()
+        world.activate("Mail")
+        world.activate("Safari")
         let base = rest()
 
         world.play(base.thumb(atMM: (10, 10)).wait(.milliseconds(50)))

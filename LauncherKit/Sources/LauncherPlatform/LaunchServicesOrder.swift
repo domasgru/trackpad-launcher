@@ -31,17 +31,21 @@ struct LaunchServicesOrder: Sendable {
         self.copyInformation = copyInformation
     }
 
-    /// Every foreground app other than this process, frontmost first. The array holds nothing else today; the
-    /// filters guard against a future macOS.
+    /// Every foreground app, frontmost first: this process too, exactly while its Dock icon shows.
     func apps() -> [AppEntry] {
         guard let serials = copyOrder(Self.defaultSession)?.takeRetainedValue() as? [CFTypeRef] else { return [] }
-        let ownPID = ProcessInfo.processInfo.processIdentifier
-        return serials.compactMap { serial in
-            guard
-                let information = copyInformation(Self.currentConnection, serial, Self.keys as CFArray)?
-                    .takeRetainedValue() as? [String: Any],
-                information["ApplicationType"] as? String == "Foreground",
-                let pid = (information["pid"] as? NSNumber)?.int32Value, pid != ownPID,
+        return Self.entries(
+            serials.compactMap {
+                copyInformation(Self.currentConnection, $0, Self.keys as CFArray)?.takeRetainedValue()
+                    as? [String: Any]
+            })
+    }
+
+    /// The parse of LaunchServices' answers, in their order: an entry for every `Foreground` app with a bundle path and
+    /// identifier, whatever its pid.
+    static func entries(_ informations: [[String: Any]]) -> [AppEntry] {
+        informations.compactMap { information in
+            guard information["ApplicationType"] as? String == "Foreground",
                 let path = information["LSBundlePath"] as? String,
                 let identifier = information["CFBundleIdentifier"] as? String
             else { return nil }

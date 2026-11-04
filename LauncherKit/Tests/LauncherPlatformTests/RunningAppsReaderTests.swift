@@ -10,7 +10,7 @@ import Testing
 
     nonisolated private static var dockAppCount: Int {
         NSWorkspace.shared.runningApplications.filter {
-            $0.activationPolicy == .regular && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+            $0.activationPolicy == .regular
                 && $0.bundleIdentifier != nil && $0.bundleURL != nil
         }.count
     }
@@ -23,7 +23,7 @@ import Testing
     /// The Dock's apps as the workspace lists them: regular activation policy, not this process.
     private static func dockApps() -> [NSRunningApplication] {
         NSWorkspace.shared.runningApplications.filter {
-            $0.activationPolicy == .regular && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+            $0.activationPolicy == .regular
                 && $0.bundleIdentifier != nil && $0.bundleURL != nil
         }
     }
@@ -51,9 +51,7 @@ import Testing
             let entry = try #require(read.apps.first { Self.identity($0) == Self.identity(app) })
             #expect(entry.name == app.localizedName)
         }
-        if let active = NSWorkspace.shared.frontmostApplication, active.activationPolicy == .regular,
-            active.processIdentifier != ProcessInfo.processInfo.processIdentifier
-        {
+        if let active = NSWorkspace.shared.frontmostApplication, active.activationPolicy == .regular {
             #expect(read.frontmost.map(Self.identity) == Self.identity(active))
             #expect(read.apps.first.map(Self.identity) == Self.identity(active))
         }
@@ -65,7 +63,6 @@ import Testing
         let reader = RunningAppsReader(order: withOrder ? LaunchServicesOrder() : nil)
         let read = reader.read()
         guard let active = NSWorkspace.shared.frontmostApplication, active.activationPolicy == .regular,
-            active.processIdentifier != ProcessInfo.processInfo.processIdentifier,
             active.bundleIdentifier != nil, active.bundleURL != nil
         else { return }
         let frontmost = try #require(read.frontmost)
@@ -77,7 +74,7 @@ import Testing
     @Test func withoutTheOrderTheActiveAppIsStillRead() {
         let read = RunningAppsReader(order: nil).read()
         if let active = NSWorkspace.shared.frontmostApplication, active.bundleURL != nil,
-            active.bundleIdentifier != nil, active.processIdentifier != ProcessInfo.processInfo.processIdentifier
+            active.bundleIdentifier != nil
         {
             #expect(read.frontmost.map(Self.identity) == Self.identity(active))
         }
@@ -100,9 +97,7 @@ import Testing
         #expect(reader.isTrackingActivations)
         let first = reader.read()
         #expect(Set(first.apps.map(Self.identity)) == Set(Self.dockApps().map(Self.identity)))
-        if let active = NSWorkspace.shared.frontmostApplication, active.activationPolicy == .regular,
-            active.processIdentifier != ProcessInfo.processInfo.processIdentifier
-        {
+        if let active = NSWorkspace.shared.frontmostApplication, active.activationPolicy == .regular {
             #expect(first.apps.first.map(Self.identity) == Self.identity(active))
         }
 
@@ -116,6 +111,51 @@ import Testing
         try activate(nowLast)
         let third = reader.read().apps.map(Self.identity)
         #expect(third.prefix(2) == [Self.identity(nowLast), Self.identity(lastEntry)])
+    }
+
+    @Test(.enabled(if: dockAppCount >= 1, "No Dock app is running"))
+    func theTrackerOrdersThisProcessAmongTheAppsItNotes() throws {
+        let tracker = ActivationTracker()
+        let other = try #require(Self.dockApps().first)
+        for app in [NSRunningApplication.current, other] {
+            NSWorkspace.shared.notificationCenter.post(
+                name: NSWorkspace.didActivateApplicationNotification, object: NSWorkspace.shared,
+                userInfo: [NSWorkspace.applicationUserInfoKey: app])
+        }
+        #expect(
+            tracker.recency.prefix(2) == [other.processIdentifier, NSRunningApplication.current.processIdentifier])
+    }
+
+    @Test func theParseKeepsEveryForegroundAppWithABundleThisProcessIncludedWhileItsIconShows() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "tl-ls-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let own = ProcessInfo.processInfo.processIdentifier
+        let ownBundle = folder.appending(path: "Own.app").path
+
+        func answer(_ name: String, pid: Int32, type: String = "Foreground", path: String? = nil) -> [String: Any] {
+            var answer: [String: Any] = [
+                "pid": NSNumber(value: pid), "ApplicationType": type, "CFBundleIdentifier": "com.test.\(name)",
+                "LSDisplayName": name,
+            ]
+            answer["LSBundlePath"] = path ?? "/Applications/\(name).app"
+            return answer
+        }
+        var noPath = answer("Ghost", pid: 300)
+        noPath["LSBundlePath"] = nil
+
+        let whileShowing = LaunchServicesOrder.entries([
+            answer("Safari", pid: 200), answer("Own", pid: own, path: ownBundle),
+            answer("Menu", pid: 250, type: "UIElement"), answer("Mail", pid: 260), noPath,
+        ])
+        #expect(whileShowing.map(\.name) == ["Safari", "Own", "Mail"])
+        #expect(whileShowing[1].url == AppEntry.location(ofBundleAtPath: ownBundle))
+
+        let afterClosing = LaunchServicesOrder.entries([
+            answer("Safari", pid: 200), answer("Own", pid: own, type: "UIElement", path: ownBundle),
+            answer("Mail", pid: 260),
+        ])
+        #expect(afterClosing.map(\.name) == ["Safari", "Mail"])
     }
 
     private func activate(_ entry: AppEntry) throws {

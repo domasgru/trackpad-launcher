@@ -22,8 +22,6 @@ import AppKit
     }
 
     private func note(_ app: NSRunningApplication) {
-        guard app.activationPolicy == .regular, app.processIdentifier != ProcessInfo.processInfo.processIdentifier
-        else { return }
         recency.removeAll { $0 == app.processIdentifier }
         recency.insert(app.processIdentifier, at: 0)
     }
