@@ -35,6 +35,10 @@ public struct TapFilters: Sendable {
             verdict = .dockSwipe(
                 dock[stream, default: DockSwipeFilter()].decide(
                     phase, trackpadBlocking: context.blocking.blocksDockSwipes))
+        case .tapAction:
+            // Whatever Tap to click is set to: under a thumb with another finger down (however long it rested, and
+            // also when the event beats the lift frame to the tap), or in the half second after the lift.
+            verdict = .tapAction(context.blocking.blocksDockSwipes || context.liftWindowIsOpen ? .drop : .pass)
         }
         settle(context)
         return TapDecision(verdict: verdict, gate: change(since: was))

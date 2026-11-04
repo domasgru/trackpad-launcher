@@ -5,7 +5,7 @@ import Synchronization
 
 /// The app's event taps: two active session taps on one `userInteractive` thread. The press port listens for the
 /// tap's whole life; the gated port, over drags, pressure, scrolling and the system's gesture events (of which only
-/// Dock swipes are acted on), only while `TapFilters` says so, so ordinary pointing and scrolling never reach the app.
+/// Dock swipes, Look up and Smart zoom are acted on), only while `TapFilters` says so, so ordinary pointing and scrolling never reach the app.
 /// It exists from the `run` that armed click blocking until the next `run`.
 /// Threads: installed and removed on main. The callback, `follow()` and `recover()` run on the tap thread, the only
 /// caller of `tapEnable` on the gated port once running. Frame threads only read `holding` and call `wake()`. The
@@ -175,7 +175,7 @@ extension TapEvent {
     ]
     static let gatedTypes: [CGEventType] = [
         .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, CGEventType(rawValue: 34)!, .scrollWheel,
-        CGEventType(rawValue: DockSwipeFields.gestureType)!, CGEventType(rawValue: DockSwipeFields.dockControlType)!,
+        CGEventType(rawValue: GestureEventFields.gestureType)!, CGEventType(rawValue: GestureEventFields.dockControlType)!,
     ]
     static var pressMask: CGEventMask { mask(pressTypes) }
     static var gatedMask: CGEventMask { mask(gatedTypes) }
@@ -187,9 +187,13 @@ extension TapEvent {
     init?(_ type: CGEventType, _ event: CGEvent) {
         if type == .scrollWheel {
             self = .scroll(ScrollEvent(event))
-        } else if type.rawValue == DockSwipeFields.gestureType || type.rawValue == DockSwipeFields.dockControlType {
+        } else if type.rawValue == GestureEventFields.gestureType || type.rawValue == GestureEventFields.dockControlType {
+            if type.rawValue == GestureEventFields.gestureType, let action = TapAction(event) {
+                self = .tapAction(action)
+                return
+            }
             guard let phase = DockSwipePhase(event) else { return nil }
-            let stream: DockSwipeStream = type.rawValue == DockSwipeFields.gestureType ? .gesture : .dockControl
+            let stream: DockSwipeStream = type.rawValue == GestureEventFields.gestureType ? .gesture : .dockControl
             self = .dockSwipe(phase, stream)
         } else if let pointer = PointerEvent(type, event) {
             self = .pointer(pointer)
@@ -199,8 +203,8 @@ extension TapEvent {
     }
 }
 
-/// The undocumented event-system numbers a Dock swipe is read by. None has a public CGEventField or CGEventType case.
-enum DockSwipeFields {
+/// The undocumented event-system numbers the click tap reads gesture events by. None has a public CGEventField or CGEventType case.
+enum GestureEventFields {
     /// NSEventTypeGesture.
     static let gestureType: UInt32 = 29
     /// The Dock's own control event, which carries the swipe it acts on.
@@ -209,6 +213,10 @@ enum DockSwipeFields {
     static let hidType = CGEventField(rawValue: 110)!
     /// kIOHIDEventTypeDockSwipe.
     static let dockSwipe: Int64 = 23
+    /// The symbolic hot key event macOS raises for Look up, as a pair of events at the lift.
+    static let lookUp: Int64 = 24
+    /// The zoom toggle event macOS raises for Smart zoom.
+    static let smartZoom: Int64 = 22
     /// The gesture's phase, in IOHIDEventPhase bits.
     static let phase = CGEventField(rawValue: 132)!
 }
@@ -217,13 +225,24 @@ extension DockSwipePhase {
     /// nil unless the event is a Dock swipe. Phase bits: began 1, changed 2, ended 4, cancelled 8, mayBegin 128.
     /// A Dock swipe with an unknown phase reads as `.changed`, which the filter never starts a drop on.
     init?(_ event: CGEvent) {
-        guard event.getIntegerValueField(DockSwipeFields.hidType) == DockSwipeFields.dockSwipe else { return nil }
-        switch event.getIntegerValueField(DockSwipeFields.phase) {
+        guard event.getIntegerValueField(GestureEventFields.hidType) == GestureEventFields.dockSwipe else { return nil }
+        switch event.getIntegerValueField(GestureEventFields.phase) {
         case 128: self = .mayBegin
         case 1: self = .began
         case 4: self = .ended
         case 8: self = .cancelled
         default: self = .changed
+        }
+    }
+}
+
+extension TapAction {
+    /// nil unless a gesture event is Look up or Smart zoom.
+    init?(_ event: CGEvent) {
+        switch event.getIntegerValueField(GestureEventFields.hidType) {
+        case GestureEventFields.lookUp: self = .lookUp
+        case GestureEventFields.smartZoom: self = .smartZoom
+        default: return nil
         }
     }
 }
@@ -282,6 +301,7 @@ extension TapVerdict {
         case .pointer(let verdict): verdict.apply(to: event)
         case .scroll(let verdict): verdict.apply(to: event)
         case .dockSwipe(let verdict): verdict.apply(to: event)
+        case .tapAction(let verdict): verdict.apply(to: event)
         }
     }
 }
@@ -300,6 +320,10 @@ extension PointerVerdict {
 }
 
 extension DockSwipeVerdict {
+    func apply(to event: CGEvent) -> Unmanaged<CGEvent>? { self == .drop ? nil : .passUnretained(event) }
+}
+
+extension TapActionVerdict {
     func apply(to event: CGEvent) -> Unmanaged<CGEvent>? { self == .drop ? nil : .passUnretained(event) }
 }
 
