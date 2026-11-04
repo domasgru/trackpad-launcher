@@ -22,7 +22,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     public typealias PickTuning = (animation: PickAnimation, simulateReduceMotion: Bool)
     private let launcher: Launcher
     private let updater: Updater?
-    private let icons = AppIcons()
+    private let icons = AppIcons { SettingsWindow.pinnedAppearance ?? NSApp.effectiveAppearance }
     private let switcherPresenter: SwitcherPresenter
     private let windowSwitcherPresenter: WindowSwitcherPresenter
     private let window: SettingsWindow

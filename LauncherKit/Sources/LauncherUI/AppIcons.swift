@@ -28,11 +28,14 @@ final class AppIcons {
     private var generation = 0
     private let generic: NSImage
     private let side: CGFloat
+    private let appearance: () -> NSAppearance
 
-    init(side: CGFloat = 16) {
+    /// `appearance` is read at every pass: the appearance of the window the icons are shown in.
+    init(side: CGFloat = 16, appearance: @escaping () -> NSAppearance = { NSApp.effectiveAppearance }) {
         self.side = side
+        self.appearance = appearance
         let source = NSWorkspace.shared.icon(for: .applicationBundle)
-        generic = Self.bitmap(of: source, side: side, appearance: NSApp.effectiveAppearance)
+        generic = Self.bitmap(of: source, side: side, appearance: appearance())
     }
 
     /// The cached icon, or a generic app icon on a miss. Never draws: the menu uses it on the click path.
@@ -41,14 +44,14 @@ final class AppIcons {
     /// Draws a missing icon on the spot and caches it. Only for an app outside the picker's list.
     func iconDrawingIfMissing(for url: URL) -> NSImage {
         if let cached = cache[url] { return cached.icon }
-        merge(Self.renderChanged(urls: [url], cached: [:], side: side, appearance: Appearance(NSApp.effectiveAppearance)))
+        merge(Self.renderChanged(urls: [url], cached: [:], side: side, appearance: Appearance(appearance())))
         return cachedIcon(for: url)
     }
 
     /// The switcher's icon for `app`: cached in the current appearance, else the running app's already-loaded icon (about 0.1 ms), else drawn on
     /// the spot. The frontmost app is running by definition, so it takes the second path at the swipe's first frame.
     func icon(forSwitcher app: AppEntry) -> NSImage {
-        let appearance = NSApp.effectiveAppearance
+        let appearance = self.appearance()
         if let cached = cache[app.url], cached.stamp.appearance == appearance.name { return cached.icon }
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID.rawValue)
             .first { $0.bundleURL == app.url }
@@ -67,7 +70,7 @@ final class AppIcons {
     func renderOnMainActor(_ apps: [AppEntry]) { renderOnMainActor(urls: apps.map(\.url)) }
 
     func renderOnMainActor(urls: [URL]) {
-        merge(Self.renderChanged(urls: urls, cached: stamps(), side: side, appearance: Appearance(NSApp.effectiveAppearance)))
+        merge(Self.renderChanged(urls: urls, cached: stamps(), side: side, appearance: Appearance(appearance())))
     }
 
     /// The same pass away from the main actor; the results merge here. Overlapping passes are harmless: the last
@@ -80,7 +83,7 @@ final class AppIcons {
     /// Returns once the results have merged. Results of a pass that `removeAll()` outlived are dropped.
     func renderOffMainActor(urls: [URL]) async {
         let cached = stamps()
-        let appearance = Appearance(NSApp.effectiveAppearance)
+        let appearance = Appearance(self.appearance())
         let side = side
         let generation = generation
         let rendered = await Self.renderChangedOffMain(urls: urls, cached: cached, side: side, appearance: appearance)
