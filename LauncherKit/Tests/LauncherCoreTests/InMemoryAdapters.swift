@@ -118,7 +118,11 @@ import LauncherCore
             guard let recognition = running[id]?.step(sampled) else { return }
             clock = max(clock, Uptime(seconds: frame.time.seconds))
             let now = clock
-            if states[id, default: TrackpadTapState()].take(recognition, now: { now }) { queue(.wake) }
+            var state = states[id, default: TrackpadTapState()]
+            let time = state.needsTime(for: recognition) ? now : nil
+            let flipped = state.take(recognition, at: time)
+            states[id] = state
+            if flipped { queue(.wake) }
             guard let event = recognition.event,
                   let answer = confirmation.deliver(TrackpadEvent(event, on: id), to: onEvent) else { continue }
             windowSwipeAnswers.append(answer)

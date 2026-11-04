@@ -66,7 +66,11 @@ final class DeviceSession: Sendable {
             if recognition.beginsSlide { $0.travel = CursorTravel.travel(curves: pointerCurves) }
             return recognition
         }
-        let flipped = state.withLock { $0.take(recognition, now: clock) }
+        // The clock is read between two separate locks, never inside one: this callback is the state's only writer, so
+        // nothing changes between the query and the take.
+        let needsTime = state.withLock { $0.needsTime(for: recognition) }
+        let time = needsTime ? clock() : nil
+        let flipped = state.withLock { $0.take(recognition, at: time) }
         if flipped { tap?.wake() }
         if let event = recognition.event {
             var reply: (@Sendable (Bool) -> Void)?

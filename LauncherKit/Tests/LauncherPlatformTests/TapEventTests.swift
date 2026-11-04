@@ -90,9 +90,11 @@ import Testing
         #expect(TapEvent(event.type, event) == nil)
     }
 
-    @Test(arguments: [(Int64(24), TapAction.lookUp), (22, .smartZoom)])
-    func parsesLookUpAndSmartZoomFromTheGestureTypeAndRidesTheGatedPort(hidType: Int64, expected: TapAction) throws {
-        let event = try gesture(GestureEventFields.gestureType, hidType: hidType, phase: hidType == 24 ? 5 : 0)
+    @Test(arguments: [(Int64(24), TapAction.lookUp, Int64(5)), (22, .smartZoom, 0)])
+    func parsesLookUpAndSmartZoomFromTheGestureTypeAndRidesTheGatedPort(
+        hidType: Int64, expected: TapAction, phase: Int64
+    ) throws {
+        let event = try gesture(GestureEventFields.gestureType, hidType: hidType, phase: phase)
         let parsed = try #require(TapEvent(event.type, event))
         #expect(parsed == .tapAction(expected))
         #expect(parsed.ridesGatedPort)
@@ -100,8 +102,11 @@ import Testing
 
     @Test func bothEventsOfTheLookUpPairParseAsLookUp() throws {
         let first = try gesture(GestureEventFields.gestureType, hidType: 24, phase: 5)
-        first.setIntegerValueField(try #require(CGEventField(rawValue: 123)), value: 1)
-        first.setIntegerValueField(try #require(CGEventField(rawValue: 165)), value: 1)
+        // Fields 123 and 165 are 1 on the first event of the Look up pair only (measured).
+        let firstOfPairMarker = try #require(CGEventField(rawValue: 123))
+        let firstOfPairSecondMarker = try #require(CGEventField(rawValue: 165))
+        first.setIntegerValueField(firstOfPairMarker, value: 1)
+        first.setIntegerValueField(firstOfPairSecondMarker, value: 1)
         let second = try gesture(GestureEventFields.gestureType, hidType: 24, phase: 5)
         #expect(TapEvent(first.type, first) == .tapAction(.lookUp))
         #expect(TapEvent(second.type, second) == .tapAction(.lookUp))

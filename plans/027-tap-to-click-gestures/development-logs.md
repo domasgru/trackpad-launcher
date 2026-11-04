@@ -39,3 +39,27 @@
   - Not done: Dragging (setting off), Magic Trackpad, Smart zoom double-taps with the thumb resting (an earlier run showed hid 22 arrives with the thumb anchored).
 - S1 deviations folded into the slices: the Look up pair is judged event by event (S4's rows offer it twice); `tapActionHoldLimit` = 400 ms (S3); a swap's own thumb-tap click is pinned as withheld by the series (S3, T37).
 - Kept the lift-frame design over the force-event discriminator for the long-rest case. The discriminator ("a press with no type-29 hid-32 force event ~6 ms before it is a tap's click") rests on facts S1 did not check and no agent can: whether the force event still comes with *Force Click and haptic feedback* off, on a Magic Trackpad, and never for a mouse's click. If any of these is wrong, it blocks physical presses every time under a thumb rested past 3 s, which breaks R3 and the "physical click blocking unchanged" non-goal for those users. The race it would close has not been seen: every one of ~75 clicks came after its lift frame, 1.7 ms at the closest, while the app's pre-step work takes microseconds. The press rule's comment records the assumption. S3's hardware check (twenty taps after a 5 s rest toggle a checkbox zero times) is the guard. If a click ever leaks there, the discriminator is the next step, once the facts above are checked on hardware.
+- S2–S4 built as planned. Departures:
+  - `DockSwipeFields` became `GestureEventFields`, since it now holds the tap actions' numbers too.
+  - T14's click is offered at L+440, not L+410: `lift()` moves the cursor on for 40 ms. It is still inside the window.
+  - Two of the nine named `TapGateTests` rows (`aPressStaysWithheldThroughTheThumbsLiftUntilTheButtonIsUp`, `aDockSwipeWarningThatSlippedThroughIsDroppedFromItsBeganOnceTheFingersAreDown`) needed no edit. Their fingers pressed or rested past the hold limit, so no lift window opens there.
+  - T30 and T31 are two long rows in `ActivityTests`.
+- Verification skill: none in the repo, so that step was skipped.
+- implementation-reviewer findings fixed:
+  - The frame thread read the injected clock while holding the session state's lock (two locks at once). The clock is now read outside the lock.
+  - `TrackpadTapState.take` is named for what it returns.
+  - The stale "trackpad settings notice" wording in `SettingsNotice`'s doc is gone.
+  - `SettingsNotice` takes one optional button value instead of a title plus a dummy closure.
+  - architecture.md now says the lift window opens when "fingers lift under the thumb" (it said "after a gesture").
+  - Test tidy-ups: the compound `#expect` in T33 is split, and the T32 phase and field numbers are named. T5's grant half is now the five-app world and asserts inactivity first. T16 checks the gated port on every frame.
+- Rejected review findings:
+  - One enum in place of `blockClicks` + `blockTapClicks`: rejected, the plan's design.
+  - Deriving `showsAccessibilityHint` from the cause: rejected, the plan's design.
+  - Dropping the test-only `DeviceSession.liftWindowIsOpen(at:)`: rejected, T33's seam.
+  - Negated `#expect` and plain `@Suite`: rejected, the repo's style.
+- Accepted risk, not changed: a press withheld while a contact is down marks that contact as pressed, so its lift opens no window. Example: a late right click from a 2-finger tap arriving under the next touch's fingers. This needs macOS to send the delayed right click while a new touch is down. But it delays the right click precisely to watch for a second tap. A leak would also need that touch to lift after the earlier window ends yet within the hold limit. Recorded so the S3 hardware check can watch for it.
+- Pending manual checks (need a human, not done):
+  - S2's Debug-build notice check.
+  - S3's checkbox counts (20 taps after a 5 s rest toggle nothing; two physical clicks after a 4 s rest toggle twice).
+  - S4's Look up / Smart zoom checks and the final walkthrough of R1–R6, the swap scenario included.
+  - A Magic Trackpad, and Dragging on.

@@ -13,6 +13,10 @@ struct SettingsView: View {
     let updater: Updater?
     let actions: LauncherActions
 
+    private var accessibilityButton: NoticeButton {
+        NoticeButton(title: Copy.accessibilityButton) { actions.openSettings(.accessibility) }
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             if let card = updater?.card {
@@ -39,25 +43,23 @@ struct SettingsView: View {
             if let notice = launcher.inactiveNotice {
                 switch notice.button {
                 case .openAccessibilitySettings:
-                    SettingsNotice(
-                        message: notice.message, button: Copy.accessibilityButton,
-                        open: { actions.openSettings(.accessibility) })
+                    SettingsNotice(message: notice.message, button: accessibilityButton)
                 case nil:
                     SettingsNotice(message: notice.message)
                 }
             }
             if launcher.showsAccessibilityHint {
-                SettingsNotice(
-                    message: Copy.accessibilityHint, button: Copy.accessibilityButton,
-                    open: { actions.openSettings(.accessibility) })
+                SettingsNotice(message: Copy.accessibilityHint, button: accessibilityButton)
             }
             if let hint = launcher.screenRecordingHint {
-                SettingsNotice(message: Copy.screenRecordingHint, button: Copy.screenRecordingButton) {
-                    switch hint {
-                    case .ask: launcher.askForScreenRecording()
-                    case .openSettings: actions.openSettings(.screenRecording)
-                    }
-                }
+                SettingsNotice(
+                    message: Copy.screenRecordingHint,
+                    button: NoticeButton(title: Copy.screenRecordingButton) {
+                        switch hint {
+                        case .ask: launcher.askForScreenRecording()
+                        case .openSettings: actions.openSettings(.screenRecording)
+                        }
+                    })
             }
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
@@ -265,17 +267,21 @@ struct ThumbPicker: NSViewRepresentable {
     }
 }
 
-/// A hint plus a button, in a group of its own. The trackpad settings notice, the Accessibility hint and the screen
-/// recording hint share it.
+/// A button's title and what it does.
+struct NoticeButton {
+    let title: String
+    let perform: () -> Void
+}
+
+/// A message and, optionally, a button, in a group of its own. The no trackpad notice, the tap-bound settings notice,
+/// the Accessibility hint and the screen recording hint share it.
 struct SettingsNotice: View {
     let message: String
-    let button: String?
-    let open: () -> Void
+    let button: NoticeButton?
 
-    init(message: String, button: String? = nil, open: @escaping () -> Void = {}) {
+    init(message: String, button: NoticeButton? = nil) {
         self.message = message
         self.button = button
-        self.open = open
     }
 
     var body: some View {
@@ -287,7 +293,7 @@ struct SettingsNotice: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
                 if let button {
-                    Button(button, action: open)
+                    Button(button.title, action: button.perform)
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.roundedRectangle(radius: 6))
                 }

@@ -38,11 +38,13 @@ import LauncherCore
     }
 
     @Test func aTapMakesNoClickOnceAccessIsGrantedWithoutARelaunch() {
-        let world = world(["Arc"], accessGranted: false)
+        let world = world(["Arc", "Figma", "Notion", "Spotify", "Slack"], accessGranted: false)
+        #expect(world.launcher.activity == .inactive(.settingsNeedAccessibility(TapBoundSettings([.tapToClick])!)))
         world.permissions.set(.accessibility, granted: true)
         world.play(thumb.tap(fingers: 1))
 
         #expect(world.system.broughtToFront == [world.app("Arc")])
+        #expect(world.hardware.feedback == [Trackpad.macBook14.id])
         #expect(click(world) == dropped)
     }
 
@@ -157,16 +159,18 @@ import LauncherCore
 
     @Test func aTapWithNoThumbMakesItsClickAsMacOSMakesIt() {
         let one = world()
-        one.play(TouchScript(.macBook14).tap(fingers: 1))
+        let gatedDuringOne = one.playFrameByFrame(TouchScript(.macBook14).tap(fingers: 1)) { one.hardware.isGatedPortOn }
+        #expect(!gatedDuringOne.contains(true))
         #expect(click(one) == passed)
         #expect(one.system.broughtToFront.isEmpty)
-        #expect(!one.hardware.isGatedPortOn)
 
         let two = world()
-        two.play(TouchScript(.macBook14).land(fingers: 2).wait(.milliseconds(120)).lift().wait(.milliseconds(10)))
+        let gatedDuringTwo = two.playFrameByFrame(
+            TouchScript(.macBook14).land(fingers: 2).wait(.milliseconds(120)).lift().wait(.milliseconds(10))
+        ) { two.hardware.isGatedPortOn }
+        #expect(!gatedDuringTwo.contains(true))
         #expect(click(two, button: 1) == passed)
         #expect(two.system.broughtToFront.isEmpty)
-        #expect(!two.hardware.isGatedPortOn)
     }
 
     @Test(arguments: [(afterMS: 340, isBlocked: true), (afterMS: 360, isBlocked: false), (afterMS: 850, isBlocked: false)])

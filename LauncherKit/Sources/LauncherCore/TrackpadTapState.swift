@@ -12,24 +12,26 @@ public struct TrackpadTapState: Equatable, Sendable {
 
     public init() {}
 
-    /// Takes one frame's recognition. `now` is read at most once, and only when the recognition opens a lift window or
-    /// one is pending, so an ordinary touch reads no clock. Returns whether `wantsTap` flipped since the last
-    /// recognition, which includes the first one after a window ended: that frame is what lets the gate close.
-    public mutating func take(_ recognition: Recognition, now: () -> Uptime) -> Bool {
-        var cached: Uptime?
-        func current() -> Uptime {
-            if let cached { return cached }
-            let read = now()
-            cached = read
-            return read
-        }
+    /// Whether `wantsTap` flipped since the last recognition taken.
+    public typealias WantsTapFlipped = Bool
+
+    /// Whether taking this recognition needs the time: it opens a lift window, or a window end is pending. Pure, so the
+    /// caller reads the clock only when this says so, and outside any lock.
+    public func needsTime(for recognition: Recognition) -> Bool {
+        recognition.opensLiftWindow || liftWindowEnd != nil
+    }
+
+    /// Takes one frame's recognition. `time` is the clock read, non-nil exactly when `needsTime(for:)` said yes, so an
+    /// ordinary touch reads no clock. Returns whether `wantsTap` flipped since the last recognition, which includes the
+    /// first one after a window ended: that frame is what lets the gate close.
+    public mutating func take(_ recognition: Recognition, at time: Uptime?) -> WantsTapFlipped {
         level = recognition.blocking
-        if recognition.opensLiftWindow {
-            liftWindowEnd = current() + GestureRules.liftWindow
-        } else if let end = liftWindowEnd, current() >= end {
+        if recognition.opensLiftWindow, let time {
+            liftWindowEnd = time + GestureRules.liftWindow
+        } else if let end = liftWindowEnd, let time, time >= end {
             liftWindowEnd = nil
         }
-        let wants = level.wantsTap || liftWindowEnd.map { current() < $0 } ?? false
+        let wants = level.wantsTap || liftWindowEnd.map { end in time.map { $0 < end } ?? false } ?? false
         defer { wanted = wants }
         return wants != wanted
     }

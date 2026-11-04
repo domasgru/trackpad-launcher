@@ -132,7 +132,7 @@ import Testing
         #expect(tap.wakes == 2)
     }
 
-    @Test func aLiftWindowOpensOnAFingerLiftingInAThumbTouchAndTheTapIsWokenByTheFrameAfterItEnded() {
+    @Test func aLiftWindowOpensOnAFingerLiftingInAThumbTouchAndTheTapIsWokenByTheFrameAfterItEnded() throws {
         let tap = StubTap()
         let clock = TestClock()
         let session = session(Delivered(), tap: tap, clock: clock)
@@ -142,14 +142,19 @@ import Testing
             TouchFrame(time: FrameTime(seconds: Double(ms) / 1000), touches: touches, press: nil)
         }
         var wakes: [Int] = []
-        var windowOpen: [(at49: Bool, at50: Bool)] = []
+        struct Open: Equatable {
+            let at49: Bool
+            let at50: Bool
+        }
+        var windowOpen: [Open] = []
         func play(_ frame: TouchFrame, clock seconds: Double) {
             let before = tap.wakes
             clock.set(seconds)
             session.receive(frame)
             wakes.append(tap.wakes - before)
-            windowOpen.append((
-                session.liftWindowIsOpen(at: Uptime(seconds: 10.49)), session.liftWindowIsOpen(at: Uptime(seconds: 10.5))
+            windowOpen.append(Open(
+                at49: session.liftWindowIsOpen(at: Uptime(seconds: 10.49)),
+                at50: session.liftWindowIsOpen(at: Uptime(seconds: 10.5))
             ))
         }
         play(frame(0, [touch(9, .landing, 10, 10)]), clock: 10.0)
@@ -159,8 +164,10 @@ import Testing
         play(frame(400, []), clock: 10.6)
 
         #expect(wakes == [1, 0, 0, 0, 1])
-        #expect(windowOpen[0] == (false, false) && windowOpen[1] == (false, false))
-        #expect(windowOpen[2] == (true, false) && windowOpen[3] == (true, false))
+        try #require(windowOpen.count == 5)
+        let closed = Open(at49: false, at50: false)
+        let open = Open(at49: true, at50: false)
+        #expect(Array(windowOpen[0...3]) == [closed, closed, open, open])
         #expect(session.blocking == .none)
     }
 
