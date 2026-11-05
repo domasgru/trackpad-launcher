@@ -196,9 +196,9 @@ struct AppPicker: NSViewRepresentable {
     }
 }
 
-/// The system's pop-up button in System Settings' style, drawing a display item of the picker's own, with the present
+/// The system's pop-up button in System Settings' style (`SettingsPopUpButton`), drawing a display item of the picker's own, with the present
 /// app's icon drawn by `iconLayer` over the display item's image slot.
-final class PickerButton: NSPopUpButton {
+final class PickerButton: SettingsPopUpButton {
     /// The icon's side.
     static let iconSide: CGFloat = 16
     /// Clear room after the icon, on top of the button's own 2 pt: 6 pt between the icon and the name's text box
@@ -208,10 +208,6 @@ final class PickerButton: NSPopUpButton {
     static let pickKey = "pick"
     /// Samples a second of the pick animation, like the launch animation's.
     private static let keyframesPerSecond: Double = 240
-    /// AppKit's semantic context for a grouped form, which SwiftUI's grouped Form sets: the pop-up then draws as in
-    /// System Settings, chevrons in a round badge and the bezel only on hover. AppKit has no public way to set it
-    /// outside a SwiftUI Form; without the private setter the button keeps the standard bordered look.
-    private static let formSemanticContext = 8
 
     /// What holds the icon's slot in the display item while `iconLayer` draws the icon.
     static let clearIconSlot = NSImage(
@@ -222,27 +218,19 @@ final class PickerButton: NSPopUpButton {
     var iconLayer: CALayer { iconView.iconLayer }
     private let iconView = IconView()
 
-    init() {
-        super.init(frame: .zero, pullsDown: false)
+    override init() {
+        super.init()
         guard let cell = cell as? NSPopUpButtonCell else { preconditionFailure("NSPopUpButton without its cell") }
         cell.usesItemFromMenu = false
         // The delegate checks the row's app itself, so a missing app selects the first item without checking it.
         cell.altersStateOfSelectedItem = false
         menu?.autoenablesItems = false
-        Self.setFormSemanticContext(on: self)
         iconView.frame = bounds
         iconView.autoresizingMask = [.width, .height]
         addSubview(iconView)
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
-
-    private static func setFormSemanticContext(on view: NSView) {
-        let setter = NSSelectorFromString("_setSemanticContext:")
-        guard view.responds(to: setter) else { return }
-        typealias Setter = @convention(c) (AnyObject, Selector, Int) -> Void
-        unsafeBitCast(view.method(for: setter), to: Setter.self)(view, setter, formSemanticContext)
-    }
 
     /// `item` drawn by the button, its name shortened to fit; `icon` drawn over its image slot, or no icon for nil. A
     /// running pick animation is left alone.

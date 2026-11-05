@@ -232,8 +232,8 @@ struct Guide: View {
     }
 }
 
-/// The thumb corner row's title and, at the trailing edge, its pop-up button (SwiftUI's menu picker is AppKit's pop-up
-/// button on macOS) listing the four corners.
+/// The thumb corner row's title and, at the trailing edge, its pop-up button listing the four corners, in System
+/// Settings' style like the app pickers.
 struct ThumbCornerRow: View {
     let launcher: Launcher
 
@@ -241,19 +241,13 @@ struct ThumbCornerRow: View {
         HStack(spacing: 16) {
             Text(Copy.thumbCornerRow)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Picker(
-                Copy.thumbCornerRow,
-                selection: Binding(get: { launcher.thumbCorner }, set: { launcher.setThumbCorner($0) })
-            ) {
-                ForEach(ThumbCorner.allCases, id: \.self) { corner in
-                    Text(Copy.thumbCornerTitle(corner)).tag(corner)
-                }
-            }
-            .pickerStyle(.menu)
-            .controlSize(.regular)
-            .labelsHidden()
+            SettingsPopUp(
+                options: ThumbCorner.allCases,
+                title: Copy.thumbCornerTitle,
+                selection: launcher.thumbCorner,
+                select: { launcher.setThumbCorner($0) },
+                accessibilityLabel: Copy.thumbCornerRow)
             .fixedSize()
-            .accessibilityLabel(Copy.thumbCornerRow)
         }
     }
 }
