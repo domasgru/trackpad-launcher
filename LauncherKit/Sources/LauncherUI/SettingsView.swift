@@ -8,7 +8,7 @@ import SwiftUI
 /// the Animate app launch switch, the switcher section, and the thumb corner row; the notices, while any applies, 10 pt
 /// apart: the no trackpad notice or the tap-bound settings notice, the Accessibility hint and the screen recording hint,
 /// one rounded group each; then *Quit Trackpad Launcher* and *Close*, aligned right. The form keeps the system's own
-/// fonts, insets and controls, and every row of the form is 42 pt tall (`formRowContent()`). The illustrations are
+/// fonts, insets and controls, and every row of the form is 46 pt tall (`formRowContent()`). The illustrations are
 /// 45 × 28 pt. The guide naming the two marks sits over the first illustration for the top-left corner only, where its
 /// arrows meet the thumb.
 struct SettingsView: View {
@@ -119,14 +119,14 @@ struct FormGroup<Content: View>: View {
     }
 }
 
-/// One row of a group: at least 42 pt tall, its content centred.
+/// One row of a group: at least 46 pt tall, as the settings form's rows are, its content centred.
 struct FormRow<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
         HStack(spacing: 0) { content }
             .padding(.vertical, 2)
-            .frame(maxWidth: .infinity, minHeight: 42)
+            .frame(maxWidth: .infinity, minHeight: 46)
     }
 }
 
@@ -188,11 +188,11 @@ struct Illustration: View {
 }
 
 extension View {
-    /// A settings form row's content: 22 pt, which the form's own 10 pt above and below makes a 42 pt row. Taller
-    /// content, an illustration or an app picker, stays centred and reaches into that padding. The height is set here
-    /// because a grouped Form ignores `listRowInsets` on macOS 26, measured offscreen in a one-row form.
+    /// A settings form row's content: 26 pt, which the form's own 10 pt above and below makes a 46 pt row. An
+    /// illustration, which is taller, stays centred and reaches into that padding. The height is set here because a
+    /// grouped Form ignores `listRowInsets` on macOS 26, measured offscreen in a one-row form.
     func formRowContent() -> some View {
-        frame(height: 22)
+        frame(height: 26)
     }
 }
 
