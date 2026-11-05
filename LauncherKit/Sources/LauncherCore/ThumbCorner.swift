@@ -4,10 +4,16 @@ import Foundation
 public enum ThumbCorner: Hashable, Sendable, CaseIterable {
     case topLeft
     case topRight
+    case bottomLeft
+    case bottomRight
+
+    /// Whether the corner is on the bottom edge: the palm band's key.
+    var isBottom: Bool { self == .bottomLeft || self == .bottomRight }
 
     /// How far a normalised x lies from the corner's side edge, as a fraction of the width.
-    func fractionFromSideEdge(x: Double) -> Double { self == .topLeft ? x : 1 - x }
+    func fractionFromSideEdge(x: Double) -> Double { self == .topLeft || self == .bottomLeft ? x : 1 - x }
 
-    /// How far a normalised x lies from the side edge opposite the corner, as a fraction of the width.
-    func fractionFromOppositeSideEdge(x: Double) -> Double { 1 - fractionFromSideEdge(x: x) }
+    /// How far a normalised y lies from the corner's top or bottom edge, as a fraction of the height.
+    /// `y` is 0 at the top edge and 1 at the bottom.
+    func fractionFromRowEdge(y: Double) -> Double { isBottom ? 1 - y : y }
 }

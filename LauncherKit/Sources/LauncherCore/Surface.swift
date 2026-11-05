@@ -40,24 +40,31 @@ package struct AnchorCorner: Sendable {
 
     /// A contact landing here, while no thumb is anchored, becomes the anchored thumb.
     package func admits(_ p: SurfacePoint) -> Bool {
-        fromEdge(p) < GestureRules.cornerWidth && p.y < GestureRules.cornerHeight
+        fromSideEdge(p) < GestureRules.cornerWidth && fromRowEdge(p) < GestureRules.cornerHeight
     }
 
     /// An anchored thumb stays anchored while inside the zone grown by `anchorReleaseMarginMM`.
     package func holds(_ p: SurfacePoint) -> Bool {
-        fromEdge(p) * surface.widthMM < GestureRules.cornerWidth * surface.widthMM + GestureRules.anchorReleaseMarginMM
-            && p.y * surface.heightMM < GestureRules.cornerHeight * surface.heightMM + GestureRules.anchorReleaseMarginMM
+        fromSideEdge(p) * surface.widthMM < GestureRules.cornerWidth * surface.widthMM + GestureRules.anchorReleaseMarginMM
+            && fromRowEdge(p) * surface.heightMM
+                < GestureRules.cornerHeight * surface.heightMM + GestureRules.anchorReleaseMarginMM
     }
 
-    /// Distance from the anchor-side edge as a fraction of the width.
-    private func fromEdge(_ p: SurfacePoint) -> Double {
+    /// Distance from the corner's side edge as a fraction of the width.
+    private func fromSideEdge(_ p: SurfacePoint) -> Double {
         corner.fractionFromSideEdge(x: p.x)
+    }
+
+    /// Distance from the corner's top or bottom edge as a fraction of the height.
+    private func fromRowEdge(_ p: SurfacePoint) -> Double {
+        corner.fractionFromRowEdge(y: p.y)
     }
 }
 
-/// Remembers which edge contacts landed in the band, so the recognizer never sees them. The band is the bottom edge and
-/// the side edge opposite the thumb corner below the `edgeBandTop` line: where the heel of the hand rests. An edge contact is a resting
-/// palm, not a finger, for as long as it stays down. Call once per frame, in frame order.
+/// Remembers which edge contacts landed in the band, so the recognizer never sees them. With a top corner the band is
+/// the bottom edge and the side edge opposite the thumb corner below the `edgeBandTop` line: where the heel of the hand
+/// rests. With a bottom corner it is the bottom edge outside the anchor corner's width, and no side edge. An edge
+/// contact is a resting palm, not a finger, for as long as it stays down. Call once per frame, in frame order.
 package struct EdgeContacts: Sendable {
     private let corner: ThumbCorner
     private let surface: SurfaceSize
@@ -86,7 +93,11 @@ package struct EdgeContacts: Sendable {
 
     private func isInBand(_ p: SurfacePoint) -> Bool {
         let fromBottomEdgeMM = (1 - p.y) * surface.heightMM
-        let fromHandSideEdgeMM = corner.fractionFromOppositeSideEdge(x: p.x) * surface.widthMM
+        if corner.isBottom {
+            return fromBottomEdgeMM < GestureRules.edgeBandMM
+                && corner.fractionFromSideEdge(x: p.x) >= GestureRules.cornerWidth
+        }
+        let fromHandSideEdgeMM = (1 - corner.fractionFromSideEdge(x: p.x)) * surface.widthMM
         let nearestBandEdgeMM = p.y > GestureRules.edgeBandTop ? min(fromBottomEdgeMM, fromHandSideEdgeMM) : fromBottomEdgeMM
         return nearestBandEdgeMM < GestureRules.edgeBandMM
     }

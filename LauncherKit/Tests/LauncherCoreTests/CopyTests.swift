@@ -7,6 +7,13 @@ import LauncherCore
         #expect(Copy.accessibilityButton == "Open Accessibility Settings…")
     }
 
+    @Test func theThumbCornerRowNamesItsFourChoicesInOrder() {
+        #expect(Copy.thumbCornerRow == "Thumb corner")
+        #expect(ThumbCorner.allCases == [.topLeft, .topRight, .bottomLeft, .bottomRight])
+        #expect(
+            ThumbCorner.allCases.map(Copy.thumbCornerTitle) == ["Top left", "Top right", "Bottom left", "Bottom right"])
+    }
+
     @Test func theScreenRecordingHintSaysWhatNeedsItAndItsButtonNamesThePane() {
         #expect(Copy.screenRecordingHint == "Allow Screen Recording access to show previews in the window switcher.")
         #expect(Copy.screenRecordingButton == "Open Screen Recording Settings…")

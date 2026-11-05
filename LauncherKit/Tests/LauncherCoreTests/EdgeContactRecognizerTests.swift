@@ -94,6 +94,7 @@ import LauncherCore
         (.topRight, .macBook14, 1.0, 75.8),
         (.topRight, .macBook14, 62.4, 75.8),
         (.topRight, .macBook14, 123.8, 75.8),
+        (.topLeft, .macBook14, 10.0, 75.8),
     ])
     func aTapLandingInTheBottomEdgeOrTheLowerHandSideEdgeFiresNothingAndTheNextTapStillFires(corner: ThumbCorner, surface: SurfaceSize, x: Double, y: Double) {
         let script = TouchScript(surface).thumb(atMM: (thumbX(corner, surface), 10))
@@ -355,5 +356,91 @@ import LauncherCore
         #expect(events.at == [110, 120, 130, 140, 150])
         #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]), "phases were \(events.phases)")
         #expect(fired(all) == [])
+    }
+
+    // MARK: Bottom corners
+
+    private func bottomThumb(_ corner: ThumbCorner) -> Track {
+        .still(9, from: 0, until: 10_000, atMM: corner == .bottomLeft ? 10 : 114.8, 66.8)
+    }
+
+    @Test(arguments: [(ThumbCorner.bottomLeft, 10.0), (.bottomRight, 114.8)])
+    func aBottomThumbHuggingTheBottomEdgeStillAnchors(corner: ThumbCorner, x: Double) {
+        let script = TouchScript(.macBook14).thumb(atMM: (x, 75.8)).tap(fingers: 1)
+        #expect(fired(script.frames, corner: corner) == [.one])
+    }
+
+    @Test(arguments: [
+        (ThumbCorner.bottomLeft, 25.0), (.bottomLeft, 62.4), (.bottomLeft, 123.8),
+        (.bottomRight, 1.0), (.bottomRight, 62.4), (.bottomRight, 99.8),
+    ])
+    func aTapLandingInTheBottomEdgeOutsideABottomCornerFiresNothingAndTheNextTapStillFires(
+        corner: ThumbCorner, x: Double
+    ) {
+        let all = frames([
+            bottomThumb(corner),
+            .still(1, from: 50, until: 170, atMM: x, 75.8),
+            .still(2, from: 250, until: 370, atMM: 62, 45),
+        ], throughMS: 500)
+        #expect(fired(all, corner: corner) == [.one])
+    }
+
+    @Test(arguments: [
+        (ThumbCorner.bottomLeft, 123.8, 53.76), (.bottomLeft, 1.0, 53.76), (.bottomLeft, 123.8, 23.04),
+        (.bottomRight, 1.0, 53.76), (.bottomRight, 123.8, 53.76), (.bottomRight, 1.0, 23.04),
+    ])
+    func theSideEdgesAreNotPartOfABottomCornersBand(corner: ThumbCorner, x: Double, y: Double) {
+        let script = TouchScript(.macBook14).thumb(atMM: (corner == .bottomLeft ? 10 : 114.8, 66.8))
+            .tap(fingers: 1, atMM: (x, y))
+        #expect(fired(script.frames, corner: corner) == [.one])
+    }
+
+    @Test func anEdgeContactBesideABottomThumbsFingerDoesNotMakeATwoFingerTap() {
+        let all = frames([
+            bottomThumb(.bottomLeft),
+            .still(1, from: 50, until: 170, atMM: 62, 45),
+            .still(2, from: 50, until: 170, atMM: 62.4, 75.8),
+        ], throughMS: 400)
+        #expect(fired(all, corner: .bottomLeft) == [.one])
+    }
+
+    @Test func anEdgeContactSlidingWithAFingerUnderABottomThumbIsNoSwipe() {
+        let all = frames([
+            bottomThumb(.bottomLeft),
+            .line(1, from: 100, until: 300, fromMM: (62, 45), toMM: (82, 45), over: 100...200),
+            .line(2, from: 100, until: 300, fromMM: (70, 75.8), toMM: (90, 75.8), over: 100...200),
+        ], throughMS: 400)
+        #expect(phases(all, corner: .bottomLeft).isEmpty)
+        #expect(fired(all, corner: .bottomLeft).isEmpty)
+    }
+
+    @Test func anEdgeContactIsNotAFingerRestingForABottomThumbsSwap() {
+        let oneFingerAndAnEdgeContact = frames([
+            .still(1, from: 0, until: 400, atMM: 62, 45),
+            .still(2, from: 0, until: 400, atMM: 62, 75.8),
+            .still(9, from: 150, until: 270, atMM: 10, 66.8),
+        ], throughMS: 500)
+        #expect(swaps(oneFingerAndAnEdgeContact, corner: .bottomLeft) == [])
+
+        let twoFingersAndAnEdgeContact = frames([
+            .still(1, from: 0, until: 400, atMM: 62, 45),
+            .still(2, from: 0, until: 400, atMM: 70, 45),
+            .still(3, from: 0, until: 400, atMM: 62.4, 75.8),
+            .still(9, from: 150, until: 270, atMM: 10, 66.8),
+        ], throughMS: 500)
+        #expect(swaps(twoFingersAndAnEdgeContact, corner: .bottomLeft) == [true])
+    }
+
+    @Test func aFingerRestingUnderABottomThumbBlocksClicksAndDockSwipesLikeUnderATopThumb() {
+        let all = frames([
+            bottomThumb(.bottomLeft),
+            .still(1, from: 100, until: 4100, atMM: 62, 45),
+        ], throughMS: 4100).filter { [0, 100, 1000, 2990, 3010, 4000, 4100].contains(ms($0)) }
+        let clicks = [false, true, true, true, false, false, false]
+        let dockSwipes = [false, true, true, true, true, true, false]
+        for (i, (frame, recognition)) in zip(all, recognitions(all, corner: .bottomLeft)).enumerated() {
+            #expect(recognition.blocksClicks == clicks[i], "clicks at \(ms(frame)) ms")
+            #expect(recognition.blocksDockSwipes == dockSwipes[i], "dock swipes at \(ms(frame)) ms")
+        }
     }
 }

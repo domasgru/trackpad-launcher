@@ -77,6 +77,23 @@ import LauncherCore
         #expect(world.hardware.scroll(.fingers(.began)) == .pass)
     }
 
+    @Test func aSwipeFromABottomRightThumbDropsScrollingBeforeDuringAndAfterTheSwitcher() {
+        let world = World.switcherWorld(accessGranted: true)
+        world.launcher.setThumbCorner(.bottomRight)
+        let hand = TouchScript(.macBook14).thumb(atMM: (114.8, 66.8)).land(fingers: 2)
+        world.play(hand)
+        #expect(world.hardware.scroll(.fingers(.mayBegin)) == .drop)
+
+        world.play(hand.slide(byMM: (3.5, 0)).slide(byMM: (12, 0)))
+        #expect(world.hardware.scroll(.fingers(.changed)) == .drop)
+
+        world.play(hand.slide(byMM: (3.5, 0)).slide(byMM: (12, 0)).lift())
+        #expect(world.hardware.scroll(.fingers(.ended)) == .drop)
+        #expect(world.hardware.scroll(.momentum(.began)) == .drop)
+        #expect(world.system.broughtToFront == [world.app("Mail")])
+        #expect(world.hardware.scroll(.fingers(.began)) == .pass)
+    }
+
     @Test func withTheWindowSwipeOffAFlickWithinTheWindowDoesNotCoastAfterTheLift() {
         let world = World.switcherWorld(accessGranted: true)
         world.launcher.setWindowSwipe(on: false)

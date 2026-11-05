@@ -48,6 +48,25 @@ import LauncherCore
         #expect(nothingHappened(right))
     }
 
+    @Test func aBottomLeftThumbSwapsFromTheBottomLeftCornerOnly() {
+        let bottom = World.switcherWorld()
+        bottom.launcher.setThumbCorner(.bottomLeft)
+        bottom.swap(thumbAtMM: (10, 66.8))
+        #expect(bottom.system.broughtToFront == [bottom.app("Mail")])
+        #expect(bottom.hardware.pulses.count == 1)
+
+        let top = World.switcherWorld()
+        top.swap(thumbAtMM: (10, 66.8))
+        #expect(nothingHappened(top))
+    }
+
+    @Test func aBottomThumbHuggingTheBottomEdgeStillSwaps() {
+        let world = World.switcherWorld()
+        world.launcher.setThumbCorner(.bottomLeft)
+        world.swap(thumbAtMM: (10, 75.8))
+        #expect(world.system.broughtToFront == [world.app("Mail")])
+    }
+
     @Test func aThumbThatRestsTooLongOrDragsSwapsNothing() {
         let held = World.switcherWorld()
         held.play(rest().thumbTap(hold: .milliseconds(500)))

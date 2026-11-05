@@ -446,6 +446,24 @@ import LauncherCore
         #expect(world.hardware.pulses.map(\.haptic) == [.lightTick, .gesture])
     }
 
+    @Test func fromTheBottomRightCornerTheSameSlideRightReachesTheSameNextApp() {
+        let world = World.switcherWorld()
+        world.launcher.setThumbCorner(.bottomRight)
+
+        world.swipe(3.5, 12, thumbAtMM: (114.8, 66.8))
+
+        #expect(world.system.broughtToFront == [world.app("Mail")])
+        #expect(world.hardware.feedback == [trackpad.id])
+        #expect(world.launcher.switcher == nil)
+
+        let topRight = World.switcherWorld()
+        topRight.launcher.setThumbCorner(.bottomRight)
+        topRight.swipe(3.5, 12, thumbAtMM: (114.8, 10))
+        #expect(topRight.system.broughtToFront.isEmpty)
+        #expect(topRight.hardware.pulses.isEmpty)
+        #expect(topRight.launcher.switcher == nil)
+    }
+
     @Test func pushingLeftPastTheFrontmostAppStretchesAndTheNextAppComesSevenMillimetresAfterTheTurn() {
         let world = World.switcherWorld()
         let pushed = world.swipe(3.5, -30, lift: false)

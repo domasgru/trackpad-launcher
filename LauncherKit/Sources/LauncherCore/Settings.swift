@@ -8,10 +8,28 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Saved under the key `handMode`, as the hand whose thumb anchors, exactly as every version has written it.
     private var handMode: HandMode = .right
 
+    /// Whether the thumb anchors at the bottom edge. A build without bottom corners ignores this key and anchors in the
+    /// top corner on the same side. The key is this field's name, permanently.
+    private var isThumbAtBottom = false
+
     /// The corner the thumb anchors in.
     public var thumbCorner: ThumbCorner {
-        get { handMode == .right ? .topLeft : .topRight }
-        set { handMode = newValue == .topLeft ? .right : .left }
+        get {
+            switch (handMode, isThumbAtBottom) {
+            case (.right, false): .topLeft
+            case (.left, false): .topRight
+            case (.right, true): .bottomLeft
+            case (.left, true): .bottomRight
+            }
+        }
+        set {
+            switch newValue {
+            case .topLeft: (handMode, isThumbAtBottom) = (.right, false)
+            case .topRight: (handMode, isThumbAtBottom) = (.left, false)
+            case .bottomLeft: (handMode, isThumbAtBottom) = (.right, true)
+            case .bottomRight: (handMode, isThumbAtBottom) = (.left, true)
+            }
+        }
     }
 
     /// Absent = unassigned.
@@ -45,6 +63,7 @@ public struct Settings: Codable, Equatable, Sendable {
         self.init()
         let container = try decoder.container(keyedBy: CodingKeys.self)
         handMode = try container.decodeIfPresent(HandMode.self, forKey: .handMode) ?? handMode
+        isThumbAtBottom = try container.decodeIfPresent(Bool.self, forKey: .isThumbAtBottom) ?? isThumbAtBottom
         assignments = try container.decodeIfPresent([Gesture: AssignedApp].self, forKey: .assignments) ?? assignments
         isLaunchAnimationOn =
             try container.decodeIfPresent(Bool.self, forKey: .isLaunchAnimationOn) ?? isLaunchAnimationOn

@@ -26,6 +26,17 @@ public enum Copy {
     public static let updateFailed = "The update couldn't be installed."
     public static let tryAgainButton = "Try again"
 
+    /// The settings window's thumb corner row and its pop-up's choices.
+    public static let thumbCornerRow = "Thumb corner"
+    public static func thumbCornerTitle(_ corner: ThumbCorner) -> String {
+        switch corner {
+        case .topLeft: "Top left"
+        case .topRight: "Top right"
+        case .bottomLeft: "Bottom left"
+        case .bottomRight: "Bottom right"
+        }
+    }
+
     /// The app menu's item in Quit's place.
     public static let closeSettings = "Close Settings"
 

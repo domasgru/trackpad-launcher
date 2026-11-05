@@ -62,8 +62,12 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
         (surface: SurfaceSize.macBook14, corner: ThumbCorner.topRight, thumb: (x: 114.8, y: 10.0)),
         (surface: SurfaceSize.magicTrackpad, corner: ThumbCorner.topLeft, thumb: (x: 10.0, y: 10.0)),
         (surface: SurfaceSize.magicTrackpad, corner: ThumbCorner.topRight, thumb: (x: 150.0, y: 10.0)),
+        (surface: SurfaceSize.macBook14, corner: ThumbCorner.bottomLeft, thumb: (x: 10.0, y: 66.8)),
+        (surface: SurfaceSize.macBook14, corner: ThumbCorner.bottomRight, thumb: (x: 114.8, y: 66.8)),
+        (surface: SurfaceSize.magicTrackpad, corner: ThumbCorner.bottomLeft, thumb: (x: 10.0, y: 105.0)),
+        (surface: SurfaceSize.magicTrackpad, corner: ThumbCorner.bottomRight, thumb: (x: 150.0, y: 105.0)),
     ])
-    func travelIsInTrackpadMillimetresAndPositiveDownwardsInBothThumbCorners(
+    func travelIsInTrackpadMillimetresAndPositiveDownwardsInEveryThumbCorner(
         surface: SurfaceSize, corner: ThumbCorner, thumb: (x: Double, y: Double)
     ) {
         let start = TouchScript(surface).thumb(atMM: thumb).land(fingers: 2, atMM: (62, 30))

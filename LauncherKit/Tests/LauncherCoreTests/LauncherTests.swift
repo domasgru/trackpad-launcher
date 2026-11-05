@@ -206,6 +206,47 @@ extension Launcher {
         #expect(world.system.broughtToFront == [world.app("Arc")])
     }
 
+    @Test func aBottomCornerChosenMidTouchJudgesTheThumbAfresh() {
+        let world = World(apps: ["Arc"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        #expect(world.launcher.thumbCorner == .topLeft)
+
+        let s1 = TouchScript(.macBook14).thumb(atMM: (10, 10)).tap(fingers: 1)
+        world.play(s1)
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+
+        let runs = world.hardware.runCount
+        world.launcher.setThumbCorner(.bottomRight)
+        #expect(world.launcher.thumbCorner == .bottomRight)
+        #expect(world.hardware.runCount == runs + 1)
+
+        let s2 = s1.wait(.milliseconds(20)).tap(fingers: 1)
+        world.play(s2)
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+
+        let s3 = s2.liftThumb().thumb(atMM: (114.8, 66.8)).tap(fingers: 1)
+        world.play(s3)
+        #expect(world.system.broughtToFront == [world.app("Arc"), world.app("Arc")])
+        #expect(world.hardware.feedback.count == 2)
+
+        world.play(s3.liftThumb().thumb(atMM: (10, 10)).tap(fingers: 1))
+        #expect(world.system.broughtToFront == [world.app("Arc"), world.app("Arc")])
+    }
+
+    @Test func aPlainContactRestingInTheNewCornerAnchorsOnTheFreshRecognizersFirstFrame() {
+        let world = World(apps: ["Arc"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+
+        let resting = TouchScript(.macBook14).thumb(atMM: (114.8, 66.8))
+        world.play(resting)
+        world.launcher.setThumbCorner(.bottomRight)
+        world.play(resting.wait(.milliseconds(20)).tap(fingers: 1))
+
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+    }
+
     @Test func hotPluggedExternalTrackpadWorksAndPulsesItself() {
         let world = World(apps: ["Arc"])
         world.launcher.start()

@@ -4,10 +4,10 @@ import SwiftUI
 
 /// One 326 pt column, 16 pt inside the window, of rounded groups 10 pt apart: the update card, while a newer version is
 /// known; the five gesture rows and the Animate app
-/// launch switch; the switcher section; the thumb picker; then, while any applies, the no trackpad notice or the tap-bound settings notice, the
+/// launch switch; the switcher section; the thumb corner row; then, while any applies, the no trackpad notice or the tap-bound settings notice, the
 /// Accessibility hint and the screen recording hint, one group each. Rows are at least 42 pt tall, with a hairline
 /// between them. The illustrations are 45 × 28 pt. The guide naming the two marks sits over the first illustration for
-/// the top-left corner, where its arrows meet the thumb. *Quit Trackpad Launcher* and *Close* end it, aligned right.
+/// the top-left corner only, where its arrows meet the thumb. *Quit Trackpad Launcher* and *Close* end it, aligned right.
 struct SettingsView: View {
     let launcher: Launcher
     let updater: Updater?
@@ -37,8 +37,7 @@ struct SettingsView: View {
             }
             FormGroup { SwitcherSection(launcher: launcher) }
             FormGroup {
-                ThumbPicker(launcher: launcher)
-                    .padding(.vertical, 8)
+                FormRow { ThumbCornerRow(launcher: launcher) }
             }
             if let notice = launcher.inactiveNotice {
                 SettingsNotice(message: notice)
@@ -154,8 +153,7 @@ struct GestureRowView: View {
         .zIndex(row.gesture == .one ? 1 : 0)
     }
 
-    /// Top-left corner only: the top-right illustrations put the thumb away from the arrows.
-    private var showsGuide: Bool { row.gesture == .one && launcher.thumbCorner == .topLeft }
+    private var showsGuide: Bool { row.gesture == .one && launcher.thumbCorner.showsGuide }
 }
 
 struct GestureIllustration: View {
@@ -181,9 +179,15 @@ struct Illustration: View {
 }
 
 extension ThumbCorner {
-    /// The illustrations draw the thumb in the top-left corner; the top-right copies
-    /// are `-inverse`, which `Scripts/inverse-illustrations.swift` draws from them.
-    func illustration(_ name: String) -> String { self == .topRight ? name + "-inverse" : name }
+    /// The illustrations draw the thumb in the top-left corner; the right-corner copies
+    /// are `-inverse`, which `Scripts/inverse-illustrations.swift` draws from them. The bottom corners use the
+    /// top-corner pictures of their side for now.
+    func illustration(_ name: String) -> String {
+        self == .topRight || self == .bottomRight ? name + "-inverse" : name
+    }
+
+    /// Only the top-left illustration puts the thumb where the guide's arrows end.
+    var showsGuide: Bool { self == .topLeft }
 }
 
 enum BundleImage {
@@ -223,42 +227,29 @@ struct Guide: View {
     }
 }
 
-/// The system segmented control at the regular size (24 pt), filling the group's width in two equal segments, the
-/// chosen one in the accent colour: SwiftUI's segmented picker keeps its fitting width on macOS, so this wraps
-/// `NSSegmentedControl`. *Left thumb* is the top-left corner.
-struct ThumbPicker: NSViewRepresentable {
+/// The thumb corner row's title and, at the trailing edge, its pop-up button (SwiftUI's menu picker is AppKit's pop-up
+/// button on macOS) listing the four corners.
+struct ThumbCornerRow: View {
     let launcher: Launcher
 
-    private static let segments: [(title: String, corner: ThumbCorner)] = [
-        ("Left thumb", .topLeft), ("Right thumb", .topRight),
-    ]
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeNSView(context: Context) -> NSSegmentedControl {
-        let control = NSSegmentedControl(
-            labels: Self.segments.map(\.title), trackingMode: .selectOne,
-            target: context.coordinator, action: #selector(Coordinator.changed(_:)))
-        control.segmentDistribution = .fillEqually
-        control.controlSize = .regular
-        control.selectedSegmentBezelColor = .controlAccentColor
-        control.setAccessibilityLabel("Thumb")
-        return control
-    }
-
-    func updateNSView(_ control: NSSegmentedControl, context: Context) {
-        context.coordinator.choose = { [launcher] in launcher.setThumbCorner(Self.segments[$0].corner) }
-        control.selectedSegment = Self.segments.firstIndex { $0.corner == launcher.thumbCorner } ?? 0
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView control: NSSegmentedControl, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? control.fittingSize.width, height: control.fittingSize.height)
-    }
-
-    @MainActor final class Coordinator: NSObject {
-        var choose: (Int) -> Void = { _ in }
-
-        @objc func changed(_ control: NSSegmentedControl) { choose(control.selectedSegment) }
+    var body: some View {
+        HStack(spacing: 16) {
+            Text(Copy.thumbCornerRow)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Picker(
+                Copy.thumbCornerRow,
+                selection: Binding(get: { launcher.thumbCorner }, set: { launcher.setThumbCorner($0) })
+            ) {
+                ForEach(ThumbCorner.allCases, id: \.self) { corner in
+                    Text(Copy.thumbCornerTitle(corner)).tag(corner)
+                }
+            }
+            .pickerStyle(.menu)
+            .controlSize(.regular)
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityLabel(Copy.thumbCornerRow)
+        }
     }
 }
 

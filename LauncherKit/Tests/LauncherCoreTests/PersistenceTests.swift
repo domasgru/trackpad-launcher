@@ -103,6 +103,216 @@ import LauncherCore
         #expect(!relaunched.isWindowSwipeOn)
     }
 
+    @Test func aReleasedRecordWithRightThumbLoadsAsTopRightAndAnchorsThereAtLogin() {
+        let world = World()
+        for (name, bundleID) in [
+            ("Arc", "company.thebrowser.Browser"), ("Figma", "com.figma.Desktop"), ("Spotify", "com.spotify.client"),
+        ] {
+            world.registry[BundleID(rawValue: bundleID)] = [world.install(name, bundleID: bundleID)]
+        }
+        world.seedSettingsRecord(Data(Self.savedSettings.utf8))
+
+        let relaunched = world.relaunch()
+        relaunched.start()
+
+        #expect(!relaunched.isWindowOpen)
+        #expect(relaunched.thumbCorner == .topRight)
+        world.tap(1, thumbAtMM: (114.8, 10))
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+        world.tap(1, thumbAtMM: (10, 10))
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+
+        relaunched.openedByHand()
+        #expect(relaunched.isWindowOpen)
+        #expect(relaunched.thumbCorner == .topRight)
+    }
+
+    @Test func aRecordSavedWithLeftThumbLoadsAsTopLeft() {
+        let world = World()
+        world.seedSettingsRecord(Fixtures.recordSavedByPlan002(handMode: "right"))
+        #expect(world.relaunch().thumbCorner == .topLeft)
+    }
+
+    @Test func aChosenCornerOpensTheWindowShowingIt() {
+        let world = World()
+        world.launcher.start()
+        world.launcher.setThumbCorner(.bottomLeft)
+
+        let relaunched = world.relaunch()
+        relaunched.start()
+        relaunched.openedByHand()
+
+        #expect(relaunched.thumbCorner == .bottomLeft)
+        #expect(relaunched.isWindowOpen)
+    }
+
+    @Test func aBottomRightChoiceSurvivesARelaunchAndTheThumbAnchorsThere() {
+        let world = World(apps: ["Arc"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.launcher.setThumbCorner(.bottomRight)
+
+        let relaunched = world.relaunch()
+        relaunched.start()
+        #expect(relaunched.thumbCorner == .bottomRight)
+
+        world.tap(1, thumbAtMM: (114.8, 66.8))
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+        world.tap(1, thumbAtMM: (114.8, 10))
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+
+        relaunched.openedByHand()
+        #expect(relaunched.thumbCorner == .bottomRight)
+    }
+
+    @Test func aFirstRunAnchorsTopLeft() {
+        let world = World(apps: ["Arc"])
+        world.launcher.start()
+        world.launcher.openedByHand()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        #expect(world.launcher.thumbCorner == .topLeft)
+
+        world.tap(1, thumbAtMM: (10, 10))
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+    }
+
+    /// What build 1.0.6 reads and writes: the hand under `handMode` and no key for the bottom corners.
+    struct Build106Settings: Codable {
+        enum HandMode: String, Codable { case right, left }
+
+        var handMode: HandMode = .right
+        var assignments: [Gesture: AssignedApp] = [:]
+        var isLaunchAnimationOn = true
+        var isSwipeOn = true
+        var isSwapOn = true
+        var isWindowSwipeOn = false
+        var hasAskedForScreenRecording = false
+
+        init() {}
+
+        init(from decoder: any Decoder) throws {
+            self.init()
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            handMode = try container.decodeIfPresent(HandMode.self, forKey: .handMode) ?? handMode
+            assignments = try container.decodeIfPresent([Gesture: AssignedApp].self, forKey: .assignments) ?? assignments
+            isLaunchAnimationOn = try container.decodeIfPresent(Bool.self, forKey: .isLaunchAnimationOn) ?? isLaunchAnimationOn
+            isSwipeOn = try container.decodeIfPresent(Bool.self, forKey: .isSwipeOn) ?? isSwipeOn
+            isSwapOn = try container.decodeIfPresent(Bool.self, forKey: .isSwapOn) ?? isSwapOn
+            isWindowSwipeOn = try container.decodeIfPresent(Bool.self, forKey: .isWindowSwipeOn) ?? isWindowSwipeOn
+            hasAskedForScreenRecording =
+                try container.decodeIfPresent(Bool.self, forKey: .hasAskedForScreenRecording) ?? hasAskedForScreenRecording
+        }
+    }
+
+    private func savedRecord(_ world: World) throws -> [String: Any] {
+        let bytes = try #require(world.settingsRecordBytes())
+        return try #require(try PropertyListSerialization.propertyList(from: bytes, format: nil) as? [String: Any])
+    }
+
+    @Test(arguments: [
+        (corner: ThumbCorner.bottomRight, hand: "left", hand106: Build106Settings.HandMode.left),
+        (.bottomLeft, "right", .right),
+    ])
+    func aBottomCornerIsSavedSoThatBuild106KeepsEverythingElseAndAnchorsOnTheSameSide(
+        corner: ThumbCorner, hand: String, hand106: Build106Settings.HandMode
+    ) throws {
+        let world = World(apps: ["Arc", "Figma"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.launcher.setAssignment(.app(world.app("Figma")), for: .two)
+        world.launcher.setLaunchAnimation(on: false)
+        world.launcher.setSwipe(on: false)
+        world.launcher.setSwap(on: false)
+        world.launcher.setWindowSwipe(on: true)
+        world.launcher.setThumbCorner(corner)
+
+        let record = try savedRecord(world)
+        #expect(record["handMode"] as? String == hand)
+        #expect(record["isThumbAtBottom"] as? Bool == true)
+        #expect(record["isLaunchAnimationOn"] as? Bool == false)
+        #expect(record["isSwipeOn"] as? Bool == false)
+        #expect(record["isSwapOn"] as? Bool == false)
+        #expect(record["isWindowSwipeOn"] as? Bool == true)
+        let assignments = try #require(record["assignments"] as? [String: [String: Any]])
+        #expect((assignments["1"]?["bundleID"] as? [String: String])?["rawValue"] == World.bundleID("Arc").rawValue)
+        #expect((assignments["2"]?["bundleID"] as? [String: String])?["rawValue"] == World.bundleID("Figma").rawValue)
+
+        let old = try PropertyListDecoder().decode(
+            Build106Settings.self, from: try #require(world.settingsRecordBytes()))
+        #expect(old.handMode == hand106)
+        #expect(old.assignments[.one]?.bundleID == World.bundleID("Arc"))
+        #expect(old.assignments[.two]?.bundleID == World.bundleID("Figma"))
+        #expect(!old.isLaunchAnimationOn && !old.isSwipeOn && !old.isSwapOn && old.isWindowSwipeOn)
+    }
+
+    private func plist(_ record: [String: Any]) throws -> Data {
+        try PropertyListSerialization.data(fromPropertyList: record, format: .xml, options: 0)
+    }
+
+    private func loaded(_ record: [String: Any]) throws -> Settings {
+        let world = World()
+        world.seedSettingsRecord(try plist(record))
+        return try #require(world.store.load())
+    }
+
+    @Test(arguments: [
+        (hand: String?.none, isAtBottom: Bool?.some(true), corner: ThumbCorner.bottomLeft),
+        ("left", nil, .topRight),
+        ("left", true, .bottomRight),
+        ("right", false, .topLeft),
+        (nil, nil, .topLeft),
+    ])
+    func theTwoCornerKeysDecodeIndependentlyAndEveryOtherFieldKeepsItsDefault(
+        hand: String?, isAtBottom: Bool?, corner: ThumbCorner
+    ) throws {
+        var record: [String: Any] = [:]
+        record["handMode"] = hand
+        record["isThumbAtBottom"] = isAtBottom
+        var expected = Settings()
+        expected.thumbCorner = corner
+        #expect(try loaded(record) == expected)
+    }
+
+    @Test func aRecordBuild106WroteLoadsWithItsHandAsATopCornerAndEverythingElseAsWritten() throws {
+        let world = World(apps: ["Arc"])
+        var old = Build106Settings()
+        old.handMode = .left
+        old.assignments = [.three: AssignedApp(world.app("Arc"))]
+        old.isLaunchAnimationOn = false
+        old.isSwipeOn = false
+        old.isSwapOn = false
+        old.isWindowSwipeOn = true
+        old.hasAskedForScreenRecording = true
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        world.seedSettingsRecord(try encoder.encode(old))
+
+        let settings = try #require(world.store.load())
+
+        var expected = Settings()
+        expected.thumbCorner = .topRight
+        expected.assignments = [.three: AssignedApp(world.app("Arc"))]
+        expected.isLaunchAnimationOn = false
+        expected.isSwipeOn = false
+        expected.isSwapOn = false
+        expected.isWindowSwipeOn = true
+        expected.hasAskedForScreenRecording = true
+        #expect(settings == expected)
+    }
+
+    @Test func aNonBooleanBottomKeyFailsTheWholeRecord() throws {
+        #expect(try loaded(["isThumbAtBottom": "yes", "isSwapOn": false]) == Settings())
+    }
+
+    @Test(arguments: ThumbCorner.allCases)
+    func eachThumbCornerSurvivesTheStore(corner: ThumbCorner) {
+        let world = World()
+        var settings = Settings()
+        settings.thumbCorner = corner
+        world.store.save(settings)
+        #expect(world.store.load()?.thumbCorner == corner)
+    }
+
     /// The record a build without the launch animation setting wrote for the top-right corner with Arc, Figma and Notion on
     /// gestures 1 to 3, with the World's own app URLs.
     private func recordFromBeforeTheLaunchAnimationSetting(_ world: World) throws -> Data {
@@ -270,7 +480,7 @@ import LauncherCore
     @Test func everySettingsFieldSurvivesTheStore() {
         let world = World(apps: ["Arc"])
         var settings = Settings()
-        settings.thumbCorner = .topRight
+        settings.thumbCorner = .bottomRight
         settings.assignments = [.three: AssignedApp(world.app("Arc"))]
         settings.isLaunchAnimationOn = false
         settings.isSwipeOn = false
