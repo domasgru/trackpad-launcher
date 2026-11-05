@@ -14,21 +14,11 @@ public struct Settings: Codable, Equatable, Sendable {
 
     /// The corner the thumb anchors in.
     public var thumbCorner: ThumbCorner {
-        get {
-            switch (handMode, isThumbAtBottom) {
-            case (.right, false): .topLeft
-            case (.left, false): .topRight
-            case (.right, true): .bottomLeft
-            case (.left, true): .bottomRight
-            }
-        }
+        // `right` is the hand whose thumb rests on the left.
+        get { ThumbCorner(isLeft: handMode == .right, isBottom: isThumbAtBottom) }
         set {
-            switch newValue {
-            case .topLeft: (handMode, isThumbAtBottom) = (.right, false)
-            case .topRight: (handMode, isThumbAtBottom) = (.left, false)
-            case .bottomLeft: (handMode, isThumbAtBottom) = (.right, true)
-            case .bottomRight: (handMode, isThumbAtBottom) = (.left, true)
-            }
+            handMode = newValue.isLeft ? .right : .left
+            isThumbAtBottom = newValue.isBottom
         }
     }
 

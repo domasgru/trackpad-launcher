@@ -40,13 +40,13 @@ package struct AnchorCorner: Sendable {
 
     /// A contact landing here, while no thumb is anchored, becomes the anchored thumb.
     package func admits(_ p: SurfacePoint) -> Bool {
-        fromSideEdge(p) < GestureRules.cornerWidth && fromRowEdge(p) < GestureRules.cornerHeight
+        fromSideEdge(p) < GestureRules.cornerWidth && fromTopOrBottomEdge(p) < GestureRules.cornerHeight
     }
 
     /// An anchored thumb stays anchored while inside the zone grown by `anchorReleaseMarginMM`.
     package func holds(_ p: SurfacePoint) -> Bool {
         fromSideEdge(p) * surface.widthMM < GestureRules.cornerWidth * surface.widthMM + GestureRules.anchorReleaseMarginMM
-            && fromRowEdge(p) * surface.heightMM
+            && fromTopOrBottomEdge(p) * surface.heightMM
                 < GestureRules.cornerHeight * surface.heightMM + GestureRules.anchorReleaseMarginMM
     }
 
@@ -56,8 +56,8 @@ package struct AnchorCorner: Sendable {
     }
 
     /// Distance from the corner's top or bottom edge as a fraction of the height.
-    private func fromRowEdge(_ p: SurfacePoint) -> Double {
-        corner.fractionFromRowEdge(y: p.y)
+    private func fromTopOrBottomEdge(_ p: SurfacePoint) -> Double {
+        corner.fractionFromTopOrBottomEdge(y: p.y)
     }
 }
 

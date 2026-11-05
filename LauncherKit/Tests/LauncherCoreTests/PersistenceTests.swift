@@ -115,8 +115,17 @@ import LauncherCore
         let relaunched = world.relaunch()
         relaunched.start()
 
-        #expect(!relaunched.isWindowOpen)
+        #expect(relaunched.isWindowOpen == false)
         #expect(relaunched.thumbCorner == .topRight)
+        #expect(
+            relaunched.rows.map(\.app) == [
+                .present(world.app("Arc")), .present(world.app("Figma")), .unassigned, .unassigned,
+                .present(world.app("Spotify")),
+            ])
+        #expect(relaunched.isLaunchAnimationOn == false)
+        #expect(relaunched.isSwipeOn == false)
+        #expect(relaunched.isSwapOn)
+        #expect(relaunched.isWindowSwipeOn == false)
         world.tap(1, thumbAtMM: (114.8, 10))
         #expect(world.system.broughtToFront == [world.app("Arc")])
         world.tap(1, thumbAtMM: (10, 10))
@@ -242,7 +251,10 @@ import LauncherCore
         #expect(old.handMode == hand106)
         #expect(old.assignments[.one]?.bundleID == World.bundleID("Arc"))
         #expect(old.assignments[.two]?.bundleID == World.bundleID("Figma"))
-        #expect(!old.isLaunchAnimationOn && !old.isSwipeOn && !old.isSwapOn && old.isWindowSwipeOn)
+        #expect(old.isLaunchAnimationOn == false)
+        #expect(old.isSwipeOn == false)
+        #expect(old.isSwapOn == false)
+        #expect(old.isWindowSwipeOn)
     }
 
     private func plist(_ record: [String: Any]) throws -> Data {

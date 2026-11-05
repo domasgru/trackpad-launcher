@@ -387,7 +387,8 @@ import LauncherCore
 
     @Test(arguments: [
         (ThumbCorner.bottomLeft, 123.8, 53.76), (.bottomLeft, 1.0, 53.76), (.bottomLeft, 123.8, 23.04),
-        (.bottomRight, 1.0, 53.76), (.bottomRight, 123.8, 53.76), (.bottomRight, 1.0, 23.04),
+        (.bottomRight, 123.8, 23.04), (.bottomRight, 1.0, 53.76), (.bottomRight, 123.8, 53.76),
+        (.bottomRight, 1.0, 23.04),
     ])
     func theSideEdgesAreNotPartOfABottomCornersBand(corner: ThumbCorner, x: Double, y: Double) {
         let script = TouchScript(.macBook14).thumb(atMM: (corner == .bottomLeft ? 10 : 114.8, 66.8))

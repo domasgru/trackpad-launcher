@@ -53,7 +53,7 @@ extension GestureRecognizerTests {
         func fires(_ x: Double, _ y: Double) -> Bool {
             fired(TouchScript(pad).thumb(atMM: (x, y)).tap(fingers: 1).frames, corner: .bottomRight, surface: pad) == [.one]
         }
-        #expect(!fires(110, 55))
+        #expect(fires(110, 55) == false)
         #expect(fires(110, 70))
     }
 

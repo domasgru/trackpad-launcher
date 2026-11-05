@@ -20,3 +20,10 @@
 - Between S2 and S3 a bottom corner shows top-corner pictures → the plan says S2 and S3 ship together; the Strategy says the view wiring is proved only by the manual criteria.
 
 ## Implement
+- Review: new test lines negated Booleans inside `#expect` and packed four switch checks into one → `== false` comparisons and one expectation per switch.
+- Review: the T23 bitmap reader force-unwrapped inside a throwing helper → `try #require`.
+- Review: side and top/bottom were re-derived in two four-way switches in `Settings` and in `ThumbCorner`'s queries → `ThumbCorner.isLeft`, `isBottom` and `init(isLeft:isBottom:)` carry them once; "row edge" (no glossary term) renamed to "top or bottom edge".
+- Review: T19 lacked the plan's `(.bottomRight, 123.8, 23.04)` row and T25 did not assert the rows and switches after the login start → both added; the illustration test lists corners through `allCases`.
+- T23's mark-mask tolerance is 2%, not the plan's 1%: `window-swipe-bottom-inverse` differs in 15 of 1278 mark pixels (1.17%), all antialiased edges of its small marks; a stale or whole-image-flipped asset differs by far more. Kept, with a comment at the expectation.
+- Kept against review: `ThumbCornerRow`'s explicit regular control size and accessibility label, both named by the plan.
+- Full gate (`make test`) green after the fixes: 677 tests in 67 suites.

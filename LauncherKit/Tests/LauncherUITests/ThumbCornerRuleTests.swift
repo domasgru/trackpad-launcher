@@ -25,7 +25,6 @@ import Testing
     nonisolated static let names = [
         "gesture-1", "gesture-2", "gesture-3", "gesture-4", "gesture-5", "swipe", "window-swipe", "thumb-tap",
     ]
-    nonisolated static let corners: [ThumbCorner] = [.topLeft, .topRight, .bottomLeft, .bottomRight]
 
     nonisolated struct Case: Sendable, CustomTestStringConvertible {
         let name: String
@@ -33,7 +32,7 @@ import Testing
         var testDescription: String { "\(name) \(corner)" }
     }
 
-    nonisolated static let cases = names.flatMap { name in corners.map { Case(name: name, corner: $0) } }
+    nonisolated static let cases = names.flatMap { name in ThumbCorner.allCases.map { Case(name: name, corner: $0) } }
 
     /// `Tests/LauncherUITests/<this file>` is four levels below the repository root.
     nonisolated static let assets = URL(fileURLWithPath: #filePath)
@@ -49,14 +48,16 @@ import Testing
             let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
             width = image.width
             height = image.height
-            let space = image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!
+            let space = try #require(image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB))
             var pixels = [UInt8](repeating: 0, count: width * height * 4)
             let width = width, height = height
-            pixels.withUnsafeMutableBytes { bytes in
-                CGContext(
-                    data: bytes.baseAddress!, width: width, height: height, bitsPerComponent: 8,
-                    bytesPerRow: width * 4, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-                    .draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            try pixels.withUnsafeMutableBytes { (bytes: UnsafeMutableRawBufferPointer) throws in
+                let context = try #require(
+                    CGContext(
+                        data: try #require(bytes.baseAddress), width: width, height: height, bitsPerComponent: 8,
+                        bytesPerRow: width * 4, space: space,
+                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+                context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
             }
             self.pixels = pixels
         }
@@ -119,6 +120,7 @@ import Testing
             }
         }
         #expect(cardDiffers == 0, "\(cardDiffers) card pixels changed outside the marks")
+        // 2%, not 1%: the bottom-inverse asset's small marks differ by 1.17% in antialiased edge pixels alone, while a stale or whole-image-flipped asset differs by far more.
         #expect(Double(maskDiffers) < 0.02 * Double(maskPixels), "\(maskDiffers) of \(maskPixels) mark pixels differ")
     }
 }
