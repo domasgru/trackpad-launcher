@@ -35,8 +35,68 @@ import LauncherCore
     @Test func leftHandAnchorsInTheTopRightCorner() {
         let topRight = TouchScript(.macBook14).thumb(atMM: (114.8, 10)).tap(fingers: 1).frames
         let topLeft = TouchScript(.macBook14).thumb(atMM: (10, 10)).tap(fingers: 1).frames
-        #expect(fired(topRight, handMode: .left) == [.one])
-        #expect(fired(topLeft, handMode: .left).isEmpty)
+        #expect(fired(topRight, corner: .topRight) == [.one])
+        #expect(fired(topLeft, corner: .topRight).isEmpty)
+    }
+}
+
+extension GestureRecognizerTests {
+    private static let bottomLeftThumb = (x: 10.0, y: 66.8)
+
+    @Test func aBottomLeftThumbAnchorsInTheBottomLeftCorner() {
+        let frames = TouchScript(.macBook14).thumb(atMM: Self.bottomLeftThumb).tap(fingers: 1).frames
+        #expect(fired(frames, corner: .bottomLeft) == [.one])
+    }
+
+    @Test func theBottomCornerIsMeasuredFromTheBottomEdgeOnAnySurface() {
+        let pad = SurfaceSize(widthMM: 120, heightMM: 80)
+        func fires(_ x: Double, _ y: Double) -> Bool {
+            fired(TouchScript(pad).thumb(atMM: (x, y)).tap(fingers: 1).frames, corner: .bottomRight, surface: pad) == [.one]
+        }
+        #expect(fires(110, 55) == false)
+        #expect(fires(110, 70))
+    }
+
+    @Test(
+        arguments: ThumbCorner.allCases,
+        [
+            (spot: ThumbCorner.topLeft, x: 10.0, y: 10.0),
+            (.topRight, 114.8, 10.0),
+            (.bottomLeft, 10.0, 66.8),
+            (.bottomRight, 114.8, 66.8),
+        ])
+    func aThumbAnchorsOnlyInTheChosenCorner(
+        chosen: ThumbCorner, spot: (spot: ThumbCorner, x: Double, y: Double)
+    ) {
+        let frames = TouchScript(.macBook14).thumb(atMM: (spot.x, spot.y)).tap(fingers: 1).frames
+        #expect(fired(frames, corner: chosen) == (spot.spot == chosen ? [.one] : []))
+    }
+
+    @Test(arguments: [
+        (corner: ThumbCorner.bottomLeft, surface: SurfaceSize.macBook14, x: 24.0, y: 66.8, fires: true),
+        (.bottomLeft, .macBook14, 26.0, 66.8, false),
+        (.bottomLeft, .macBook14, 10.0, 58.8, true),
+        (.bottomLeft, .macBook14, 10.0, 56.8, false),
+        (.bottomRight, .magicTrackpad, 150.0, 105.0, true),
+        (.bottomRight, .magicTrackpad, 150.0, 85.0, false),
+    ])
+    func theBottomCornerIsTwentyPercentByTwentyFivePercentOfTheSurface(
+        corner: ThumbCorner, surface: SurfaceSize, x: Double, y: Double, fires: Bool
+    ) {
+        let frames = TouchScript(surface).thumb(atMM: (x, y)).tap(fingers: 1).frames
+        #expect(fired(frames, corner: corner, surface: surface) == (fires ? [.one] : []))
+    }
+
+    @Test(arguments: [
+        (rollTo: (x: 10.0, y: 56.6), fires: true),
+        (rollTo: (x: 10.0, y: 54.6), fires: false),
+        (rollTo: (x: 26.0, y: 66.8), fires: true),
+        (rollTo: (x: 28.0, y: 66.8), fires: false),
+    ])
+    func aBottomThumbStaysAnchoredUntilItIsTwoMillimetresOutsideTheZone(rollTo: (x: Double, y: Double), fires: Bool) {
+        let frames = TouchScript(.macBook14).thumb(atMM: Self.bottomLeftThumb).rollThumb(toMM: rollTo)
+            .tap(fingers: 1).frames
+        #expect(fired(frames, corner: .bottomLeft) == (fires ? [.one] : []))
     }
 }
 
@@ -168,7 +228,7 @@ extension GestureRecognizerTests {
             h.frame(atMS: 150, [h.contact(9, atMM: 10, 10), h.contact(7, atMM: 62, 45)]),
             h.frame(atMS: 160, [h.contact(9, atMM: 10, 10)]),
         ]
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
+        var recognizer = GestureRecognizer(corner: .topLeft, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
         let perFrame = frames.map { recognizer.step($0).fired }
         #expect(perFrame == [nil, nil, nil, nil, .one, nil, nil, .one])
     }
@@ -241,7 +301,7 @@ extension GestureRecognizerTests {
             h.frame(atMS: 140, [h.contact(9, atMM: 10, 10)]),
             h.frame(atMS: 150, []),
         ]
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
+        var recognizer = GestureRecognizer(corner: .topLeft, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
         #expect(frames.map { recognizer.step($0).fired } == [nil, nil, nil, nil, .one, nil, nil])
     }
 }

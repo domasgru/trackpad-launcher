@@ -40,7 +40,7 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// `blockTapClicks`: presses that arrive while a lift window is open are blocked; only meaningful together with
     /// `blockClicks`.
     func run(
-        _ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>,
+        _ trackpads: [Trackpad], corner: ThumbCorner, blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>,
         swaps: Bool)
     /// One pulse of that kind on that trackpad. No-op if it is gone.
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID)

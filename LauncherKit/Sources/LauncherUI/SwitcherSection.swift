@@ -8,29 +8,29 @@ struct SwitcherSection: View {
 
     var body: some View {
         SettingRow(
-            illustration: "swipe", title: "Switch recent", handMode: launcher.handMode,
+            illustration: "swipe", title: "Switch recent", corner: launcher.thumbCorner,
             isOn: Binding(get: { launcher.isSwipeOn }, set: { launcher.setSwipe(on: $0) }))
         FormDivider()
         SettingRow(
-            illustration: "window-swipe", title: "Switch windows", handMode: launcher.handMode,
+            illustration: "window-swipe", title: "Switch windows", corner: launcher.thumbCorner,
             isOn: Binding(get: { launcher.isWindowSwipeOn }, set: { launcher.setWindowSwipe(on: $0) }))
         FormDivider()
         SettingRow(
-            illustration: "thumb-tap", title: "Toggle recent", handMode: launcher.handMode,
+            illustration: "thumb-tap", title: "Toggle recent", corner: launcher.thumbCorner,
             isOn: Binding(get: { launcher.isSwapOn }, set: { launcher.setSwap(on: $0) }))
     }
 }
 
-/// One switch with its illustration (the inverse copy in left-hand mode) 10 pt before its title.
+/// One switch with its illustration (the copy for the chosen thumb corner) 10 pt before its title.
 struct SettingRow: View {
     let illustration: String
     let title: String
-    let handMode: HandMode
+    let corner: ThumbCorner
     let isOn: Binding<Bool>
 
     var body: some View {
         FormRow {
-            Illustration(name: illustration, handMode: handMode)
+            Illustration(name: illustration, corner: corner)
                 .accessibilityHidden(true)
                 .padding(.trailing, 10)
             SwitchRow(title: title, isOn: isOn)

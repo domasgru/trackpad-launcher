@@ -129,7 +129,7 @@ import Testing
     }
 
     @Test func movingOverAnOlderCopyKeepsEverySettingAndHandsStartingAtLoginOver() {
-        let world = LifecycleWorld(record: [.one: "Arc"], handMode: .left, loginItemOn: true)
+        let world = LifecycleWorld(record: [.one: "Arc"], corner: .topRight, loginItemOn: true)
         let process = world.launch(.byHand, others: [.earlier], placement: .elsewhere)
         #expect(process.copies.stopped.isEmpty)
 
@@ -153,7 +153,7 @@ import Testing
         #expect(world.loginItem.isOn)
         #expect(Set(world.mac.suiteDomain().keys) == ["settings"])
         #expect(installed.window == .open(request: 1))
-        #expect(installed.launcher.handMode == .left)
+        #expect(installed.launcher.thumbCorner == .topRight)
         installed.tap(1, thumbAtMM: Self.leftThumbEdge)
         #expect(installed.system.broughtToFront == [world.mac.app("Arc")])
     }
@@ -282,6 +282,6 @@ import Testing
 
     @Test func aKillAnywhereInAMoveOverAnOlderCopyConverges() {
         convergesAfterAKillAnywhereIn(
-            LifecycleWorld(record: [.one: "Arc"], handMode: .left, loginItemOn: true), others: [.earlier])
+            LifecycleWorld(record: [.one: "Arc"], corner: .topRight, loginItemOn: true), others: [.earlier])
     }
 }

@@ -5,7 +5,23 @@ import Foundation
 /// Decoding rule, for every field present and future: a key missing from the record decodes as that field's default;
 /// a key this build does not know is ignored; a key whose value does not decode fails the whole record.
 public struct Settings: Codable, Equatable, Sendable {
-    public var handMode: HandMode = .right
+    /// Saved under the key `handMode`, as the hand whose thumb anchors, exactly as every version has written it.
+    private var handMode: HandMode = .right
+
+    /// Whether the thumb anchors at the bottom edge. A build without bottom corners ignores this key and anchors in the
+    /// top corner on the same side. The key is this field's name, permanently.
+    private var isThumbAtBottom = false
+
+    /// The corner the thumb anchors in.
+    public var thumbCorner: ThumbCorner {
+        // `right` is the hand whose thumb rests on the left.
+        get { ThumbCorner(isLeft: handMode == .right, isBottom: isThumbAtBottom) }
+        set {
+            handMode = newValue.isLeft ? .right : .left
+            isThumbAtBottom = newValue.isBottom
+        }
+    }
+
     /// Absent = unassigned.
     public var assignments: [Gesture: AssignedApp] = [:]
     /// Whether a gesture plays the launch animation. The key is this field's name, permanently.
@@ -37,6 +53,7 @@ public struct Settings: Codable, Equatable, Sendable {
         self.init()
         let container = try decoder.container(keyedBy: CodingKeys.self)
         handMode = try container.decodeIfPresent(HandMode.self, forKey: .handMode) ?? handMode
+        isThumbAtBottom = try container.decodeIfPresent(Bool.self, forKey: .isThumbAtBottom) ?? isThumbAtBottom
         assignments = try container.decodeIfPresent([Gesture: AssignedApp].self, forKey: .assignments) ?? assignments
         isLaunchAnimationOn =
             try container.decodeIfPresent(Bool.self, forKey: .isLaunchAnimationOn) ?? isLaunchAnimationOn
@@ -46,6 +63,12 @@ public struct Settings: Codable, Equatable, Sendable {
         hasAskedForScreenRecording =
             try container.decodeIfPresent(Bool.self, forKey: .hasAskedForScreenRecording) ?? hasAskedForScreenRecording
     }
+}
+
+/// The wire form of the thumb corner: `right` is the thumb on the left side, `left` the thumb on the right side.
+private enum HandMode: String, Codable {
+    case right
+    case left
 }
 
 /// One plist-encoded record under one key. Local-substitutable: tests use a throwaway `UserDefaults` suite.

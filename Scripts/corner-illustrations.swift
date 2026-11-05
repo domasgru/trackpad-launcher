@@ -1,18 +1,24 @@
 #!/usr/bin/env swift
-// Draws the left hand's copy of each gesture illustration: assets/<name>.png, exported from Figma with the thumb
-// top-left (right hand), becomes assets/<name>-inverse.png with the thumb top-right.
-// Only the marks are mirrored. The paper card is lit from one side, so a mirrored card would light the left-hand
-// copies from the other. The marks are pure black on the card, so each pixel is card × (1 − coverage): the card behind
-// a mark is filled in smoothly from the card around it, the coverage is 1 − pixel ÷ card, and the copy is the
+// Draws every other corner's copy of each gesture illustration: assets/<name>.png, exported from Figma with the thumb
+// top-left, becomes assets/<name>-inverse.png with the thumb top-right (marks mirrored left to right),
+// assets/<name>-bottom.png with the thumb bottom-left (marks mirrored top to bottom) and
+// assets/<name>-bottom-inverse.png with the thumb bottom-right (mirrored both ways).
+// Only the marks are mirrored. The paper card is lit from one side, so a mirrored card would light the copies
+// from another. The marks are pure black on the card, so each pixel is card × (1 − coverage): the card behind
+// a mark is filled in smoothly from the card around it, the coverage is 1 − pixel ÷ card, and each copy is the
 // card × (1 − mirrored coverage).
 //
-// Usage: swift Scripts/inverse-illustrations.swift
+// Usage: swift Scripts/corner-illustrations.swift
 import CoreGraphics
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
 let names = ["gesture-1", "gesture-2", "gesture-3", "gesture-4", "gesture-5", "swipe", "window-swipe", "thumb-tap"]
+/// The file suffix of each derived copy, and the directions its marks are mirrored in.
+let copies: [(suffix: String, mirrorX: Bool, mirrorY: Bool)] = [
+    ("-inverse", true, false), ("-bottom", false, true), ("-bottom-inverse", true, true),
+]
 let assets = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     .appendingPathComponent("assets")
 
@@ -117,16 +123,18 @@ for name in names {
     let image = Bitmap(assets.appendingPathComponent("\(name).png"))
     let mask = markMask(image)
     let card = card(behind: image, mask: mask)
-    var inverse = card
-    for y in 0..<image.height {
-        for x in 0..<image.width {
-            let mirrored = image.width - 1 - x
-            guard mask[y * image.width + mirrored] else { continue }
-            let coverage = max(0, min(1, 1 - image.luminance(mirrored, y) / card.luminance(mirrored, y)))
-            precondition(inverse[x, y, 3] == 255, "\(name): a mirrored mark falls off the card at \(x), \(y)")
-            for channel in 0..<3 { inverse[x, y, channel] = card[x, y, channel] * (1 - coverage) }
+    for (suffix, mirrorX, mirrorY) in copies {
+        var copy = card
+        for y in 0..<image.height {
+            for x in 0..<image.width {
+                let (sx, sy) = (mirrorX ? image.width - 1 - x : x, mirrorY ? image.height - 1 - y : y)
+                guard mask[sy * image.width + sx] else { continue }
+                let coverage = max(0, min(1, 1 - image.luminance(sx, sy) / card.luminance(sx, sy)))
+                precondition(copy[x, y, 3] == 255, "\(name)\(suffix): a mirrored mark falls off the card at \(x), \(y)")
+                for channel in 0..<3 { copy[x, y, channel] = card[x, y, channel] * (1 - coverage) }
+            }
         }
+        copy.write(assets.appendingPathComponent("\(name)\(suffix).png"))
+        print("assets/\(name)\(suffix).png")
     }
-    inverse.write(assets.appendingPathComponent("\(name)-inverse.png"))
-    print("assets/\(name)-inverse.png")
 }

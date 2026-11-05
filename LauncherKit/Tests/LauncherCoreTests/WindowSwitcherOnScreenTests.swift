@@ -224,13 +224,25 @@ import LauncherCore
 
     @Test func leftHandedTheSameSlideDownReachesTheNextWindow() {
         let world = World.windowWorld(visible: ["Docs", "Mail"])
-        world.launcher.setHandMode(.left)
+        world.launcher.setThumbCorner(.topRight)
 
         world.windowSwipe(3.5, 12, lift: false, thumbAtMM: (114.8, 10))
 
         #expect(titles(world) == ["Docs", "Mail"])
         #expect(selected(world) == 1)
         #expect(world.hardware.lightTicks.count == 1)
+    }
+
+    @Test func fromTheBottomLeftCornerTheSameSlideDownReachesTheNextWindow() {
+        let world = World.windowWorld(visible: ["Docs", "Mail"])
+        world.launcher.setThumbCorner(.bottomLeft)
+
+        world.windowSwipe(3.5, 12, lift: false, thumbAtMM: (10, 66.8))
+
+        #expect(titles(world) == ["Docs", "Mail"])
+        #expect(selected(world) == 1)
+        #expect(world.hardware.lightTicks.count == 1)
+        #expect(world.system.windows.raised == [[world.window("Mail")]])
     }
 
     @Test func aTwoFingerTapThatDriftsTwoMillimetresDownStaysATap() {

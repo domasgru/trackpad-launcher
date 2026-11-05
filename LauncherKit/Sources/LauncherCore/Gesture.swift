@@ -24,9 +24,9 @@ public struct GestureEvent: Equatable, Sendable {
 /// What two fingers sliding under an anchored thumb start. Decided once, on the frame the farthest-moved finger passes
 /// 3 mm, and held until both fingers lift.
 public enum SlideKind: Hashable, Sendable {
-    /// More sideways than up or down: the app switcher. Travel is positive to the right in both hand modes.
+    /// More sideways than up or down: the app switcher. Travel is positive to the right whatever the thumb corner.
     case swipe
-    /// More up or down than sideways: the window switcher. Travel is positive downwards in both hand modes.
+    /// More up or down than sideways: the window switcher. Travel is positive downwards whatever the thumb corner.
     case windowSwipe
 }
 

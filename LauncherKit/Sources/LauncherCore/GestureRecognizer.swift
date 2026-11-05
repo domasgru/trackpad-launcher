@@ -82,9 +82,9 @@ public struct GestureRecognizer: Sendable {
     /// `slides`: the kinds whose setting is on. Empty: a pair's drag spoils like any drag, as with both settings off.
     /// `swaps`: false: a thumb landing under resting fingers is only ever held, never a thumb tap.
     /// `travel`: how finger movement becomes switcher travel. A var, so a Debug tuner can change it between frames.
-    public init(handMode: HandMode, surface: SurfaceSize, slides: Set<SlideKind>, swaps: Bool, travel: SwipeTravel) {
-        self.corner = AnchorCorner(handMode, surface: surface)
-        self.edgeContacts = EdgeContacts(handMode, surface: surface)
+    public init(corner: ThumbCorner, surface: SurfaceSize, slides: Set<SlideKind>, swaps: Bool, travel: SwipeTravel) {
+        self.corner = AnchorCorner(corner, surface: surface)
+        self.edgeContacts = EdgeContacts(corner, surface: surface)
         self.surface = surface
         self.slides = slides
         self.swaps = swaps

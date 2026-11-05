@@ -18,12 +18,12 @@ import LauncherCore
     /// `record` is what an earlier run saved: these apps on these gestures. nil is a Mac that holds no settings.
     init(
         apps: [String] = ["Arc", "Notes"], accessGranted: Bool = true, record: [Gesture: String]? = nil,
-        handMode: HandMode = .right, loginItemOn: Bool = false
+        corner: ThumbCorner = .topLeft, loginItemOn: Bool = false
     ) {
         mac = World(apps: apps, accessGranted: accessGranted)
         if let record {
             var settings = Settings()
-            settings.handMode = handMode
+            settings.thumbCorner = corner
             for (gesture, name) in record { settings.assignments[gesture] = AssignedApp(mac.app(name)) }
             mac.freshStore().save(settings)
         }

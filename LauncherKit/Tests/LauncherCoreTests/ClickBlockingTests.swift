@@ -30,6 +30,20 @@ import LauncherCore
         #expect(world.hardware.feedback == [trackpad.id])
     }
 
+    @Test func aFirmTapFromABottomLeftThumbOpensItsAppAndTheWholePressNeverReachesApps() {
+        let world = World(apps: ["Arc"], accessGranted: true)
+        world.launcher.start()
+        world.launcher.setThumbCorner(.bottomLeft)
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+
+        world.hardware.touch(
+            TouchScript(.macBook14).thumb(atMM: (10, 66.8)).tap(fingers: 1, click: .firm).frames, on: trackpad.id)
+
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+        #expect(world.hardware.pressVerdicts == [.drop, .drop])
+        #expect(world.hardware.feedback == [trackpad.id])
+    }
+
     @Test func pressAndHoldOpensNothingAndBlocksThePress() {
         let world = world()
         world.hardware.touch(script().tap(fingers: 1, hold: .seconds(1), click: .firm).frames, on: trackpad.id)

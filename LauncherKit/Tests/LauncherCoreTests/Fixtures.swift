@@ -20,65 +20,65 @@ extension Trackpad {
 /// Runs a fresh recognizer over `frames` and returns everything that fired, in order.
 func fired(
     _ frames: [TouchFrame],
-    handMode: HandMode = .right,
+    corner: ThumbCorner = .topLeft,
     surface: SurfaceSize = .macBook14,
     slides: Set<SlideKind> = [.swipe, .windowSwipe],
     swaps: Bool = true,
     answering: Bool? = true
 ) -> [Gesture] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
+    var recognizer = GestureRecognizer(corner: corner, surface: surface, slides: slides, swaps: swaps, travel: .linear)
     return frames.compactMap { recognizer.step($0, answering: answering).fired }
 }
 
 /// Runs a fresh recognizer over `frames` and returns every swipe phase it reported, in order.
 func phases(
     _ frames: [TouchFrame],
-    handMode: HandMode = .right,
+    corner: ThumbCorner = .topLeft,
     surface: SurfaceSize = .macBook14,
     slides: Set<SlideKind> = [.swipe, .windowSwipe],
     swaps: Bool = true,
     answering: Bool? = true
 ) -> [SwipePhase] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
+    var recognizer = GestureRecognizer(corner: corner, surface: surface, slides: slides, swaps: swaps, travel: .linear)
     return frames.compactMap { recognizer.step($0, answering: answering).swipe }
 }
 
 /// Runs a fresh recognizer over `frames` and returns every window swipe phase it reported, in order.
 func windowPhases(
     _ frames: [TouchFrame],
-    handMode: HandMode = .right,
+    corner: ThumbCorner = .topLeft,
     surface: SurfaceSize = .macBook14,
     slides: Set<SlideKind> = [.swipe, .windowSwipe],
     swaps: Bool = true,
     answering: Bool? = true
 ) -> [SwipePhase] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
+    var recognizer = GestureRecognizer(corner: corner, surface: surface, slides: slides, swaps: swaps, travel: .linear)
     return frames.compactMap { recognizer.step($0, answering: answering).windowSwipe }
 }
 
 /// Runs a fresh recognizer over `frames` and returns `startsSeries` of every swap it reported, in order.
 func swaps(
     _ frames: [TouchFrame],
-    handMode: HandMode = .right,
+    corner: ThumbCorner = .topLeft,
     surface: SurfaceSize = .macBook14,
     slides: Set<SlideKind> = [.swipe, .windowSwipe],
     swaps: Bool = true,
     answering: Bool? = true
 ) -> [Bool] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
+    var recognizer = GestureRecognizer(corner: corner, surface: surface, slides: slides, swaps: swaps, travel: .linear)
     return frames.compactMap { recognizer.step($0, answering: answering).swapStartsSeries }
 }
 
 /// Per frame: what the recognizer said about a swipe and a window swipe, and whether it blocked clicks.
 func perFrame(
     _ frames: [TouchFrame],
-    handMode: HandMode = .right,
+    corner: ThumbCorner = .topLeft,
     surface: SurfaceSize = .macBook14,
     slides: Set<SlideKind> = [.swipe, .windowSwipe],
     swaps: Bool = true,
     answering: Bool? = true
 ) -> [(swipe: SwipePhase?, windowSwipe: SwipePhase?, blocks: Bool)] {
-    var recognizer = GestureRecognizer(handMode: handMode, surface: surface, slides: slides, swaps: swaps, travel: .linear)
+    var recognizer = GestureRecognizer(corner: corner, surface: surface, slides: slides, swaps: swaps, travel: .linear)
     return frames.map {
         let recognition = recognizer.step($0, answering: answering)
         return (recognition.swipe, recognition.windowSwipe, recognition.blocksClicks)
@@ -127,10 +127,10 @@ struct HandFrames {
 }
 
 enum Fixtures {
-    /// The record the build before the switcher saved: hand mode and gestures 1...4, no other keys.
-    static func recordSavedByPlan002(handMode: HandMode = .right, two: AppEntry? = nil) -> Data {
+    /// The record the build before the switcher saved: thumb corner and gestures 1...4, no other keys.
+    static func recordSavedByPlan002(handMode: String = "right", two: AppEntry? = nil) -> Data {
         struct Saved: Codable {
-            var handMode: HandMode
+            var handMode: String
             var assignments: [Gesture: AssignedApp]
         }
         var saved = Saved(handMode: handMode, assignments: [:])

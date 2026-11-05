@@ -19,7 +19,7 @@ import LauncherCore
 
     private func makeRecognizer() -> GestureRecognizer {
         GestureRecognizer(
-            handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
+            corner: .topLeft, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
     }
 
     private static let thumbID = 100
