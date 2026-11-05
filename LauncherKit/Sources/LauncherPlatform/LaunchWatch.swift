@@ -7,30 +7,28 @@ import LauncherCore
 /// finishing and ending by key-value observation, which macOS pushes for every kind of app, then one look at its
 /// windows and, with Accessibility, its first window created later. When it cannot be told of that window (no
 /// Accessibility, or the app's Accessibility server not answering yet, as Things' is at finishing), it looks at the
-/// window list again every `relookInterval` on the bounce's clock instead, until a window shows or `stop()`. Reports
-/// each fact at most once, nothing after `stop()`, and holds nothing once stopped. Every Accessibility call goes to the
+/// window list again every `relookInterval` instead, until a window shows or `stop()`. Its time (the cap, the limit
+/// once the app finished launching, the re-look interval) passes on its own `LaunchClock`, made when it starts, so it
+/// runs with or without a bounce and costs nothing before the app is opened. Reports each fact at most once, nothing after `stop()`, and holds nothing once stopped. Every Accessibility call goes to the
 /// app element it creates, whose messaging timeout it sets to `messagingTimeout` itself.
 @MainActor final class LaunchWatch {
     static let messagingTimeout: Float = 0.2
-    /// R9's 50 ms. A window-list read takes about a millisecond and needs no permission.
+    /// A window-list read takes about a millisecond and needs no permission.
     static let relookInterval = Duration.milliseconds(50)
 
     private let report: @MainActor (LaunchProgress) -> Void
-    /// Calls back once the given time has passed on the bounce's clock; never once the bounce has ended.
-    private let wait: @MainActor (Duration, @escaping @MainActor () -> Void) -> Void
+    /// Made by `start(cap:)`.
+    private var clock: LaunchClock?
     private var process: NSRunningApplication?
     private var observations: [NSKeyValueObservation] = []
     private var windowObserver: AXObserver?
     private var hasFinished = false
     private var hasGoneNowhere = false
+    private var hasRanOut = false
     private var isStopped = false
 
-    init(
-        report: @escaping @MainActor (LaunchProgress) -> Void,
-        wait: @escaping @MainActor (Duration, @escaping @MainActor () -> Void) -> Void
-    ) {
+    init(report: @escaping @MainActor (LaunchProgress) -> Void) {
         self.report = report
-        self.wait = wait
     }
 
     isolated deinit { stop() }
@@ -40,9 +38,32 @@ import LauncherCore
         Task { @MainActor [weak self] in self?.adopt(pid) }
     }
 
-    /// Invalidates the observations and removes the window observer's run-loop source. Idempotent.
+    /// Runs the watch out at `cap` at the latest.
+    func start(cap: Duration) {
+        guard !isStopped, clock == nil else { return }
+        let clock = LaunchClock()
+        self.clock = clock
+        clock.after(cap) { [weak self] in self?.runOut() }
+    }
+
+    /// From now on the watch runs out within `limit` at the latest, never later than its cap or an earlier limit: the
+    /// first deadline to pass reports.
+    func limit(to limit: Duration) {
+        guard !isStopped else { return }
+        clock?.after(limit) { [weak self] in self?.runOut() }
+    }
+
+    private func runOut() {
+        guard !isStopped, !hasRanOut else { return }
+        hasRanOut = true
+        report(.ranOut)
+    }
+
+    /// Stops the clock, invalidates the observations and removes the window observer's run-loop source. Idempotent.
     func stop() {
         isStopped = true
+        clock?.stop()
+        clock = nil
         dropWindowObserver()
         observations.forEach { $0.invalidate() }
         observations = []
@@ -95,7 +116,7 @@ import LauncherCore
     }
 
     private func relookLater(_ pid: pid_t) {
-        wait(Self.relookInterval) { [weak self] in self?.relook(pid) }
+        clock?.after(Self.relookInterval) { [weak self] in self?.relook(pid) }
     }
 
     private func relook(_ pid: pid_t) {

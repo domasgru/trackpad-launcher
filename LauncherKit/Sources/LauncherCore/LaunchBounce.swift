@@ -8,7 +8,7 @@ public enum LaunchProgress: Equatable, Sendable {
     case windowShown
     /// macOS could not launch it, or its process ended before the bounce did.
     case wentNowhere
-    /// The bounce reached a time limit: its cap, or the limit set once the app finished launching.
+    /// The launch's watch reached a time limit: its cap, or the limit set once the app finished launching.
     case ranOut
 }
 

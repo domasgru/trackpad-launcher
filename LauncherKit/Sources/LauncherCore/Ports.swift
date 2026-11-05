@@ -95,7 +95,7 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// pointer and following it, in one row with any other bounce, newest on the right. Watches that launch and pushes
     /// `onLaunchProgress` for it until `endLaunchBounce`, `.ranOut` at `cap` at the latest. Reads the pointer, the
     /// displays, Reduce motion and the tuning at the call. Nothing it shows activates Trackpad Launcher, becomes key or
-    /// receives a click. A bounce it cannot show runs out on the next main-actor turn. One bounce per app: for an app
+    /// receives a click. With no display to bounce on, the watch runs as usual and only the icon is missing. One bounce per app: for an app
     /// whose bounce still plays it only brings the app to front.
     func bringToFrontBouncing(_ app: AppEntry, cap: Duration)
 

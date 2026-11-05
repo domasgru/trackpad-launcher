@@ -45,14 +45,15 @@ import LauncherCore
         let id = app.bundleID
         guard launches[id] == nil else { return bringToFront(app) }
         let report: @MainActor (LaunchProgress) -> Void = { [weak self] in self?.report($0, of: id) }
-        let watch = LaunchWatch(report: report) { [bounces] wait, passed in bounces.after(wait, in: id, passed) }
+        let watch = LaunchWatch(report: report)
         launches[id] = Launch(watch: watch)
         // The app first: nothing below can delay it.
         open(app, then: watch.opened)
-        bounces.start(app, cap: cap) { report(.ranOut) }
+        watch.start(cap: cap)
+        bounces.start(app)
     }
 
-    public func limitLaunchBounce(of app: BundleID, to limit: Duration) { bounces.limit(app, to: limit) }
+    public func limitLaunchBounce(of app: BundleID, to limit: Duration) { launches[app]?.watch.limit(to: limit) }
 
     public func endLaunchBounce(of app: BundleID, with ending: LaunchBounceEnding) {
         launches.removeValue(forKey: app)?.watch.stop()
