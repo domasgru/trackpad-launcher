@@ -8,8 +8,9 @@ import SwiftUI
 /// the Animate app launch switch, the switcher section, and the thumb corner row with the Hide background apps switch
 /// below it; the notices, while any applies, 10 pt apart: the no trackpad notice or the tap-bound settings notice, the Accessibility hint and the screen recording hint,
 /// one rounded group each; then *Quit Trackpad Launcher* and *Close*, aligned right. The form keeps the system's own
-/// fonts, row heights, insets and controls. The illustrations are 45 × 28 pt. The guide naming the two marks sits over
-/// the first illustration for the top-left corner only, where its arrows meet the thumb.
+/// fonts, insets and controls, and every row of the form is 46 pt tall (`formRowContent()`). The illustrations are
+/// 45 × 28 pt. The guide naming the two marks sits over the first illustration for the top-left corner only, where its
+/// arrows meet the thumb.
 struct SettingsView: View {
     let launcher: Launcher
     let updater: Updater?
@@ -50,9 +51,11 @@ struct SettingsView: View {
                         GestureRowView(row: row, launcher: launcher, actions: actions)
                     }
                     Toggle(
-                        "Animate app launch",
                         isOn: Binding(
-                            get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) }))
+                            get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
+                    ) {
+                        Text("Animate app launch").formRowContent()
+                    }
                     .toggleStyle(.switch)
                 }
                 Section { SwitcherSection(launcher: launcher) }
@@ -124,14 +127,14 @@ struct FormGroup<Content: View>: View {
     }
 }
 
-/// One row of a group: at least 42 pt tall, its content centred.
+/// One row of a group: at least 46 pt tall, as the settings form's rows are, its content centred.
 struct FormRow<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
         HStack(spacing: 0) { content }
             .padding(.vertical, 2)
-            .frame(maxWidth: .infinity, minHeight: 42)
+            .frame(maxWidth: .infinity, minHeight: 46)
     }
 }
 
@@ -162,6 +165,7 @@ struct GestureRowView: View {
                 },
                 pickAnimation: actions.pickAnimation)
         }
+        .formRowContent()
         // Above the next row, so the guide's arrows draw over it.
         .zIndex(row.gesture == .one ? 1 : 0)
     }
@@ -188,6 +192,15 @@ struct Illustration: View {
 
     var body: some View {
         BundleImage.view(corner.illustration(name), type: "png", size: Self.size)
+    }
+}
+
+extension View {
+    /// A settings form row's content: 26 pt, which the form's own 10 pt above and below makes a 46 pt row. An
+    /// illustration, which is taller, stays centred and reaches into that padding. The height is set here because a
+    /// grouped Form ignores `listRowInsets` on macOS 26, measured offscreen in a one-row form.
+    func formRowContent() -> some View {
+        frame(height: 26)
     }
 }
 
@@ -250,13 +263,12 @@ struct ThumbCornerRow: View {
     let launcher: Launcher
 
     var body: some View {
-        Picker(
-            Copy.thumbCornerRow,
-            selection: Binding(get: { launcher.thumbCorner }, set: { launcher.setThumbCorner($0) })
-        ) {
+        Picker(selection: Binding(get: { launcher.thumbCorner }, set: { launcher.setThumbCorner($0) })) {
             ForEach(ThumbCorner.allCases, id: \.self) { corner in
                 Text(Copy.thumbCornerTitle(corner)).tag(corner)
             }
+        } label: {
+            Text(Copy.thumbCornerRow).formRowContent()
         }
         .pickerStyle(.menu)
     }

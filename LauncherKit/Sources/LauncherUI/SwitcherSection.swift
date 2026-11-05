@@ -33,6 +33,7 @@ struct SettingRow: View {
                     .accessibilityHidden(true)
                 Text(title)
             }
+            .formRowContent()
         }
         .toggleStyle(.switch)
     }
