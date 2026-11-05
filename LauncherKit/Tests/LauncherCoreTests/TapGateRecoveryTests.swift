@@ -135,10 +135,14 @@ import LauncherCore
         #expect(!world.hardware.isGatedPortOn)
     }
 
-    @Test func tapToClickTurnsTheTapOff() {
+    @Test func withAccessATapToClickChangeKeepsTheTapAndRestartsItClosed() {
         let world = world()
+        let runs = world.hardware.runCount
         world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
-        #expect(world.hardware.offer(.scroll(.fingers(.changed))) == .noTap)
+        #expect(world.hardware.runCount == runs + 1)
+        #expect(world.hardware.isBlockingClicks)
+        #expect(!world.hardware.isGatedPortOn)
+        #expect(world.hardware.offer(.scroll(.fingers(.changed))) == .notSent)
     }
 
     @Test func twoTrackpadsMergeToTheHighestLevelAndTheGateFollowsTheOneThatStillWantsIt() {

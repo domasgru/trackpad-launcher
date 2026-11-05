@@ -3,13 +3,11 @@ import LauncherCore
 
 /// The System Settings panes the settings window opens.
 enum SettingsPane {
-    case trackpad
     case accessibility
     case screenRecording
 
     var url: URL {
         switch self {
-        case .trackpad: URL(string: "x-apple.systempreferences:com.apple.preference.trackpad")!
         case .accessibility:
             URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
         case .screenRecording:

@@ -32,7 +32,7 @@ import Testing
     private func event(_ type: CGEventType, number: Int64 = 0, button: Int64? = nil) throws -> CGEvent {
         let event = try #require(CGEvent(source: nil))
         event.type = type
-        event.setIntegerValueField(DockSwipeFields.hidType, value: DockSwipeFields.dockSwipe)
+        event.setIntegerValueField(GestureEventFields.hidType, value: GestureEventFields.dockSwipe)
         event.setIntegerValueField(.mouseEventNumber, value: number)
         if let button { event.setIntegerValueField(.mouseEventButtonNumber, value: button) }
         return event
@@ -63,11 +63,11 @@ import Testing
         #expect(TapEvent(type, try event(type)) == nil)
     }
 
-    private func gesture(_ type: UInt32, hidType: Int64 = DockSwipeFields.dockSwipe, phase: Int64) throws -> CGEvent {
+    private func gesture(_ type: UInt32, hidType: Int64 = GestureEventFields.dockSwipe, phase: Int64) throws -> CGEvent {
         let event = try #require(CGEvent(source: nil))
         event.type = try #require(CGEventType(rawValue: type))
-        event.setIntegerValueField(DockSwipeFields.hidType, value: hidType)
-        event.setIntegerValueField(DockSwipeFields.phase, value: phase)
+        event.setIntegerValueField(GestureEventFields.hidType, value: hidType)
+        event.setIntegerValueField(GestureEventFields.phase, value: phase)
         return event
     }
 
@@ -76,8 +76,8 @@ import Testing
     ])
     func parsesADockSwipeOnEitherGestureTypeWithItsPhase(phase: Int64, expected: DockSwipePhase) throws {
         for (type, stream) in [
-            (DockSwipeFields.gestureType, DockSwipeStream.gesture),
-            (DockSwipeFields.dockControlType, .dockControl),
+            (GestureEventFields.gestureType, DockSwipeStream.gesture),
+            (GestureEventFields.dockControlType, .dockControl),
         ] {
             let event = try gesture(type, phase: phase)
             #expect(TapEvent(event.type, event) == .dockSwipe(expected, stream))
@@ -86,12 +86,46 @@ import Testing
 
     @Test(arguments: [Int64(0), 8, 5, 6])
     func ignoresEveryOtherGestureSoPinchRotateAndAppSwipesPass(hidType: Int64) throws {
-        let event = try gesture(DockSwipeFields.gestureType, hidType: hidType, phase: 1)
+        let event = try gesture(GestureEventFields.gestureType, hidType: hidType, phase: 1)
         #expect(TapEvent(event.type, event) == nil)
     }
 
+    @Test(arguments: [(Int64(24), TapAction.lookUp, Int64(5)), (22, .smartZoom, 0)])
+    func parsesLookUpAndSmartZoomFromTheGestureTypeAndRidesTheGatedPort(
+        hidType: Int64, expected: TapAction, phase: Int64
+    ) throws {
+        let event = try gesture(GestureEventFields.gestureType, hidType: hidType, phase: phase)
+        let parsed = try #require(TapEvent(event.type, event))
+        #expect(parsed == .tapAction(expected))
+        #expect(parsed.ridesGatedPort)
+    }
+
+    @Test func bothEventsOfTheLookUpPairParseAsLookUp() throws {
+        let first = try gesture(GestureEventFields.gestureType, hidType: 24, phase: 5)
+        // Fields 123 and 165 are 1 on the first event of the Look up pair only (measured).
+        let firstOfPairMarker = try #require(CGEventField(rawValue: 123))
+        let firstOfPairSecondMarker = try #require(CGEventField(rawValue: 165))
+        first.setIntegerValueField(firstOfPairMarker, value: 1)
+        first.setIntegerValueField(firstOfPairSecondMarker, value: 1)
+        let second = try gesture(GestureEventFields.gestureType, hidType: 24, phase: 5)
+        #expect(TapEvent(first.type, first) == .tapAction(.lookUp))
+        #expect(TapEvent(second.type, second) == .tapAction(.lookUp))
+    }
+
+    @Test(arguments: [Int64(24), 22])
+    func theDockControlTypeCarriesNoTapActions(hidType: Int64) throws {
+        let event = try gesture(GestureEventFields.dockControlType, hidType: hidType, phase: 5)
+        #expect(TapEvent(event.type, event) == nil)
+    }
+
+    @Test func aDroppedTapActionReturnsNothingAndAPassedOneComesBackAsIs() throws {
+        let event = try gesture(GestureEventFields.gestureType, hidType: 24, phase: 5)
+        #expect(TapActionVerdict.drop.apply(to: event) == nil)
+        #expect(TapActionVerdict.pass.apply(to: event)?.takeUnretainedValue() === event)
+    }
+
     @Test func aDroppedDockSwipeReturnsNothingAndAPassedOneComesBackAsIs() throws {
-        let event = try gesture(DockSwipeFields.dockControlType, phase: 1)
+        let event = try gesture(GestureEventFields.dockControlType, phase: 1)
         #expect(DockSwipeVerdict.drop.apply(to: event) == nil)
         #expect(DockSwipeVerdict.pass.apply(to: event)?.takeUnretainedValue() === event)
     }

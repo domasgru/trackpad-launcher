@@ -25,12 +25,23 @@ public final class Launcher {
     public var isSwipeOn: Bool { settings.isSwipeOn }
     public var isSwapOn: Bool { settings.isSwapOn }
     public var isWindowSwipeOn: Bool { settings.isWindowSwipeOn }
-    /// One derivation, read by the icon, the notice and the fire guard.
+    /// One derivation, read by the notice and the fire guard.
     public var activity: GestureActivity {
-        GestureActivity(connected: Set(connected.map(\.kind)), values: preferenceValues)
+        GestureActivity(
+            connected: Set(connected.map(\.kind)), values: preferenceValues, accessGranted: isAccessibilityGranted)
     }
 
-    /// Drives the Accessibility hint. Deliberately not part of `activity`, so the icon never reads it.
+    /// nil while gestures are active.
+    public var inactiveNotice: InactiveNotice? {
+        guard case .inactive(let cause) = activity else { return nil }
+        return InactiveNotice(cause)
+    }
+
+    /// The Accessibility hint shows while the permission is missing and the notice carries no button of its own.
+    public var showsAccessibilityHint: Bool {
+        !isAccessibilityGranted && inactiveNotice?.button == nil
+    }
+
     public private(set) var isAccessibilityGranted = false
     /// Read with Accessibility on every push, so a window swipe never reads it.
     private var isScreenRecordingGranted = false
@@ -226,6 +237,7 @@ public final class Launcher {
         let trackpads: [Trackpad]
         let handMode: HandMode
         let blockClicks: Bool
+        let blockTapClicks: Bool
         let slides: Set<SlideKind>
         let swaps: Bool
     }
@@ -246,14 +258,19 @@ public final class Launcher {
         let active = activity.isActive
         // Blocking needs gestures active and access granted; without either, presses are plain clicks. Without access
         // no window can be read, so a slide up or down is what it is with the window swipe setting off.
+        let blockClicks = active && granted
+        let tapToClickIsOn = TapBoundSetting.on(connected: Set(connected.map(\.kind)), values: preferenceValues)
+            .contains(.tapToClick)
         let run = Run(
-            trackpads: active ? connected : [], handMode: settings.handMode, blockClicks: active && granted,
+            trackpads: active ? connected : [], handMode: settings.handMode, blockClicks: blockClicks,
+            blockTapClicks: blockClicks && tapToClickIsOn,
             slides: granted ? settings.slides : settings.slides.subtracting([.windowSwipe]), swaps: settings.isSwapOn)
         guard restart || run != lastRun else { return }
         lastRun = run
         // Running replaces every recognizer, which ends any swipe or window swipe in progress.
         shown = nil
-        hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks, slides: run.slides, swaps: run.swaps)
+        hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks,
+            blockTapClicks: run.blockTapClicks, slides: run.slides, swaps: run.swaps)
     }
 
     private enum Visual { case launchBounce, launchAnimation, bringToFrontOnly }

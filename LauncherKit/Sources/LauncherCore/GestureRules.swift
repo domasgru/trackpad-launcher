@@ -21,6 +21,13 @@ package enum GestureRules {
     static let dragThresholdMM = 3.0
     /// Clicks are blocked for this long after a thumb anchors. Strictly less blocks.
     static let clickBlockingWindow = Duration.seconds(3)
+    /// The lift window: after a contact other than the thumb lifts inside a thumb touch as macOS could read a tap, every
+    /// tap action is blocked for this long. Strictly less is inside.
+    static let liftWindow = Duration.milliseconds(500)
+    /// The longest a contact is down and still makes a tap action in macOS (measured: taps under a thumb held up to
+    /// 169 ms acted, every touch held 297 ms or more did not). Strictly less qualifies. Deliberately not
+    /// `maxTapDuration`, though the number is the same: that says what fires a gesture, this says what macOS clicks.
+    static let tapActionHoldLimit = Duration.milliseconds(400)
     /// The most icons a switcher row holds: the frontmost app and the most recently used others.
     static let switcherMaxApps = 10
     /// The most rows a window switcher holds: the front window, the other visible ones, then the minimised ones.

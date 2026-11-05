@@ -24,12 +24,20 @@ import Testing
         func wake() { counted.withLock { $0 += 1 } }
     }
 
-    private func session(_ delivered: Delivered, tap: (any TapLink)? = nil) -> DeviceSession {
+    /// A clock the test sets.
+    private final class TestClock: Sendable {
+        private let value = Mutex(Uptime(seconds: 10))
+        var now: Uptime { value.withLock { $0 } }
+        func set(_ seconds: Double) { value.withLock { $0 = Uptime(seconds: seconds) } }
+    }
+
+    private func session(_ delivered: Delivered, tap: (any TapLink)? = nil, clock: TestClock = TestClock()) -> DeviceSession {
         DeviceSession(
             trackpad: TrackpadID(rawValue: 1),
             recognizer: GestureRecognizer(
                 handMode: .right, surface: Self.surface, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear),
-            pointerCurves: PointerCurve.builtInCurves, tap: tap, deliver: { delivered.append($0, $1) })
+            pointerCurves: PointerCurve.builtInCurves, tap: tap, clock: { clock.now },
+            deliver: { delivered.append($0, $1) })
     }
 
     private func touch(_ id: Int32, _ phase: Touch.Phase, _ x: Double, _ y: Double) -> Touch {
@@ -103,7 +111,8 @@ import Testing
     @Test func theTapIsWokenOnlyWhenTheTrackpadStartsOrStopsWantingIt() {
         let tap = StubTap()
         let delivered = Delivered()
-        let session = session(delivered, tap: tap)
+        let clock = TestClock()
+        let session = session(delivered, tap: tap, clock: clock)
         var answered = 0
         var wakes: [Int] = []
         for frame in frames().all {
@@ -114,12 +123,52 @@ import Testing
             wakes.append(tap.wakes - before)
         }
         let before = tap.wakes
+        clock.set(11)
         session.receive(TouchFrame(time: FrameTime(seconds: 9), touches: [], press: nil))
         wakes.append(tap.wakes - before)
         #expect(wakes.first == 1)
         #expect(wakes.last == 1)
         #expect(wakes.dropFirst().dropLast().allSatisfy { $0 == 0 })
         #expect(tap.wakes == 2)
+    }
+
+    @Test func aLiftWindowOpensOnAFingerLiftingInAThumbTouchAndTheTapIsWokenByTheFrameAfterItEnded() throws {
+        let tap = StubTap()
+        let clock = TestClock()
+        let session = session(Delivered(), tap: tap, clock: clock)
+        let thumb = touch(9, .down, 10, 10)
+        let finger = touch(1, .landing, 62, 45)
+        func frame(_ ms: Int, _ touches: [Touch]) -> TouchFrame {
+            TouchFrame(time: FrameTime(seconds: Double(ms) / 1000), touches: touches, press: nil)
+        }
+        var wakes: [Int] = []
+        struct Open: Equatable {
+            let at49: Bool
+            let at50: Bool
+        }
+        var windowOpen: [Open] = []
+        func play(_ frame: TouchFrame, clock seconds: Double) {
+            let before = tap.wakes
+            clock.set(seconds)
+            session.receive(frame)
+            wakes.append(tap.wakes - before)
+            windowOpen.append(Open(
+                at49: session.liftWindowIsOpen(at: Uptime(seconds: 10.49)),
+                at50: session.liftWindowIsOpen(at: Uptime(seconds: 10.5))
+            ))
+        }
+        play(frame(0, [touch(9, .landing, 10, 10)]), clock: 10.0)
+        play(frame(100, [thumb, finger]), clock: 10.0)
+        play(frame(200, [thumb]), clock: 10.0)
+        play(frame(300, []), clock: 10.1)
+        play(frame(400, []), clock: 10.6)
+
+        #expect(wakes == [1, 0, 0, 0, 1])
+        try #require(windowOpen.count == 5)
+        let closed = Open(at49: false, at50: false)
+        let open = Open(at49: true, at50: false)
+        #expect(Array(windowOpen[0...3]) == [closed, closed, open, open])
+        #expect(session.blocking == .none)
     }
 
     @Test func aSessionReadsItsTapsPressSummaryAndNoneWithoutATap() {

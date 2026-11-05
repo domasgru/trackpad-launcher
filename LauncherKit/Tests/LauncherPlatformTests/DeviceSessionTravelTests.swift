@@ -19,7 +19,8 @@ import Testing
             trackpad: TrackpadID(rawValue: 1),
             recognizer: GestureRecognizer(
                 handMode: .right, surface: Self.surface, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear),
-            pointerCurves: PointerCurve.builtInCurves, tap: nil, deliver: { event, reply in
+            pointerCurves: PointerCurve.builtInCurves, tap: nil, clock: { Uptime(seconds: 0) },
+            deliver: { event, reply in
                 delivered.append(event)
                 reply?(true)
             })

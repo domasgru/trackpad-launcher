@@ -2,27 +2,128 @@ import Testing
 import LauncherCore
 
 @MainActor @Suite struct ActivityTests {
-    private func inactive(_ settings: ConflictingSetting...) -> GestureActivity {
-        .inactive(.settings(ConflictingSettings(settings)!))
+    private func inactive(_ settings: TapBoundSetting...) -> GestureActivity {
+        .inactive(.settingsNeedAccessibility(TapBoundSettings(settings)!))
     }
 
-    @Test func tapToClickOnBuiltInDeactivatesAndStopsTheDevices() {
+    @Test func tapToClickOnBuiltInWithAccessKeepsGesturesActiveAndTheDevicesRunning() {
+        let world = World(apps: ["Arc"], accessGranted: true)
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
+
+        #expect(world.launcher.activity == .active)
+        #expect(Set(world.hardware.running.keys) == [Trackpad.macBook14.id])
+        #expect(world.hardware.isBlockingClicks)
+        world.tap(1)
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+        #expect(world.hardware.feedback == [Trackpad.macBook14.id])
+    }
+
+    @Test func settingsOnTheExternalTrackpadOnlyLetTheGestureFireOnEitherTrackpadWithAccess() {
+        let world = World(apps: ["Notes"], attached: [.macBook14, .magicTrackpad], accessGranted: true)
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Notes")), for: .three)
+        world.preferences.set(.tapToClick, rawValue: 1, for: .external)
+        world.preferences.set(.lookUpTapWithThreeFingers, rawValue: 2, for: .external)
+        #expect(world.launcher.activity == .active)
+
+        world.tap(3, on: .magicTrackpad)
+        world.tap(3)
+
+        #expect(world.system.broughtToFront == [world.app("Notes"), world.app("Notes")])
+        #expect(world.hardware.feedback == [Trackpad.magicTrackpad.id, Trackpad.macBook14.id])
+    }
+
+    @Test func swipeWindowSwipeAndSwapRunWithTapToClickOnAndAccess() {
+        let swipe = World.switcherWorld(accessGranted: true)
+        swipe.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
+        swipe.swipe(3.5, 12)
+        #expect(swipe.system.broughtToFront == [swipe.app("Mail")])
+        #expect(swipe.hardware.feedback == [Trackpad.macBook14.id])
+        #expect(swipe.launcher.switcher == nil)
+
+        let swap = World.switcherWorld(accessGranted: true)
+        swap.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
+        swap.swap()
+        #expect(swap.system.broughtToFront == [swap.app("Mail")])
+        #expect(swap.hardware.feedback == [Trackpad.macBook14.id])
+
+        let windows = World.windowWorld(visible: ["Docs", "Mail"])
+        windows.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
+        windows.windowSwipe(3.5, 12, lift: false)
+        #expect(windows.system.windows.raised == [[windows.window("Mail")]])
+    }
+
+    @Test func turningTapToClickOnWhileRunningRestartsTheTrackpadsAndTheNextGestureFires() {
+        let world = World(apps: ["Arc"], accessGranted: true)
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        let runs = world.hardware.runCount
+
+        world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
+
+        #expect(world.launcher.activity == .active)
+        #expect(Set(world.hardware.running.keys) == [Trackpad.macBook14.id])
+        #expect(world.hardware.runCount == runs + 1)
+        #expect(world.hardware.isBlockingClicks)
+        world.tap(1)
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+        let press = PressID(button: 0, number: 1)
+        #expect(world.hardware.offer(.pointer(.press(press))) == .decided(.pointer(.drop)))
+        #expect(world.hardware.offer(.pointer(.release(press))) == .decided(.pointer(.drop)))
+    }
+
+    @Test(arguments: [
+        (clicking: 1, lookUp: 0, expected: [TapBoundSetting.tapToClick]),
+        (clicking: 0, lookUp: 2, expected: [.lookUpTapWithThreeFingers]),
+        (clicking: 1, lookUp: 2, expected: [.tapToClick, .lookUpTapWithThreeFingers]),
+    ] as [(clicking: Int, lookUp: Int, expected: [TapBoundSetting])])
+    func withoutAccessTapBoundSettingsDeactivateAndStopTheDevices(
+        clicking: Int, lookUp: Int, expected: [TapBoundSetting]
+    ) {
         let world = World(apps: ["Arc"])
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
 
-        world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
+        world.preferences.set(.tapToClick, rawValue: clicking, for: .builtIn)
+        world.preferences.set(.lookUpTapWithThreeFingers, rawValue: lookUp, for: .builtIn)
 
+        #expect(world.launcher.activity == .inactive(.settingsNeedAccessibility(TapBoundSettings(expected)!)))
+        #expect(world.hardware.running.isEmpty)
+        #expect(!world.hardware.isBlockingClicks)
+        world.tap(1)
+        let offer = world.hardware.offer(.pointer(.press(PressID(button: 0, number: 1))))
+        #expect(world.system.broughtToFront.isEmpty)
+        #expect(world.hardware.pulses.isEmpty)
+        #expect(offer == .noTap)
+    }
+
+    @Test func grantingAccessMakesGesturesActiveAtOnceAndRevokingStopsThemAgain() {
+        let world = World(apps: ["Arc"])
+        world.launcher.start()
+        world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
+        world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
+        #expect(world.launcher.activity == inactive(.tapToClick))
+
+        world.permissions.set(.accessibility, granted: true)
+        #expect(world.launcher.activity == .active)
+        #expect(Set(world.hardware.running.keys) == [Trackpad.macBook14.id])
+        #expect(world.hardware.isBlockingClicks)
+        world.tap(1)
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+        let press = PressID(button: 0, number: 1)
+        #expect(world.hardware.offer(.pointer(.press(press))) == .decided(.pointer(.drop)))
+
+        world.permissions.set(.accessibility, granted: false)
         #expect(world.launcher.activity == inactive(.tapToClick))
         #expect(world.hardware.running.isEmpty)
         world.tap(1)
-        #expect(world.system.broughtToFront.isEmpty)
-        #expect(world.hardware.feedback.isEmpty)
-        #expect(world.system.launchAnimations.isEmpty)
-        #expect(world.system.bounces.isEmpty)
+        #expect(world.system.broughtToFront == [world.app("Arc")])
+        #expect(world.hardware.offer(.pointer(.press(press))) == .noTap)
     }
 
-    @Test func settingOnlyOnTheConnectedExternalTrackpadDeactivates() {
+    @Test func settingOnlyOnTheConnectedExternalTrackpadDeactivatesWithoutAccess() {
         let world = World(apps: ["Arc"])
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
@@ -63,14 +164,14 @@ import LauncherCore
     }
 
     @Test(arguments: [
-        (clicking: nil, lookUp: 2, expected: [ConflictingSetting.lookUpTapWithThreeFingers]),
+        (clicking: nil, lookUp: 2, expected: [TapBoundSetting.lookUpTapWithThreeFingers]),
         (clicking: 1, lookUp: 2, expected: [.tapToClick, .lookUpTapWithThreeFingers]),
         (clicking: 1, lookUp: 0, expected: [.tapToClick]),
         (clicking: 0, lookUp: 0, expected: []),
         (clicking: nil, lookUp: nil, expected: []),
-    ] as [(clicking: Int?, lookUp: Int?, expected: [ConflictingSetting])])
+    ] as [(clicking: Int?, lookUp: Int?, expected: [TapBoundSetting])])
     func noticeNamesExactlyTheOffendingSettingsInTableOrder(
-        clicking: Int?, lookUp: Int?, expected: [ConflictingSetting]
+        clicking: Int?, lookUp: Int?, expected: [TapBoundSetting]
     ) {
         let world = World()
         world.launcher.start()
@@ -78,12 +179,12 @@ import LauncherCore
         world.preferences.set(.lookUpTapWithThreeFingers, rawValue: lookUp, for: .builtIn)
         world.preferences.set(.tapToClick, rawValue: clicking, for: .builtIn)
 
-        let want = ConflictingSettings(expected).map { GestureActivity.inactive(.settings($0)) } ?? .active
+        let want = TapBoundSettings(expected).map { GestureActivity.inactive(.settingsNeedAccessibility($0)) } ?? .active
         #expect(world.launcher.activity == want)
     }
 
-    @Test func noConflictingSettingsIsNotACause() {
-        #expect(ConflictingSettings([]) == nil)
+    @Test func noTapBoundSettingsIsNotACause() {
+        #expect(TapBoundSettings([]) == nil)
     }
 
     @Test func noTrackpadWinsOverSettingsAndTracksHotPlug() {
@@ -91,13 +192,60 @@ import LauncherCore
         world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
         world.launcher.start()
         #expect(world.launcher.activity == .inactive(.noTrackpad))
+        #expect(
+            world.launcher.inactiveNotice
+                == InactiveNotice(message: "No trackpad connected. Connect a trackpad to use gestures.", button: nil))
+        #expect(world.launcher.showsAccessibilityHint)
 
-        world.preferences.set(.tapToClick, rawValue: 0, for: .builtIn)
         world.hardware.attach(.macBook14)
-        #expect(world.launcher.activity == .active)
+        #expect(world.launcher.activity == inactive(.tapToClick))
 
         world.hardware.detach(Trackpad.macBook14.id)
         #expect(world.launcher.activity == .inactive(.noTrackpad))
+
+        world.hardware.attach(.macBook14)
+        world.permissions.set(.accessibility, granted: true)
+        #expect(world.launcher.activity == .active)
+    }
+
+    @Test func theNoticeAndTheHintFollowTheSettingsAndTheGrantLive() {
+        let world = World()
+        world.launcher.start()
+        world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
+        world.preferences.set(.lookUpTapWithThreeFingers, rawValue: 0, for: .builtIn)
+        world.launcher.openedByHand()
+        let one = "Gestures are off while Tap to click is on, until Trackpad Launcher has Accessibility access."
+        #expect(world.launcher.activity == inactive(.tapToClick))
+        #expect(world.launcher.inactiveNotice == InactiveNotice(message: one, button: .openAccessibilitySettings))
+        #expect(!world.launcher.showsAccessibilityHint)
+
+        world.permissions.set(.accessibility, granted: true)
+        #expect(world.launcher.activity == .active)
+        #expect(world.launcher.inactiveNotice == nil)
+        #expect(!world.launcher.showsAccessibilityHint)
+        #expect(world.launcher.isWindowOpen)
+
+        world.permissions.set(.accessibility, granted: false)
+        #expect(world.launcher.inactiveNotice == InactiveNotice(message: one, button: .openAccessibilitySettings))
+        #expect(!world.launcher.showsAccessibilityHint)
+
+        world.preferences.set(.lookUpTapWithThreeFingers, rawValue: 2, for: .builtIn)
+        #expect(world.launcher.activity == inactive(.tapToClick, .lookUpTapWithThreeFingers))
+        #expect(
+            world.launcher.inactiveNotice
+                == InactiveNotice(
+                    message: "Gestures are off while Tap to click and Look up: Tap with three fingers are on, "
+                        + "until Trackpad Launcher has Accessibility access.",
+                    button: .openAccessibilitySettings))
+
+        world.preferences.set(.tapToClick, rawValue: 0, for: .builtIn)
+        world.preferences.set(.lookUpTapWithThreeFingers, rawValue: 0, for: .builtIn)
+        #expect(world.launcher.activity == .active)
+        #expect(world.launcher.inactiveNotice == nil)
+        #expect(world.launcher.showsAccessibilityHint)
+
+        world.permissions.set(.accessibility, granted: true)
+        #expect(!world.launcher.showsAccessibilityHint)
     }
 
     @Test func rowsStayEditableWhileInactive() {

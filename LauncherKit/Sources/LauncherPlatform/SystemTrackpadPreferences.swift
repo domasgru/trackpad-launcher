@@ -17,7 +17,7 @@ import LauncherCore
         suites = domains.compactMapValues { UserDefaults(suiteName: $0) }
         super.init()
         for suite in suites.values {
-            for setting in ConflictingSetting.allCases {
+            for setting in TapBoundSetting.allCases {
                 suite.addObserver(self, forKeyPath: setting.preferenceKey, options: [], context: nil)
             }
         }
@@ -25,7 +25,7 @@ import LauncherCore
 
     isolated deinit {
         for suite in suites.values {
-            for setting in ConflictingSetting.allCases {
+            for setting in TapBoundSetting.allCases {
                 suite.removeObserver(self, forKeyPath: setting.preferenceKey)
             }
         }
@@ -35,7 +35,7 @@ import LauncherCore
     public func current() -> [TrackpadKind: TrackpadPreferenceValues] {
         suites.mapValues { suite in
             var values: TrackpadPreferenceValues = [:]
-            for setting in ConflictingSetting.allCases {
+            for setting in TapBoundSetting.allCases {
                 values[setting] = suite.object(forKey: setting.preferenceKey) as? Int
             }
             return values

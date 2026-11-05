@@ -4,7 +4,7 @@ import SwiftUI
 
 /// One 326 pt column, 16 pt inside the window, of rounded groups 10 pt apart: the update card, while a newer version is
 /// known; the five gesture rows and the Animate app
-/// launch switch; the switcher section; the thumb picker; then, while any applies, the trackpad settings notice, the
+/// launch switch; the switcher section; the thumb picker; then, while any applies, the no trackpad notice or the tap-bound settings notice, the
 /// Accessibility hint and the screen recording hint, one group each. Rows are at least 42 pt tall, with a hairline
 /// between them. The illustrations are 45 × 28 pt. The guide naming the two marks sits over the first illustration in
 /// right-hand mode, where its arrows meet the thumb. *Quit Trackpad Launcher* and *Close* end it, aligned right.
@@ -12,6 +12,10 @@ struct SettingsView: View {
     let launcher: Launcher
     let updater: Updater?
     let actions: LauncherActions
+
+    private var accessibilityButton: NoticeButton {
+        NoticeButton(title: Copy.accessibilityButton) { actions.openSettings(.accessibility) }
+    }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -36,23 +40,26 @@ struct SettingsView: View {
                 ThumbPicker(launcher: launcher)
                     .padding(.vertical, 8)
             }
-            if case .inactive(let cause) = launcher.activity {
-                SettingsNotice(
-                    message: Copy.inactiveNotice(for: cause), button: Copy.trackpadSettingsButton,
-                    open: { actions.openSettings(.trackpad) })
+            if let notice = launcher.inactiveNotice {
+                switch notice.button {
+                case .openAccessibilitySettings:
+                    SettingsNotice(message: notice.message, button: accessibilityButton)
+                case nil:
+                    SettingsNotice(message: notice.message)
+                }
             }
-            if !launcher.isAccessibilityGranted {
-                SettingsNotice(
-                    message: Copy.accessibilityHint, button: Copy.accessibilityButton,
-                    open: { actions.openSettings(.accessibility) })
+            if launcher.showsAccessibilityHint {
+                SettingsNotice(message: Copy.accessibilityHint, button: accessibilityButton)
             }
             if let hint = launcher.screenRecordingHint {
-                SettingsNotice(message: Copy.screenRecordingHint, button: Copy.screenRecordingButton) {
-                    switch hint {
-                    case .ask: launcher.askForScreenRecording()
-                    case .openSettings: actions.openSettings(.screenRecording)
-                    }
-                }
+                SettingsNotice(
+                    message: Copy.screenRecordingHint,
+                    button: NoticeButton(title: Copy.screenRecordingButton) {
+                        switch hint {
+                        case .ask: launcher.askForScreenRecording()
+                        case .openSettings: actions.openSettings(.screenRecording)
+                        }
+                    })
             }
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
@@ -260,12 +267,22 @@ struct ThumbPicker: NSViewRepresentable {
     }
 }
 
-/// A hint plus a button, in a group of its own. The trackpad settings notice, the Accessibility hint and the screen
-/// recording hint share it.
+/// A button's title and what it does.
+struct NoticeButton {
+    let title: String
+    let perform: () -> Void
+}
+
+/// A message and, optionally, a button, in a group of its own. The no trackpad notice, the tap-bound settings notice,
+/// the Accessibility hint and the screen recording hint share it.
 struct SettingsNotice: View {
     let message: String
-    let button: String
-    let open: () -> Void
+    let button: NoticeButton?
+
+    init(message: String, button: NoticeButton? = nil) {
+        self.message = message
+        self.button = button
+    }
 
     var body: some View {
         FormGroup {
@@ -275,9 +292,11 @@ struct SettingsNotice: View {
                     .lineSpacing(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
-                Button(button, action: open)
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.roundedRectangle(radius: 6))
+                if let button {
+                    Button(button.title, action: button.perform)
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.roundedRectangle(radius: 6))
+                }
             }
             .padding(.vertical, 8)
             .frame(minHeight: 42)
