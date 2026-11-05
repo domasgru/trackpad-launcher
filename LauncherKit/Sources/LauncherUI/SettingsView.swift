@@ -5,8 +5,8 @@ import SwiftUI
 /// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges, the form's sections
 /// aside: the update card, while a newer version is known; the settings form, a SwiftUI grouped Form drawn as System
 /// Settings draws one, spanning the window's width inside its own side margins, its sections the five gesture rows and
-/// the Animate app launch switch, the switcher section, and the thumb corner row; the notices, while any applies, 10 pt
-/// apart: the no trackpad notice or the tap-bound settings notice, the Accessibility hint and the screen recording hint,
+/// the Animate app launch switch, the switcher section, and the thumb corner row with the Hide background apps switch
+/// below it; the notices, while any applies, 10 pt apart: the no trackpad notice or the tap-bound settings notice, the Accessibility hint and the screen recording hint,
 /// one rounded group each; then *Quit Trackpad Launcher* and *Close*, aligned right. The form keeps the system's own
 /// fonts, row heights, insets and controls. The illustrations are 45 × 28 pt. The guide naming the two marks sits over
 /// the first illustration for the top-left corner only, where its arrows meet the thumb.
@@ -56,7 +56,15 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
                 }
                 Section { SwitcherSection(launcher: launcher) }
-                Section { ThumbCornerRow(launcher: launcher) }
+                Section {
+                    ThumbCornerRow(launcher: launcher)
+                    Toggle(
+                        "Hide background apps",
+                        isOn: Binding(
+                            get: { launcher.isHideBackgroundAppsOn }, set: { launcher.setHideBackgroundApps(on: $0) })
+                    )
+                    .toggleStyle(.switch)
+                }
             }
             .formStyle(.grouped)
             .scrollDisabled(true)

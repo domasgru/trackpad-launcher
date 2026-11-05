@@ -10,6 +10,14 @@ import LauncherCore
     /// One per bounce playing, from `bringToFrontBouncing` to `endLaunchBounce`.
     private var launches: [BundleID: Launch] = [:]
     public var onLaunchProgress: (@MainActor (BundleID, LaunchProgress) -> Void)?
+    /// The frontmost app waiting to be hidden until the app being kept has come to the front.
+    private var pendingHide: PendingHide?
+
+    private struct PendingHide {
+        let app: NSRunningApplication
+        let kept: String
+        let observer: any NSObjectProtocol
+    }
 
     private struct Launch {
         let watch: LaunchWatch
@@ -36,6 +44,46 @@ import LauncherCore
     }
 
     public func bringToFront(_ app: AppEntry) { open(app) }
+
+    public func hideOtherApps(than app: BundleID) {
+        forgetPendingHide()
+        let kept = app.rawValue
+        let others = NSWorkspace.shared.runningApplications.filter {
+            $0.activationPolicy == .regular && !$0.isTerminated && $0.bundleIdentifier != kept
+                && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        }
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        let deferred = others.first { $0.processIdentifier == frontmost?.processIdentifier }
+        let now = others.filter { $0.processIdentifier != deferred?.processIdentifier }
+        // Hiding the frontmost app at once makes macOS activate the next visible app, which would land second in the
+        // ⌘-Tab order above the app the user came from.
+        Task { @MainActor in
+            for other in now { other.hide() }
+        }
+        guard let deferred else { return }
+        // Alive only while the hide is pending.
+        let observer = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            let activated =
+                (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?
+                .bundleIdentifier
+            MainActor.assumeIsolated { self?.applicationActivated(activated) }
+        }
+        pendingHide = PendingHide(app: deferred, kept: kept, observer: observer)
+    }
+
+    private func applicationActivated(_ bundleIdentifier: String?) {
+        guard let pending = pendingHide else { return }
+        forgetPendingHide()
+        if bundleIdentifier == pending.kept { pending.app.hide() }
+    }
+
+    private func forgetPendingHide() {
+        guard let pending = pendingHide else { return }
+        NSWorkspace.shared.notificationCenter.removeObserver(pending.observer)
+        pendingHide = nil
+    }
 
     public func hasProcess(_ app: BundleID) -> Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: app.rawValue).allSatisfy(\.isTerminated)

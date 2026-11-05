@@ -290,7 +290,22 @@ import LauncherCore
 
     func bringToFront(_ app: AppEntry) {
         broughtToFront.append(app)
+        hiddenApps.remove(app.bundleID)
         onBringToFront?(app)
+    }
+
+    /// Every hide, by the app it kept, in order.
+    private(set) var hidesOthers: [BundleID] = []
+    /// Which apps are hidden now. A hide adds every ⌘-Tab app and the frontmost app but the kept one at once: the
+    /// adapter's deferral and next-turn hop are its own mechanics. Any bring to front shows the app again.
+    private(set) var hiddenApps: Set<BundleID> = []
+    /// Runs inside `hideOtherApps`, after recording, so a test can see what was already recorded.
+    var onHideOtherApps: (() -> Void)?
+
+    func hideOtherApps(than app: BundleID) {
+        hidesOthers.append(app)
+        hiddenApps.formUnion((running + (frontmost.map { [$0] } ?? [])).map(\.bundleID).filter { $0 != app })
+        onHideOtherApps?()
     }
 
     func runningApps() -> RunningApps { RunningApps(frontmost: frontmost, apps: running) }
@@ -340,6 +355,7 @@ import LauncherCore
     /// Records the bring to front, then the bounce, in that order.
     func bringToFrontBouncing(_ app: AppEntry, cap: Duration) {
         broughtToFront.append(app)
+        hiddenApps.remove(app.bundleID)
         bounces.append(Bounce(app: app, cap: cap))
         onBringToFrontBouncing?()
     }

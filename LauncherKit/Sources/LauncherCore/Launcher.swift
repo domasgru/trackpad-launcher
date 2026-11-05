@@ -24,6 +24,7 @@ public final class Launcher {
     public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
     public var isSwipeOn: Bool { settings.isSwipeOn }
     public var isSwapOn: Bool { settings.isSwapOn }
+    public var isHideBackgroundAppsOn: Bool { settings.isHideBackgroundAppsOn }
     public var isWindowSwipeOn: Bool { settings.isWindowSwipeOn }
     /// One derivation, read by the notice and the fire guard.
     public var activity: GestureActivity {
@@ -188,6 +189,13 @@ public final class Launcher {
         reconcile()
     }
 
+    /// Hide background apps switch. Saved at once; it hides and shows nothing now and applies to the next action.
+    public func setHideBackgroundApps(on: Bool) {
+        guard on != settings.isHideBackgroundAppsOn else { return }
+        settings.isHideBackgroundAppsOn = on
+        store.save(settings)
+    }
+
     /// The screen recording hint's button while it asks. Records the ask and saves before asking, so a crash in
     /// between never asks twice; a later press opens System Settings instead.
     public func askForScreenRecording() {
@@ -272,12 +280,21 @@ public final class Launcher {
 
     private enum Visual { case launchBounce, launchAnimation, bringToFrontOnly }
 
-    /// Reads `hasProcess` only when it decides something.
-    private func visual(for app: AppEntry) -> Visual {
-        guard settings.isLaunchAnimationOn else { return .bringToFrontOnly }
-        // The app's bounce still plays: it keeps the one bounce.
-        if bounces[app.bundleID] != nil { return .bringToFrontOnly }
-        return system.hasProcess(app.bundleID) ? .launchAnimation : .launchBounce
+    /// What the gesture shows and whether the other apps hide after it. Reads `hasProcess` only when it decides
+    /// something: the launch animation or the hide setting is on.
+    private func visual(for app: AppEntry) -> (visual: Visual, hides: Bool) {
+        let animates = settings.isLaunchAnimationOn
+        let hides = settings.isHideBackgroundAppsOn
+        guard animates || hides else { return (.bringToFrontOnly, false) }
+        // The app's bounce still plays: it keeps the one bounce and hides nothing.
+        if bounces[app.bundleID] != nil { return (.bringToFrontOnly, false) }
+        let hasProcess = system.hasProcess(app.bundleID)
+        return (animates ? (hasProcess ? .launchAnimation : .launchBounce) : .bringToFrontOnly, hides && hasProcess)
+    }
+
+    private func hideOtherApps(than app: BundleID) {
+        guard settings.isHideBackgroundAppsOn else { return }
+        system.hideOtherApps(than: app)
     }
 
     /// Every silent case decided here and only here: inactive, unassigned, missing.
@@ -287,7 +304,8 @@ public final class Launcher {
               let app = catalog.locate(assigned)
         else { return }
         hardware.playFeedback(.gesture, on: event.trackpad)
-        switch visual(for: app) {
+        let (visual, hides) = visual(for: app)
+        switch visual {
         case .launchBounce:
             bounces[app.bundleID] = .startingUp
             // Opens the app first, inside the call.
@@ -299,6 +317,7 @@ public final class Launcher {
         case .bringToFrontOnly:
             system.bringToFront(app)
         }
+        if hides { hideOtherApps(than: app.bundleID) }
     }
 
     /// A report for an app whose bounce ended finds no record: a late window plays nothing.
@@ -342,6 +361,7 @@ public final class Launcher {
             guard running.contains(target.url) else { return }
             hardware.playFeedback(.gesture, on: event.trackpad)
             system.bringToFront(open.selectedApp)
+            hideOtherApps(than: target.bundleID)
         case .cancelled:
             if case .apps(let open)? = shown, open.trackpad == event.trackpad { shown = nil }
         }
@@ -379,6 +399,7 @@ public final class Launcher {
                 hardware.playFeedback(.gesture, on: event.trackpad)
             }
             system.raiseWindows(lift.raises)
+            if lift.playsHaptic { hideOtherApps(than: open.app.bundleID) }
         case .cancelled:
             // The windows stay as they are: no reordering, silent.
             if case .windows(let open)? = shown, open.trackpad == event.trackpad { shown = nil }
@@ -392,6 +413,7 @@ public final class Launcher {
         guard let target = swapSeries.next(in: system.runningApps()) else { return }
         hardware.playFeedback(.gesture, on: event.trackpad)
         system.bringToFront(target)
+        hideOtherApps(than: target.bundleID)
     }
 
     /// Rows and the prepared launch animations change together, so the icon of any app that can fire is ready before
