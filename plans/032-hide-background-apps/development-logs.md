@@ -41,3 +41,16 @@
 - App Nap on the unseen watch was uninferred → S4's manual times the 2 s limit on an idle bundled build, with a `ProcessInfo` activity as the contingency.
 - Rejected: moving R18 back into a World row (it cannot fail); a window-list check before every hide (only if an app hides early); skipping already hidden apps (the read costs as much as the call).
 - R12's "came back" reading needed a decision → amended R12: the frontmost read at window time decides, so a user who came back gets the hide; no activation observer. Decided by the orchestrating session under `/do`; flagged to the human in the final report.
+
+## Implement
+- No repo `AGENTS.md` → the gate is `make test` (three bundles); the app bundle was also built with `xcodebuild`, never opened. No verification skill exists, so that step did not apply.
+- S1: T14's 3 s bound failed one run in four: in the parallel run other tests hold the main actor for seconds; alone a 200 ms limit passed in 217 ms → `awaiting`'s default bound, and the limit row's cap raised from 5 s to 120 s so only the limit can answer in time; lower bounds only, as the plan's strategy says.
+- S1: `LaunchWatch` read `ContinuousClock` to skip later limits → removed: the first deadline to pass reports, and time stays on Core Animation's clock.
+- S1: the watch made its clock in `init`, before the open → made in `start(cap:)`, so the panel never delays the app.
+- S2: T1 used a record from the current code → uses the released fixture, `PersistenceTests.savedSettings`, as the row says.
+- S4: the fake's `bounceEndings` became `launchEndings`, since unseen watches end too; expected values unchanged.
+- R12: built on the amended reading, the frontmost read at window time; the plan's R12 text and its S4 criterion still carry the earlier wording.
+- `ApplicationsUpdaterTests.swift:675`, an existing 35 s upper bound, failed twice at load averages up to 236 and passed alone 3 of 3 → machine load, not this branch; left as it is, reported.
+- Review fixed: the *Running apps* entry names the new read; the *Bring to front* entry no longer contradicts *Launch watch*; the architecture's "launch bounce's launch watch"; T3 asserts `launches`, not the derived `bounces`; `hidesOthers` folded into the other two `nothingHappened` helpers; redundant `if hides`; `hasRanOut` → `hasRunOut`; `BundleID` in the pending hide; `#require` and `== false` in the new tests; `LaunchBounceTests` → `WatchedLaunchTests`.
+- Review rejected: the bare `@Suite` (96 existing suites do the same); the negative `Task.sleep` waits (nothing pushes an absence, and the render server's time cannot be advanced); several scenarios in one row's test (each is a plan row); moving the fixture to its own file; a new file for the hide (the plan confines `.hide(` to the adapter's file); extracting the regular-app filter, the bring-to-front sequence or `Bounce`/`Launch` (small, and each differs in what it reads or its purpose); `B(_:)`, a test-local shorthand.
+- Manual checks needing a human or real apps were not run (S1, S2, S3, S4 lists); the Electron window-list and `ProcessInfo` contingencies stay unbuilt pending them.

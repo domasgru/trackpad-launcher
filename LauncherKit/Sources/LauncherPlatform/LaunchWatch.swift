@@ -24,7 +24,7 @@ import LauncherCore
     private var windowObserver: AXObserver?
     private var hasFinished = false
     private var hasGoneNowhere = false
-    private var hasRanOut = false
+    private var hasRunOut = false
     private var isStopped = false
 
     init(report: @escaping @MainActor (LaunchProgress) -> Void) {
@@ -54,8 +54,8 @@ import LauncherCore
     }
 
     private func runOut() {
-        guard !isStopped, !hasRanOut else { return }
-        hasRanOut = true
+        guard !isStopped, !hasRunOut else { return }
+        hasRunOut = true
         report(.ranOut)
     }
 

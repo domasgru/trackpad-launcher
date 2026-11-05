@@ -20,7 +20,7 @@ import LauncherCore
     @Test func theSettingIsOffOnAFreshInstall() {
         let world = World(apps: ["Arc"])
         world.launcher.start()
-        #expect(!world.launcher.isHideBackgroundAppsOn)
+        #expect(world.launcher.isHideBackgroundAppsOn == false)
     }
 
     @Test func aRecordAReleasedBuildWroteLoadsOffAndATapHidesNothingAtLogin() {
@@ -38,7 +38,7 @@ import LauncherCore
         // The record anchors the thumb top right.
         world.tap(1, thumbAtMM: (114.8, 10))
 
-        #expect(!relaunched.isHideBackgroundAppsOn)
+        #expect(relaunched.isHideBackgroundAppsOn == false)
         #expect(world.system.broughtToFront == [world.app("Arc")])
         #expect(world.system.hidesOthers.isEmpty)
     }
@@ -135,7 +135,7 @@ import LauncherCore
         #expect(world.system.broughtToFront == [world.app("Safari")])
         #expect(world.system.hidesOthers == [B("Safari")])
         #expect(world.system.launchAnimations.isEmpty)
-        #expect(world.system.bounces.isEmpty)
+        #expect(world.system.launches.isEmpty)
     }
 
     @Test(arguments: [true, false])

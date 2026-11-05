@@ -15,7 +15,7 @@ import LauncherCore
 
     private struct PendingHide {
         let app: NSRunningApplication
-        let kept: String
+        let kept: BundleID
         let observer: any NSObjectProtocol
     }
 
@@ -47,9 +47,8 @@ import LauncherCore
 
     public func hideOtherApps(than app: BundleID) {
         forgetPendingHide()
-        let kept = app.rawValue
         let others = NSWorkspace.shared.runningApplications.filter {
-            $0.activationPolicy == .regular && !$0.isTerminated && $0.bundleIdentifier != kept
+            $0.activationPolicy == .regular && !$0.isTerminated && $0.bundleIdentifier != app.rawValue
         }
         let frontmost = NSWorkspace.shared.frontmostApplication
         let deferred = others.first { $0.processIdentifier == frontmost?.processIdentifier }
@@ -69,7 +68,7 @@ import LauncherCore
                 .bundleIdentifier
             MainActor.assumeIsolated { self?.applicationActivated(activated) }
         }
-        pendingHide = PendingHide(app: deferred, kept: kept, observer: observer)
+        pendingHide = PendingHide(app: deferred, kept: app, observer: observer)
     }
 
     /// This process hides with the app's own hide. The activation policy stays regular, so the Dock icon remains.
@@ -84,7 +83,7 @@ import LauncherCore
     private func applicationActivated(_ bundleIdentifier: String?) {
         guard let pending = pendingHide else { return }
         forgetPendingHide()
-        if bundleIdentifier == pending.kept { Self.hide(pending.app) }
+        if bundleIdentifier == pending.kept.rawValue { Self.hide(pending.app) }
     }
 
     private func forgetPendingHide() {

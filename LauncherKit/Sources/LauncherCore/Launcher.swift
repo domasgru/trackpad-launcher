@@ -313,7 +313,7 @@ public final class Launcher {
             // After bring to front, so whatever the animation costs lands on the icon, never on the app.
             system.playLaunchAnimation(for: app)
         }
-        if hides { hideOtherApps(than: id) }
+        hideOtherApps(than: id)
     }
 
     /// A report for an app whose launch ended finds no record: a late window plays and hides nothing.

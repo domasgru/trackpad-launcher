@@ -2,7 +2,7 @@ import Testing
 
 @testable import LauncherCore
 
-@Suite struct LaunchBounceTests {
+@Suite struct WatchedLaunchTests {
     @Test func aWindowEndsEveryBounceWithTheLaunchAnimation() {
         #expect(WatchedLaunch.Stage.startingUp.next(after: .windowShown) == .end(.launchAnimation))
         #expect(WatchedLaunch.Stage.startedUp.next(after: .windowShown) == .end(.launchAnimation))

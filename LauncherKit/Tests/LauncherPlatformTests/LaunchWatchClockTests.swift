@@ -27,14 +27,15 @@ import Testing
         }
         #expect(ranOut == true)
         #expect(reports.seen.map(\.progress) == [.ranOut])
-        #expect((reports.seen.first?.time ?? began) - began >= .milliseconds(200), "not before the cap")
+        let ranOutAt = try #require(reports.seen.first?.time)
+        #expect(ranOutAt - began >= .milliseconds(200), "not before the cap")
         #expect(hostShownAtRunOut == false)
         try await Task.sleep(for: .milliseconds(500))
         #expect(reports.seen.count == 1, "nothing else follows")
         watch?.stop()
     }
 
-    @Test func aLimitRunsTheWatchOutLongBeforeItsCap() async {
+    @Test func aLimitRunsTheWatchOutLongBeforeItsCap() async throws {
         let reports = Reports()
         var watch: LaunchWatch?
         var limited = ContinuousClock.now
@@ -52,7 +53,8 @@ import Testing
         }
         #expect(ranOut == true)
         #expect(reports.seen.map(\.progress) == [.ranOut])
-        #expect((reports.seen.first?.time ?? limited) - limited >= .milliseconds(200))
+        let ranOutAt = try #require(reports.seen.first?.time)
+        #expect(ranOutAt - limited >= .milliseconds(200))
         watch?.stop()
     }
 
