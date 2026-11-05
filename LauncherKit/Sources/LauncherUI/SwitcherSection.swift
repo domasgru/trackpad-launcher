@@ -21,7 +21,7 @@ struct SwitcherSection: View {
     }
 }
 
-/// One switch with its illustration (the inverse copy for the top-right corner) 10 pt before its title.
+/// One switch with its illustration (the copy for the chosen thumb corner) 10 pt before its title.
 struct SettingRow: View {
     let illustration: String
     let title: String

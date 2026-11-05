@@ -179,11 +179,16 @@ struct Illustration: View {
 }
 
 extension ThumbCorner {
-    /// The illustrations draw the thumb in the top-left corner; the right-corner copies
-    /// are `-inverse`, which `Scripts/inverse-illustrations.swift` draws from them. The bottom corners use the
-    /// top-corner pictures of their side for now.
+    /// The illustrations are drawn with the thumb in the top-left corner. The other corners' copies are derived from
+    /// them by `Scripts/corner-illustrations.swift`: `-inverse` top-right, `-bottom` bottom-left and
+    /// `-bottom-inverse` bottom-right.
     func illustration(_ name: String) -> String {
-        self == .topRight || self == .bottomRight ? name + "-inverse" : name
+        switch self {
+        case .topLeft: name
+        case .topRight: name + "-inverse"
+        case .bottomLeft: name + "-bottom"
+        case .bottomRight: name + "-bottom-inverse"
+        }
     }
 
     /// Only the top-left illustration puts the thumb where the guide's arrows end.
