@@ -54,7 +54,7 @@ final class WindowSwitcherPresenter {
     }
 
     /// The column sits in the top-left corner of the pointer's display, a margin inside its visible frame: below the
-    /// menu bar and clear of a Dock on the left, in both hand modes. The capture starts first, so it runs off the main
+    /// menu bar and clear of a Dock on the left, whatever the thumb corner. The capture starts first, so it runs off the main
     /// actor while the panel is laid out and shown; its pictures land after `open` returns, into slots left empty.
     private func open(_ switcher: WindowSwitcher) {
         let screen = Displays.screen(under: NSEvent.mouseLocation)

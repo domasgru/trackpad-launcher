@@ -303,9 +303,11 @@ extension World {
     /// Two fingers rest 150 ms, then the thumb taps `taps` times in the anchor corner, then the fingers lift unless
     /// `lift` is false. Returns its script so a row can continue it with `play`.
     @discardableResult
-    func swap(taps: Int = 1, lift: Bool = true, on trackpad: Trackpad = .macBook14) -> TouchScript {
+    func swap(
+        taps: Int = 1, lift: Bool = true, thumbAtMM thumb: (x: Double, y: Double) = (10, 10), on trackpad: Trackpad = .macBook14
+    ) -> TouchScript {
         var script = TouchScript(trackpad.surface).land(fingers: 2).wait(.milliseconds(150))
-        for _ in 0..<taps { script = script.thumbTap() }
+        for _ in 0..<taps { script = script.thumbTap(atMM: thumb) }
         if lift { script = script.lift() }
         play(script, on: trackpad)
         return script
@@ -369,8 +371,11 @@ extension World {
     /// Thumb at (10, 10), two fingers down, each slide in turn (millimetres, positive right), then the fingers lift
     /// unless `lift` is false. Returns its script so a row can continue it with `play`.
     @discardableResult
-    func swipe(_ slidesMM: Double..., lift: Bool = true, on trackpad: Trackpad = .macBook14) -> TouchScript {
-        var script = TouchScript(trackpad.surface).thumb(atMM: (10, 10)).land(fingers: 2)
+    func swipe(
+        _ slidesMM: Double..., lift: Bool = true, thumbAtMM thumb: (x: Double, y: Double) = (10, 10),
+        on trackpad: Trackpad = .macBook14
+    ) -> TouchScript {
+        var script = TouchScript(trackpad.surface).thumb(atMM: thumb).land(fingers: 2)
         for slide in slidesMM { script = script.slide(byMM: (slide, 0)) }
         if lift { script = script.lift() }
         play(script, on: trackpad)

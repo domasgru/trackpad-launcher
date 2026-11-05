@@ -108,9 +108,9 @@ private func run(
     _ frames: [TouchFrame], _ pairing: Pairing, answers: [Int: [(began: FrameTime, isWindowSwipe: Bool)]]
 ) -> (subject: [Recognition], reference: [Recognition]) {
     var subject = GestureRecognizer(
-        handMode: .right, surface: .macBook14, slides: pairing.subject, swaps: true, travel: .linear)
+        corner: .topLeft, surface: .macBook14, slides: pairing.subject, swaps: true, travel: .linear)
     var reference = GestureRecognizer(
-        handMode: .right, surface: .macBook14, slides: pairing.reference, swaps: true, travel: .linear)
+        corner: .topLeft, surface: .macBook14, slides: pairing.reference, swaps: true, travel: .linear)
     var seen: (subject: [Recognition], reference: [Recognition]) = ([], [])
     for (i, frame) in frames.enumerated() {
         seen.subject.append(subject.step(frame))

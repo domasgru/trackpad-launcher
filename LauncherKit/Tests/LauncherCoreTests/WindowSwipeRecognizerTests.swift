@@ -9,7 +9,7 @@ private func slidePhases(_ kind: SlideKind, _ frames: [TouchFrame], slides: Set<
 /// Every recognition a fresh recognizer with both kinds on gave, frame by frame.
 private func recognitions(_ frames: [TouchFrame]) -> [Recognition] {
     var recognizer = GestureRecognizer(
-        handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
+        corner: .topLeft, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
     return frames.map { recognizer.step($0, answering: true) }
 }
 
@@ -58,26 +58,26 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
     }
 
     @Test(arguments: [
-        (surface: SurfaceSize.macBook14, hand: HandMode.right, thumbX: 10.0),
-        (surface: SurfaceSize.macBook14, hand: HandMode.left, thumbX: 114.8),
-        (surface: SurfaceSize.magicTrackpad, hand: HandMode.right, thumbX: 10.0),
-        (surface: SurfaceSize.magicTrackpad, hand: HandMode.left, thumbX: 150.0),
+        (surface: SurfaceSize.macBook14, corner: ThumbCorner.topLeft, thumb: (x: 10.0, y: 10.0)),
+        (surface: SurfaceSize.macBook14, corner: ThumbCorner.topRight, thumb: (x: 114.8, y: 10.0)),
+        (surface: SurfaceSize.magicTrackpad, corner: ThumbCorner.topLeft, thumb: (x: 10.0, y: 10.0)),
+        (surface: SurfaceSize.magicTrackpad, corner: ThumbCorner.topRight, thumb: (x: 150.0, y: 10.0)),
     ])
-    func travelIsInTrackpadMillimetresAndPositiveDownwardsInBothHandModes(
-        surface: SurfaceSize, hand: HandMode, thumbX: Double
+    func travelIsInTrackpadMillimetresAndPositiveDownwardsInBothThumbCorners(
+        surface: SurfaceSize, corner: ThumbCorner, thumb: (x: Double, y: Double)
     ) {
-        let start = TouchScript(surface).thumb(atMM: (thumbX, 10)).land(fingers: 2, atMM: (62, 30))
+        let start = TouchScript(surface).thumb(atMM: thumb).land(fingers: 2, atMM: (62, 30))
             .slide(byMM: (0, 3.5))
         let down = start.slide(byMM: (0, 12)).lift().frames
         let up = start.slide(byMM: (0, -12)).lift().frames
-        let downPhases = windowPhases(down, handMode: hand, surface: surface)
-        let upPhases = windowPhases(up, handMode: hand, surface: surface)
+        let downPhases = windowPhases(down, corner: corner, surface: surface)
+        let upPhases = windowPhases(up, corner: corner, surface: surface)
         let lastMove: ([SwipePhase]) -> SwipePhase? = { $0.last { if case .moved = $0 { true } else { false } } }
         #expect(lastMove(downPhases)?.isCloseTo(.moved(travelMM: 12.35)) == true)
         #expect(lastMove(upPhases)?.isCloseTo(.moved(travelMM: -11.65)) == true)
         #expect(downPhases.last == .ended && upPhases.last == .ended)
-        #expect(phases(down, handMode: hand, surface: surface).isEmpty)
-        #expect(phases(up, handMode: hand, surface: surface).isEmpty)
+        #expect(phases(down, corner: corner, surface: surface).isEmpty)
+        #expect(phases(up, corner: corner, surface: surface).isEmpty)
     }
 
     @Test(arguments: [

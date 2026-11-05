@@ -66,7 +66,7 @@ import LauncherCore
     /// Forgets every session, stops every device, then starts exactly `trackpads` with a fresh recognizer each.
     /// A click tap exists afterwards iff `blockClicks`, the system allows it and a trackpad is running.
     public func run(
-        _ trackpads: [Trackpad], handMode: HandMode, blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>,
+        _ trackpads: [Trackpad], corner: ThumbCorner, blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>,
         swaps: Bool
     ) {
         runs += 1
@@ -92,7 +92,7 @@ import LauncherCore
             let ref = Unmanaged.passUnretained(device).toOpaque()
             let session = DeviceSession(
                 trackpad: trackpad.id,
-                recognizer: GestureRecognizer(handMode: handMode, surface: trackpad.surface, slides: slides, swaps: swaps, travel: .linear),
+                recognizer: GestureRecognizer(corner: corner, surface: trackpad.surface, slides: slides, swaps: swaps, travel: .linear),
                 pointerCurves: CursorTravel.curves(of: framework.getService(ref)),
                 tap: clickTap, clock: { .now },
                 deliver: { [weak self] event, reply in

@@ -20,7 +20,7 @@ public final class Launcher {
     /// Every app picker's list. Replaced only by a scan; never emptied while one runs.
     public private(set) var installedApps: InstalledApps
     public var isWindowOpen: Bool { window != .closed }
-    public var handMode: HandMode { settings.handMode }
+    public var thumbCorner: ThumbCorner { settings.thumbCorner }
     public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
     public var isSwipeOn: Bool { settings.isSwipeOn }
     public var isSwapOn: Bool { settings.isSwapOn }
@@ -148,10 +148,10 @@ public final class Launcher {
         }
     }
 
-    /// Hand mode toggle. Moves the anchor corner by re-running the devices with fresh recognizers.
-    public func setHandMode(_ mode: HandMode) {
-        guard mode != settings.handMode else { return }
-        settings.handMode = mode
+    /// Thumb corner change. Moves the anchor corner by re-running the devices with fresh recognizers.
+    public func setThumbCorner(_ corner: ThumbCorner) {
+        guard corner != settings.thumbCorner else { return }
+        settings.thumbCorner = corner
         store.save(settings)
         reconcile()
     }
@@ -232,7 +232,7 @@ public final class Launcher {
     /// in progress, alone: preference and trust notifications also fire for writes that change nothing here.
     private struct Run: Equatable {
         let trackpads: [Trackpad]
-        let handMode: HandMode
+        let corner: ThumbCorner
         let blockClicks: Bool
         let blockTapClicks: Bool
         let slides: Set<SlideKind>
@@ -242,7 +242,7 @@ public final class Launcher {
     @ObservationIgnored private var lastRun: Run?
     @ObservationIgnored private var swapSeries = SwapSeries()
 
-    /// The one convergent operation behind launch, hot-plug, wake, preference, hand-mode and trust changes.
+    /// The one convergent operation behind launch, hot-plug, wake, preference, thumb corner and trust changes.
     /// `restart`: run the trackpads even if nothing changed. Hot-plug and wake need it: devices stop delivering frames
     /// across sleep.
     private func reconcile(restart: Bool = false) {
@@ -259,14 +259,14 @@ public final class Launcher {
         let tapToClickIsOn = TapBoundSetting.on(connected: Set(connected.map(\.kind)), values: preferenceValues)
             .contains(.tapToClick)
         let run = Run(
-            trackpads: active ? connected : [], handMode: settings.handMode, blockClicks: blockClicks,
+            trackpads: active ? connected : [], corner: settings.thumbCorner, blockClicks: blockClicks,
             blockTapClicks: blockClicks && tapToClickIsOn,
             slides: granted ? settings.slides : settings.slides.subtracting([.windowSwipe]), swaps: settings.isSwapOn)
         guard restart || run != lastRun else { return }
         lastRun = run
         // Running replaces every recognizer, which ends any swipe or window swipe in progress.
         shown = nil
-        hardware.run(run.trackpads, handMode: run.handMode, blockClicks: run.blockClicks,
+        hardware.run(run.trackpads, corner: run.corner, blockClicks: run.blockClicks,
             blockTapClicks: run.blockTapClicks, slides: run.slides, swaps: run.swaps)
     }
 

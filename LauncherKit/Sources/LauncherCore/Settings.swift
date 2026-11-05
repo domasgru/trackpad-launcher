@@ -5,7 +5,15 @@ import Foundation
 /// Decoding rule, for every field present and future: a key missing from the record decodes as that field's default;
 /// a key this build does not know is ignored; a key whose value does not decode fails the whole record.
 public struct Settings: Codable, Equatable, Sendable {
-    public var handMode: HandMode = .right
+    /// Saved under the key `handMode`, as the hand whose thumb anchors, exactly as every version has written it.
+    private var handMode: HandMode = .right
+
+    /// The corner the thumb anchors in.
+    public var thumbCorner: ThumbCorner {
+        get { handMode == .right ? .topLeft : .topRight }
+        set { handMode = newValue == .topLeft ? .right : .left }
+    }
+
     /// Absent = unassigned.
     public var assignments: [Gesture: AssignedApp] = [:]
     /// Whether a gesture plays the launch animation. The key is this field's name, permanently.
@@ -46,6 +54,12 @@ public struct Settings: Codable, Equatable, Sendable {
         hasAskedForScreenRecording =
             try container.decodeIfPresent(Bool.self, forKey: .hasAskedForScreenRecording) ?? hasAskedForScreenRecording
     }
+}
+
+/// The wire form of the thumb corner: `right` is the thumb on the left side, `left` the thumb on the right side.
+private enum HandMode: String, Codable {
+    case right
+    case left
 }
 
 /// One plist-encoded record under one key. Local-substitutable: tests use a throwaway `UserDefaults` suite.

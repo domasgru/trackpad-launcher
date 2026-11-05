@@ -131,7 +131,7 @@ import LauncherCore
         #expect(!world.hardware.isGatedPortOn)
 
         world.play(hand.wait(.milliseconds(50)))
-        world.launcher.setHandMode(.left)
+        world.launcher.setThumbCorner(.topRight)
         #expect(!world.hardware.isGatedPortOn)
     }
 

@@ -192,13 +192,13 @@ extension Launcher {
         #expect(world.system.launchAnimations.isEmpty, "preparing plays nothing")
     }
 
-    @Test func handModeDefaultsToRightAndSwitchingMovesTheCorner() {
+    @Test func thumbCornerDefaultsToTopLeftAndSwitchingMovesTheCorner() {
         let world = World(apps: ["Arc"])
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
-        #expect(world.launcher.handMode == .right)
+        #expect(world.launcher.thumbCorner == .topLeft)
 
-        world.launcher.setHandMode(.left)
+        world.launcher.setThumbCorner(.topRight)
         world.tap(1, thumbAtMM: (114.8, 10))
         #expect(world.system.broughtToFront == [world.app("Arc")])
 

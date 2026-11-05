@@ -39,7 +39,7 @@ import LauncherCore
 
     @Test func leftHandSwapsFromTheTopRightCornerOnly() {
         let left = World.switcherWorld()
-        left.launcher.setHandMode(.left)
+        left.launcher.setThumbCorner(.topRight)
         left.play(rest().thumbTap(atMM: (114.8, 10)))
         #expect(left.system.broughtToFront == [left.app("Mail")])
 

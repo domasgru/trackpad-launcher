@@ -160,8 +160,8 @@ import LauncherCore
         #expect(world.scanner.scanRequests == 1)
 
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
-        world.launcher.setHandMode(.left)
-        world.launcher.setHandMode(.right)
+        world.launcher.setThumbCorner(.topRight)
+        world.launcher.setThumbCorner(.topLeft)
         world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
         world.preferences.set(.tapToClick, rawValue: 0, for: .builtIn)
         world.hardware.attach(.magicTrackpad)

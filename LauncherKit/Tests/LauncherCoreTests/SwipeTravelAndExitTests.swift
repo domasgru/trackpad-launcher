@@ -12,17 +12,17 @@ import LauncherCore
     }
 
     @Test(arguments: [
-        (surface: SurfaceSize.macBook14, hand: HandMode.right, thumbX: 10.0),
-        (surface: SurfaceSize.macBook14, hand: HandMode.left, thumbX: 114.8),
-        (surface: SurfaceSize.magicTrackpad, hand: HandMode.right, thumbX: 10.0),
-        (surface: SurfaceSize.magicTrackpad, hand: HandMode.left, thumbX: 150.0),
+        (surface: SurfaceSize.macBook14, corner: ThumbCorner.topLeft, thumb: (x: 10.0, y: 10.0)),
+        (surface: SurfaceSize.macBook14, corner: ThumbCorner.topRight, thumb: (x: 114.8, y: 10.0)),
+        (surface: SurfaceSize.magicTrackpad, corner: ThumbCorner.topLeft, thumb: (x: 10.0, y: 10.0)),
+        (surface: SurfaceSize.magicTrackpad, corner: ThumbCorner.topRight, thumb: (x: 150.0, y: 10.0)),
     ])
-    func travelIsInTrackpadMillimetresAndPositiveToTheRightInBothHandModes(
-        surface: SurfaceSize, hand: HandMode, thumbX: Double
+    func travelIsInTrackpadMillimetresAndPositiveToTheRightInBothThumbCorners(
+        surface: SurfaceSize, corner: ThumbCorner, thumb: (x: Double, y: Double)
     ) {
-        let start = TouchScript(surface).thumb(atMM: (thumbX, 10)).land(fingers: 2).slide(byMM: (3.5, 0))
-        let right = phases(start.slide(byMM: (12, 0)).frames, handMode: hand, surface: surface)
-        let left = phases(start.slide(byMM: (-12, 0)).frames, handMode: hand, surface: surface)
+        let start = TouchScript(surface).thumb(atMM: thumb).land(fingers: 2).slide(byMM: (3.5, 0))
+        let right = phases(start.slide(byMM: (12, 0)).frames, corner: corner, surface: surface)
+        let left = phases(start.slide(byMM: (-12, 0)).frames, corner: corner, surface: surface)
         #expect(right.last?.isCloseTo(.moved(travelMM: 12.35)) == true)
         #expect(left.last?.isCloseTo(.moved(travelMM: -11.65)) == true)
     }

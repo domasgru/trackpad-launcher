@@ -35,8 +35,8 @@ import LauncherCore
     @Test func leftHandAnchorsInTheTopRightCorner() {
         let topRight = TouchScript(.macBook14).thumb(atMM: (114.8, 10)).tap(fingers: 1).frames
         let topLeft = TouchScript(.macBook14).thumb(atMM: (10, 10)).tap(fingers: 1).frames
-        #expect(fired(topRight, handMode: .left) == [.one])
-        #expect(fired(topLeft, handMode: .left).isEmpty)
+        #expect(fired(topRight, corner: .topRight) == [.one])
+        #expect(fired(topLeft, corner: .topRight).isEmpty)
     }
 }
 
@@ -168,7 +168,7 @@ extension GestureRecognizerTests {
             h.frame(atMS: 150, [h.contact(9, atMM: 10, 10), h.contact(7, atMM: 62, 45)]),
             h.frame(atMS: 160, [h.contact(9, atMM: 10, 10)]),
         ]
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
+        var recognizer = GestureRecognizer(corner: .topLeft, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
         let perFrame = frames.map { recognizer.step($0).fired }
         #expect(perFrame == [nil, nil, nil, nil, .one, nil, nil, .one])
     }
@@ -241,7 +241,7 @@ extension GestureRecognizerTests {
             h.frame(atMS: 140, [h.contact(9, atMM: 10, 10)]),
             h.frame(atMS: 150, []),
         ]
-        var recognizer = GestureRecognizer(handMode: .right, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
+        var recognizer = GestureRecognizer(corner: .topLeft, surface: .macBook14, slides: [.swipe], swaps: true, travel: .linear)
         #expect(frames.map { recognizer.step($0).fired } == [nil, nil, nil, nil, .one, nil, nil])
     }
 }

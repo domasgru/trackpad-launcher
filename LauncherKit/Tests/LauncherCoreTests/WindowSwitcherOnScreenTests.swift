@@ -224,7 +224,7 @@ import LauncherCore
 
     @Test func leftHandedTheSameSlideDownReachesTheNextWindow() {
         let world = World.windowWorld(visible: ["Docs", "Mail"])
-        world.launcher.setHandMode(.left)
+        world.launcher.setThumbCorner(.topRight)
 
         world.windowSwipe(3.5, 12, lift: false, thumbAtMM: (114.8, 10))
 

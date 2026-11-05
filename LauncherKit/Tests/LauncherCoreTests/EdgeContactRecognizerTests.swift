@@ -37,9 +37,9 @@ import LauncherCore
         }
     }
 
-    private func recognitions(_ frames: [TouchFrame]) -> [Recognition] {
+    private func recognitions(_ frames: [TouchFrame], corner: ThumbCorner = .topLeft) -> [Recognition] {
         var recognizer = GestureRecognizer(
-            handMode: .right, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
+            corner: corner, surface: .macBook14, slides: [.swipe, .windowSwipe], swaps: true, travel: .linear)
         return frames.map { recognizer.step($0, answering: true) }
     }
 
@@ -67,9 +67,9 @@ import LauncherCore
 
     private let thumb = Track.still(9, from: 0, until: 10_000, atMM: 10, 10)
 
-    /// The thumb's x in the anchor corner for the hand mode, 10 mm from the anchor-side edge.
-    private func thumbX(_ handMode: HandMode, _ surface: SurfaceSize = .macBook14) -> Double {
-        handMode == .right ? 10 : surface.widthMM - 10
+    /// The thumb's x in the anchor corner for the corner, 10 mm from the anchor-side edge.
+    private func thumbX(_ corner: ThumbCorner, _ surface: SurfaceSize = .macBook14) -> Double {
+        corner == .topLeft ? 10 : surface.widthMM - 10
     }
 
     @Test func aPalmBrushingTheEdgeDuringAOneFingerSlideFiresNothing() {
@@ -84,53 +84,53 @@ import LauncherCore
     }
 
     @Test(arguments: [
-        (HandMode.right, SurfaceSize.macBook14, 123.8, 53.76),
-        (.left, .macBook14, 1.0, 53.76),
-        (.right, .macBook14, 123.8, 34.56),
-        (.right, .magicTrackpad, 159.0, 51.75),
-        (.right, .macBook14, 1.0, 75.8),
-        (.right, .macBook14, 62.4, 75.8),
-        (.right, .macBook14, 123.8, 75.8),
-        (.left, .macBook14, 1.0, 75.8),
-        (.left, .macBook14, 62.4, 75.8),
-        (.left, .macBook14, 123.8, 75.8),
+        (ThumbCorner.topLeft, SurfaceSize.macBook14, 123.8, 53.76),
+        (.topRight, .macBook14, 1.0, 53.76),
+        (.topLeft, .macBook14, 123.8, 34.56),
+        (.topLeft, .magicTrackpad, 159.0, 51.75),
+        (.topLeft, .macBook14, 1.0, 75.8),
+        (.topLeft, .macBook14, 62.4, 75.8),
+        (.topLeft, .macBook14, 123.8, 75.8),
+        (.topRight, .macBook14, 1.0, 75.8),
+        (.topRight, .macBook14, 62.4, 75.8),
+        (.topRight, .macBook14, 123.8, 75.8),
     ])
-    func aTapLandingInTheBottomEdgeOrTheLowerHandSideEdgeFiresNothingAndTheNextTapStillFires(handMode: HandMode, surface: SurfaceSize, x: Double, y: Double) {
-        let script = TouchScript(surface).thumb(atMM: (thumbX(handMode, surface), 10))
+    func aTapLandingInTheBottomEdgeOrTheLowerHandSideEdgeFiresNothingAndTheNextTapStillFires(corner: ThumbCorner, surface: SurfaceSize, x: Double, y: Double) {
+        let script = TouchScript(surface).thumb(atMM: (thumbX(corner, surface), 10))
             .tap(fingers: 1, atMM: (x, y))
             .tap(fingers: 1, atMM: (62, 45))
-        #expect(fired(script.frames, handMode: handMode, surface: surface) == [.one])
+        #expect(fired(script.frames, corner: corner, surface: surface) == [.one])
     }
 
     @Test(arguments: [
-        (HandMode.right, SurfaceSize.macBook14, 62.4, 1.0),
-        (.left, .macBook14, 62.4, 1.0),
-        (.right, .macBook14, 30.0, 1.0),
-        (.right, .macBook14, 123.8, 1.0),
-        (.right, .macBook14, 1.0, 53.76),
-        (.right, .macBook14, 1.0, 23.04),
-        (.left, .macBook14, 123.8, 53.76),
-        (.right, .macBook14, 123.8, 15.36),
-        (.left, .macBook14, 1.0, 23.04),
-        (.right, .macBook14, 123.8, 26.88),
-        (.right, .magicTrackpad, 159.0, 40.25),
+        (ThumbCorner.topLeft, SurfaceSize.macBook14, 62.4, 1.0),
+        (.topRight, .macBook14, 62.4, 1.0),
+        (.topLeft, .macBook14, 30.0, 1.0),
+        (.topLeft, .macBook14, 123.8, 1.0),
+        (.topLeft, .macBook14, 1.0, 53.76),
+        (.topLeft, .macBook14, 1.0, 23.04),
+        (.topRight, .macBook14, 123.8, 53.76),
+        (.topLeft, .macBook14, 123.8, 15.36),
+        (.topRight, .macBook14, 1.0, 23.04),
+        (.topLeft, .macBook14, 123.8, 26.88),
+        (.topLeft, .magicTrackpad, 159.0, 40.25),
     ])
-    func aTapNearTheTopEdgeTheOppositeEdgeOrTheUpperHandSideEdgeIsAFinger(handMode: HandMode, surface: SurfaceSize, x: Double, y: Double) {
-        let script = TouchScript(surface).thumb(atMM: (thumbX(handMode, surface), 10)).tap(fingers: 1, atMM: (x, y))
-        #expect(fired(script.frames, handMode: handMode, surface: surface) == [.one])
+    func aTapNearTheTopEdgeTheOppositeEdgeOrTheUpperHandSideEdgeIsAFinger(corner: ThumbCorner, surface: SurfaceSize, x: Double, y: Double) {
+        let script = TouchScript(surface).thumb(atMM: (thumbX(corner, surface), 10)).tap(fingers: 1, atMM: (x, y))
+        #expect(fired(script.frames, corner: corner, surface: surface) == [.one])
     }
 
     @Test(arguments: [
-        (HandMode.right, 123.8, 53.76),
-        (.left, 1.0, 53.76),
+        (ThumbCorner.topLeft, 123.8, 53.76),
+        (.topRight, 1.0, 53.76),
     ])
-    func aPalmRestingAtTheHandSideEdgeDoesNotAddToATap(handMode: HandMode, palmX: Double, palmY: Double) {
+    func aPalmRestingAtTheHandSideEdgeDoesNotAddToATap(corner: ThumbCorner, palmX: Double, palmY: Double) {
         let all = frames([
-            .still(9, from: 0, until: 10_000, atMM: thumbX(handMode), 10),
+            .still(9, from: 0, until: 10_000, atMM: thumbX(corner), 10),
             .still(2, from: 50, until: 400, atMM: palmX, palmY),
             .still(1, from: 120, until: 240, atMM: 62, 45),
         ], throughMS: 500)
-        #expect(fired(all, handMode: handMode) == [.one])
+        #expect(fired(all, corner: corner) == [.one])
     }
 
     @Test func aFingerAtTheTopEdgeCountsInATwoFingerTap() {
@@ -218,12 +218,12 @@ import LauncherCore
     }
 
     @Test(arguments: [
-        (HandMode.right, 1.0),
-        (.left, 123.8),
+        (ThumbCorner.topLeft, 1.0),
+        (.topRight, 123.8),
     ])
-    func aThumbAtTheVeryCornerStillAnchors(handMode: HandMode, thumbX: Double) {
+    func aThumbAtTheVeryCornerStillAnchors(corner: ThumbCorner, thumbX: Double) {
         let script = TouchScript(.macBook14).thumb(atMM: (thumbX, 1)).tap(fingers: 1)
-        #expect(fired(script.frames, handMode: handMode) == [.one])
+        #expect(fired(script.frames, corner: corner) == [.one])
     }
 
     @Test(arguments: [

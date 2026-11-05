@@ -30,11 +30,11 @@ public struct SurfaceSize: Hashable, Sendable {
 
 /// The fixed zone where a thumb arms gestures.
 package struct AnchorCorner: Sendable {
-    private let handMode: HandMode
+    private let corner: ThumbCorner
     private let surface: SurfaceSize
 
-    package init(_ handMode: HandMode, surface: SurfaceSize) {
-        self.handMode = handMode
+    package init(_ corner: ThumbCorner, surface: SurfaceSize) {
+        self.corner = corner
         self.surface = surface
     }
 
@@ -51,21 +51,21 @@ package struct AnchorCorner: Sendable {
 
     /// Distance from the anchor-side edge as a fraction of the width.
     private func fromEdge(_ p: SurfacePoint) -> Double {
-        handMode.fractionFromThumbSideEdge(x: p.x)
+        corner.fractionFromSideEdge(x: p.x)
     }
 }
 
 /// Remembers which edge contacts landed in the band, so the recognizer never sees them. The band is the bottom edge and
-/// the hand-side edge below the `edgeBandTop` line: where the heel of the hand rests. An edge contact is a resting
+/// the side edge opposite the thumb corner below the `edgeBandTop` line: where the heel of the hand rests. An edge contact is a resting
 /// palm, not a finger, for as long as it stays down. Call once per frame, in frame order.
 package struct EdgeContacts: Sendable {
-    private let handMode: HandMode
+    private let corner: ThumbCorner
     private let surface: SurfaceSize
     private var edgeContactIDs: Set<TouchID> = []
     private var previouslyDown: Set<TouchID> = []
 
-    package init(_ handMode: HandMode, surface: SurfaceSize) {
-        self.handMode = handMode
+    package init(_ corner: ThumbCorner, surface: SurfaceSize) {
+        self.corner = corner
         self.surface = surface
     }
 
@@ -86,7 +86,7 @@ package struct EdgeContacts: Sendable {
 
     private func isInBand(_ p: SurfacePoint) -> Bool {
         let fromBottomEdgeMM = (1 - p.y) * surface.heightMM
-        let fromHandSideEdgeMM = handMode.fractionFromHandSideEdge(x: p.x) * surface.widthMM
+        let fromHandSideEdgeMM = corner.fractionFromOppositeSideEdge(x: p.x) * surface.widthMM
         let nearestBandEdgeMM = p.y > GestureRules.edgeBandTop ? min(fromBottomEdgeMM, fromHandSideEdgeMM) : fromBottomEdgeMM
         return nearestBandEdgeMM < GestureRules.edgeBandMM
     }

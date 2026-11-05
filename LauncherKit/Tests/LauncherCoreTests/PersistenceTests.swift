@@ -3,19 +3,19 @@ import Testing
 import LauncherCore
 
 @MainActor @Suite struct PersistenceTests {
-    @Test func assignmentsAndHandModeSurviveARelaunch() {
+    @Test func assignmentsAndThumbCornerSurviveARelaunch() {
         let names = ["Arc", "Figma", "Notion", "Spotify", "Slack"]
         let world = World(apps: names)
         world.launcher.start()
         for (gesture, name) in zip(Gesture.allCases, names) {
             world.launcher.setAssignment(.app(world.app(name)), for: gesture)
         }
-        world.launcher.setHandMode(.left)
+        world.launcher.setThumbCorner(.topRight)
 
         let relaunched = world.relaunch()
 
         #expect(relaunched.rows.map(\.app) == names.map { .present(world.app($0)) })
-        #expect(relaunched.handMode == .left)
+        #expect(relaunched.thumbCorner == .topRight)
     }
 
     @Test func firstRunShowsFreshDefaultsOpensTheWindowAndRegistersTheLoginItem() {
@@ -25,7 +25,7 @@ import LauncherCore
         world.launcher.start()
 
         #expect(world.launcher.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
-        #expect(world.launcher.handMode == .right)
+        #expect(world.launcher.thumbCorner == .topLeft)
         #expect(world.launcher.isLaunchAnimationOn)
         #expect(world.launcher.isSwipeOn)
         #expect(world.launcher.isSwapOn)
@@ -57,7 +57,7 @@ import LauncherCore
         #expect(world.loginItem.calls.isEmpty)
         #expect(world.permissions.asks.isEmpty)
         #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
-        #expect(relaunched.handMode == .right)
+        #expect(relaunched.thumbCorner == .topLeft)
         #expect(relaunched.isLaunchAnimationOn)
         #expect(relaunched.isSwipeOn)
         #expect(relaunched.isSwapOn)
@@ -96,14 +96,14 @@ import LauncherCore
                 .present(world.app("Arc")), .present(world.app("Figma")), .unassigned, .unassigned,
                 .present(world.app("Spotify")),
             ])
-        #expect(relaunched.handMode == .left)
+        #expect(relaunched.thumbCorner == .topRight)
         #expect(!relaunched.isLaunchAnimationOn)
         #expect(!relaunched.isSwipeOn)
         #expect(relaunched.isSwapOn)
         #expect(!relaunched.isWindowSwipeOn)
     }
 
-    /// The record a build without the launch animation setting wrote for Left hand with Arc, Figma and Notion on
+    /// The record a build without the launch animation setting wrote for the top-right corner with Arc, Figma and Notion on
     /// gestures 1 to 3, with the World's own app URLs.
     private func recordFromBeforeTheLaunchAnimationSetting(_ world: World) throws -> Data {
         func assignment(_ name: String) -> [String: Any] {
@@ -135,7 +135,7 @@ import LauncherCore
 
         #expect(relaunched.isLaunchAnimationOn)
         #expect(relaunched.isSwipeOn)
-        #expect(relaunched.handMode == .left)
+        #expect(relaunched.thumbCorner == .topRight)
         #expect(relaunched.rows.map(\.app) == threeAppsThenUnassigned(world))
         #expect(world.loginItem.calls.isEmpty)
         #expect(world.permissions.asks.isEmpty)
@@ -151,7 +151,7 @@ import LauncherCore
         let relaunched = world.relaunch()
 
         #expect(!relaunched.isLaunchAnimationOn)
-        #expect(relaunched.handMode == .left)
+        #expect(relaunched.thumbCorner == .topRight)
         #expect(relaunched.rows.map(\.app) == threeAppsThenUnassigned(world))
     }
 
@@ -166,7 +166,7 @@ import LauncherCore
 
         #expect(relaunched.isLaunchAnimationOn)
         #expect(relaunched.isSwipeOn)
-        #expect(relaunched.handMode == .right)
+        #expect(relaunched.thumbCorner == .topLeft)
         #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: Gesture.allCases.count))
         #expect(world.loginItem.calls.isEmpty)
         #expect(world.permissions.asks.isEmpty)
@@ -197,13 +197,13 @@ import LauncherCore
 
         let older = World(apps: ["Arc"])
         let arc = older.app("Arc")
-        older.seedSettingsRecord(Fixtures.recordSavedByPlan002(handMode: .left, two: arc))
+        older.seedSettingsRecord(Fixtures.recordSavedByPlan002(handMode: "left", two: arc))
         let loaded = older.relaunch()
 
         #expect(loaded.isSwipeOn)
         #expect(loaded.isSwapOn)
         #expect(!loaded.isWindowSwipeOn)
-        #expect(loaded.handMode == .left)
+        #expect(loaded.thumbCorner == .topRight)
         #expect(loaded.rows.map(\.app)[1] == .present(arc))
     }
 
@@ -270,7 +270,7 @@ import LauncherCore
     @Test func everySettingsFieldSurvivesTheStore() {
         let world = World(apps: ["Arc"])
         var settings = Settings()
-        settings.handMode = .left
+        settings.thumbCorner = .topRight
         settings.assignments = [.three: AssignedApp(world.app("Arc"))]
         settings.isLaunchAnimationOn = false
         settings.isSwipeOn = false
@@ -284,7 +284,7 @@ import LauncherCore
         #expect(world.store.load() == settings)
     }
 
-    /// Written by `SettingsStore.save` (binary plist) and converted with `plutil -convert xml1`: Left hand, Launch
+    /// Written by `SettingsStore.save` (binary plist) and converted with `plutil -convert xml1`: top-right corner, Launch
     /// animation off, apps on gestures 1, 2 and 5, and two apps in the switcher list. Never regenerate: this is the
     /// format released builds write. It predates the swap and window swipe keys, so it also proves an upgrade takes both defaults:
     /// the swap on, the window swipe off. The paths live under `/tl-fixture`, which no Mac has, so each app

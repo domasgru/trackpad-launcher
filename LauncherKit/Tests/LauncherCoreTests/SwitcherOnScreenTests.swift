@@ -436,7 +436,7 @@ import LauncherCore
 
     @Test func leftHandedTheSameSlideRightReachesTheSameNextApp() {
         let world = World.switcherWorld()
-        world.launcher.setHandMode(.left)
+        world.launcher.setThumbCorner(.topRight)
 
         world.play(
             TouchScript(trackpad.surface).thumb(atMM: (114.8, 10)).land(fingers: 2).slide(byMM: (3.5, 0))
