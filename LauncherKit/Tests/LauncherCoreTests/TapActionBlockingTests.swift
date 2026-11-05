@@ -105,4 +105,21 @@ import LauncherCore
         #expect(!world.hardware.isGatedPortOn)
         #expect(world.hardware.offer(.tapAction(.lookUp)) == .notSent)
     }
+
+    /// The gate closed on an event after the window, while the pad sent no frame; the next thumb touch must open it
+    /// again, though the last frame before it already wanted the tap.
+    @Test func aThumbLandingAfterAnEventClosedTheGateOpensItAgain() {
+        let world = world()
+        let first = thumb.tap(fingers: 3).liftThumb()
+        world.play(first)
+        world.hardware.advanceClock(by: .milliseconds(600))
+        #expect(world.hardware.offer(.scroll(.fingers(.mayBegin))) == .decided(.scroll(.pass)))
+        #expect(!world.hardware.isGatedPortOn)
+
+        world.play(first.thumb(atMM: (10, 10)).tap(fingers: 3))
+
+        #expect(world.hardware.isGatedPortOn)
+        #expect(lookUpPair(world) == droppedPair)
+        #expect(world.system.broughtToFront == [world.app("Notes"), world.app("Notes")])
+    }
 }

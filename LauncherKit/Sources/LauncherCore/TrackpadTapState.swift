@@ -23,8 +23,11 @@ public struct TrackpadTapState: Equatable, Sendable {
 
     /// Takes one frame's recognition. `time` is the clock read, non-nil exactly when `needsTime(for:)` said yes, so an
     /// ordinary touch reads no clock. Returns whether `wantsTap` flipped since the last recognition, which includes the
-    /// first one after a window ended: that frame is what lets the gate close.
+    /// first one after a window ended: that frame is what lets the gate close. It also returns true when the tap is
+    /// wanted now and the last recognition's demand has lapsed by `time`: a window that ended between frames may have
+    /// let the tap's next event close the gate, which no frame saw, so the gate is woken to open again.
     public mutating func take(_ recognition: Recognition, at time: Uptime?) -> WantsTapFlipped {
+        let lastDemandHolds = level.wantsTap || time.map(liftWindowIsOpen(at:)) ?? false
         level = recognition.blocking
         if recognition.opensLiftWindow, let time {
             liftWindowEnd = time + GestureRules.liftWindow
@@ -33,7 +36,7 @@ public struct TrackpadTapState: Equatable, Sendable {
         }
         let wants = level.wantsTap || liftWindowEnd.map { end in time.map { $0 < end } ?? false } ?? false
         defer { wanted = wants }
-        return wants != wanted
+        return wants != wanted || (wants && !lastDemandHolds)
     }
 
     /// Strictly before the end is open.
