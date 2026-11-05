@@ -394,7 +394,7 @@ import LauncherCore
 
     @Test func whileGesturesAreInactiveTheSwipeDoesNothingEvenIfOneWasInFlight() {
         let world = World.switcherWorld()
-        world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
+        world.hardware.detach(trackpad.id)
         #expect(world.hardware.running.isEmpty)
 
         world.swipe(3.5, 12)

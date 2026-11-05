@@ -63,3 +63,4 @@
   - S3's checkbox counts (20 taps after a 5 s rest toggle nothing; two physical clicks after a 4 s rest toggle twice).
   - S4's Look up / Smart zoom checks and the final walkthrough of R1–R6, the swap scenario included.
   - A Magic Trackpad, and Dragging on.
+- After 1.0.5, the human asked for gestures to stay on without Accessibility even with Tap to click or Look up on, accepting the stray click → R12 supersedes R6 and R8–R10. `GestureActivity` depends only on a connected trackpad; `InactiveCause` keeps `.noTrackpad` alone; the tap-bound settings notice, `TapBoundSettings`, the core `NoticeButton` and `InactiveNotice` are gone (`Launcher.inactiveNotice` is the sentence); the Accessibility hint shows whenever the permission is missing. Tests that used "Tap to click without access" to make gestures inactive now detach the trackpad.

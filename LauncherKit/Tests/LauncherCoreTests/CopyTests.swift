@@ -27,17 +27,7 @@ import LauncherCore
         #expect(Copy.tryAgainButton == "Try again")
     }
 
-    @Test(arguments: [
-        (cause: InactiveCause.noTrackpad, notice: "No trackpad connected. Connect a trackpad to use gestures."),
-        (cause: .settingsNeedAccessibility(TapBoundSettings([.tapToClick])!),
-         notice: "Gestures are off while Tap to click is on, until Trackpad Launcher has Accessibility access."),
-        (cause: .settingsNeedAccessibility(TapBoundSettings([.lookUpTapWithThreeFingers])!),
-         notice: "Gestures are off while Look up: Tap with three fingers is on, until Trackpad Launcher has Accessibility access."),
-        (cause: .settingsNeedAccessibility(TapBoundSettings([.tapToClick, .lookUpTapWithThreeFingers])!),
-         notice: "Gestures are off while Tap to click and Look up: Tap with three fingers are on, until Trackpad Launcher has Accessibility access."),
-    ])
-    func theInactiveNoticeNamesTheCauseInTheSettingsOwnWords(cause: InactiveCause, notice: String) {
-        #expect(Copy.inactiveNotice(for: cause) == notice)
-        #expect(!Copy.inactiveNotice(for: cause).hasPrefix("Gestures are off while these trackpad settings are on"))
+    @Test func theNoTrackpadNoticeSaysWhatToDo() {
+        #expect(Copy.inactiveNotice(for: .noTrackpad) == "No trackpad connected. Connect a trackpad to use gestures.")
     }
 }

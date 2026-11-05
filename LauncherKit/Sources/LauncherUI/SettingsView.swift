@@ -41,12 +41,7 @@ struct SettingsView: View {
                     .padding(.vertical, 8)
             }
             if let notice = launcher.inactiveNotice {
-                switch notice.button {
-                case .openAccessibilitySettings:
-                    SettingsNotice(message: notice.message, button: accessibilityButton)
-                case nil:
-                    SettingsNotice(message: notice.message)
-                }
+                SettingsNotice(message: notice)
             }
             if launcher.showsAccessibilityHint {
                 SettingsNotice(message: Copy.accessibilityHint, button: accessibilityButton)

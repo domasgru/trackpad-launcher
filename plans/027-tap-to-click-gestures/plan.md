@@ -21,6 +21,8 @@ Tap to click and Look up no longer turn gestures off. A tap with other fingers u
 
 ## Requirements
 
+> **Changed after 1.0.5 (shipped in 1.0.6):** the human chose gestures over clean taps when the Accessibility permission is missing. R6, R8, R9 and R10 are superseded by R12: gestures never turn off for a trackpad setting, and the Accessibility hint is the only message about the permission.
+
 ### R1. Tap to click and Look up no longer turn gestures off
 Gestures MUST be active while *Tap to click* or *Look up: Tap with three fingers* is on for any connected trackpad, as long as Trackpad Launcher has the Accessibility permission and a trackpad is connected. This holds for the built-in trackpad and for a Magic Trackpad alike. With the Accessibility permission, no system trackpad setting makes gestures inactive.
 
@@ -250,6 +252,24 @@ The notice "No trackpad connected. Connect a trackpad to use gestures." MUST sta
 - **GIVEN** no trackpad is connected, Tap to click is on, and Trackpad Launcher lacks the Accessibility permission
 - **WHEN** the user opens the settings window
 - **THEN** it shows "No trackpad connected. Connect a trackpad to use gestures."
+
+### R12. Gestures work without the Accessibility permission, whatever the trackpad settings
+Gestures MUST be active whenever a trackpad is connected, whatever Tap to click, Look up and the Accessibility permission are set to. Without the permission nothing is blocked, so a gesture under Tap to click MUST also click as macOS makes it, and one under Look up MUST also look up. The settings window MUST show only the Accessibility hint while the permission is missing, and no notice that gestures are off.
+
+#### Scenario: Tap to click on, no permission
+- **GIVEN** Tap to click is on, Arc is assigned to the 1-finger gesture, and Trackpad Launcher lacks the Accessibility permission
+- **WHEN** the thumb rests in the anchor corner and one finger taps
+- **THEN** Arc comes to the front with the gesture haptic, and the tap also clicks where the pointer is
+
+#### Scenario: The settings window without the permission
+- **GIVEN** Tap to click and Look up: Tap with three fingers are on, and Trackpad Launcher lacks the Accessibility permission
+- **WHEN** the user opens the settings window
+- **THEN** it shows the Accessibility hint and no notice that gestures are off
+
+#### Scenario: Granting the permission
+- **GIVEN** Tap to click is on and Trackpad Launcher lacks the Accessibility permission
+- **WHEN** the user grants the permission
+- **THEN** the next gesture opens its app and makes no click, with no relaunch
 
 ## Non-goals
 

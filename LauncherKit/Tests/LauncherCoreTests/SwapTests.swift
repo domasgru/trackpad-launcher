@@ -250,9 +250,9 @@ import LauncherCore
         #expect(world.system.broughtToFront == [world.app("Mail")])
     }
 
-    @Test func withTapToClickOnNothingRunsAndASwapEventThatSlipsInIsIgnored() {
+    @Test func withNoTrackpadNothingRunsAndASwapEventThatSlipsInIsIgnored() {
         let world = World.switcherWorld()
-        world.preferences.set(.tapToClick, rawValue: 1, for: .builtIn)
+        world.hardware.detach(trackpad.id)
         #expect(world.hardware.running.isEmpty)
         world.swap()
         world.hardware.inject(.swap(SwapEvent(startsSeries: true, trackpad: trackpad.id)))

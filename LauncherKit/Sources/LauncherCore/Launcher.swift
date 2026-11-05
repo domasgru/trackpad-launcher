@@ -27,20 +27,17 @@ public final class Launcher {
     public var isWindowSwipeOn: Bool { settings.isWindowSwipeOn }
     /// One derivation, read by the notice and the fire guard.
     public var activity: GestureActivity {
-        GestureActivity(
-            connected: Set(connected.map(\.kind)), values: preferenceValues, accessGranted: isAccessibilityGranted)
+        GestureActivity(connected: Set(connected.map(\.kind)))
     }
 
-    /// nil while gestures are active.
-    public var inactiveNotice: InactiveNotice? {
+    /// The sentence the settings window shows while gestures are inactive; nil while they are active.
+    public var inactiveNotice: String? {
         guard case .inactive(let cause) = activity else { return nil }
-        return InactiveNotice(cause)
+        return Copy.inactiveNotice(for: cause)
     }
 
-    /// The Accessibility hint shows while the permission is missing and the notice carries no button of its own.
-    public var showsAccessibilityHint: Bool {
-        !isAccessibilityGranted && inactiveNotice?.button == nil
-    }
+    /// The Accessibility hint shows while the permission is missing.
+    public var showsAccessibilityHint: Bool { !isAccessibilityGranted }
 
     public private(set) var isAccessibilityGranted = false
     /// Read with Accessibility on every push, so a window swipe never reads it.

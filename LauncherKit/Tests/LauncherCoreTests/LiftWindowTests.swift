@@ -39,13 +39,16 @@ import LauncherCore
 
     @Test func aTapMakesNoClickOnceAccessIsGrantedWithoutARelaunch() {
         let world = world(["Arc", "Figma", "Notion", "Spotify", "Slack"], accessGranted: false)
-        #expect(world.launcher.activity == .inactive(.settingsNeedAccessibility(TapBoundSettings([.tapToClick])!)))
-        world.permissions.set(.accessibility, granted: true)
-        world.play(thumb.tap(fingers: 1))
-
+        let first = thumb.tap(fingers: 1).liftThumb()
+        world.play(first)
         #expect(world.system.broughtToFront == [world.app("Arc")])
-        #expect(world.hardware.feedback == [Trackpad.macBook14.id])
-        #expect(click(world) == dropped)
+        #expect(click(world) == [.noTap, .noTap])
+
+        world.permissions.set(.accessibility, granted: true)
+        world.play(first.wait(.milliseconds(600)).thumb(atMM: (10, 10)).tap(fingers: 1))
+
+        #expect(world.system.broughtToFront == [world.app("Arc"), world.app("Arc")])
+        #expect(click(world, number: 2) == dropped)
     }
 
     @Test func aRightClickAfterATwoFingerTapOrAShortTouchIsBlockedToo() {

@@ -42,17 +42,10 @@ public enum Copy {
         "\(appName) — Window \(position)"
     }
 
-    /// The sentence shown in place of the hint while gestures are inactive. The list is joined in English whatever the
-    /// user's locale, because the sentence around it is English.
+    /// The sentence the settings window shows while gestures are inactive.
     public static func inactiveNotice(for cause: InactiveCause) -> String {
         switch cause {
-        case .noTrackpad:
-            "No trackpad connected. Connect a trackpad to use gestures."
-        case .settingsNeedAccessibility(let tapBound):
-            "Gestures are off while "
-                + tapBound.settings.map(\.noticeName).formatted(.list(type: .and).locale(Locale(identifier: "en")))
-                + (tapBound.settings.count == 1 ? " is on" : " are on")
-                + ", until Trackpad Launcher has Accessibility access."
+        case .noTrackpad: "No trackpad connected. Connect a trackpad to use gestures."
         }
     }
 }

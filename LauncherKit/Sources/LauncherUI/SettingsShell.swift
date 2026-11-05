@@ -41,7 +41,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
 
     /// Everything that decides the window's height.
     private struct Fit: Equatable {
-        let inactiveNotice: InactiveNotice?
+        let inactiveNotice: String?
         let showsAccessibilityHint: Bool
         let isSwipeOn: Bool
         let screenRecordingHint: ScreenRecordingHint?

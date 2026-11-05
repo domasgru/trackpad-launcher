@@ -122,7 +122,7 @@ import LauncherCore
 
         world.permissions.set(.accessibility, granted: false)
         #expect(!world.hardware.isBlockingClicks)
-        #expect(world.hardware.running.isEmpty)
+        #expect(Set(world.hardware.running.keys) == [trackpad.id])
 
         world.permissions.set(.accessibility, granted: true)
         world.preferences.set(.tapToClick, rawValue: 0, for: .builtIn)

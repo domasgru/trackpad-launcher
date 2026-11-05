@@ -1,10 +1,9 @@
 import Foundation
 
-/// A system trackpad setting that binds a system action to a tap rather than a press. Gestures coexist with it only
-/// through click blocking, which needs the Accessibility permission.
-/// This enum is the table: every case supplies its key, its on value and its notice text through
-/// exhaustive switches, so adding a setting is one case the compiler forces through all three.
-/// `allCases` order is notice order.
+/// A system trackpad setting that binds a system action to a tap rather than a press. Gestures work with it on; with
+/// the Accessibility permission, click blocking keeps a gesture's tap from also acting.
+/// This enum is the table: every case supplies its key and its on value through exhaustive switches, so adding a
+/// setting is one case the compiler forces through both.
 public enum TapBoundSetting: CaseIterable, Hashable, Sendable {
     case tapToClick
     case lookUpTapWithThreeFingers
@@ -25,14 +24,6 @@ public enum TapBoundSetting: CaseIterable, Hashable, Sendable {
         }
     }
 
-    /// Exactly the words the tap-bound settings notice uses.
-    var noticeName: String {
-        switch self {
-        case .tapToClick: "Tap to click"
-        case .lookUpTapWithThreeFingers: "Look up: Tap with three fingers"
-        }
-    }
-
     /// The settings that are on for any connected trackpad, in table order.
     public static func on(
         connected: Set<TrackpadKind>, values: [TrackpadKind: TrackpadPreferenceValues]
@@ -46,19 +37,8 @@ public enum TapBoundSetting: CaseIterable, Hashable, Sendable {
 /// Raw values of the table keys as read from one domain. Absent keys are absent entries.
 public typealias TrackpadPreferenceValues = [TapBoundSetting: Int]
 
-/// Non-empty, in table order. The failable init is the only constructor.
-public struct TapBoundSettings: Equatable, Sendable {
-    public let settings: [TapBoundSetting]
-
-    public init?(_ settings: [TapBoundSetting]) {
-        guard !settings.isEmpty else { return nil }
-        self.settings = settings
-    }
-}
-
 public enum InactiveCause: Equatable, Sendable {
     case noTrackpad
-    case settingsNeedAccessibility(TapBoundSettings)
 }
 
 /// One value read by the notice and the fire guard.
@@ -68,44 +48,9 @@ public enum GestureActivity: Equatable, Sendable {
 
     public var isActive: Bool { self == .active }
 
-    /// Pure. No trackpad wins over settings; a tap-bound setting on for any connected kind makes gestures inactive
-    /// only while the Accessibility permission is missing.
-    public init(
-        connected: Set<TrackpadKind>, values: [TrackpadKind: TrackpadPreferenceValues], accessGranted: Bool
-    ) {
-        guard !connected.isEmpty else {
-            self = .inactive(.noTrackpad)
-            return
-        }
-        guard !accessGranted else {
-            self = .active
-            return
-        }
-        let on = TapBoundSetting.on(connected: connected, values: values)
-        self = TapBoundSettings(on).map { .inactive(.settingsNeedAccessibility($0)) } ?? .active
-    }
-}
-
-/// The button a notice carries.
-public enum NoticeButton: Equatable, Sendable {
-    case openAccessibilitySettings
-}
-
-/// What the settings window says while gestures are inactive.
-public struct InactiveNotice: Equatable, Sendable {
-    public let message: String
-    public let button: NoticeButton?
-
-    public init(message: String, button: NoticeButton?) {
-        self.message = message
-        self.button = button
-    }
-
-    init(_ cause: InactiveCause) {
-        message = Copy.inactiveNotice(for: cause)
-        switch cause {
-        case .noTrackpad: button = nil
-        case .settingsNeedAccessibility: button = .openAccessibilitySettings
-        }
+    /// Pure. Gestures are active whenever a trackpad is connected, whatever its settings and the Accessibility
+    /// permission: without the permission a gesture's tap may also click, look up or zoom.
+    public init(connected: Set<TrackpadKind>) {
+        self = connected.isEmpty ? .inactive(.noTrackpad) : .active
     }
 }
