@@ -31,7 +31,7 @@ for round in $(seq 1 "$rounds"); do
     [ "$ending" = after-open ] && kill -TERM "$old" 2>/dev/null
     sleep 1.5
     new=$(pgrep -f "$binary" | grep -v -x "$old" | head -1)
-    if kill -0 "$old" 2>/dev/null; then old_gone=no; else old_gone=yes; fi
+    if [ -n "$old" ] && ! kill -0 "$old" 2>/dev/null; then old_gone=yes; else old_gone=no; fi
     resident=no
     if [ -n "$new" ] && lsappinfo info -pid "$new" 2>/dev/null | grep -q 'type="Foreground"'; then resident=yes; fi
     if [ "$old_gone" = yes ] && [ "$resident" = yes ]; then alive=$((alive + 1)); result=alive; else dead=$((dead + 1)); result=DEAD; fi

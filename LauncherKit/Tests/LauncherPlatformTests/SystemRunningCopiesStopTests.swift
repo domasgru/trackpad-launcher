@@ -26,17 +26,25 @@ import Testing
         return true
     }
 
-    @Test func stopsRealCopiesAcrossAPoolDrainAndIgnoresCopiesThatAreGone() async throws {
+    private static func uniqueIdentifier() -> String {
+        "\(BundleFixture.identifier).t\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+    }
+
+    @Test func stoppingNothingExitsAtOnce() {
+        let copies = SystemRunningCopies(bundleIdentifier: Self.uniqueIdentifier())
+        let none = Exits()
+        autoreleasepool { copies.stop([]) { none.record() } }
+        #expect(none.count == 1)
+    }
+
+    @Test func stoppedCopiesExitAndTheNewCopySurvives() async throws {
         let fixture = try BundleFixture()
-        let releaseIdentifier = "\(BundleFixture.identifier).t\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
-        let release = try fixture.makeRunnableBundle(
-            named: "Fixture.app", in: fixture.folder("release"), identifier: releaseIdentifier)
-        let debug = try fixture.makeRunnableBundle(
-            named: "Fixture.app", in: fixture.folder("debug"), identifier: releaseIdentifier + ".debug")
+        let releaseIdentifier = Self.uniqueIdentifier()
+        let release = try fixture.makeRunnableBundle(in: fixture.folder("release"), identifier: releaseIdentifier)
+        let debug = try fixture.makeRunnableBundle(in: fixture.folder("debug"), identifier: releaseIdentifier + ".debug")
+        let runningPids = { BundleFixture.pids(runningExecutableOf: release) + BundleFixture.pids(runningExecutableOf: debug) }
         defer {
-            for pid in BundleFixture.pids(runningExecutableOf: release) + BundleFixture.pids(runningExecutableOf: debug) {
-                kill(pid, SIGKILL)
-            }
+            for pid in runningPids() { kill(pid, SIGKILL) }
         }
         try BundleFixture.launch(release)
         try BundleFixture.launch(debug)
@@ -45,7 +53,7 @@ import Testing
         let bothListed = await Self.waitUntil(.seconds(15)) { copies.others().count == 2 }
         try #require(bothListed, "both fixture copies are listed")
         let listed = copies.others()
-        let pids = Set(BundleFixture.pids(runningExecutableOf: release) + BundleFixture.pids(runningExecutableOf: debug))
+        let pids = Set(runningPids())
         #expect(pids.count == 2)
         #expect(Set(listed.map(\.id.rawValue)) == pids)
 
@@ -59,18 +67,15 @@ import Testing
             }
         }
         try #require(completed != nil)
-        #expect(exits.count == 1)
-        #expect(exits.onMainThread)
         for pid in pids {
             #expect(await Self.waitUntil(.seconds(2)) { Self.isGone(pid) }, "pid \(pid) is gone")
         }
+        #expect(exits.count == 1)
+        #expect(exits.onMainThread)
 
         try #require(copies.others().isEmpty, "macOS lists the stopped copies as gone")
         let gone = Exits()
         autoreleasepool { copies.stop(listed) { gone.record() } }
         #expect(gone.count == 1)
-        let none = Exits()
-        autoreleasepool { copies.stop([]) { none.record() } }
-        #expect(none.count == 1)
     }
 }

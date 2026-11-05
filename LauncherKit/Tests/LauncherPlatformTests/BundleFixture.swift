@@ -56,9 +56,8 @@ final class BundleFixture: @unchecked Sendable {
     /// A background-only app macOS launches: its executable is a shell script that sleeps for about two minutes, so a
     /// test that dies before stopping it leaves nothing behind for longer. Not quarantined, and no `exec`: the process
     /// LaunchServices knows is the shell, whose argv names the executable.
-    @discardableResult
-    func makeRunnableBundle(named name: String, in folder: URL, identifier: String) throws -> URL {
-        let app = folder.appending(path: name)
+    func makeRunnableBundle(in folder: URL, identifier: String) throws -> URL {
+        let app = folder.appending(path: "Fixture.app")
         let macOS = app.appending(path: "Contents/MacOS")
         try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
         let info: [String: Any] = [
@@ -77,17 +76,12 @@ final class BundleFixture: @unchecked Sendable {
         try run("/usr/bin/open", ["-g", app.path])
     }
 
-    /// The pids of processes running the runnable bundle `app`, read from the process table.
+    /// The pids of processes running the runnable bundle `app`, read from the process table. `-P 1` keeps only children
+    /// of launchd, so the shell's own forked child, still carrying the shell's argv before `exec`, is not matched.
     static func pids(runningExecutableOf app: URL) -> [pid_t] {
-        let process = Process()
-        process.executableURL = URL(filePath: "/usr/bin/pgrep")
-        process.arguments = ["-f", "--", NSRegularExpression.escapedPattern(for: app.appending(path: "Contents/MacOS/fixture").path)]
-        let output = Pipe()
-        process.standardOutput = output
-        guard let waitForExit = try? process.start() else { return [] }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        waitForExit()
-        return String(decoding: data, as: UTF8.self).split(separator: "\n").compactMap { pid_t($0) }
+        let pattern = NSRegularExpression.escapedPattern(for: app.appending(path: "Contents/MacOS/fixture").path)
+        let output = (try? run("/usr/bin/pgrep", ["-f", "-P", "1", "--", pattern])) ?? ""
+        return output.split(separator: "\n").compactMap { pid_t($0) }
     }
 
     private func quarantineEveryItem(of app: URL) throws {
