@@ -2,8 +2,8 @@ import AppKit
 import LauncherCore
 
 @MainActor public final class SystemRunningCopies: RunningCopies {
-    /// The observations of a stop under way, alive until every listed copy has exited.
-    private var watches: [NSKeyValueObservation] = []
+    /// The watches of a stop under way, alive until every listed copy has exited.
+    private var watches: [Watch] = []
 
     private let bundleIdentifier: String?
 
@@ -34,12 +34,15 @@ import LauncherCore
             return
         }
         let finish: @MainActor () -> Void = { [weak self] in
-            self?.watches = []
+            if let self {
+                for watch in self.watches { watch.invalidate() }
+                self.watches = []
+            }
             exited()
         }
         watches = apps.map { app in
             app.forceTerminate()
-            return app.observe(\.isTerminated, options: [.initial, .new]) { app, _ in
+            return Watch(app) { app in
                 guard app.isTerminated else { return }
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
@@ -51,6 +54,26 @@ import LauncherCore
     }
 
     public func endThisCopy() { NSApp.terminate(nil) }
+}
+
+/// One stopped copy's application and the observation of its exit. An observation does not retain the object it
+/// observes, and an `NSRunningApplication` that deallocates with observers still registered crashes in
+/// `removeObserver:forKeyPath:` (the autorelease pool of the Apple Event that runs `stop` can be what releases it). So
+/// the watch owns the application, and invalidates the observation before the application is released: a class's
+/// deinit body runs while its stored properties are still alive, whichever path drops the watch.
+@MainActor private final class Watch {
+    private let app: NSRunningApplication
+    private let observation: NSKeyValueObservation
+
+    init(_ app: NSRunningApplication, onChange: @escaping @Sendable (NSRunningApplication) -> Void) {
+        self.app = app
+        observation = app.observe(\.isTerminated, options: [.initial, .new]) { app, _ in onChange(app) }
+    }
+
+    /// Idempotent: Foundation ignores a second invalidation.
+    func invalidate() { observation.invalidate() }
+
+    isolated deinit { invalidate() }
 }
 
 /// Counts each listed copy's exit once; true on the one that completes the list.
