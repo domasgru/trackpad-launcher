@@ -8,8 +8,9 @@ import SwiftUI
 /// the Animate app launch switch, the switcher section, and the thumb corner row; the notices, while any applies, 10 pt
 /// apart: the no trackpad notice or the tap-bound settings notice, the Accessibility hint and the screen recording hint,
 /// one rounded group each; then *Quit Trackpad Launcher* and *Close*, aligned right. The form keeps the system's own
-/// fonts, row heights, insets and controls. The illustrations are 45 × 28 pt. The guide naming the two marks sits over
-/// the first illustration for the top-left corner only, where its arrows meet the thumb.
+/// fonts, insets and controls. The illustrations are 45 × 28 pt, and every row of the form is as tall as a row with one.
+/// The guide naming the two marks sits over the first illustration for the top-left corner only, where its arrows meet
+/// the thumb.
 struct SettingsView: View {
     let launcher: Launcher
     let updater: Updater?
@@ -50,9 +51,11 @@ struct SettingsView: View {
                         GestureRowView(row: row, launcher: launcher, actions: actions)
                     }
                     Toggle(
-                        "Animate app launch",
                         isOn: Binding(
-                            get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) }))
+                            get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
+                    ) {
+                        TitleRowLabel(title: "Animate app launch")
+                    }
                     .toggleStyle(.switch)
                 }
                 Section { SwitcherSection(launcher: launcher) }
@@ -176,10 +179,19 @@ struct Illustration: View {
     let name: String
     let corner: ThumbCorner
 
-    private static let size = CGSize(width: 45, height: 28)
+    static let size = CGSize(width: 45, height: 28)
 
     var body: some View {
         BundleImage.view(corner.illustration(name), type: "png", size: Self.size)
+    }
+}
+
+/// The label of a form row with no illustration: as tall as one, so the row is as tall as the rows that have one.
+struct TitleRowLabel: View {
+    let title: String
+
+    var body: some View {
+        Text(title).frame(minHeight: Illustration.size.height)
     }
 }
 
@@ -242,13 +254,12 @@ struct ThumbCornerRow: View {
     let launcher: Launcher
 
     var body: some View {
-        Picker(
-            Copy.thumbCornerRow,
-            selection: Binding(get: { launcher.thumbCorner }, set: { launcher.setThumbCorner($0) })
-        ) {
+        Picker(selection: Binding(get: { launcher.thumbCorner }, set: { launcher.setThumbCorner($0) })) {
             ForEach(ThumbCorner.allCases, id: \.self) { corner in
                 Text(Copy.thumbCornerTitle(corner)).tag(corner)
             }
+        } label: {
+            TitleRowLabel(title: Copy.thumbCornerRow)
         }
         .pickerStyle(.menu)
     }
