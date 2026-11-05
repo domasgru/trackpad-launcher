@@ -141,12 +141,13 @@ struct LaunchFlight {
             // The share scales the slant's angle, not its tangent.
             let slant = tan(share * tuning.maximumSlant * .pi / 180)
             let veer = share * tuning.maximumSway * pow(u, tuning.swayCurve)
-            let lean = tuning.maximumSway > 0 ? share : 0
+            // With no sway there is no tilt, as before the slant.
+            let tiltShare = tuning.maximumSway > 0 ? share : 0
             return Pose(
                 offset: CGPoint(x: side.sign * rise * (slant + veer), y: rise),
                 side: peak * (1 - tuning.shrink * pow(u, tuning.shrinkCurve)),
                 // Counter-clockwise is positive, so tilting toward a rightward (positive) sway is a negative rotation.
-                rotation: -side.sign * lean * tuning.maximumTilt * .pi / 180 * pow(u, tuning.tiltCurve), opacity: fade)
+                rotation: -side.sign * tiltShare * tuning.maximumTilt * .pi / 180 * pow(u, tuning.tiltCurve), opacity: fade)
         }
     }
 

@@ -81,8 +81,12 @@ extension LaunchDisplay {
     }
 
     /// The first keyframe whose screen y is above the start's.
-    private func firstRising(of keyframes: [Keyframe]) throws -> Keyframe {
-        try #require(keyframes.first { $0.screenPosition.y > keyframes[0].screenPosition.y }, "never rises")
+    private func firstRising(
+        of keyframes: [Keyframe], sourceLocation: SourceLocation = #_sourceLocation
+    ) throws -> Keyframe {
+        try #require(
+            keyframes.first { $0.screenPosition.y > keyframes[0].screenPosition.y }, "never rises",
+            sourceLocation: sourceLocation)
     }
 
     /// A keyframe's angle from straight up, in degrees, by its screen displacement from `start`.
@@ -132,7 +136,7 @@ extension LaunchDisplay {
         let start = keyframes[0].screenPosition
         let rising = keyframes.filter { $0.screenPosition.y > start.y }
 
-        #expect(!rising.isEmpty)
+        try #require(rising.isEmpty == false, "never rises")
         for keyframe in rising {
             #expect(abs(angle(of: keyframe, from: start) - 4) <= 1e-6, "angle at \(keyframe.time) s")
             #expect(isRight(keyframe, of: start) == (draw > 0))
@@ -169,19 +173,6 @@ extension LaunchDisplay {
             #expect(isRight(try firstRising(of: keyframes), of: start) == expectedRight)
             #expect(isRight(try #require(keyframes.last), of: start) == expectedRight)
         }
-    }
-
-    @Test(arguments: [1.0, -1.0])
-    func theDriftShareOfTheRiseOnlyGrowsAndNeverPassesAThird(draw: Double) throws {
-        let keyframes = try stage(draw: draw, reduceMotion: false).keyframes()
-        let start = keyframes[0].screenPosition
-        let rising = keyframes.filter { $0.screenPosition.y > start.y }
-        let ratios = rising.map { abs($0.screenPosition.x - start.x) / ($0.screenPosition.y - start.y) }
-
-        for (previous, next) in zip(ratios, ratios.dropFirst()) {
-            #expect(next >= previous - 1e-12, "ratio fell from \(previous) to \(next)")
-        }
-        #expect(try #require(ratios.last) <= 1.0 / 3)
     }
 
     @Test(arguments: draws)
@@ -349,7 +340,7 @@ extension LaunchDisplay {
     }
 
     @Test(arguments: draws)
-    func iconVeersToTheDrawnSideByNoMoreThanAThirdOfItsRise(draw: Double) throws {
+    func iconDriftsToTheDrawnSideByAGrowingShareOfItsRiseThatNeverPassesAThird(draw: Double) throws {
         let keyframes = try stage(draw: draw, reduceMotion: false).keyframes()
         let start = keyframes[0].screenPosition
 
@@ -357,6 +348,12 @@ extension LaunchDisplay {
             let rise = keyframe.screenPosition.y - start.y
             let drift = keyframe.screenPosition.x - start.x
             #expect(abs(drift) <= rise / 3, "drift \(drift) against rise \(rise) at \(keyframe.time) s")
+        }
+        let rising = keyframes.filter { $0.screenPosition.y > start.y }
+        try #require(rising.isEmpty == false, "never rises")
+        let ratios = rising.map { abs($0.screenPosition.x - start.x) / ($0.screenPosition.y - start.y) }
+        for (previous, next) in zip(ratios, ratios.dropFirst()) {
+            #expect(next >= previous - 1e-12, "ratio fell from \(previous) to \(next)")
         }
         let end = try #require(keyframes.last).screenPosition
         #expect(end.y - start.y > 0)

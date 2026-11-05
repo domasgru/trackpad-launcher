@@ -25,3 +25,10 @@
 - "Drift" meant the veer in D2 and all sideways movement in T6/T9 → D2 defines veer, slant and drift; Sway curve's comment is to say veer.
 - Slips: 83 keyframes, not 82; S1 names Max slant's comment for the inequality too; T7 simulates Reduce motion with Max slant 20° rather than the shipped 4°.
 - The *Launch bounce* entry read as if the slant made the ending swell on → reworded so the size clause carries "swells on" and the slant is its own clause.
+
+## Implement
+- S1 built in one commit: the flight draw takes the tuning and keeps it as a snapshot; the moving motion carries side and share; the pose is D2's; Max slant (4°) in the tuning, its decoder, the Launch reset and the tuner's Sway section; T1–T12 green. Departure: `LaunchFlights.Side` became `fileprivate` so the motion can carry it.
+- Verification skill: none in the repo (no `.claude/skills/verify-*`), step skipped.
+- Review fixes: `!` inside `#require` replaced; `firstRising(of:)` passes its source location; the tilt's `lean` local renamed `tiltShare` (the glossary's *lean* is the whole sideways movement); T6's monotonic ratio folded into the existing third-of-rise test, the duplicate test removed.
+- Review findings not fixed: `LaunchOverlay.pixels(at:)` still reads `LaunchTuning.current` (it sizes the shared icon bitmap, also for the bounce, not the flight); the inequality stays in both doc comments (D3 asks for it); T5 and T12's explicit Max sway check stay (plan scenarios); degree-to-radian conversion and test-splitting nits left.
+- Full gate (`make test`) green after fixes; `swift build -c release` builds. Debug-build hand checks (slider range and steps, reset arrow, by-feel flights) not run by agents.
