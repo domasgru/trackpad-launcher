@@ -1,7 +1,7 @@
 import LauncherCore
 import SwiftUI
 
-/// The update card as one rounded group: its text on the left and its button on the right, in a row at least 42 pt
+/// The update card as one rounded group: its text on the left and its button on the right, in a row at least 46 pt
 /// tall. While downloading, a bar runs under the row; while installing there is no button.
 struct UpdateCardView: View {
     let card: UpdateCard
