@@ -2,8 +2,8 @@ import AppKit
 import LauncherCore
 import Observation
 
-/// Renders `lifecycle.moveDialog` as an alert run modally after activating the app (an accessory app activates without
-/// a Dock icon), and sends the answer back.
+/// Renders `lifecycle.moveDialog` as an alert run modally, activating the app once it shows (an accessory app
+/// activates without a Dock icon), and sends the answer back.
 public final class MoveDialogPresenter {
     private var observation: Task<Void, Never>?
 
@@ -34,7 +34,11 @@ public final class MoveDialogPresenter {
             alert.informativeText = reason
             alert.addButton(withTitle: Copy.moveQuitButton)
         }
-        NSApp.activate()
+        // The system drops an activation while the app has no window on screen, so it runs inside the modal session,
+        // once the alert shows. Ordering the alert front here instead would stop AppKit centring it.
+        RunLoop.main.perform(inModes: [.modalPanel]) {
+            MainActor.assumeIsolated { AppActivation.activateOverOtherApps() }
+        }
         let isFirstButton = alert.runModal() == .alertFirstButtonReturn
         switch dialog {
         case .asking: lifecycle.answer(isFirstButton ? .move : .quit)
