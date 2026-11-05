@@ -68,16 +68,196 @@ extension LaunchDisplay {
 
     private func stage(
         draw: Double, reduceMotion: Bool, at pointer: CGPoint = middleOfBuiltIn,
-        among displays: [LaunchDisplay] = displays, sourceLocation: SourceLocation = #_sourceLocation
+        among displays: [LaunchDisplay] = displays, tuning: LaunchTuning = .shipped, sourceLocation: SourceLocation = #_sourceLocation
     ) throws -> LaunchStage {
         var flights = LaunchFlights()
-        let flight = flights.next(draw: draw, reduceMotion: reduceMotion)
+        let flight = flights.next(draw: draw, reduceMotion: reduceMotion, tuning: tuning)
         return try #require(flight.staged(at: pointer, among: displays), sourceLocation: sourceLocation)
     }
 
     /// The index of the pop's peak: the largest keyframe, where the deflating flight starts.
     private func peak(of keyframes: [Keyframe]) throws -> Int {
         try #require(keyframes.indices.max { keyframes[$0].side < keyframes[$1].side })
+    }
+
+    /// The first keyframe whose screen y is above the start's.
+    private func firstRising(of keyframes: [Keyframe]) throws -> Keyframe {
+        try #require(keyframes.first { $0.screenPosition.y > keyframes[0].screenPosition.y }, "never rises")
+    }
+
+    /// A keyframe's angle from straight up, in degrees, by its screen displacement from `start`.
+    private func angle(of keyframe: Keyframe, from start: CGPoint) -> Double {
+        let dx = keyframe.screenPosition.x - start.x
+        let dy = keyframe.screenPosition.y - start.y
+        return atan2(abs(dx), dy) * 180 / .pi
+    }
+
+    private func isRight(_ keyframe: Keyframe, of start: CGPoint) -> Bool {
+        keyframe.screenPosition.x > start.x
+    }
+
+    @Test(arguments: draws)
+    func iconStaysOnThePointerThroughThePopThenLeansToItsSideFromItsFirstRisingMoment(draw: Double) throws {
+        let keyframes = try stage(draw: draw, reduceMotion: false).keyframes()
+        let start = keyframes[0].screenPosition
+        let peak = try peak(of: keyframes)
+        let first = try firstRising(of: keyframes)
+        let firstIndex = try #require(keyframes.firstIndex { $0.time == first.time })
+
+        for keyframe in keyframes[...peak] {
+            #expect(keyframe.screenPosition == start, "left the pointer during the pop, at \(keyframe.time) s")
+        }
+        #expect(isRight(first, of: start) == (draw >= 0), "wrong side for draw \(draw)")
+        #expect(angle(of: first, from: start) >= 0.38, "angle \(angle(of: first, from: start))")
+        for keyframe in keyframes[firstIndex...] {
+            #expect(isRight(keyframe, of: start) == (draw >= 0), "crossed sides at \(keyframe.time) s")
+        }
+    }
+
+    @Test(arguments: [(1.0, 4.0), (0.5, 2.2), (0.0, 0.4), (-1.0, 4.0)])
+    func theSlantIsTheSwaysShareOfMaxSlantInAngle(draw: Double, degrees: Double) throws {
+        let keyframes = try stage(draw: draw, reduceMotion: false).keyframes()
+        let start = keyframes[0].screenPosition
+        let first = try firstRising(of: keyframes)
+
+        #expect(abs(angle(of: first, from: start) - degrees) <= 0.02, "angle \(angle(of: first, from: start))")
+        #expect(isRight(first, of: start) == (draw >= 0))
+    }
+
+    @Test(arguments: [1.0, -1.0])
+    func withNoSwayTheIconRisesAlongAStraightSlantedLineAndDoesNotTilt(draw: Double) throws {
+        var tuning = LaunchTuning.shipped
+        tuning.maximumSway = 0
+        let keyframes = try stage(draw: draw, reduceMotion: false, tuning: tuning).keyframes()
+        let start = keyframes[0].screenPosition
+        let rising = keyframes.filter { $0.screenPosition.y > start.y }
+
+        #expect(!rising.isEmpty)
+        for keyframe in rising {
+            #expect(abs(angle(of: keyframe, from: start) - 4) <= 1e-6, "angle at \(keyframe.time) s")
+            #expect(isRight(keyframe, of: start) == (draw > 0))
+        }
+        for keyframe in keyframes {
+            #expect(keyframe.rotationDegrees == 0, "tilted at \(keyframe.time) s")
+        }
+    }
+
+    @Test func withNoSwayTheSideRuleStillHolds() throws {
+        var tuning = LaunchTuning.shipped
+        tuning.maximumSway = 0
+        var flights = LaunchFlights()
+        let sides = try [0.6, 0.6, 0.6].map { draw in
+            let keyframes = try #require(
+                flights.next(draw: draw, reduceMotion: false, tuning: tuning)
+                    .staged(at: Self.middleOfBuiltIn, among: Self.displays)
+            ).keyframes()
+            return isRight(try firstRising(of: keyframes), of: keyframes[0].screenPosition)
+        }
+
+        #expect(sides == [true, true, false])
+    }
+
+    @Test func aSideNeverComesUpThreeTimesInARowFromTheFirstRisingMoment() throws {
+        var flights = LaunchFlights()
+        for expectedRight in [true, true, false] {
+            let staged = try #require(
+                flights.next(draw: 0.6, reduceMotion: false, tuning: .shipped)
+                    .staged(at: Self.middleOfBuiltIn, among: Self.displays))
+            let keyframes = try staged.keyframes()
+            let start = keyframes[0].screenPosition
+
+            #expect(isRight(try firstRising(of: keyframes), of: start) == expectedRight)
+            #expect(isRight(try #require(keyframes.last), of: start) == expectedRight)
+        }
+    }
+
+    @Test(arguments: [1.0, -1.0])
+    func theDriftShareOfTheRiseOnlyGrowsAndNeverPassesAThird(draw: Double) throws {
+        let keyframes = try stage(draw: draw, reduceMotion: false).keyframes()
+        let start = keyframes[0].screenPosition
+        let rising = keyframes.filter { $0.screenPosition.y > start.y }
+        let ratios = rising.map { abs($0.screenPosition.x - start.x) / ($0.screenPosition.y - start.y) }
+
+        for (previous, next) in zip(ratios, ratios.dropFirst()) {
+            #expect(next >= previous - 1e-12, "ratio fell from \(previous) to \(next)")
+        }
+        #expect(try #require(ratios.last) <= 1.0 / 3)
+    }
+
+    @Test(arguments: draws)
+    func underReduceMotionTheTunersSimulationAlsoFadesInPlaceWithoutSlant(draw: Double) throws {
+        var forced = LaunchTuning.shipped
+        forced.forceReduceMotion = true
+        forced.maximumSlant = 20
+        let systemSetting = try stage(draw: draw, reduceMotion: true).keyframes()
+        let simulated = try stage(draw: draw, reduceMotion: false, tuning: forced).keyframes()
+
+        for keyframes in [systemSetting, simulated] {
+            for keyframe in keyframes {
+                #expect(keyframe.screenPosition == Self.middleOfBuiltIn, "moved at \(keyframe.time) s")
+                #expect(keyframe.side == 60)
+                #expect(keyframe.rotationDegrees == 0)
+            }
+            #expect(try #require(keyframes.last).opacity == 0)
+        }
+    }
+
+    @Test func aBounceEndingSlantsFromTheSpotItsInflatedIconIsAt() throws {
+        let spot = CGPoint(x: 900, y: 500)
+        var flights = LaunchFlights()
+        let flight = flights.next(draw: 1, reduceMotion: false, tuning: .shipped).sized(1.4)
+        let keyframes = try #require(flight.staged(at: spot, among: Self.displays)).keyframes()
+        let peak = try peak(of: keyframes)
+        let first = try firstRising(of: keyframes)
+
+        #expect(keyframes[0].side == 84)
+        for keyframe in keyframes[...peak] {
+            #expect(keyframe.screenPosition == spot)
+        }
+        #expect(abs(angle(of: first, from: spot) - 4) <= 0.02)
+        #expect(isRight(first, of: spot))
+
+        var noPop = LaunchTuning.shipped
+        noPop.popSize = 0
+        var otherFlights = LaunchFlights()
+        let unpopped = try #require(
+            otherFlights.next(draw: 1, reduceMotion: false, tuning: noPop).sized(1.4)
+                .staged(at: spot, among: Self.displays)
+        ).keyframes()
+        #expect(abs(angle(of: unpopped[1], from: spot) - 4) <= 0.02)
+        #expect(isRight(unpopped[1], of: spot))
+    }
+
+    @Test func withMaxSlantZeroTheIconVeersAloneAndAtTwentyItLeansWithoutChangingTheRise() throws {
+        var flat = LaunchTuning.shipped
+        flat.maximumSlant = 0
+        let flatFrames = try stage(draw: 1, reduceMotion: false, tuning: flat).keyframes()
+        let flatStart = flatFrames[0].screenPosition
+        let flatEnd = try #require(flatFrames.last).screenPosition
+        #expect(angle(of: try firstRising(of: flatFrames), from: flatStart) <= 0.02)
+        #expect(flatEnd.x > flatStart.x)
+        #expect(abs((flatEnd.x - flatStart.x) / (flatEnd.y - flatStart.y) - 0.26) <= 1e-9)
+
+        var steep = LaunchTuning.shipped
+        steep.maximumSlant = 20
+        for draw in [1.0, -1.0] {
+            let frames = try stage(draw: draw, reduceMotion: false, tuning: steep).keyframes()
+            let first = try firstRising(of: frames)
+            #expect(abs(angle(of: first, from: frames[0].screenPosition) - 20) <= 0.02)
+            #expect(isRight(first, of: frames[0].screenPosition) == (draw > 0))
+        }
+
+        let halfShare = try stage(draw: 0.5, reduceMotion: false, tuning: steep).keyframes()
+        #expect(abs(angle(of: try firstRising(of: halfShare), from: halfShare[0].screenPosition) - 11) <= 0.02)
+
+        let halfFlat = try stage(draw: 0.5, reduceMotion: false, tuning: flat).keyframes()
+        #expect(halfShare.count == halfFlat.count)
+        for (a, b) in zip(halfShare, halfFlat) {
+            let riseA = a.screenPosition.y - halfShare[0].screenPosition.y
+            let riseB = b.screenPosition.y - halfFlat[0].screenPosition.y
+            #expect(abs(a.time - b.time) <= 1e-9)
+            #expect(abs(riseA - riseB) <= 1e-9, "rise differs at \(a.time) s")
+        }
     }
 
     @Test(arguments: modes, draws)
@@ -118,7 +298,7 @@ extension LaunchDisplay {
     func iconRisesFasterAndFasterToBetween60And80PointsAboveItsStart(draw: Double) throws {
         let keyframes = try stage(draw: draw, reduceMotion: false).keyframes()
         let rises = keyframes.map { $0.screenPosition.y - keyframes[0].screenPosition.y }
-        let halfway = try #require(keyframes.lastIndex { $0.time <= LaunchFlight.duration / 2 + 1e-9 })
+        let halfway = try #require(keyframes.lastIndex { $0.time <= LaunchTuning.shipped.duration / 2 + 1e-9 })
         let last = try #require(rises.last)
 
         #expect((60...80).contains(last))
@@ -192,7 +372,7 @@ extension LaunchDisplay {
         var flights = LaunchFlights()
         return try draws.map { draw in
             let staged = try #require(
-                flights.next(draw: draw, reduceMotion: false).staged(at: Self.middleOfBuiltIn, among: Self.displays))
+                flights.next(draw: draw, reduceMotion: false, tuning: .shipped).staged(at: Self.middleOfBuiltIn, among: Self.displays))
             let keyframes = try staged.keyframes()
             let start = keyframes[0].screenPosition
             let end = try #require(keyframes.last).screenPosition
@@ -249,7 +429,7 @@ extension LaunchDisplay {
         var flights = LaunchFlights()
         var sides: [Bool] = []
         for reduceMotion in [false, true, false, true, false] {
-            let flight = flights.next(draw: 0.6, reduceMotion: reduceMotion)
+            let flight = flights.next(draw: 0.6, reduceMotion: reduceMotion, tuning: .shipped)
             guard !reduceMotion else { continue }
             let keyframes = try #require(flight.staged(at: Self.middleOfBuiltIn, among: Self.displays)).keyframes()
             sides.append(try #require(keyframes.last).screenPosition.x > Self.middleOfBuiltIn.x)

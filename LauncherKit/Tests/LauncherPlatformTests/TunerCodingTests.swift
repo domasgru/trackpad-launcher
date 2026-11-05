@@ -160,6 +160,7 @@ struct TunerCodingTests {
         t.swayCurve = 2.5
         t.maximumTilt = 8
         t.tiltCurve = 2
+        t.maximumSlant = 12
         t.forceReduceMotion = true
         t.swipeFollowsCursor = false
         t.swipePointsPerStep = 150
@@ -172,6 +173,40 @@ struct TunerCodingTests {
         return t
     }
 
+    /// The tuning above as the tuner saved it before Max slant existed, verbatim from its encoder.
+    private static let tuningBeforeSlant = #"""
+        {"maximumSway":0.5,"shrink":0.4,"swipeTrackingSpeed":1.5,"swayCurve":2.5,"bounce":{"inflateFrom":30,"height":41,"creep":0.2,"gap":9,"slide":0.23,"rest":0.13,"timeUp":0.21,"squash":0.17,"trailing":0.31,"timeDown":0.22,"spacing":14,"creepTime":7,"style":"jump","inflateCurve":3,"fadeOut":0.27,"pulseLow":0.37,"offset":5,"pulsePeriod":1.9,"inflateTime":0.6},"shrinkCurve":2,"duration":0.5,"iconSide":80,"maximumTilt":8,"pick":{"startScale":0.25,"peakScale":1.35,"settleTime":0.35,"growTime":0.45},"fadeCurve":5,"rise":90,"popSize":0.3,"tiltCurve":2,"riseCurve":2.5,"minimumSway":0.2,"popTime":0.1,"swipeFollowsCursor":false,"forceReduceMotion":true,"swipePointsPerStep":150}
+        """#
+
+    @Test func `a tuning saved before Max slant loads with the shipped slant and every saved value kept`() throws {
+        let tuning = try JSONDecoder().decode(LaunchTuning.self, from: Data(Self.tuningBeforeSlant.utf8))
+
+        var expected = Self.everythingAwayFromShipped
+        expected.maximumSlant = 4
+        #expect(tuning == expected)
+        #expect(tuning.maximumSway == 0.5)
+    }
+
+    @Test func `Max slant survives a save and load`() throws {
+        var tuning = LaunchTuning()
+        tuning.maximumSlant = 12
+        let presets = [TuningPreset(name: "Slanted", tuning: tuning)]
+
+        let loaded = try JSONDecoder().decode([TuningPreset].self, from: JSONEncoder().encode(presets))
+
+        #expect(loaded[0].tuning.maximumSlant == 12)
+        #expect(loaded == presets)
+    }
+
+    @Test func `the shipped sway and slant numbers`() {
+        let shipped = LaunchTuning.shipped
+
+        #expect(shipped.maximumSlant == 4)
+        #expect(shipped.maximumSway == 0.26)
+        #expect(shipped.minimumSway == 0.1)
+        #expect(shipped.swayCurve == 1.8)
+    }
+
     @Test func `resetting Pick ships the pick and keeps everything else`() {
         let away = Self.everythingAwayFromShipped
         var expected = away
@@ -180,7 +215,7 @@ struct TunerCodingTests {
         #expect(away.resettingToShipped(.pick) == expected)
     }
 
-    @Test func `resetting Launch ships the fourteen flight knobs and keeps everything else`() {
+    @Test func `resetting Launch ships the fifteen flight knobs and keeps everything else`() {
         let away = Self.everythingAwayFromShipped
         let shipped = LaunchTuning.shipped
         var expected = away
@@ -198,8 +233,15 @@ struct TunerCodingTests {
         expected.swayCurve = shipped.swayCurve
         expected.maximumTilt = shipped.maximumTilt
         expected.tiltCurve = shipped.tiltCurve
+        expected.maximumSlant = shipped.maximumSlant
 
         #expect(away.resettingToShipped(.launch) == expected)
+        #expect(away.resettingToShipped(.launch).maximumSlant == 4)
+    }
+
+    @Test(arguments: [TunerTab.bounce, .pick, .swipe])
+    func `resetting another tab keeps Max slant`(tab: TunerTab) {
+        #expect(Self.everythingAwayFromShipped.resettingToShipped(tab).maximumSlant == 12)
     }
 
     @Test func `resetting Bounce ships only the bounce`() {

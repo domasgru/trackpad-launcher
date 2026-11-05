@@ -23,13 +23,18 @@ struct LaunchTuning: Equatable, Sendable {
     var shrinkCurve: Double = 1.4
     /// Opacity = 1 − t^fadeCurve. Higher stays opaque longer.
     var fadeCurve: Double = 4
-    /// Sideways drift per point of rise at the end, for the largest sway. Below a third, so the drift never
-    /// outgrows the rise.
+    /// The veer per point of rise at the end, for the largest sway: the sideways part that comes late in the flight.
+    /// With the slant on top, `tan(Max slant) + Max sway` should stay at most 1/3 at the largest sway (shipped:
+    /// tan 4° + 0.26 = 0.3299), so the drift never outgrows a third of the rise.
     var maximumSway: Double = 0.26
     /// The smallest sway, as a share of the maximum, so every moving flight veers.
     var minimumSway: Double = 0.1
-    /// Drift = sway × rise(t) × t^swayCurve. Higher veers later.
+    /// Veer = sway × rise(t) × t^swayCurve. Higher veers later.
     var swayCurve: Double = 1.8
+    /// The slant of the largest sway, in degrees: a launch's slant is its sway's share × Max slant, and its path leans
+    /// toward the sway's side from the first rising moment. Keep `tan(Max slant) + Max sway` at most 1/3 (shipped:
+    /// tan 4° + 0.26 = 0.3299), so the drift never outgrows a third of the rise.
+    var maximumSlant: Double = 4
     /// The end tilt of the largest sway, in degrees.
     var maximumTilt: Double = 4
     /// Tilt = tilt × t^tiltCurve.
@@ -48,6 +53,9 @@ struct LaunchTuning: Equatable, Sendable {
 
     /// The pick animation's numbers: an app picker's icon growing into place.
     var pick: PickAnimation = .shipped
+
+    /// The side at the pop's peak, the largest the icon gets.
+    var peakSide: Double { iconSide * (1 + popSize) }
 
     static let shipped = LaunchTuning()
 
@@ -84,6 +92,7 @@ extension LaunchTuning: Codable {
         maximumSway = try c.decode(.maximumSway, or: s.maximumSway)
         minimumSway = try c.decode(.minimumSway, or: s.minimumSway)
         swayCurve = try c.decode(.swayCurve, or: s.swayCurve)
+        maximumSlant = try c.decode(.maximumSlant, or: s.maximumSlant)
         maximumTilt = try c.decode(.maximumTilt, or: s.maximumTilt)
         tiltCurve = try c.decode(.tiltCurve, or: s.tiltCurve)
         forceReduceMotion = try c.decode(.forceReduceMotion, or: s.forceReduceMotion)
@@ -143,6 +152,7 @@ extension LaunchTuning {
             t.maximumSway = s.maximumSway
             t.minimumSway = s.minimumSway
             t.swayCurve = s.swayCurve
+            t.maximumSlant = s.maximumSlant
             t.maximumTilt = s.maximumTilt
             t.tiltCurve = s.tiltCurve
         case .bounce:

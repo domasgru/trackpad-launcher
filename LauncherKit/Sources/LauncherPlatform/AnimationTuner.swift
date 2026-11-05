@@ -267,6 +267,9 @@ struct TunerView: View {
             knob("Max sway", \.maximumSway, 0...1.5, step: 0.01, hint: "sideways per point of rise")
             knob("Min sway", \.minimumSway, 0...1, step: 0.01, hint: "share of max")
             knob("Sway curve", \.swayCurve, 0...5, step: 0.05, hint: "higher veers later")
+            knob(
+                "Max slant", \.maximumSlant, 0...30, step: 0.5, unit: "°",
+                hint: "rise leans toward the sway; scaled by the sway's share")
         }
         Section("Tilt") {
             knob("Max tilt", \.maximumTilt, 0...45, step: 0.5, unit: "°")

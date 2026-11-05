@@ -40,9 +40,11 @@ import Synchronization
     /// bounce's ending, from wherever its icon is, among the displays the bounce read, so one `ScreenRead` places both.
     /// `size` is the icon's side then, as a share of the usual: the whole flight plays at that size.
     func play(for app: AppEntry, from start: CGPoint, among displays: [LaunchDisplay], size: CGFloat = 1) {
-        let reduceMotion =
-            NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || LaunchTuning.current.forceReduceMotion
-        let flight = flights.next(draw: .random(in: -1...1), reduceMotion: reduceMotion).sized(size)
+        let tuning = LaunchTuning.current
+        let flight = flights.next(
+            draw: .random(in: -1...1), reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+            tuning: tuning
+        ).sized(size)
         guard let stage = flight.staged(at: start, among: displays),
               case let (panel, host)? = Self.makePanel(frame: stage.frame)
         else { return }
@@ -103,7 +105,7 @@ import Synchronization
     private static func pixels(at scale: CGFloat) -> Int {
         let bounce = LaunchTuning.current.bounce
         let inflated = bounce.style == .inflate ? 1 + max(bounce.creep, 0) : 1
-        return Int((LaunchFlight.peakSide * inflated * scale).rounded())
+        return Int((LaunchTuning.current.peakSide * inflated * scale).rounded())
     }
 
     /// The icon Finder shows for the app, as a bitmap of the icon's peak size in pixels at `scale`, so it never
