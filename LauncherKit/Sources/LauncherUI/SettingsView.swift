@@ -8,9 +8,9 @@ import SwiftUI
 /// the Animate app launch switch, the switcher section, and the thumb corner row; the notices, while any applies, 10 pt
 /// apart: the no trackpad notice or the tap-bound settings notice, the Accessibility hint and the screen recording hint,
 /// one rounded group each; then *Quit Trackpad Launcher* and *Close*, aligned right. The form keeps the system's own
-/// fonts, insets and controls. The illustrations are 45 × 28 pt, and every row of the form is as tall as a row with one.
-/// The guide naming the two marks sits over the first illustration for the top-left corner only, where its arrows meet
-/// the thumb.
+/// fonts, insets and controls, and every row of the form is 42 pt tall (`formRowContent()`). The illustrations are
+/// 45 × 28 pt. The guide naming the two marks sits over the first illustration for the top-left corner only, where its
+/// arrows meet the thumb.
 struct SettingsView: View {
     let launcher: Launcher
     let updater: Updater?
@@ -54,7 +54,7 @@ struct SettingsView: View {
                         isOn: Binding(
                             get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
                     ) {
-                        TitleRowLabel(title: "Animate app launch")
+                        Text("Animate app launch").formRowContent()
                     }
                     .toggleStyle(.switch)
                 }
@@ -157,6 +157,7 @@ struct GestureRowView: View {
                 },
                 pickAnimation: actions.pickAnimation)
         }
+        .formRowContent()
         // Above the next row, so the guide's arrows draw over it.
         .zIndex(row.gesture == .one ? 1 : 0)
     }
@@ -179,19 +180,19 @@ struct Illustration: View {
     let name: String
     let corner: ThumbCorner
 
-    static let size = CGSize(width: 45, height: 28)
+    private static let size = CGSize(width: 45, height: 28)
 
     var body: some View {
         BundleImage.view(corner.illustration(name), type: "png", size: Self.size)
     }
 }
 
-/// The label of a form row with no illustration: as tall as one, so the row is as tall as the rows that have one.
-struct TitleRowLabel: View {
-    let title: String
-
-    var body: some View {
-        Text(title).frame(minHeight: Illustration.size.height)
+extension View {
+    /// A settings form row's content: 22 pt, which the form's own 10 pt above and below makes a 42 pt row. Taller
+    /// content, an illustration or an app picker, stays centred and reaches into that padding. The height is set here
+    /// because a grouped Form ignores `listRowInsets` on macOS 26, measured offscreen in a one-row form.
+    func formRowContent() -> some View {
+        frame(height: 22)
     }
 }
 
@@ -259,7 +260,7 @@ struct ThumbCornerRow: View {
                 Text(Copy.thumbCornerTitle(corner)).tag(corner)
             }
         } label: {
-            TitleRowLabel(title: Copy.thumbCornerRow)
+            Text(Copy.thumbCornerRow).formRowContent()
         }
         .pickerStyle(.menu)
     }
