@@ -295,4 +295,31 @@ import LauncherCore
         world.swap()
         #expect(nothingHidOrShown(world))
     }
+
+    @Test func aTapWithTheSettingsWindowOpenHidesItWithTheOtherApps() {
+        let world = hideWorld(frontmost: "Safari")
+        world.openSettings()
+        world.tap(1)
+        #expect(world.system.hidesOthers == [B("Safari")])
+        #expect(world.system.hiddenApps.contains(world.trackpadLauncher.bundleID))
+        #expect(world.launcher.window == .open(request: 1))
+        #expect(world.system.launchAnimations == [world.app("Safari")])
+        #expect(world.hardware.feedback.count == 1)
+
+        world.launcher.setAssignment(.app(world.app("Notes")), for: .two)
+        world.tap(2)
+        #expect(world.system.broughtToFront == [world.app("Safari"), world.app("Notes")])
+        #expect(world.system.hidesOthers.count == 2)
+    }
+
+    @Test func aSwapBackToTheSettingsWindowLeavesItVisibleAndHidesEveryOtherApp() {
+        let world = hideWorld(frontmost: "Safari")
+        world.openSettings()
+        world.activate("Safari")
+        world.swap()
+        #expect(world.system.broughtToFront == [world.trackpadLauncher])
+        #expect(world.launcher.window == .open(request: 2))
+        #expect(world.system.hidesOthers == [B("Trackpad Launcher")])
+        #expect(world.system.hiddenApps == [B("Safari"), B("Mail"), B("Notes")])
+    }
 }

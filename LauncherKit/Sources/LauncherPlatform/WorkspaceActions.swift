@@ -50,7 +50,6 @@ import LauncherCore
         let kept = app.rawValue
         let others = NSWorkspace.shared.runningApplications.filter {
             $0.activationPolicy == .regular && !$0.isTerminated && $0.bundleIdentifier != kept
-                && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
         }
         let frontmost = NSWorkspace.shared.frontmostApplication
         let deferred = others.first { $0.processIdentifier == frontmost?.processIdentifier }
@@ -58,7 +57,7 @@ import LauncherCore
         // Hiding the frontmost app at once makes macOS activate the next visible app, which would land second in the
         // ⌘-Tab order above the app the user came from.
         Task { @MainActor in
-            for other in now { other.hide() }
+            for other in now { Self.hide(other) }
         }
         guard let deferred else { return }
         // Alive only while the hide is pending.
@@ -73,10 +72,19 @@ import LauncherCore
         pendingHide = PendingHide(app: deferred, kept: kept, observer: observer)
     }
 
+    /// This process hides with the app's own hide. The activation policy stays regular, so the Dock icon remains.
+    private static func hide(_ app: NSRunningApplication) {
+        if app.processIdentifier == NSRunningApplication.current.processIdentifier {
+            NSApp.hide(nil)
+        } else {
+            app.hide()
+        }
+    }
+
     private func applicationActivated(_ bundleIdentifier: String?) {
         guard let pending = pendingHide else { return }
         forgetPendingHide()
-        if bundleIdentifier == pending.kept { pending.app.hide() }
+        if bundleIdentifier == pending.kept { Self.hide(pending.app) }
     }
 
     private func forgetPendingHide() {

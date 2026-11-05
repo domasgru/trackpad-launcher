@@ -141,6 +141,8 @@ import Synchronization
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         // The app deactivates whenever another app is brought to front; the overlay must outlive that.
         panel.hidesOnDeactivate = false
+        // The app's own hide, for the settings window, must not cut the animation short.
+        panel.canHide = false
         panel.animationBehavior = .none
         panel.isReleasedWhenClosed = false
         panel.contentView = content

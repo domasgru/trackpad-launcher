@@ -62,7 +62,8 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// Bring to front: launch, or unhide / restore / reopen / activate exactly like a Dock click.
     func bringToFront(_ app: AppEntry)
     /// Hides every running app with a Dock icon whose bundle identifier differs from `app` (every copy of `app` stays),
-    /// on every display and Space, full-screen apps included; menu bar apps stay. Idempotent; needs no permission;
+    /// on every display and Space, full-screen apps included; menu bar apps stay. Trackpad Launcher itself is included
+    /// while its Dock icon shows (its settings window is open), unless it is `app`. Idempotent; needs no permission;
     /// returns at once. The app frontmost at the call, when it is not `app`, is hidden only once `app` has come to the
     /// front; the others go out on the next main-actor turn.
     func hideOtherApps(than app: BundleID)
