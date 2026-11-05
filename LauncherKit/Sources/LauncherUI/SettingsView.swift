@@ -2,58 +2,91 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// One 326 pt column, 16 pt inside the window, of rounded groups 10 pt apart: the update card, while a newer version is
-/// known; the five gesture rows and the Animate app
-/// launch switch; the switcher section; the thumb corner row; then, while any applies, the no trackpad notice or the tap-bound settings notice, the
-/// Accessibility hint and the screen recording hint, one group each. Rows are at least 42 pt tall, with a hairline
-/// between them. The illustrations are 45 × 28 pt. The guide naming the two marks sits over the first illustration for
-/// the top-left corner only, where its arrows meet the thumb. *Quit Trackpad Launcher* and *Close* end it, aligned right.
+/// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges, the form's sections
+/// aside: the update card, while a newer version is known; the settings form, a SwiftUI grouped Form drawn as System
+/// Settings draws one, spanning the window's width inside its own side margins, its sections the five gesture rows and
+/// the Animate app launch switch, the switcher section, and the thumb corner row; the notices, while any applies, 10 pt
+/// apart: the no trackpad notice or the tap-bound settings notice, the Accessibility hint and the screen recording hint,
+/// one rounded group each; then *Quit Trackpad Launcher* and *Close*, aligned right. The form keeps the system's own
+/// fonts, row heights, insets and controls. The illustrations are 45 × 28 pt. The guide naming the two marks sits over
+/// the first illustration for the top-left corner only, where its arrows meet the thumb.
 struct SettingsView: View {
     let launcher: Launcher
     let updater: Updater?
     let actions: LauncherActions
 
+    /// The update card's and the notices' labels. The form keeps the system's own fonts.
+    private static let labelFont = Font.system(size: 13, weight: .medium)
+    /// The window's edges to everything but the form, which spans the window's width.
+    private static let inset: CGFloat = 16
+    /// Between the column's parts: the update card, the form, the notices and the buttons.
+    private static let partSpacing: CGFloat = 20
+    /// Between two notices, as between the form's own sections.
+    private static let noticeSpacing: CGFloat = 10
+    /// A grouped Form's own room above its first section and below its last: SwiftUI's, not exposed and not changed by
+    /// `contentMargins`, so measured in the settings window on macOS 26 (`plans/030-thumb-corner-popup-style`).
+    private static let formMargins = (top: CGFloat(20), bottom: CGFloat(20))
+
     private var accessibilityButton: NoticeButton {
         NoticeButton(title: Copy.accessibilityButton) { actions.openSettings(.accessibility) }
     }
 
+    private var hasNotices: Bool {
+        launcher.inactiveNotice != nil || launcher.showsAccessibilityHint || launcher.screenRecordingHint != nil
+    }
+
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Self.partSpacing) {
             if let card = updater?.card {
-                UpdateCardView(
-                    card: card, updateNow: { updater?.updateNow() }, cancel: { updater?.cancel() })
+                UpdateCardView(card: card, updateNow: { updater?.updateNow() }, cancel: { updater?.cancel() })
+                    // The labels only: the controls keep the system's own fonts.
+                    .font(Self.labelFont)
+                    .padding(.horizontal, Self.inset)
             }
-            FormGroup {
-                ForEach(launcher.rows) { row in
-                    GestureRowView(row: row, launcher: launcher, actions: actions)
-                    FormDivider()
-                }
-                FormRow {
-                    SwitchRow(
-                        title: "Animate app launch",
+            // The window's whole width: the form's own margins inset its sections.
+            Form {
+                Section {
+                    ForEach(launcher.rows) { row in
+                        GestureRowView(row: row, launcher: launcher, actions: actions)
+                    }
+                    Toggle(
+                        "Animate app launch",
                         isOn: Binding(
                             get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) }))
+                    .toggleStyle(.switch)
                 }
+                Section { SwitcherSection(launcher: launcher) }
+                Section { ThumbCornerRow(launcher: launcher) }
             }
-            FormGroup { SwitcherSection(launcher: launcher) }
-            FormGroup {
-                FormRow { ThumbCornerRow(launcher: launcher) }
-            }
-            if let notice = launcher.inactiveNotice {
-                SettingsNotice(message: notice)
-            }
-            if launcher.showsAccessibilityHint {
-                SettingsNotice(message: Copy.accessibilityHint, button: accessibilityButton)
-            }
-            if let hint = launcher.screenRecordingHint {
-                SettingsNotice(
-                    message: Copy.screenRecordingHint,
-                    button: NoticeButton(title: Copy.screenRecordingButton) {
-                        switch hint {
-                        case .ask: launcher.askForScreenRecording()
-                        case .openSettings: actions.openSettings(.screenRecording)
-                        }
-                    })
+            .formStyle(.grouped)
+            .scrollDisabled(true)
+            .scrollContentBackground(.hidden)
+            // The column's spacing above and below the sections, not the form's own margins on top of it.
+            .padding(.top, -Self.formMargins.top)
+            .padding(.bottom, -Self.formMargins.bottom)
+            // Under its neighbours, so the margins it lays over them never cover or take their clicks.
+            .zIndex(-1)
+            if hasNotices {
+                VStack(spacing: Self.noticeSpacing) {
+                    if let notice = launcher.inactiveNotice {
+                        SettingsNotice(message: notice)
+                    }
+                    if launcher.showsAccessibilityHint {
+                        SettingsNotice(message: Copy.accessibilityHint, button: accessibilityButton)
+                    }
+                    if let hint = launcher.screenRecordingHint {
+                        SettingsNotice(
+                            message: Copy.screenRecordingHint,
+                            button: NoticeButton(title: Copy.screenRecordingButton) {
+                                switch hint {
+                                case .ask: launcher.askForScreenRecording()
+                                case .openSettings: actions.openSettings(.screenRecording)
+                                }
+                            })
+                    }
+                }
+                .font(Self.labelFont)
+                .padding(.horizontal, Self.inset)
             }
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
@@ -64,11 +97,9 @@ struct SettingsView: View {
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.roundedRectangle(radius: 6))
             }
-            .padding(.top, 10)
+            .padding(.horizontal, Self.inset)
         }
-        // The labels only: the controls keep the system's own fonts.
-        .font(.system(size: 13, weight: .medium))
-        .padding(16)
+        .padding(.vertical, Self.inset)
         .frame(width: 326)
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -96,32 +127,6 @@ struct FormRow<Content: View>: View {
     }
 }
 
-/// The hairline between two rows of a group.
-struct FormDivider: View {
-    var body: some View {
-        Rectangle()
-            .fill(Color(nsColor: .quinaryLabel))
-            .frame(height: 1)
-    }
-}
-
-/// A title and its switch, the switch at the trailing edge.
-struct SwitchRow: View {
-    let title: String
-    let isOn: Binding<Bool>
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Text(title)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Toggle(title, isOn: isOn)
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .labelsHidden()
-        }
-    }
-}
-
 /// A gesture row reads the model and sends one intent.
 struct GestureRowView: View {
     let row: GestureRow
@@ -129,7 +134,7 @@ struct GestureRowView: View {
     let actions: LauncherActions
 
     var body: some View {
-        FormRow {
+        HStack(spacing: 0) {
             GestureIllustration(gesture: row.gesture, corner: launcher.thumbCorner)
                 .overlay(alignment: .topLeading) {
                     if showsGuide {
@@ -232,29 +237,20 @@ struct Guide: View {
     }
 }
 
-/// The thumb corner row's title and, at the trailing edge, its pop-up button (SwiftUI's menu picker is AppKit's pop-up
-/// button on macOS) listing the four corners.
+/// The thumb corner row: the form's own pop-up listing the four corners.
 struct ThumbCornerRow: View {
     let launcher: Launcher
 
     var body: some View {
-        HStack(spacing: 16) {
-            Text(Copy.thumbCornerRow)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Picker(
-                Copy.thumbCornerRow,
-                selection: Binding(get: { launcher.thumbCorner }, set: { launcher.setThumbCorner($0) })
-            ) {
-                ForEach(ThumbCorner.allCases, id: \.self) { corner in
-                    Text(Copy.thumbCornerTitle(corner)).tag(corner)
-                }
+        Picker(
+            Copy.thumbCornerRow,
+            selection: Binding(get: { launcher.thumbCorner }, set: { launcher.setThumbCorner($0) })
+        ) {
+            ForEach(ThumbCorner.allCases, id: \.self) { corner in
+                Text(Copy.thumbCornerTitle(corner)).tag(corner)
             }
-            .pickerStyle(.menu)
-            .controlSize(.regular)
-            .labelsHidden()
-            .fixedSize()
-            .accessibilityLabel(Copy.thumbCornerRow)
         }
+        .pickerStyle(.menu)
     }
 }
 
