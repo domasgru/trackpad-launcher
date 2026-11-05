@@ -108,7 +108,13 @@ func runningWithWindowClosed() {
 
 struct Outcome {
     let shown: Bool, front: String, order: [String]
-    var good: Bool { shown && front == processName && order.first == processName }
+    /// Other sessions' UI tests may raise their own app at any moment. That app is ignored, and only that app: what
+    /// is judged is whether the window rose above the app the user was in.
+    static let unrelated: Set<String> = ["Files App", "FilesMacUITests-Runner"]
+    var good: Bool {
+        shown && (front == processName || Self.unrelated.contains(front))
+            && order.first { !Self.unrelated.contains($0) } == processName
+    }
 }
 
 func measure() -> Outcome {
