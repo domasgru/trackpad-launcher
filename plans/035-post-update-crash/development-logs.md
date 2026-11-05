@@ -18,4 +18,5 @@
 - Found while fixing the above, not by the review: `NSWorkspace.openApplication`'s completion for a script app arrives only after LaunchServices' 30 s launch timeout → the test does not await it at all; it launches with `open -g`, waits briefly for `others()` to list the pair, and takes the pids from the process table.
 
 ## Implement
-- (none yet)
+- R1's end-to-end run, after the fix, on a Release build under `com.example.TrackpadLauncherCrashRepro`, ad-hoc signed (the launching session's build line, in place of the plan's `Apple Development` line, under `build/repro`): `ending=stopped rounds=15 new-copy-alive=15 new-copy-dead=0`, every round with the old copy gone and the new copy foreground; `ls ~/Library/Logs/DiagnosticReports | grep -c "Trackpad Launcher"` read 21 before and 21 after.
+- `repro.sh` was committed without its executable bit, so the plan's direct invocation was refused → it is now mode 755.

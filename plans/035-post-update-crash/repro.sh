@@ -6,6 +6,10 @@
 #   ending = after-open   the old copy gets SIGTERM right after `open` returns, as Lifecycle.replaced() ends it
 #   ending = stopped      nothing ends the old copy but the new copy's own stop()
 #
+# A round counts as alive only when the old copy's pid is gone (kill -0 fails) and the new copy's pid is registered
+# with LaunchServices as type="Foreground": opening the settings window makes that of an LSUIElement app, and a copy
+# stuck before the other copies have exited never gets there.
+#
 # Build the app under its own identifier: a copy force-terminates every copy of its identifier family, so a build
 # with the real identifier would kill the installed app.
 set -u
@@ -26,9 +30,12 @@ for round in $(seq 1 "$rounds"); do
     open -g -n "$app"
     [ "$ending" = after-open ] && kill -TERM "$old" 2>/dev/null
     sleep 1.5
-    survivors=$(pgrep -f "$binary" | grep -v -x "$old" | wc -l | tr -d ' ')
-    if [ "$survivors" -ge 1 ]; then alive=$((alive + 1)); result=alive; else dead=$((dead + 1)); result=DEAD; fi
-    echo "round $round: new copy $result"
+    new=$(pgrep -f "$binary" | grep -v -x "$old" | head -1)
+    if kill -0 "$old" 2>/dev/null; then old_gone=no; else old_gone=yes; fi
+    resident=no
+    if [ -n "$new" ] && lsappinfo info -pid "$new" 2>/dev/null | grep -q 'type="Foreground"'; then resident=yes; fi
+    if [ "$old_gone" = yes ] && [ "$resident" = yes ]; then alive=$((alive + 1)); result=alive; else dead=$((dead + 1)); result=DEAD; fi
+    echo "round $round: new copy $result (old copy gone: $old_gone, new copy foreground: $resident)"
     clear_copies
 done
 echo "ending=$ending rounds=$rounds new-copy-alive=$alive new-copy-dead=$dead"
