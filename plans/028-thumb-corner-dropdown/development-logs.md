@@ -1,6 +1,17 @@
 # Development logs: Four thumb corners
 
 ## Specify
+- Window swipe direction from a bottom corner had no scenario → added a bottom-left window swipe scenario to R3.
+- Top-corner side palm band had no regression scenario → added the opposite-edge scenario to R5.
+- 2 mm release margin was not stated for bottom corners → added it to R2 with a "rolls too far" scenario; moved the "just outside" case to 25 mm, clear of the margin.
+- Thumb tap at the bottom edge inside the corner was not covered → added a swap scenario to R4; R4 now says what an edge contact does.
+- R5 leaned on "as today" → stated the band explicitly.
+- R7 did not say today's guide behaviour → stated it and added *Top right* and *Top left* scenarios.
+- R8 bundled three requirements → split into R8 (migration), R9 (first-run default), R10 (relaunch); the upgrade scenario now checks anchoring before any window opens.
+- Solution did not trace R4, R5, R7 → added a sentence for each; added a Documentation section for the overview and glossary.
+- Non-goal wording: tooling name dropped, side-band and downgrade reasons sharpened.
+- Rejected: keeping the window-swipe arrows unflipped in bottom illustrations; the user chose a plain top-to-bottom flip.
+- Found while checking the downgrade non-goal: an older version drops every setting when one value does not decode → added R11, a downgrade keeps the other settings and loads a bottom corner as the top corner on its side.
 
 ## Plan
 - Planning found R1's last clause ("a thumb already anchored keeps working until it lifts") contradicts the domain model, where every settings change restarts recognition and a thumb already down is judged on the first frame → the clause now says the thumb is judged afresh and anchors only if it rests in the new corner; T1 proves it.
