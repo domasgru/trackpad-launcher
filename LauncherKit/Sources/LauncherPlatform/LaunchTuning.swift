@@ -32,8 +32,8 @@ struct LaunchTuning: Equatable, Sendable {
     var swayCurve: Double = 1.8
     /// The end tilt of the largest sway, in degrees.
     var maximumTilt: Double = 4
-    /// Tilt = tilt × t^tiltCurve.
-    var tiltCurve: Double = 1
+    /// Tilt = tilt × t^tiltCurve. Below 1 tilts early, above 1 late.
+    var tiltCurve: Double = 0.6
     /// Plays the Reduce motion flight whatever the system setting. Only the tuner sets it.
     var forceReduceMotion = false
     /// Switcher swipes move like the cursor, with macOS's acceleration; off, one millimetre of finger is one of travel.
