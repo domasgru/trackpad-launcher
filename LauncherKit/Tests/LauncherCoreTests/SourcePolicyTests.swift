@@ -135,6 +135,12 @@ import Testing
         Confined(token: "SecCode", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
         Confined(token: "SecStaticCode", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
         Confined(token: "SecRequirement", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
+        Confined(
+            token: "ignoringOtherApps", onlyIn: ["AppActivation.swift"],
+            rule: "the override of the app in front has one home, with its reason"),
+        Confined(
+            token: ".activate()", onlyIn: ["AnimationTuner.swift"],
+            rule: "the plain call is refused on a cold launch; it lives only in the Debug tuner, whose click-time call is user intent"),
         Confined(token: "/bin/mv", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's move has one script"),
         Confined(token: "osascript", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's exchange has one script"),
         Confined(token: "SMAppService", onlyIn: ["SystemLoginItem.swift"], rule: "one login item, one adapter"),

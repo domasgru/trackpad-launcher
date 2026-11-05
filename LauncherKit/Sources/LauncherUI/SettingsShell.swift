@@ -156,7 +156,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             }
             if window.isMiniaturized { window.deminiaturize(nil) }
             window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            AppActivation.activateOverOtherApps()
         }
     }
 

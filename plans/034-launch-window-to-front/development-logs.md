@@ -14,3 +14,9 @@
 
 ## Implement
 - <what implementation-reviewer found> → <what changed>
+- S1 step 1, unchanged source, R2 (1 trial): Trackpad Launcher's layer 8 window above Calculator's, but `frontmost=Calculator`, `active=false`. The dialog floats without focus.
+- S1 step 2: the `.activate()` entry reported its two hits (`MoveDialogPresenter.swift:37`, `SettingsShell.swift:159`) before the change.
+- S1 step 5, changed build, harness `base` 4 trials: cold-finder, cold-other, reopen-finder, reopen-other, behind-other all `0/4 bad`, every line `front=Trackpad Launcher`, `order=["Trackpad Launcher", …]`.
+- S1 step 6, R1 on the changed build (Calculator in front, plain `open`): `frontmost=Trackpad Launcher`, `active=true`, windows: Trackpad Launcher layer 3, Trackpad Launcher layer 0, Calculator. The key window itself is **not verified** (needs ⌘W).
+- S1 step 7, R2 on the changed build, 2 trials: both FAILED. `frontmost=Calculator`, `active=false`, Trackpad Launcher's layer 8 window above Calculator's. Same read as before the change; the activation did not take for the move dialog. Default button fill **not verified**. Not retried further; reported.
+- S1 step 8: Calculator quit, target not running, no dev copy in pgrep.

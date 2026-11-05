@@ -34,7 +34,7 @@ public final class MoveDialogPresenter {
             alert.informativeText = reason
             alert.addButton(withTitle: Copy.moveQuitButton)
         }
-        NSApp.activate()
+        AppActivation.activateOverOtherApps()
         let isFirstButton = alert.runModal() == .alertFirstButtonReturn
         switch dialog {
         case .asking: lifecycle.answer(isFirstButton ? .move : .quit)
