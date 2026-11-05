@@ -289,6 +289,133 @@ import LauncherCore
         #expect(world.system.broughtToFront.isEmpty)
     }
 
+    private func launchingWorld(_ name: String, animates: Bool = true, hideOn: Bool = true) -> World {
+        let world = World(apps: [name, "Mail"])
+        world.launcher.start()
+        world.makeRunning(["Mail"])
+        world.makeFrontmost("Mail")
+        world.launcher.setAssignment(.app(world.app(name)), for: .two)
+        world.launcher.setLaunchAnimation(on: animates)
+        world.launcher.setHideBackgroundApps(on: hideOn)
+        return world
+    }
+
+    @Test func aLaunchHidesTheOthersOnlyOnceItsWindowShowsWhetherOrNotItBounces() {
+        let animated = launchingWorld("Figma")
+        animated.tap(2)
+        #expect(animated.system.launches == [.init(app: animated.app("Figma"), cap: .seconds(10), bouncing: true)])
+        #expect(animated.system.bounces == [.init(app: animated.app("Figma"), cap: .seconds(10))])
+        #expect(animated.system.hidesOthers.isEmpty)
+        #expect(animated.system.hiddenApps.isEmpty)
+
+        var endingsWhenHiding: [RecordingSystemActions.LaunchEnd]?
+        animated.system.onHideOtherApps = { [unowned animated] in endingsWhenHiding = animated.system.launchEndings }
+        animated.makeFrontmost("Figma")
+        animated.report(.windowShown, for: "Figma")
+        #expect(animated.system.launchEndings == [.init(app: B("Figma"), ending: .launchAnimation)])
+        #expect(animated.system.hidesOthers == [B("Figma")])
+        #expect(animated.system.hiddenApps == [B("Mail")])
+        #expect(endingsWhenHiding?.count == 1, "the bounce's launch animation starts before the hide")
+
+        let unseen = launchingWorld("Figma", animates: false)
+        unseen.tap(2)
+        #expect(unseen.system.launches == [.init(app: unseen.app("Figma"), cap: .seconds(10), bouncing: false)])
+        #expect(unseen.system.bounces.isEmpty)
+        #expect(unseen.system.launchAnimations.isEmpty)
+        #expect(unseen.hardware.feedback.count == 1)
+        #expect(unseen.system.hidesOthers.isEmpty)
+
+        unseen.makeFrontmost("Figma")
+        unseen.report(.windowShown, for: "Figma")
+        #expect(unseen.system.hidesOthers == [B("Figma")])
+        #expect(unseen.system.launchEndings.count == 1)
+    }
+
+    @Test(arguments: [true, false])
+    func aLaunchThatFailsOrShowsNoWindowInTimeHidesNothing(animates: Bool) {
+        let failed = launchingWorld("Figma", animates: animates)
+        failed.tap(2)
+        failed.makeFrontmost("Figma")
+        failed.report(.wentNowhere, for: "Figma")
+        #expect(failed.system.launchEndings == [.init(app: B("Figma"), ending: .quietFade)])
+        #expect(failed.system.hidesOthers.isEmpty)
+        failed.report(.windowShown, for: "Figma")
+        #expect(failed.system.launchEndings.count == 1)
+        #expect(failed.system.hidesOthers.isEmpty)
+
+        let quiet = launchingWorld("Figma", animates: animates)
+        quiet.tap(2)
+        quiet.makeFrontmost("Figma")
+        quiet.report(.finishedLaunching, for: "Figma")
+        #expect(quiet.system.launches.first?.limits == [.seconds(2)])
+        quiet.report(.ranOut, for: "Figma")
+        #expect(quiet.system.launches.isEmpty)
+        #expect(quiet.system.hidesOthers.isEmpty)
+        quiet.report(.windowShown, for: "Figma")
+        #expect(quiet.system.launchEndings.count == 1)
+        #expect(quiet.system.hidesOthers.isEmpty)
+
+        let early = launchingWorld("Figma", animates: animates)
+        early.tap(2)
+        early.makeFrontmost("Figma")
+        early.report(.ranOut, for: "Figma")
+        #expect(early.system.launchEndings == [.init(app: B("Figma"), ending: .quietFade)])
+        #expect(early.system.hidesOthers.isEmpty)
+    }
+
+    @Test func aLaunchHidesOnlyWhenItsAppIsFrontmostWhenItsWindowShows() {
+        func windowShown(whileFrontmost front: String?) -> World {
+            let world = launchingWorld("Slack")
+            world.tap(2)
+            world.makeFrontmost(front)
+            world.report(.windowShown, for: "Slack")
+            return world
+        }
+
+        let elsewhere = windowShown(whileFrontmost: "Mail")
+        #expect(elsewhere.system.launchEndings == [.init(app: B("Slack"), ending: .launchAnimation)])
+        #expect(elsewhere.system.hidesOthers.isEmpty)
+        #expect(windowShown(whileFrontmost: nil).system.hidesOthers.isEmpty)
+        #expect(windowShown(whileFrontmost: "Slack").system.hidesOthers == [B("Slack")])
+    }
+
+    @Test func aRepeatedGestureKeepsTheOneLaunchAndTakesTheSwitchNow() {
+        let enabled = launchingWorld("Figma", hideOn: false)
+        enabled.tap(2)
+        enabled.launcher.setHideBackgroundApps(on: true)
+        enabled.tap(2)
+        #expect(enabled.system.launches.count == 1)
+        #expect(enabled.system.broughtToFront == [enabled.app("Figma"), enabled.app("Figma")])
+        #expect(enabled.hardware.feedback.count == 2)
+        enabled.makeFrontmost("Figma")
+        enabled.report(.windowShown, for: "Figma")
+        #expect(enabled.system.hidesOthers == [B("Figma")])
+
+        let disabled = launchingWorld("Figma")
+        disabled.tap(2)
+        disabled.launcher.setHideBackgroundApps(on: false)
+        disabled.tap(2)
+        disabled.makeFrontmost("Figma")
+        disabled.report(.windowShown, for: "Figma")
+        #expect(disabled.system.hidesOthers.isEmpty)
+    }
+
+    @Test func flippingTheSwitchAloneChangesNothingAboutALaunchUnderWay() {
+        let switchedOn = launchingWorld("Figma", hideOn: false)
+        switchedOn.tap(2)
+        switchedOn.launcher.setHideBackgroundApps(on: true)
+        switchedOn.makeFrontmost("Figma")
+        switchedOn.report(.windowShown, for: "Figma")
+        #expect(switchedOn.system.hidesOthers.isEmpty)
+
+        let switchedOff = launchingWorld("Figma")
+        switchedOff.tap(2)
+        switchedOff.launcher.setHideBackgroundApps(on: false)
+        switchedOff.makeFrontmost("Figma")
+        switchedOff.report(.windowShown, for: "Figma")
+        #expect(switchedOff.system.hidesOthers == [B("Figma")])
+    }
+
     @Test func aSwapWithNothingToSwapToHidesNothing() {
         let world = World.switcherWorld(apps: ["Safari"], running: ["Safari"])
         world.launcher.setHideBackgroundApps(on: true)

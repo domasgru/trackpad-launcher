@@ -4,26 +4,26 @@ import Testing
 
 @Suite struct LaunchBounceTests {
     @Test func aWindowEndsEveryBounceWithTheLaunchAnimation() {
-        #expect(LaunchBounce.startingUp.next(after: .windowShown) == .end(.launchAnimation))
-        #expect(LaunchBounce.startedUp.next(after: .windowShown) == .end(.launchAnimation))
+        #expect(WatchedLaunch.Stage.startingUp.next(after: .windowShown) == .end(.launchAnimation))
+        #expect(WatchedLaunch.Stage.startedUp.next(after: .windowShown) == .end(.launchAnimation))
     }
 
     @Test func goingNowhereEndsEveryBounceQuietly() {
-        #expect(LaunchBounce.startingUp.next(after: .wentNowhere) == .end(.quietFade))
-        #expect(LaunchBounce.startedUp.next(after: .wentNowhere) == .end(.quietFade))
+        #expect(WatchedLaunch.Stage.startingUp.next(after: .wentNowhere) == .end(.quietFade))
+        #expect(WatchedLaunch.Stage.startedUp.next(after: .wentNowhere) == .end(.quietFade))
     }
 
     @Test func finishingLaunchingStartsTheGraceOnlyOnce() {
-        #expect(LaunchBounce.startingUp.next(after: .finishedLaunching) == .startUp(limit: .seconds(2)))
-        #expect(LaunchBounce.startedUp.next(after: .finishedLaunching) == .carryOn)
+        #expect(WatchedLaunch.Stage.startingUp.next(after: .finishedLaunching) == .startUp(limit: .seconds(2)))
+        #expect(WatchedLaunch.Stage.startedUp.next(after: .finishedLaunching) == .carryOn)
     }
 
     @Test func runningOutEndsQuietlyUnlessTheAppFinishedLaunching() {
-        #expect(LaunchBounce.startingUp.next(after: .ranOut) == .end(.quietFade))
-        #expect(LaunchBounce.startedUp.next(after: .ranOut) == .end(.launchAnimation))
+        #expect(WatchedLaunch.Stage.startingUp.next(after: .ranOut) == .end(.quietFade))
+        #expect(WatchedLaunch.Stage.startedUp.next(after: .ranOut) == .end(.launchAnimation))
     }
 
     @Test func theCapIsTenSeconds() {
-        #expect(LaunchBounce.cap == .seconds(10))
+        #expect(WatchedLaunch.cap == .seconds(10))
     }
 }
