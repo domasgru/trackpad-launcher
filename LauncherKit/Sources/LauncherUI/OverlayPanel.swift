@@ -34,6 +34,8 @@ class OverlayPanel: NSPanel {
         level = .screenSaver
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         hidesOnDeactivate = false
+        // The app's own hide must not take the switcher down while it fades out.
+        canHide = false
         animationBehavior = .none
         isReleasedWhenClosed = false
 

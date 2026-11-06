@@ -7,9 +7,10 @@ import LauncherCore
     private let reader = RunningAppsReader()
     private let windows = FrontmostAppWindows()
     private let promptsUser: Bool
-    /// One per bounce playing, from `bringToFrontBouncing` to `endLaunchBounce`.
+    /// One per watched launch, from `bringToFrontWatching` to `endLaunch`.
     private var launches: [BundleID: Launch] = [:]
     public var onLaunchProgress: (@MainActor (BundleID, LaunchProgress) -> Void)?
+    private let hider = BackgroundHider()
 
     private struct Launch {
         let watch: LaunchWatch
@@ -28,7 +29,7 @@ import LauncherCore
         _ = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder")
     }
 
-    /// Every report for a bounce, from its watch or its deadlines, passes the bounce's gate first.
+    /// Every report for a launch, from its watch or its deadlines, passes the launch's gate first.
     private func report(_ progress: LaunchProgress, of app: BundleID) {
         guard var launch = launches[app], launch.gate.admits(progress) else { return }
         launches[app] = launch
@@ -37,24 +38,27 @@ import LauncherCore
 
     public func bringToFront(_ app: AppEntry) { open(app) }
 
+    public func hideOtherApps(than app: BundleID) { hider.hideOthers(than: app) }
+
     public func hasProcess(_ app: BundleID) -> Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: app.rawValue).allSatisfy(\.isTerminated)
     }
 
-    public func bringToFrontBouncing(_ app: AppEntry, cap: Duration) {
+    public func bringToFrontWatching(_ app: AppEntry, cap: Duration, bouncing: Bool) {
         let id = app.bundleID
         guard launches[id] == nil else { return bringToFront(app) }
         let report: @MainActor (LaunchProgress) -> Void = { [weak self] in self?.report($0, of: id) }
-        let watch = LaunchWatch(report: report) { [bounces] wait, passed in bounces.after(wait, in: id, passed) }
+        let watch = LaunchWatch(report: report)
         launches[id] = Launch(watch: watch)
         // The app first: nothing below can delay it.
         open(app, then: watch.opened)
-        bounces.start(app, cap: cap) { report(.ranOut) }
+        watch.start(cap: cap)
+        if bouncing { bounces.start(app) }
     }
 
-    public func limitLaunchBounce(of app: BundleID, to limit: Duration) { bounces.limit(app, to: limit) }
+    public func limitLaunch(of app: BundleID, to limit: Duration) { launches[app]?.watch.limit(to: limit) }
 
-    public func endLaunchBounce(of app: BundleID, with ending: LaunchBounceEnding) {
+    public func endLaunch(of app: BundleID, with ending: LaunchBounceEnding) {
         launches.removeValue(forKey: app)?.watch.stop()
         bounces.end(app, with: ending)
     }
@@ -121,7 +125,7 @@ import LauncherCore
     #endif
 }
 
-/// What may still be reported for one bounce: `.finishedLaunching` at most once, then exactly one of the others, then
+/// What may still be reported for one launch: `.finishedLaunching` at most once, then exactly one of the others, then
 /// nothing. Pure; it makes `onLaunchProgress`'s contract true whoever receives the reports.
 struct LaunchReportGate: Equatable {
     private var hasFinished = false

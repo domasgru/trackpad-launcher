@@ -35,6 +35,9 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Whether the screen recording hint's button has asked macOS for the permission. The key is this field's name,
     /// permanently.
     public var hasAskedForScreenRecording = false
+    /// Whether an action that brings an app or window to the front also hides every other app. The key is this field's
+    /// name, permanently.
+    public var isHideBackgroundAppsOn = false
 
     /// The bundle identifiers of every assigned app, missing ones included. Derived, never stored.
     public var assignedBundleIDs: Set<BundleID> { Set(assignments.values.map(\.bundleID)) }
@@ -62,6 +65,8 @@ public struct Settings: Codable, Equatable, Sendable {
         isWindowSwipeOn = try container.decodeIfPresent(Bool.self, forKey: .isWindowSwipeOn) ?? isWindowSwipeOn
         hasAskedForScreenRecording =
             try container.decodeIfPresent(Bool.self, forKey: .hasAskedForScreenRecording) ?? hasAskedForScreenRecording
+        isHideBackgroundAppsOn =
+            try container.decodeIfPresent(Bool.self, forKey: .isHideBackgroundAppsOn) ?? isHideBackgroundAppsOn
     }
 }
 

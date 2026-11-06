@@ -5,7 +5,8 @@ import Observation
 /// `activity` is derived, never stored; `rows` derive from settings plus the catalog; `fire` is the only path
 /// that pulses, launches, plays the launch animation or the launch bounce from a gesture; no gesture closes the window. `fire`
 /// shows either only while the launch animation setting is on: the bounce for an app with no process, the animation for
-/// one with a process.
+/// one with a process. A launch with no process is watched while either setting needs it (the bounce shows, or the hide
+/// background apps setting waits for the app's window); the progress handler hides the others after its first window.
 @MainActor @Observable
 public final class Launcher {
     public private(set) var rows: [GestureRow] = []
@@ -24,6 +25,7 @@ public final class Launcher {
     public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
     public var isSwipeOn: Bool { settings.isSwipeOn }
     public var isSwapOn: Bool { settings.isSwapOn }
+    public var isHideBackgroundAppsOn: Bool { settings.isHideBackgroundAppsOn }
     public var isWindowSwipeOn: Bool { settings.isWindowSwipeOn }
     /// One derivation, read by the notice and the fire guard.
     public var activity: GestureActivity {
@@ -63,9 +65,9 @@ public final class Launcher {
 
     private var shown: ShownSwitcher?
     @ObservationIgnored private var windowSwipesBegun = 0
-    /// The launches whose bounce plays. Written only by `fire` and `progress(_:of:)`: the one record of which bounces
-    /// are live; the adapter's row follows its commands.
-    @ObservationIgnored private var bounces: [BundleID: LaunchBounce] = [:]
+    /// The launches being watched, one record per launched bundle. Written only by `fire` and `progress(_:of:)`: the one
+    /// record of which launches are live; the adapter's watches and bounces follow its commands.
+    @ObservationIgnored private var launches: [BundleID: WatchedLaunch] = [:]
     private var settings: Settings
     private var connected: [Trackpad] = []
     private var preferenceValues: [TrackpadKind: TrackpadPreferenceValues] = [:]
@@ -188,6 +190,13 @@ public final class Launcher {
         reconcile()
     }
 
+    /// Hide background apps switch. Saved at once; it hides and shows nothing now and applies to the next action.
+    public func setHideBackgroundApps(on: Bool) {
+        guard on != settings.isHideBackgroundAppsOn else { return }
+        settings.isHideBackgroundAppsOn = on
+        store.save(settings)
+    }
+
     /// The screen recording hint's button while it asks. Records the ask and saves before asking, so a crash in
     /// between never asks twice; a later press opens System Settings instead.
     public func askForScreenRecording() {
@@ -270,48 +279,59 @@ public final class Launcher {
             blockTapClicks: run.blockTapClicks, slides: run.slides, swaps: run.swaps)
     }
 
-    private enum Visual { case launchBounce, launchAnimation, bringToFrontOnly }
-
-    /// Reads `hasProcess` only when it decides something.
-    private func visual(for app: AppEntry) -> Visual {
-        guard settings.isLaunchAnimationOn else { return .bringToFrontOnly }
-        // The app's bounce still plays: it keeps the one bounce.
-        if bounces[app.bundleID] != nil { return .bringToFrontOnly }
-        return system.hasProcess(app.bundleID) ? .launchAnimation : .launchBounce
+    private func hideOtherApps(than app: BundleID) {
+        guard settings.isHideBackgroundAppsOn else { return }
+        system.hideOtherApps(than: app)
     }
 
-    /// Every silent case decided here and only here: inactive, unassigned, missing.
+    /// Every silent case decided here and only here: inactive, unassigned, missing. Reads `hasProcess` only when it
+    /// decides something: the launch animation or the hide setting is on, and no launch of the app is watched.
     private func fire(_ event: GestureEvent) {
         guard activity.isActive,
               let assigned = settings.assignments[event.gesture],
               let app = catalog.locate(assigned)
         else { return }
         hardware.playFeedback(.gesture, on: event.trackpad)
-        switch visual(for: app) {
-        case .launchBounce:
-            bounces[app.bundleID] = .startingUp
-            // Opens the app first, inside the call.
-            system.bringToFrontBouncing(app, cap: LaunchBounce.cap)
-        case .launchAnimation:
+        let animates = settings.isLaunchAnimationOn
+        let hides = settings.isHideBackgroundAppsOn
+        let id = app.bundleID
+        // A watched launch keeps its one watch, bouncing or unseen; only its hide follows the latest gesture.
+        if launches[id] != nil {
+            launches[id]?.hidesOthersOnWindow = hides
             system.bringToFront(app)
+            return
+        }
+        guard animates || hides else { return system.bringToFront(app) }
+        guard system.hasProcess(id) else {
+            launches[id] = WatchedLaunch(stage: .startingUp, hidesOthersOnWindow: hides)
+            // Opens the app first, inside the call.
+            system.bringToFrontWatching(app, cap: WatchedLaunch.cap, bouncing: animates)
+            return
+        }
+        system.bringToFront(app)
+        if animates {
             // After bring to front, so whatever the animation costs lands on the icon, never on the app.
             system.playLaunchAnimation(for: app)
-        case .bringToFrontOnly:
-            system.bringToFront(app)
         }
+        hideOtherApps(than: id)
     }
 
-    /// A report for an app whose bounce ended finds no record: a late window plays nothing.
+    /// A report for an app whose launch ended finds no record: a late window plays and hides nothing.
     private func progress(_ progress: LaunchProgress, of app: BundleID) {
-        guard let bounce = bounces[app] else { return }
-        switch bounce.next(after: progress) {
+        guard let launch = launches[app] else { return }
+        switch launch.stage.next(after: progress) {
         case .carryOn: break
         case .startUp(let limit):
-            bounces[app] = .startedUp
-            system.limitLaunchBounce(of: app, to: limit)
+            launches[app]?.stage = .startedUp
+            system.limitLaunch(of: app, to: limit)
         case .end(let ending):
-            bounces[app] = nil
-            system.endLaunchBounce(of: app, with: ending)
+            launches[app] = nil
+            system.endLaunch(of: app, with: ending)
+            // After the end, so a bounce's launch animation starts first. The record decides, not the switch now.
+            if progress == .windowShown, launch.hidesOthersOnWindow,
+               system.runningApps().frontmost?.bundleID == app {
+                system.hideOtherApps(than: app)
+            }
         }
     }
 
@@ -342,6 +362,7 @@ public final class Launcher {
             guard running.contains(target.url) else { return }
             hardware.playFeedback(.gesture, on: event.trackpad)
             system.bringToFront(open.selectedApp)
+            hideOtherApps(than: target.bundleID)
         case .cancelled:
             if case .apps(let open)? = shown, open.trackpad == event.trackpad { shown = nil }
         }
@@ -379,6 +400,7 @@ public final class Launcher {
                 hardware.playFeedback(.gesture, on: event.trackpad)
             }
             system.raiseWindows(lift.raises)
+            if lift.playsHaptic { hideOtherApps(than: open.app.bundleID) }
         case .cancelled:
             // The windows stay as they are: no reordering, silent.
             if case .windows(let open)? = shown, open.trackpad == event.trackpad { shown = nil }
@@ -392,6 +414,7 @@ public final class Launcher {
         guard let target = swapSeries.next(in: system.runningApps()) else { return }
         hardware.playFeedback(.gesture, on: event.trackpad)
         system.bringToFront(target)
+        hideOtherApps(than: target.bundleID)
     }
 
     /// Rows and the prepared launch animations change together, so the icon of any app that can fire is ready before

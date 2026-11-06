@@ -10,7 +10,7 @@ import LauncherCore
     private func names(_ switcher: Switcher?) -> [String]? { switcher?.row.map(\.name) }
 
     private func nothingHappened(_ world: World) -> Bool {
-        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty && world.system.bounces.isEmpty
+        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty && world.system.bounces.isEmpty && world.system.hidesOthers.isEmpty
     }
 
     // MARK: Drift through the app

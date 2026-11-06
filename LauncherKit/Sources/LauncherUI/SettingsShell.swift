@@ -146,6 +146,8 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             if let sheet = window.attachedSheet { window.endSheet(sheet, returnCode: .cancel) }
             window.orderOut(nil)
             NSApp.setActivationPolicy(.accessory)
+            // Closing while hidden (the Dock's Quit) must not leave the process hidden with no window.
+            if NSApp.isHidden { NSApp.unhideWithoutActivation() }
         case .open:
             if !isShown {
                 isShown = true
@@ -155,6 +157,9 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                 centre()
             }
             if window.isMiniaturized { window.deminiaturize(nil) }
+            // An opening by hand while the app is hidden shows the window where it was; this also covers a window
+            // closed while hidden and reopened.
+            if NSApp.isHidden { NSApp.unhide(nil) }
             window.makeKeyAndOrderFront(nil)
             AppActivation.activateOverOtherApps()
         }

@@ -290,7 +290,22 @@ import LauncherCore
 
     func bringToFront(_ app: AppEntry) {
         broughtToFront.append(app)
+        hiddenApps.remove(app.bundleID)
         onBringToFront?(app)
+    }
+
+    /// Every hide, by the app it kept, in order.
+    private(set) var hidesOthers: [BundleID] = []
+    /// Which apps are hidden now. A hide adds every ⌘-Tab app and the frontmost app but the kept one at once: the
+    /// adapter's deferral and next-turn hop are its own mechanics. Any bring to front shows the app again.
+    private(set) var hiddenApps: Set<BundleID> = []
+    /// Runs inside `hideOtherApps`, after recording, so a test can see what was already recorded.
+    var onHideOtherApps: (() -> Void)?
+
+    func hideOtherApps(than app: BundleID) {
+        hidesOthers.append(app)
+        hiddenApps.formUnion((running + (frontmost.map { [$0] } ?? [])).map(\.bundleID).filter { $0 != app })
+        onHideOtherApps?()
     }
 
     func runningApps() -> RunningApps { RunningApps(frontmost: frontmost, apps: running) }
@@ -311,23 +326,34 @@ import LauncherCore
 
     /// Processes ⌘-Tab does not show: menu bar apps, apps still starting from the Dock.
     var processes: Set<BundleID> = []
-    /// The bounces playing, in start order: the row, newest last. Every `bringToFrontBouncing` call appends, a repeated
-    /// one too, so a second start shows; the fake does not copy the adapter's one-bounce-per-app guard.
-    private(set) var bounces: [Bounce] = []
-    /// Every `endLaunchBounce` call, in order, so a double end shows.
-    private(set) var bounceEndings: [BounceEnd] = []
+    /// The launches being watched, in start order, newest last. Every `bringToFrontWatching` call appends, a repeated
+    /// one too, so a second start shows; the fake does not copy the adapter's one-watch-per-app guard.
+    private(set) var launches: [Launch] = []
+    /// The bounces playing: the watched launches that bounce.
+    var bounces: [Bounce] {
+        launches.filter(\.bouncing).map { Bounce(app: $0.app, cap: $0.cap, limits: $0.limits) }
+    }
+    /// Every `endLaunch` call, in order, so a double end shows.
+    private(set) var launchEndings: [LaunchEnd] = []
     var onLaunchProgress: (@MainActor (BundleID, LaunchProgress) -> Void)?
-    /// Runs inside `bringToFrontBouncing`, like `onPlayLaunchAnimation`, so a test can see the other effects then.
-    var onBringToFrontBouncing: (() -> Void)?
+    /// Runs inside `bringToFrontWatching`, like `onPlayLaunchAnimation`, so a test can see the other effects then.
+    var onBringToFrontWatching: (() -> Void)?
 
-    struct Bounce: Equatable {
+    struct Launch: Equatable {
         let app: AppEntry
         let cap: Duration
+        let bouncing: Bool
         /// Every limit the model set, in order. Recorded, not applied: which deadline passes first is the adapter's.
         var limits: [Duration] = []
     }
 
-    struct BounceEnd: Equatable {
+    struct Bounce: Equatable {
+        let app: AppEntry
+        let cap: Duration
+        var limits: [Duration] = []
+    }
+
+    struct LaunchEnd: Equatable {
         let app: BundleID
         let ending: LaunchBounceEnding
     }
@@ -337,21 +363,22 @@ import LauncherCore
         processes.contains(app) || frontmost?.bundleID == app || running.contains { $0.bundleID == app }
     }
 
-    /// Records the bring to front, then the bounce, in that order.
-    func bringToFrontBouncing(_ app: AppEntry, cap: Duration) {
+    /// Records the bring to front, then the watch, in that order.
+    func bringToFrontWatching(_ app: AppEntry, cap: Duration, bouncing: Bool) {
         broughtToFront.append(app)
-        bounces.append(Bounce(app: app, cap: cap))
-        onBringToFrontBouncing?()
+        hiddenApps.remove(app.bundleID)
+        launches.append(Launch(app: app, cap: cap, bouncing: bouncing))
+        onBringToFrontWatching?()
     }
 
-    func limitLaunchBounce(of app: BundleID, to limit: Duration) {
-        guard let index = bounces.firstIndex(where: { $0.app.bundleID == app }) else { return }
-        bounces[index].limits.append(limit)
+    func limitLaunch(of app: BundleID, to limit: Duration) {
+        guard let index = launches.firstIndex(where: { $0.app.bundleID == app }) else { return }
+        launches[index].limits.append(limit)
     }
 
-    func endLaunchBounce(of app: BundleID, with ending: LaunchBounceEnding) {
-        bounceEndings.append(BounceEnd(app: app, ending: ending))
-        bounces.removeAll { $0.app.bundleID == app }
+    func endLaunch(of app: BundleID, with ending: LaunchBounceEnding) {
+        launchEndings.append(LaunchEnd(app: app, ending: ending))
+        launches.removeAll { $0.app.bundleID == app }
     }
 
     /// The launch reports `progress` inline, as the real adapter pushes it on the main actor. A test withholds a report
