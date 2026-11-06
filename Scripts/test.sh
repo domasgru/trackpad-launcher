@@ -2,4 +2,4 @@
 set -euo pipefail
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 cd "$(dirname "$0")/../LauncherKit"
-exec swift test "$@"
+exec swift test --disable-keychain "$@"

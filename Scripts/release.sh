@@ -345,6 +345,7 @@ mkdir -p "$OUT"
 (cd "$ROOT" && xcodegen generate)
 
 xcodebuild archive \
+  -packageAuthorizationProvider netrc \
   -project "$ROOT/$PROJECT_NAME.xcodeproj" \
   -scheme "$PROJECT_NAME" \
   -configuration Release \
@@ -368,6 +369,7 @@ cat > "$OUT/ExportOptions.plist" <<PLIST
 PLIST
 
 xcodebuild -exportArchive \
+  -packageAuthorizationProvider netrc \
   -archivePath "$OUT/$PROJECT_NAME.xcarchive" \
   -exportOptionsPlist "$OUT/ExportOptions.plist" \
   -exportPath "$OUT/export"
