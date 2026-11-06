@@ -110,7 +110,7 @@ import Testing
             token: "URLSession", onlyIn: ["GitHubReleases.swift"],
             rule: "the update check and its download are the one network path"),
         Confined(token: "http", onlyIn: ["GitHubReleases.swift"], rule: "the one network file holds every address"),
-        Confined(token: "Data(contentsOf:", onlyIn: ["Apps.swift"], rule: "the one local-file reader; a URL read is a request"),
+        Confined(token: "Data(contentsOf:", onlyIn: ["Apps.swift", "CardContract.swift"], rule: "the one local-file reader; a URL read is a request"),
         Confined(token: "AXIsProcessTrusted", onlyIn: ["SystemPermissions.swift"], rule: "R9 one permission, one adapter"),
         Confined(token: "notify_register", onlyIn: ["SystemPermissions.swift"], rule: "R7 the trust push"),
         Confined(
@@ -142,9 +142,9 @@ import Testing
         Confined(token: "AXUIElement", onlyIn: ["FrontmostAppWindows.swift", "LaunchWatch.swift"], rule: "the window reads have two readers"),
         Confined(token: "CGWindowList", onlyIn: ["FrontmostAppWindows.swift", "LaunchWatch.swift"], rule: "the window reads have two readers"),
         Confined(token: ".hide(", onlyIn: ["BackgroundHider.swift"], rule: "apps are hidden in one place"),
-        Confined(token: "SecCode", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
-        Confined(token: "SecStaticCode", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
-        Confined(token: "SecRequirement", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
+        Confined(token: "SecCode", onlyIn: ["CodeSignature.swift", "CardContract.swift"], rule: "the code signature is read in one place"),
+        Confined(token: "SecStaticCode", onlyIn: ["CodeSignature.swift", "CardContract.swift"], rule: "the code signature is read in one place"),
+        Confined(token: "SecRequirement", onlyIn: ["CodeSignature.swift", "CardContract.swift"], rule: "the code signature is read in one place"),
         Confined(
             token: "ignoringOtherApps", onlyIn: ["AppActivation.swift"],
             rule: "the override of the active app has one home, with its reason"),
@@ -170,20 +170,20 @@ import Testing
             token: "forceTerminate", onlyIn: ["SystemRunningCopies.swift"], rule: "other copies are stopped in one place"),
         Confined(token: ".terminate(", onlyIn: ["SystemRunningCopies.swift"], rule: "processes are ended in one place"),
         Confined(token: "copyItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
-        Confined(token: "moveItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
+        Confined(token: "moveItem(", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the move's file operations are in one file"),
         Confined(token: "replaceItemAt(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
         Confined(token: "renamex_np(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
-        Confined(token: "removeItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
+        Confined(token: "removeItem(", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the move's file operations are in one file"),
         Confined(
-            token: "AppleArchive", onlyIn: ["BundleInstall.swift"], rule: "the update's unpacking is in one file"),
+            token: "AppleArchive", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the update's unpacking is in one file"),
         Confined(
-            token: "ArchiveStream", onlyIn: ["BundleInstall.swift"], rule: "the update's unpacking is in one file"),
+            token: "ArchiveStream", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the update's unpacking is in one file"),
         Confined(
-            token: "ArchiveByteStream", onlyIn: ["BundleInstall.swift"], rule: "the update's unpacking is in one file"),
+            token: "ArchiveByteStream", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the update's unpacking is in one file"),
         Confined(
-            token: "removexattr", onlyIn: ["BundleInstall.swift"], rule: "the quarantine is cleared in one file"),
+            token: "removexattr", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the quarantine is cleared in one file"),
         Confined(
-            token: "itemReplacementDirectory", onlyIn: ["BundleInstall.swift"],
+            token: "itemReplacementDirectory", onlyIn: ["BundleInstall.swift", "CardContract.swift"],
             rule: "the staging folder is made in one file"),
         Confined(
             token: "createsNewApplicationInstance", onlyIn: ["ApplicationsUpdater.swift"],
@@ -306,7 +306,7 @@ import Testing
 
     @Test func scanVisitsEveryLibraryTarget() throws {
         let visited = try Self.scannedRoots.flatMap { try Self.swiftFiles(under: $0) }.map(\.path)
-        for target in ["LauncherCore", "LauncherPlatform", "LauncherUI"] {
+        for target in ["LauncherCore", "LauncherPlatform", "LauncherUI", "CardContract"] {
             #expect(visited.contains { $0.contains("/Sources/\(target)/") }, "no file scanned under \(target)")
         }
         #expect(visited.contains { $0.contains("/TrackpadLauncher/") }, "no file scanned under the app target")
@@ -318,6 +318,19 @@ import Testing
         let core = Self.packageRoot.appending(path: "Sources/LauncherCore")
         let hits = try Self.disallowedImports(in: core, allowed: Self.coreAllowedImports)
         #expect(hits.isEmpty, "LauncherCore may import only \(Self.coreAllowedImports.sorted()): \(hits)")
+    }
+
+    @Test func cardContractStaysFrozenApartFromTheApp() throws {
+        let sources = Self.packageRoot.appending(path: "Sources")
+        for target in ["CardContract", "card-contract"] {
+            let hits = try Self.disallowedImports(
+                in: sources.appending(path: target), allowed: ["AppleArchive", "CardContract", "Foundation", "Security", "System"])
+            #expect(hits.isEmpty, "\(target) may import neither LauncherCore nor LauncherPlatform: \(hits)")
+        }
+        let manifest = try String(
+            contentsOf: Self.packageRoot.deletingLastPathComponent().appending(path: "project.yml"), encoding: .utf8)
+        #expect(!manifest.contains("CardContract"), "the app links CardContract")
+        #expect(!manifest.contains("card-contract"), "the app links card-contract")
     }
 
     @Test func importScannerFindsAPlantedImport() throws {

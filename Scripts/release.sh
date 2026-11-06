@@ -326,6 +326,9 @@ fi
 if [ "${1:-}" = "--archive-only" ]; then
   [ -n "${2:-}" ] || fail "usage: release.sh --archive-only <path to Trackpad Launcher.app>"
   archive_and_check "$2" lenient
+  swift run --package-path "$ROOT/LauncherKit" --disable-keychain card-contract \
+    "$AAR" --team "$TEAM_ID" --identifier "$BUNDLE_ID" ||
+    echo "note: an older copy's card would refuse this archive (not fatal in --archive-only: the app is not notarised)."
   exit 0
 fi
 
@@ -393,6 +396,9 @@ xcrun stapler validate "$APP"
 rm -f "$ZIP"
 
 archive_and_check "$APP" strict
+# After archive_and_check strict: the stapled archive, against every shipped card's own rules (R16).
+swift run --package-path "$ROOT/LauncherKit" --disable-keychain card-contract \
+  "$AAR" --team "$TEAM_ID" --identifier "$BUNDLE_ID" || fail "an older copy's card would refuse this release."
 
 build_image "$APP"
 

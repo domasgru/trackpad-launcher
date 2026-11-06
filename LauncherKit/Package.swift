@@ -23,6 +23,9 @@ let package = Package(
             dependencies: ["LauncherCore"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
+        .target(name: "CardContract"),
+        .executableTarget(name: "card-contract", dependencies: ["CardContract"]),
+        .testTarget(name: "CardContractTests", dependencies: ["CardContract", "card-contract"]),
         .testTarget(name: "LauncherCoreTests", dependencies: ["LauncherCore"]),
         .testTarget(
             name: "LauncherUITests",
