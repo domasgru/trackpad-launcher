@@ -61,8 +61,15 @@ public enum Haptic: Sendable { case gesture, lightTick }
 @MainActor public protocol SystemActions: AnyObject {
     /// Bring to front: launch, or unhide / restore / reopen / activate exactly like a Dock click.
     func bringToFront(_ app: AppEntry)
+    /// Hides every running app with a Dock icon whose bundle identifier differs from `app` (every copy of `app` stays),
+    /// on every display and Space, full-screen apps included; menu bar apps stay. Trackpad Launcher itself is included
+    /// while its Dock icon shows (its settings window is open), unless it is `app`. Idempotent; needs no permission;
+    /// returns at once. Nothing hides until `app` is active and no longer hidden, whichever comes last, and within about
+    /// 3 s or not at all; a later call replaces the goal and hides whatever this one had not. Hides that do not land are
+    /// sent again within about half a second, while `app` stays in front.
+    func hideOtherApps(than app: BundleID)
     /// The apps the next launch animations and launch bounces may be for. Each call replaces the previous set. Readies
-    /// whatever a later `playLaunchAnimation` or `bringToFrontBouncing` for one of them needs now, so that call does no
+    /// whatever a later `playLaunchAnimation` or `bringToFrontWatching` for one of them needs now, so that call does no
     /// slow work.
     func prepareLaunchAnimations(for apps: [AppEntry])
     /// For an app with a process. Returns at once. Reads the pointer, the displays and Reduce motion at the moment of the
@@ -71,17 +78,20 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// Nothing it shows activates Trackpad Launcher, becomes key or receives a click.
     func playLaunchAnimation(for app: AppEntry)
 
-    // A gesture that launches its app shows the launch bounce.
+    // A gesture that launches its app watches the launch.
     //
-    // The model decides everything: which visual a gesture gets, which bounces are live (keyed by bundle ID) and how
-    // each one ends. The SystemActions adapter shows each bounce, watches its launch, keeps its time, and reports
-    // LaunchProgress through `onLaunchProgress`. A report for an app with no live bounce does nothing.
+    // The model decides everything: which visual a gesture gets, which launches are watched (keyed by bundle ID), how
+    // each one ends and whether the others hide after it. The SystemActions adapter watches each launch, shows its
+    // bounce when asked, keeps its time, and reports LaunchProgress through `onLaunchProgress`. A report for an app
+    // whose launch is not watched does nothing.
     //
-    //   fire, no process:      system.bringToFrontBouncing(app, cap: 10 s)   // opens the app first, then the bounce
-    //   .finishedLaunching:    system.limitLaunchBounce(of: id, to: 2 s)
-    //   .windowShown:          system.endLaunchBounce(of: id, with: .launchAnimation)
-    //   .wentNowhere:          system.endLaunchBounce(of: id, with: .quietFade)
-    //   .ranOut:               either ending, by how far the launch got
+    //   fire, no process:      system.bringToFrontWatching(app, cap: 10 s, bouncing: the launch animation setting)
+    //                                                                   // opens the app first, then the watch
+    //   .finishedLaunching:    system.limitLaunch(of: id, to: 2 s)
+    //   .windowShown:          system.endLaunch(of: id, with: .launchAnimation), then, when the gesture's hide setting
+    //                          was on and the app is frontmost, system.hideOtherApps(than: id)
+    //   .wentNowhere:          system.endLaunch(of: id, with: .quietFade)
+    //   .ranOut:               either ending, by how far the launch got; never a hide
     //
     // Time is the adapter's: `.ranOut` arrives at the cap, or at the limit set once the app finished launching,
     // whichever comes first. Tests push it like any other report.
@@ -90,26 +100,28 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// `runningApps()`, not the ⌘-Tab list. Under 0.1 ms; reads only.
     func hasProcess(_ app: BundleID) -> Bool
 
-    /// Bring to front for an app with no process, with its launch bounce. Opens the app exactly as `bringToFront`
-    /// does, first, so the bounce never delays it; then, before returning, shows its icon bouncing just above the
-    /// pointer and following it, in one row with any other bounce, newest on the right. Watches that launch and pushes
-    /// `onLaunchProgress` for it until `endLaunchBounce`, `.ranOut` at `cap` at the latest. Reads the pointer, the
-    /// displays, Reduce motion and the tuning at the call. Nothing it shows activates Trackpad Launcher, becomes key or
-    /// receives a click. A bounce it cannot show runs out on the next main-actor turn. One bounce per app: for an app
-    /// whose bounce still plays it only brings the app to front.
-    func bringToFrontBouncing(_ app: AppEntry, cap: Duration)
+    /// Bring to front for an app with no process, watching its launch. Opens the app exactly as `bringToFront` does,
+    /// first, so the watch never delays it; then watches that launch and pushes `onLaunchProgress` for it until
+    /// `endLaunch`, `.ranOut` at `cap` at the latest. When `bouncing`, also, before returning, shows its icon bouncing
+    /// just above the pointer and following it, in one row with any other bounce, newest on the right; it reads the
+    /// pointer, the displays, Reduce motion and the tuning at the call, and nothing it shows activates Trackpad
+    /// Launcher, becomes key or receives a click. With no display to bounce on, the watch runs as usual and only the
+    /// icon is missing. When not bouncing, nothing shows. One watch per app: for an app whose launch is watched it only
+    /// brings the app to front.
+    func bringToFrontWatching(_ app: AppEntry, cap: Duration, bouncing: Bool)
 
-    /// From now on the bounce runs out within `limit` at the latest; never later than its cap or an earlier limit.
-    /// No-op for an app whose bounce is not playing.
-    func limitLaunchBounce(of app: BundleID, to limit: Duration)
+    /// From now on the launch's watch runs out within `limit` at the latest; never later than its cap or an earlier
+    /// limit. No-op for an app whose launch is not watched.
+    func limitLaunch(of app: BundleID, to limit: Duration)
 
-    /// Ends the bounce from wherever the icon is, stops watching its launch and pushes nothing more for it; the icon no
-    /// longer follows the pointer, and the others close up over about 0.2 s. Once the last bounce has ended nothing of
-    /// ours remains: no row panel, no monitor, no observer. Idempotent: a no-op for an app whose bounce is not playing.
-    func endLaunchBounce(of app: BundleID, with ending: LaunchBounceEnding)
+    /// Stops watching the launch and its clock and pushes nothing more for it. When its bounce shows, ends it from
+    /// wherever the icon is with `ending`: the icon no longer follows the pointer, and the others close up over about
+    /// 0.2 s; otherwise ignores `ending`. Once the last watch has ended nothing of ours remains: no row panel, no
+    /// monitor, no observer. Idempotent: a no-op for an app whose launch is not watched.
+    func endLaunch(of app: BundleID, with ending: LaunchBounceEnding)
 
-    /// On the main actor, only for an app whose bounce plays: `.finishedLaunching` at most once, then at most one of
-    /// the others before `endLaunchBounce`. Nothing for a launch Trackpad Launcher did not start.
+    /// On the main actor, only for an app whose launch is watched: `.finishedLaunching` at most once, then at most one
+    /// of the others before `endLaunch`. Nothing for a launch Trackpad Launcher did not start.
     var onLaunchProgress: (@MainActor (BundleID, LaunchProgress) -> Void)? { get set }
 
     /// The active app and the ⌘-Tab apps, read now from their one source of truth.

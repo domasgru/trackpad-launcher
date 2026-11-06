@@ -4,12 +4,12 @@ import SwiftUI
 
 /// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges: the update card,
 /// while a newer version is known; the settings form, a SwiftUI grouped Form drawn as System Settings draws one, its
-/// sections the five gesture rows and the Animate app launch switch, the switcher section, and the thumb corner row;
-/// the notices, while any applies, 10 pt apart: the no trackpad notice or the tap-bound settings notice, the
-/// Accessibility hint and the screen recording hint, one rounded group each; then *Quit Trackpad Launcher* and *Close*,
-/// aligned right. The form keeps the system's own fonts, insets and controls, and every row of the form is 46 pt tall
-/// (`formRowContent()`). The illustrations are 45 × 28 pt. The guide naming the two marks sits over the first
-/// illustration for the top-left corner only, where its arrows meet the thumb.
+/// sections the five gesture rows and the Animate app launch switch, the switcher section, and the thumb corner row
+/// with the Hide background apps switch below it; the notices, while any applies, 10 pt apart: the no trackpad notice
+/// or the tap-bound settings notice, the Accessibility hint and the screen recording hint, one rounded group each; then
+/// *Quit Trackpad Launcher* and *Close*, aligned right. The form keeps the system's own fonts, insets and controls, and
+/// every row of the form is 46 pt tall (`formRowContent()`). The illustrations are 45 × 28 pt. The guide naming the two
+/// marks sits over the first illustration for the top-left corner only, where its arrows meet the thumb.
 struct SettingsView: View {
     let launcher: Launcher
     let updater: Updater?
@@ -58,7 +58,16 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
                 }
                 Section { SwitcherSection(launcher: launcher) }
-                Section { ThumbCornerRow(launcher: launcher) }
+                Section {
+                    ThumbCornerRow(launcher: launcher)
+                    Toggle(
+                        isOn: Binding(
+                            get: { launcher.isHideBackgroundAppsOn }, set: { launcher.setHideBackgroundApps(on: $0) })
+                    ) {
+                        Text("Hide background apps").formRowContent()
+                    }
+                    .toggleStyle(.switch)
+                }
             }
             .formStyle(.grouped)
             .scrollDisabled(true)

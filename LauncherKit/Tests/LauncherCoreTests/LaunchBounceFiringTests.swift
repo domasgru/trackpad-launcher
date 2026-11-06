@@ -20,7 +20,7 @@ import LauncherCore
         let world = world([("Figma", .two)])
         world.launcher.openedByHand()
         var feedbackWhenBouncing: [TrackpadID]?
-        world.system.onBringToFrontBouncing = { [unowned world] in feedbackWhenBouncing = world.hardware.feedback }
+        world.system.onBringToFrontWatching = { [unowned world] in feedbackWhenBouncing = world.hardware.feedback }
 
         world.tap(2)
 
@@ -77,7 +77,7 @@ import LauncherCore
         world.system.report(.ranOut, for: World.bundleID("Figma"))
         world.system.report(.wentNowhere, for: World.bundleID("Figma"))
 
-        #expect(world.system.bounceEndings.count == 1)
+        #expect(world.system.launchEndings.count == 1)
         #expect(world.system.bounces.isEmpty)
         #expect(world.system.launchAnimations.isEmpty)
     }
@@ -90,7 +90,7 @@ import LauncherCore
 
             world.report(.windowShown, for: "Figma")
 
-            #expect(world.system.bounceEndings == [.init(app: World.bundleID("Figma"), ending: .launchAnimation)])
+            #expect(world.system.launchEndings == [.init(app: World.bundleID("Figma"), ending: .launchAnimation)])
             #expect(world.system.launchAnimations.isEmpty, "the adapter plays the hand-off")
         }
     }
@@ -104,7 +104,7 @@ import LauncherCore
         #expect(world.system.bounces.first?.limits == [.seconds(2)])
 
         world.report(.ranOut, for: "Bartender")
-        #expect(world.system.bounceEndings == [.init(app: World.bundleID("Bartender"), ending: .launchAnimation)])
+        #expect(world.system.launchEndings == [.init(app: World.bundleID("Bartender"), ending: .launchAnimation)])
     }
 
     @Test func aLaunchThatGoesNowhereOrRunsOutBeforeFinishingEndsWithAQuietFade() {
@@ -119,7 +119,7 @@ import LauncherCore
             for report in reports { world.report(report, for: "Figma") }
 
             #expect(
-                world.system.bounceEndings == [.init(app: World.bundleID("Figma"), ending: .quietFade)], "\(name)")
+                world.system.launchEndings == [.init(app: World.bundleID("Figma"), ending: .quietFade)], "\(name)")
             #expect(world.system.launchAnimations.isEmpty, "\(name)")
         }
     }
@@ -132,16 +132,16 @@ import LauncherCore
 
         world.report(.finishedLaunching, for: "Xcode")
         world.report(.ranOut, for: "Xcode")
-        #expect(world.system.bounceEndings == [.init(app: World.bundleID("Xcode"), ending: .launchAnimation)])
+        #expect(world.system.launchEndings == [.init(app: World.bundleID("Xcode"), ending: .launchAnimation)])
 
         let bounces = world.system.bounces
-        let endings = world.system.bounceEndings
+        let endings = world.system.launchEndings
         let launchAnimations = world.system.launchAnimations
         let broughtToFront = world.system.broughtToFront
         world.report(.windowShown, for: "Xcode")
         world.report(.windowShown, for: "Mail")
         #expect(world.system.bounces == bounces)
-        #expect(world.system.bounceEndings == endings)
+        #expect(world.system.launchEndings == endings)
         #expect(world.system.launchAnimations == launchAnimations)
         #expect(world.system.broughtToFront == broughtToFront)
     }
@@ -166,11 +166,11 @@ import LauncherCore
 
         world.report(.windowShown, for: "Slack")
 
-        #expect(world.system.bounceEndings == [.init(app: World.bundleID("Slack"), ending: .launchAnimation)])
+        #expect(world.system.launchEndings == [.init(app: World.bundleID("Slack"), ending: .launchAnimation)])
         #expect(world.system.bounces == bounced(world, "Xcode"))
 
         world.report(.ranOut, for: "Xcode")
-        #expect(world.system.bounceEndings.map(\.app) == [World.bundleID("Slack"), World.bundleID("Xcode")])
+        #expect(world.system.launchEndings.map(\.app) == [World.bundleID("Slack"), World.bundleID("Xcode")])
     }
 
     @Test(arguments: [false, true])
@@ -201,7 +201,7 @@ import LauncherCore
         #expect(world.system.broughtToFront.count == 2)
 
         world.report(.ranOut, for: "Bartender")
-        #expect(world.system.bounceEndings == [.init(app: World.bundleID("Bartender"), ending: .launchAnimation)])
+        #expect(world.system.launchEndings == [.init(app: World.bundleID("Bartender"), ending: .launchAnimation)])
     }
 
     @Test func aLiveBounceSilencesNoOtherGesture() {
@@ -217,7 +217,7 @@ import LauncherCore
         #expect(world.system.launchAnimations == [world.app("Arc")])
         #expect(world.system.broughtToFront.count == 3, "the bounce's app, the gesture's app and the swap's app")
         #expect(world.system.bounces == bounced(world, "Figma"))
-        #expect(world.system.bounceEndings.isEmpty)
+        #expect(world.system.launchEndings.isEmpty)
         #expect(world.system.bounces.first?.limits == [])
     }
 }

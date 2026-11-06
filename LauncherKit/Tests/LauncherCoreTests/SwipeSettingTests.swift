@@ -3,7 +3,7 @@ import LauncherCore
 
 @MainActor @Suite struct SwipeSettingTests {
     private func nothingHappened(_ world: World) -> Bool {
-        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty && world.system.bounces.isEmpty
+        world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.system.launchAnimations.isEmpty && world.system.bounces.isEmpty && world.system.hidesOthers.isEmpty
     }
 
     @Test func turningTheSwipeOffShowsNoSwitcherAndKeepsTheWindowOpen() {

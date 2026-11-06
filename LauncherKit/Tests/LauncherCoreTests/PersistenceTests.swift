@@ -499,6 +499,7 @@ import LauncherCore
         settings.isSwapOn = false
         settings.isWindowSwipeOn = true
         settings.hasAskedForScreenRecording = true
+        settings.isHideBackgroundAppsOn = true
         #expect(settings != Settings())
 
         world.store.save(settings)
@@ -511,7 +512,7 @@ import LauncherCore
     /// format released builds write. It predates the swap and window swipe keys, so it also proves an upgrade takes both defaults:
     /// the swap on, the window swipe off. The paths live under `/tl-fixture`, which no Mac has, so each app
     /// resolves through the world's registry and never through whatever this machine has installed.
-    private static let savedSettings = """
+    static let savedSettings = """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
         <plist version="1.0">

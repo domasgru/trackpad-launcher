@@ -3,10 +3,9 @@ import LauncherCore
 import QuartzCore
 
 /// Shows launch bounces. Every bouncing icon sits in one row above the pointer, in one display-sized click-through
-/// panel on the pointer's display. Core Animation plays the bounce. Each bounce carries its own deadlines (1→1 opacity
-/// animations on its clock layer), which pass on the render server's clock and die with the bounce. An ending lifts
-/// the icon out of the row into its own panel. Once the row is empty and the last ending's completion has run, nothing
-/// of ours runs.
+/// panel on the pointer's display. Core Animation plays the bounce. Time is not here: a bounce plays until `end`, and
+/// the launch's watch owns the limits that end it. An ending lifts the icon out of the row into its own panel. Once the
+/// row is empty and the last ending's completion has run, nothing of ours runs.
 @MainActor final class BounceOverlay {
     private let launchOverlay: LaunchOverlay
     /// The pointer and the displays, read at each start. `ScreenRead.now` in the app.
@@ -17,7 +16,6 @@ import QuartzCore
     private var stage: RowStage?
     /// Quiet-fade panels, kept until their fade's completion (AppKit keeps closed panels in its window list).
     private var fading: Set<NSPanel> = []
-    private var deadlineCount = 0
     /// The pointer-move monitors, which exist only while the row is not empty.
     private var monitors: [Any] = []
 
@@ -36,11 +34,6 @@ import QuartzCore
         let slot: CALayer
         /// Anchor at its bottom centre; plays `BounceMotion` forever.
         let icon: CALayer
-        /// Zero-size; carries the deadlines.
-        let clock: CALayer
-        var deadlines: [Deadline]
-        /// Called once, by the first deadline to pass; nil after.
-        var ranOut: (@MainActor () -> Void)?
     }
 
     init(launchOverlay: LaunchOverlay, screen: @escaping @MainActor () -> ScreenRead) {
@@ -48,7 +41,8 @@ import QuartzCore
         self.screen = screen
     }
 
-    func start(_ app: AppEntry, cap: Duration, ranOut: @escaping @MainActor () -> Void) {
+    /// Starts the bounce of `app`. When there is no display to bounce on, there is no bounce and nothing else happens.
+    func start(_ app: AppEntry) {
         guard !row.contains(where: { $0.app.bundleID == app.bundleID }) else { return }
         let tuning = LaunchTuning.current
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || tuning.forceReduceMotion
@@ -57,10 +51,7 @@ import QuartzCore
         let before = stage?.display
         guard let layout = Self.layout(count: row.count + 1, read, tuning),
               let stage = stage(on: layout.display)
-        else {
-            Task { @MainActor in ranOut() }
-            return
-        }
+        else { return }
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -77,15 +68,9 @@ import QuartzCore
             guard let keyPath = animation.keyPath else { continue }
             icon.add(animation, forKey: keyPath)
         }
-        let clock = CALayer()
         slot.addSublayer(icon)
-        slot.addSublayer(clock)
 
-        let id = app.bundleID
-        var bouncing = Bouncing(
-            app: app, tuning: tuning, reduceMotion: reduceMotion, slot: slot, icon: icon, clock: clock, deadlines: [],
-            ranOut: ranOut)
-        bouncing.deadlines.append(deadline(on: clock, after: cap) { [weak self] in self?.runOut(id) })
+        let bouncing = Bouncing(app: app, tuning: tuning, reduceMotion: reduceMotion, slot: slot, icon: icon)
         stage.host.addSublayer(slot)
         let others = row
         row.append(bouncing)
@@ -94,32 +79,9 @@ import QuartzCore
         CATransaction.commit()
     }
 
-    func limit(_ app: BundleID, to limit: Duration) {
-        guard let index = row.firstIndex(where: { $0.app.bundleID == app }) else { return }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        let clock = row[index].clock
-        let added = deadline(on: clock, after: limit) { [weak self] in self?.runOut(app) }
-        row[index].deadlines.append(added)
-        CATransaction.commit()
-    }
-
-    /// Calls `passed` once `wait` has passed on the bounce's clock, unless the bounce has ended by then. Nothing when
-    /// the app has no bounce.
-    func after(_ wait: Duration, in app: BundleID, _ passed: @escaping @MainActor () -> Void) {
-        guard let index = row.firstIndex(where: { $0.app.bundleID == app }) else { return }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        let added = deadline(on: row[index].clock, after: wait, passed: passed)
-        row[index].deadlines.append(added)
-        CATransaction.commit()
-    }
-
     func end(_ app: BundleID, with ending: LaunchBounceEnding) {
         guard let index = row.firstIndex(where: { $0.app.bundleID == app }) else { return }
         let bouncing = row.remove(at: index)
-        // Before the layer leaves: removing an animated layer stops its deadlines at the next commit.
-        bouncing.deadlines.forEach { $0.isCancelled = true }
         let read = screen()
         let display = stage?.display
         let side = CGFloat(bouncing.tuning.iconSide)
@@ -162,17 +124,16 @@ import QuartzCore
     }
 
     #if DEBUG
-    /// Bounces `app` at the pointer until `stopPreview`. Called again while it bounces, it restarts the bounce with the
-    /// tuning now current, in place, with no ending.
+    /// Bounces `app` at the pointer until `stopPreview`, with no deadline. Called again while it bounces, it restarts the
+    /// bounce with the tuning now current, in place, with no ending.
     func preview(_ app: AppEntry) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         if let index = row.firstIndex(where: { $0.app.bundleID == app.bundleID }) {
             let bouncing = row.remove(at: index)
-            bouncing.deadlines.forEach { $0.isCancelled = true }
             bouncing.slot.removeFromSuperlayer()
         }
-        start(app, cap: .seconds(24 * 60 * 60)) { [weak self] in self?.end(app.bundleID, with: .launchAnimation) }
+        start(app)
         if row.isEmpty {
             unfollow()
             stage?.panel.close()
@@ -186,12 +147,6 @@ import QuartzCore
         end(app.bundleID, with: .launchAnimation)
     }
     #endif
-
-    private func runOut(_ app: BundleID) {
-        guard let index = row.firstIndex(where: { $0.app.bundleID == app }), let ranOut = row[index].ranOut else { return }
-        row[index].ranOut = nil
-        ranOut()
-    }
 
     /// Keeps the row above the pointer: passive monitors of moves and drags, read only while a bounce shows. The global
     /// one does not see events sent to our own windows, so the local one covers those.
@@ -335,39 +290,5 @@ import QuartzCore
         let motion = BounceMotion(tuning: bouncing.tuning.bounce, reduceMotion: bouncing.reduceMotion)
         frozen.add(motion.quietFade(from: opacity), forKey: "fade")
         CATransaction.commit()
-    }
-
-    /// One deadline on `clock`: a 1→1 opacity animation of `duration`, whose stop is the push.
-    private func deadline(
-        on clock: CALayer, after duration: Duration, passed: @escaping @MainActor () -> Void
-    ) -> Deadline {
-        let deadline = Deadline(passed: passed)
-        let animation = CABasicAnimation(keyPath: "opacity")
-        animation.fromValue = Float(1)
-        animation.toValue = Float(1)
-        animation.duration = duration.seconds
-        animation.delegate = deadline
-        deadlineCount += 1
-        clock.add(animation, forKey: "deadline-\(deadlineCount)")
-        return deadline
-    }
-
-    /// A deadline on the render server's clock. A cancelled one reports nothing. A stop the system causes
-    /// (`finished == false`, not cancelled) reports as passed, so no bounce can outlive its cap. Internal, so a test can
-    /// drive its stop rule directly.
-    @MainActor final class Deadline: NSObject, CAAnimationDelegate {
-        var isCancelled = false
-        let passed: @MainActor () -> Void
-        init(passed: @escaping @MainActor () -> Void) { self.passed = passed }
-        nonisolated func animationDidStop(_ animation: CAAnimation, finished: Bool) {
-            MainActor.assumeIsolated { if !isCancelled { passed() } }
-        }
-    }
-}
-
-extension Duration {
-    /// Whole and fractional seconds.
-    var seconds: Double {
-        Double(components.seconds) + Double(components.attoseconds) / 1e18
     }
 }

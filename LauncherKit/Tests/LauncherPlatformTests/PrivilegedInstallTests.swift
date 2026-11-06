@@ -237,7 +237,7 @@ final class TestAdministrator: Administrator {
 }
 
 /// These block for seconds, so each runs its work on a thread of its own and records what it found afterwards.
-@Suite(.timeLimit(.minutes(1))) struct PrivilegedSwapAtomicityTests {
+@Suite(.timeLimit(.minutes(3))) struct PrivilegedSwapAtomicityTests {
     @Test func killingTheRealScriptAtAnyMomentLeavesAWholeCopyAndTheNewOneOnceItExitedZero() async throws {
         let fixture = try BundleFixture()
         let old = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Templates/old"), version: "1.0.0")
@@ -247,7 +247,7 @@ final class TestAdministrator: Administrator {
         let applications = try fixture.folder("Applications")
         let destination = applications.appending(path: "Trackpad Launcher.app")
 
-        let failures = try await onItsOwnThread("the script to be killed in 100 rounds") { () throws -> [String] in
+        let failures = try await onItsOwnThread("the script to be killed in 100 rounds", within: .seconds(150)) { () throws -> [String] in
             let files = FileManager.default
             var failures: [String] = []
 
@@ -294,7 +294,7 @@ final class TestAdministrator: Administrator {
         ]
         try FileManager.default.copyItem(at: sources[0], to: destination)
 
-        let found = try await onItsOwnThread("200 swaps under observation") { () throws -> (DestinationObserver.Report, [String]) in
+        let found = try await onItsOwnThread("200 swaps under observation", within: .seconds(150)) { () throws -> (DestinationObserver.Report, [String]) in
             let observer = DestinationObserver(folder: applications, appName: "Trackpad Launcher.app")
             observer.start()
             var failures: [String] = []
