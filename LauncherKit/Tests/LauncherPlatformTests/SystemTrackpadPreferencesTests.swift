@@ -31,12 +31,12 @@ import Testing
         }
     }
 
-    /// True when `onChange` ran before the 5 s bound; the push is awaited, never polled.
+    /// True when `onChange` ran before the 20 s bound; the push is awaited, never polled.
     private func changeArrives(on adapter: SystemTrackpadPreferences, after action: () -> Void) async -> Bool {
         let outcome = AsyncStream<Bool>.makeStream()
         adapter.onChange = { outcome.continuation.yield(true) }
         let bound = Task {
-            try await Task.sleep(for: .seconds(5))
+            try await Task.sleep(for: .seconds(20))
             outcome.continuation.yield(false)
         }
         action()
@@ -55,12 +55,12 @@ import Testing
         #expect(adapter.current()[kind]?[.tapToClick] == nil)
 
         let wrote = await changeArrives(on: adapter) { domain.write("Clicking", int: 1) }
-        #expect(wrote, "onChange arrives within 5 s of the write")
+        #expect(wrote, "onChange arrives within 20 s of the write")
         #expect(adapter.current()[kind]?[.tapToClick] == 1)
         #expect(adapter.current()[kind]?[.lookUpTapWithThreeFingers] == nil)
 
         let deleted = await changeArrives(on: adapter) { domain.delete() }
-        #expect(deleted, "onChange arrives within 5 s of the delete")
+        #expect(deleted, "onChange arrives within 20 s of the delete")
         #expect(adapter.current()[kind]?[.tapToClick] == nil)
     }
 

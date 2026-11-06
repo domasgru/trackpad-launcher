@@ -37,12 +37,20 @@ import Testing
     }
 
     @Test(.enabled(if: orderResolves, "The private LaunchServices order does not resolve on this Mac"))
-    func theOrderHoldsEveryDockAppNamedAsMacOSNamesItWithTheActiveAppFirst() throws {
+    func theOrderHoldsEveryDockAppNamedAsMacOSNamesItWithTheActiveAppFirst() async throws {
         let reader = RunningAppsReader()
         #expect(!reader.isTrackingActivations)
-        let before = Self.dockApps()
-        let read = reader.read()
-        let after = Self.dockApps()
+        var before = Self.dockApps()
+        var read = reader.read()
+        var after = Self.dockApps()
+        // Another app launching or quitting reaches the reader first: NSWorkspace's list changes only as the main run
+        // loop turns. So a difference gets a few turns of the loop to settle; one that stays is the reader's.
+        for _ in 0..<20 where Set(read.apps.map(Self.identity)) != Set(before.map(Self.identity)) {
+            try? await Task.sleep(for: .milliseconds(100))
+            before = Self.dockApps()
+            read = reader.read()
+            after = Self.dockApps()
+        }
         guard Set(before.map(Self.identity)) == Set(after.map(Self.identity)) else { return }
 
         #expect(Set(read.apps.map(Self.identity)) == Set(before.map(Self.identity)))

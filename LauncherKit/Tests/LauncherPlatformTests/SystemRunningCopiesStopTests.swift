@@ -17,6 +17,15 @@ import Testing
 
     private static func isGone(_ pid: pid_t) -> Bool { kill(pid, 0) == -1 && errno == ESRCH }
 
+    /// What the kernel and LaunchServices each say of `pids`: a stop that never completes reads differently when the
+    /// copies are alive than when they are gone and the exit was not reported.
+    private static func states(of pids: Set<pid_t>) -> String {
+        pids.sorted().map { pid in
+            let terminated = NSRunningApplication(processIdentifier: pid).map { "\($0.isTerminated)" } ?? "not listed"
+            return "pid \(pid): gone \(isGone(pid)), isTerminated \(terminated)"
+        }.joined(separator: "; ")
+    }
+
     private static func waitUntil(_ limit: Duration, _ condition: @MainActor () -> Bool) async -> Bool {
         let deadline = ContinuousClock.now + limit
         while !condition() {
@@ -66,7 +75,7 @@ import Testing
                 }
             }
         }
-        try #require(completed != nil)
+        try #require(completed != nil, "\(Self.states(of: pids))")
         for pid in pids {
             #expect(await Self.waitUntil(.seconds(2)) { Self.isGone(pid) }, "pid \(pid) is gone")
         }
