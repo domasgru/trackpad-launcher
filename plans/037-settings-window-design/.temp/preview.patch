@@ -1,0 +1,53 @@
+diff --git a/TrackpadLauncher/TrackpadLauncherApp.swift b/TrackpadLauncher/TrackpadLauncherApp.swift
+index d3c2859..8ba6d71 100644
+--- a/TrackpadLauncher/TrackpadLauncherApp.swift
++++ b/TrackpadLauncher/TrackpadLauncherApp.swift
+@@ -3,6 +3,22 @@ import LauncherCore
+ import LauncherPlatform
+ import LauncherUI
+ 
++/// Preview only, never committed: answers a release check three seconds after the window opens.
++final class PreviewReleases: ReleaseList {
++    func fetch(then done: @escaping @MainActor ([Release]) -> Void) {
++        let release = Release(
++            version: Version(9, 9, 9), minimumMacOS: Version(26), archive: URL(filePath: "/nonexistent"), archiveSize: 1)
++        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { MainActor.assumeIsolated { done([release]) } }
++    }
++}
++
++/// Preview only, never committed: does nothing.
++final class PreviewInstaller: UpdateInstaller {
++    func update(to release: Release, events: @escaping @MainActor (UpdateEvent) -> Void) {}
++    func cancelDownload() {}
++    func openNewVersion(then started: @escaping @MainActor (Bool) -> Void) {}
++}
++
+ @main
+ enum TrackpadLauncherApp {
+     static func main() {
+@@ -44,6 +60,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
+     /// is `InstalledRelease.init?`, which the tests call too. `developerIDSigner()` takes no arguments, so
+     /// `--as-release-build` cannot fake it.
+     private func makeUpdater(placement: Placement, location: Location) -> Updater? {
++        if CommandLine.arguments.contains("--preview-update"),
++           let installed = InstalledRelease(
++               placement: .installed, developerIDSigned: true, version: Version(1, 0, 0), macOS: ThisCopy.macOS()) {
++            return Updater(installed, releases: PreviewReleases(), installer: PreviewInstaller())
++        }
+         let signer = CodeSignature.developerIDSigner()
+         guard
+             let installed = InstalledRelease(
+@@ -80,7 +101,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
+         let catalog = AppCatalog.system
+         let actions = WorkspaceActions()
+         let launcher = Launcher(
+-            hardware: MultitouchTrackpads(), preferences: SystemTrackpadPreferences(), permissions: SystemPermissions(),
++            hardware: MultitouchTrackpads(), preferences: SystemTrackpadPreferences(),
++            permissions: CommandLine.arguments.contains("--preview-permissions")
++                ? SystemPermissions(
++                    trusted: { FileManager.default.fileExists(atPath: "/tmp/tl-preview-accessibility") },
++                    capturing: { FileManager.default.fileExists(atPath: "/tmp/tl-preview-screen") })
++                : SystemPermissions(),
+             system: actions, catalog: catalog, scanner: SystemAppScanner(catalog: catalog),
+             store: SettingsStore(defaults: .standard), startAtLogin: startAtLogin, updater: updater)
+         shell = SettingsShell(launcher: launcher, updater: updater, quit: { [unowned self] in lifecycle.quit() })

@@ -11,6 +11,8 @@ import Testing
         #expect(turn.toValue as? Double == 2 * Double.pi, sourceLocation: sourceLocation)
         #expect(turn.duration == 30, sourceLocation: sourceLocation)
         #expect(turn.repeatCount == .infinity, sourceLocation: sourceLocation)
+        // The bench's window is never ordered in, so it cannot see this one: see the comment in `GearView`.
+        #expect(turn.isRemovedOnCompletion == false, sourceLocation: sourceLocation)
         #expect(turn.timingFunction == CAMediaTimingFunction(name: .linear), sourceLocation: sourceLocation)
         #expect(CATransform3DIsIdentity(bench.view.gearLayer.transform), sourceLocation: sourceLocation)
         #expect(bench.view.layer?.animationKeys() == nil, sourceLocation: sourceLocation)

@@ -91,6 +91,9 @@ final class GearView: NSView {
             turn.timingFunction = CAMediaTimingFunction(name: .linear)
             turn.repeatCount = .infinity
             turn.duration = Self.period
+            // Not a no-op, though the turn never completes: without it the real settings window opens with the gear
+            // still. A window that is never ordered in, as in the tests, keeps the turn either way.
+            turn.isRemovedOnCompletion = false
             gearLayer.add(turn, forKey: Self.animationKey)
         }
     }
