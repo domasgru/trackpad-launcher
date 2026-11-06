@@ -28,6 +28,7 @@
 #                                          stapler and Team ID checks are only reported; in the full
 #                                          release they are fatal. The bundle identifier check is fatal
 #                                          in both
+#   Scripts/release.sh --feed-only <version> write and publish the feed item of an already published release
 set -euo pipefail
 
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
@@ -47,6 +48,8 @@ BACKGROUND="$ROOT/Scripts/release/dmg-background.png"
 DMG="$OUT/$PROJECT_NAME.dmg"
 REPOSITORY="domasgru/trackpad-launcher"
 VERSION_FILE="$ROOT/Config/Version.xcconfig"
+FEED="$ROOT/appcast.xml"
+SPARKLE_BIN="$ROOT/LauncherKit/.build/artifacts/sparkle/Sparkle/bin"
 NOTARY_PROFILE="${NOTARY_PROFILE:-trackpad-launcher}"
 # True from the version commit until it is pushed: should the script stop in between, the commit is undone.
 UNPUSHED_BUMP=false
@@ -133,6 +136,11 @@ preflight_checkout() {
     fail "notarytool cannot use keychain profile '$NOTARY_PROFILE'; create it with 'xcrun notarytool store-credentials $NOTARY_PROFILE' or set NOTARY_PROFILE."
   command -v xcodegen >/dev/null ||
     fail "xcodegen is not on the PATH; install it (brew install xcodegen) and retry."
+  (cd "$ROOT/LauncherKit" && swift package --disable-keychain resolve) || fail "cannot resolve the package."
+  [ -x "$SPARKLE_BIN/sign_update" ] || fail "Sparkle's tools are missing from the resolved package."
+  [ "$("$SPARKLE_BIN/generate_keys" -p)" = "$(sed -n 's/^ *SUPublicEDKey: *//p' "$ROOT/project.yml")" ] ||
+    fail "the keychain's update key is not the one project.yml ships; import the backup with generate_keys -f."
+  xmllint --noout "$FEED" || fail "appcast.xml is not well-formed."
 
   git -C "$ROOT" fetch --quiet --tags origin || fail "cannot fetch origin."
   [ "$(git -C "$ROOT" branch --show-current)" = main ] || fail "check out main first; releases are made from main."
@@ -164,8 +172,23 @@ bump_version() {
   echo "Version $current → $next, build $build → $((build + 1)), committed on main (pushed just before publishing)."
 }
 
+# Refuses a build number that Sparkle would never offer: it must be above the feed's highest and the previous tag's.
+# The tag is checked as well, so an empty feed cannot bypass the check.
+preflight_build_number() {
+  local build highest tag tagged=""
+  build="$(read_setting CURRENT_PROJECT_VERSION)"
+  [[ "$build" =~ ^[0-9]{1,9}$ ]] || fail "CURRENT_PROJECT_VERSION '$build' is not a whole number."
+  highest="$(sed -n 's:.*<sparkle\:version>\([0-9]*\)</sparkle\:version>.*:\1:p' "$FEED" | sort -n | tail -1)"
+  [ "$build" -gt "${highest:-0}" ] || fail "build $build is not above the feed's $highest; Sparkle would never offer it."
+  tag="$(git -C "$ROOT" tag --list 'v*' | sort -V | tail -1)"
+  if [ -n "$tag" ]; then
+    tagged="$(git -C "$ROOT" show "$tag:Config/Version.xcconfig" | sed -n 's/^CURRENT_PROJECT_VERSION *= *//p')"
+    [ "$build" -gt "${tagged:-0}" ] || fail "build $build is not above $tag's $tagged."
+  fi
+}
+
 # Refuses to go on unless the version in Config/Version.xcconfig is above every earlier tag and release,
-# drafts included. Sets EXPECTED_VERSION.
+# drafts included, and the build number is above every earlier one. Sets EXPECTED_VERSION.
 preflight_version() {
   EXPECTED_VERSION="$(read_setting MARKETING_VERSION)"
   [[ "$EXPECTED_VERSION" =~ $NUMERIC ]] ||
@@ -179,6 +202,7 @@ preflight_version() {
   clash="$(printf '%s\n%s\n' "$tags" "$releases" | first_not_below "$EXPECTED_VERSION")"
   [ -z "$clash" ] ||
     fail "version $EXPECTED_VERSION is not above every earlier release ($clash exists); run 'release.sh patch' or raise Config/Version.xcconfig."
+  preflight_build_number
 }
 
 # Archives the app as the update asset, unpacks it as an older version will and checks the result. Sets AAR.
@@ -227,6 +251,9 @@ archive_and_check() {
   else
     $stapled || fail "the unpacked app has no valid stapled ticket."
     $signed || fail "the unpacked app is not signed by team $TEAM_ID."
+    # Sparkle's atomic swap needs its installer and the update on one team.
+    codesign -dv "$copy/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" 2>&1 |
+      grep -qx "TeamIdentifier=$TEAM_ID" || fail "Sparkle's installer is not signed by team $TEAM_ID."
   fi
   # The kernel stamps com.apple.provenance on files this process creates; it cannot be excluded, anything else can.
   [ -z "$(xattr -lr "$copy" | grep -v ': com.apple.provenance: ')" ] || fail "the unpacked app carries extended attributes."
@@ -315,6 +342,42 @@ APPLESCRIPT
   rm -f "$RW_DMG"
 }
 
+# Signs $AAR with the update key and renders the feed with its item for $EXPECTED_VERSION into $OUT/appcast.xml,
+# read from the sealed bundle $APP. The tree is untouched, so a failure here leaves it clean.
+write_feed() {
+  local attributes signature item plist="$APP/Contents/Info.plist" name
+  name="$(basename "$AAR")"
+  attributes="$("$SPARKLE_BIN/sign_update" "$AAR")" || fail "cannot sign the update with the update key."
+  signature="$(sed -n 's/.*edSignature="\([^"]*\)".*/\1/p' <<<"$attributes")"
+  "$SPARKLE_BIN/sign_update" --verify "$AAR" "$signature" || fail "the update's signature does not verify."
+  item="<item><title>$EXPECTED_VERSION</title>"
+  item+="<pubDate>$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')</pubDate>"
+  item+="<sparkle:version>$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")</sparkle:version>"
+  item+="<sparkle:shortVersionString>$EXPECTED_VERSION</sparkle:shortVersionString>"
+  item+="<sparkle:minimumSystemVersion>$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$plist")</sparkle:minimumSystemVersion>"
+  item+="<enclosure url=\"https://github.com/$REPOSITORY/releases/download/v$EXPECTED_VERSION/$name\" $attributes type=\"application/octet-stream\"/></item>"
+  # A version already in the feed is replaced, so --feed-only can run twice.
+  awk -v item="$item" -v version="<title>$EXPECTED_VERSION</title>" \
+    'index($0, version) { next } /<\/channel>/ { print item } { print }' "$FEED" > "$OUT/appcast.xml"
+  xmllint --noout "$OUT/appcast.xml" || fail "the feed is not well-formed."
+}
+
+# Commits and pushes the rendered feed. A rejected push is undone locally, so main still equals origin's and
+# --feed-only can run again.
+publish_feed() {
+  if cmp -s "$OUT/appcast.xml" "$FEED"; then
+    echo "The feed already lists $EXPECTED_VERSION; nothing to publish."
+    return
+  fi
+  local retry="v$EXPECTED_VERSION is published but the feed is not; run release.sh --feed-only $EXPECTED_VERSION."
+  cp "$OUT/appcast.xml" "$FEED"
+  git -C "$ROOT" add "$FEED" && git -C "$ROOT" commit --quiet -m "Feed $EXPECTED_VERSION" -- "$FEED" ||
+    { git -C "$ROOT" checkout --quiet HEAD -- "$FEED"; fail "cannot commit the feed. $retry"; }
+  git -C "$ROOT" push --quiet origin HEAD:main ||
+    { git -C "$ROOT" reset --quiet --keep HEAD~1; fail "cannot push the feed. $retry"; }
+  echo "Published the feed with $EXPECTED_VERSION."
+}
+
 if [ "${1:-}" = "--image-only" ]; then
   [ -n "${2:-}" ] || fail "usage: release.sh --image-only <path to Trackpad Launcher.app>"
   mkdir -p "$OUT"
@@ -332,14 +395,39 @@ if [ "${1:-}" = "--archive-only" ]; then
   exit 0
 fi
 
+if [ "${1:-}" = "--feed-only" ]; then
+  version="${2:-}"
+  [[ "$version" =~ $NUMERIC ]] || fail "usage: release.sh --feed-only <published version>"
+  preflight_checkout
+  EXPECTED_VERSION="$version"
+  mkdir -p "$OUT"
+  rm -f "$OUT/$ARCHIVE_PREFIX-$version-macOS-"*.aar
+  gh release download "v$version" --pattern '*.aar' --dir "$OUT" --repo "$REPOSITORY" ||
+    fail "cannot download the archive of v$version; is it published?"
+  archives=("$OUT/$ARCHIVE_PREFIX-$version-macOS-"*.aar)
+  { [ "${#archives[@]}" -eq 1 ] && [ -f "${archives[0]}" ]; } || fail "v$version has no single $ARCHIVE_PREFIX-$version-macOS-*.aar."
+  AAR="${archives[0]}"
+  unpacked="$(mktemp -d)"
+  aa extract -d "$unpacked" -i "$AAR"
+  APP="$unpacked/$ARCHIVED_BUNDLE_NAME"
+  [ -d "$APP" ] || fail "the archive does not unpack to $ARCHIVED_BUNDLE_NAME."
+  write_feed
+  publish_feed
+  rm -rf "$unpacked"
+  exit 0
+fi
+
 case "${1:-}" in
   "" | patch | minor | major) ;;
-  *) fail "usage: release.sh [patch|minor|major]   (or --image-only <app>, --archive-only <app>)" ;;
+  *) fail "usage: release.sh [patch|minor|major]   (or --image-only <app>, --archive-only <app>, --feed-only <version>)" ;;
 esac
 
 preflight_checkout
 "$ROOT/Scripts/test.sh" || fail "the tests fail; nothing was changed or published."
 [ -z "${1:-}" ] || bump_version "$1"
+# A failed publish can leave a draft nothing sees, and it would block this retry.
+[ "$(gh release view "v$(read_setting MARKETING_VERSION)" --repo "$REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null)" != true ] ||
+  gh release delete "v$(read_setting MARKETING_VERSION)" --repo "$REPOSITORY" --yes
 preflight_version
 
 rm -rf "$OUT"
@@ -413,6 +501,7 @@ spctl --assess --type open --context context:primary-signature -vv "$DMG"
 spctl --assess --type execute -vv "$APP"
 
 MIN_MACOS="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist")"
+write_feed
 if $UNPUSHED_BUMP; then
   git -C "$ROOT" push --quiet origin HEAD:main ||
     fail "cannot push the version commit to origin's main (did main move?); nothing was published."
@@ -422,5 +511,6 @@ gh release create "v$EXPECTED_VERSION" "$DMG" "$AAR" --repo "$REPOSITORY" --late
   --target "$(git -C "$ROOT" rev-parse HEAD)" \
   --title "Trackpad Launcher $EXPECTED_VERSION" --notes "Requires macOS $MIN_MACOS or later." ||
   fail "publishing v$EXPECTED_VERSION failed; main already holds its version, so run release.sh with no argument to retry."
+publish_feed
 echo "Release artifacts: $DMG $AAR"
 echo "Published v$EXPECTED_VERSION."
