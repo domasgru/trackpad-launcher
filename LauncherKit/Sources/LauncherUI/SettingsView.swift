@@ -2,15 +2,14 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges, the form's sections
-/// aside: the update card, while a newer version is known; the settings form, a SwiftUI grouped Form drawn as System
-/// Settings draws one, spanning the window's width inside its own side margins, its sections the five gesture rows and
-/// the Animate app launch switch, the switcher section, and the thumb corner row; the notices, while any applies, 10 pt
-/// apart: the no trackpad notice or the tap-bound settings notice, the Accessibility hint and the screen recording hint,
-/// one rounded group each; then *Quit Trackpad Launcher* and *Close*, aligned right. The form keeps the system's own
-/// fonts, insets and controls, and every row of the form is 46 pt tall (`formRowContent()`). The illustrations are
-/// 45 × 28 pt. The guide naming the two marks sits over the first illustration for the top-left corner only, where its
-/// arrows meet the thumb.
+/// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges: the update card,
+/// while a newer version is known; the settings form, a SwiftUI grouped Form drawn as System Settings draws one, its
+/// sections the five gesture rows and the Animate app launch switch, the switcher section, and the thumb corner row;
+/// the notices, while any applies, 10 pt apart: the no trackpad notice or the tap-bound settings notice, the
+/// Accessibility hint and the screen recording hint, one rounded group each; then *Quit Trackpad Launcher* and *Close*,
+/// aligned right. The form keeps the system's own fonts, insets and controls, and every row of the form is 46 pt tall
+/// (`formRowContent()`). The illustrations are 45 × 28 pt. The guide naming the two marks sits over the first
+/// illustration for the top-left corner only, where its arrows meet the thumb.
 struct SettingsView: View {
     let launcher: Launcher
     let updater: Updater?
@@ -18,15 +17,16 @@ struct SettingsView: View {
 
     /// The update card's and the notices' labels. The form keeps the system's own fonts.
     private static let labelFont = Font.system(size: 13, weight: .medium)
-    /// The window's edges to everything but the form, which spans the window's width.
+    /// The window's edges to the column's parts, the form's sections included.
     private static let inset: CGFloat = 16
     /// Between the column's parts: the update card, the form, the notices and the buttons.
     private static let partSpacing: CGFloat = 20
     /// Between two notices, as between the form's own sections.
     private static let noticeSpacing: CGFloat = 10
-    /// A grouped Form's own room above its first section and below its last: SwiftUI's, not exposed and not changed by
-    /// `contentMargins`, so measured in the settings window on macOS 26 (`plans/030-thumb-corner-popup-style`).
-    private static let formMargins = (top: CGFloat(20), bottom: CGFloat(20))
+    /// A grouped Form's own room around its sections: SwiftUI's and not exposed. `contentMargins` leaves the top and
+    /// bottom as they are and adds to the sides, so these are measured on macOS 26
+    /// (`plans/030-thumb-corner-popup-style`, `plans/036-settings-form-padding`).
+    private static let formMargins = (top: CGFloat(20), bottom: CGFloat(20), side: CGFloat(20))
 
     private var accessibilityButton: NoticeButton {
         NoticeButton(title: Copy.accessibilityButton) { actions.openSettings(.accessibility) }
@@ -44,7 +44,6 @@ struct SettingsView: View {
                     .font(Self.labelFont)
                     .padding(.horizontal, Self.inset)
             }
-            // The window's whole width: the form's own margins inset its sections.
             Form {
                 Section {
                     ForEach(launcher.rows) { row in
@@ -64,9 +63,10 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .scrollDisabled(true)
             .scrollContentBackground(.hidden)
-            // The column's spacing above and below the sections, not the form's own margins on top of it.
+            // The column's spacing and inset around the sections, in place of the form's own margins.
             .padding(.top, -Self.formMargins.top)
             .padding(.bottom, -Self.formMargins.bottom)
+            .padding(.horizontal, Self.inset - Self.formMargins.side)
             // Under its neighbours, so the margins it lays over them never cover or take their clicks.
             .zIndex(-1)
             if hasNotices {
