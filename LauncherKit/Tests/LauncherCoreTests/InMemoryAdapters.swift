@@ -568,6 +568,38 @@ final class EffectLog {
     var entries: [String] = []
 }
 
+/// Counts the engine's calls and records them in the shared log; a test pushes the events Sparkle would.
+@MainActor final class InMemoryUpdateEngine: UpdateEngine {
+    var log: EffectLog?
+    var onEvent: (@MainActor (UpdateEngineEvent) -> Void)?
+    private(set) var starts = 0
+    private(set) var checks = 0
+    private(set) var discards = 0
+    var armWorks = true
+
+    func start() {
+        starts += 1
+        log?.entries.append("engine start")
+    }
+
+    func check() {
+        checks += 1
+        log?.entries.append("check")
+    }
+
+    func discardHeldUpdate() {
+        discards += 1
+        log?.entries.append("discard")
+    }
+
+    func armRestart() -> Bool {
+        log?.entries.append("arm restart")
+        return armWorks
+    }
+
+    func push(_ event: UpdateEngineEvent) { onEvent?(event) }
+}
+
 /// Holds `done` until a row releases an outcome, and records its calls in the shared log.
 @MainActor final class InMemoryInstaller: Installer {
     var log: EffectLog?

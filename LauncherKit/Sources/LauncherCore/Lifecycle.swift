@@ -127,7 +127,7 @@ public final class Lifecycle {
     private enum Stage {
         case idle
         /// Other copies are stopping; nothing of ours senses yet.
-        case replacingOthers(opensWindow: Bool, eject: DiskImage?)
+        case replacingOthers(opening: Opening, opensWindow: Bool, eject: DiskImage?)
         case resident(Launcher)
         /// The move dialog is up; a resident keeps its gestures.
         case askingToMove(resident: Launcher?)
@@ -143,6 +143,7 @@ public final class Lifecycle {
     @ObservationIgnored private let installer: any Installer
     @ObservationIgnored private let startAtLogin: StartAtLogin
     @ObservationIgnored private let makeResident: @MainActor () -> Launcher
+    @ObservationIgnored private let updater: Updater?
 
     /// The gesture model once it runs, including while a resident shows the dialog, moves or shows the failure; nil for
     /// a copy that only asks or is still stopping others.
@@ -165,13 +166,15 @@ public final class Lifecycle {
 
     public init(
         placement: Placement, copies: any RunningCopies, installer: any Installer, startAtLogin: StartAtLogin,
-        makeResident: @escaping @MainActor () -> Launcher
+        makeResident: @escaping @MainActor () -> Launcher, updater: Updater? = nil
     ) {
         self.placement = placement
         self.installer = installer
         self.copies = copies
         self.startAtLogin = startAtLogin
         self.makeResident = makeResident
+        self.updater = updater
+        updater?.onHandOver = { [unowned self] in handedOver() }
     }
 
     /// Once, from applicationDidFinishLaunching. A second call does nothing.
@@ -182,15 +185,18 @@ public final class Lifecycle {
         switch route {
         case .end: end()
         case .askToMove: stage = .askingToMove(resident: nil)
-        case .runSilently: replace(others, opensWindow: false, eject: launch.diskImageToEject)
-        case .runWithWindow: replace(others, opensWindow: true, eject: launch.diskImageToEject)
+        case .runSilently:
+            replace(others, opening: launch.opening, opensWindow: false, eject: launch.diskImageToEject)
+        case .runWithWindow:
+            replace(others, opening: launch.opening, opensWindow: true, eject: launch.diskImageToEject)
         }
     }
 
     /// From applicationShouldHandleReopen.
     public func openedAgain(_ opening: Opening) {
         switch (stage, Route(opening, placement: placement, olderCopyRuns: false)) {
-        case (.replacingOthers(_, let eject), .runWithWindow): stage = .replacingOthers(opensWindow: true, eject: eject)
+        case (.replacingOthers(let first, _, let eject), .runWithWindow):
+            stage = .replacingOthers(opening: first, opensWindow: true, eject: eject)
         case (.resident(let launcher), .runWithWindow): launcher.openedByHand()
         case (.resident(let launcher), .askToMove): stage = .askingToMove(resident: launcher)
         default: break
@@ -240,19 +246,27 @@ public final class Lifecycle {
     }
 
     /// The stage first: `stop` may call back before it returns.
-    private func replace(_ others: [RunningCopy], opensWindow: Bool, eject: DiskImage?) {
-        stage = .replacingOthers(opensWindow: opensWindow, eject: eject)
+    private func replace(_ others: [RunningCopy], opening: Opening, opensWindow: Bool, eject: DiskImage?) {
+        stage = .replacingOthers(opening: opening, opensWindow: opensWindow, eject: eject)
         copies.stop(others) { [unowned self] in othersExited() }
     }
 
+    /// The only place the updater starts, so a copy about to end, or asking to move, never reaches the network.
     private func othersExited() {
-        guard case .replacingOthers(let opensWindow, let eject) = stage else { return }
+        guard case .replacingOthers(let opening, let opensWindow, let eject) = stage else { return }
         let launcher = makeResident()
         launcher.start()
         stage = .resident(launcher)
         if opensWindow { launcher.openedByHand() }
         // The mover has exited, so its volume is free.
         if let eject { installer.eject(eject) }
+        updater?.start(watching: launcher, opening: opening)
+    }
+
+    /// `end()`, never `quit()`: starting at login stays as it is.
+    private func handedOver() {
+        guard case .resident = stage else { return }
+        end()
     }
 
     /// The order converges after a crash at any point: the swap inside `install` is the first change anywhere, the login

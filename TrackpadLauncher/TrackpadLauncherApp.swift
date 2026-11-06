@@ -35,8 +35,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lifecycle = Lifecycle(
             placement: placement, copies: SystemRunningCopies(), installer: ApplicationsInstaller(location: location),
             startAtLogin: startAtLogin,
-            makeResident: { [unowned self] in makeResident(startAtLogin) })
+            makeResident: { [unowned self] in makeResident(startAtLogin) },
+            updater: makeUpdater(placement: placement, location: location))
         moveDialog = MoveDialogPresenter(lifecycle: lifecycle)
+    }
+
+    /// The gate is a value only `UpdatableCopy.init?` can make, and `Updater` will not build without one.
+    private func makeUpdater(placement: Placement, location: Location) -> Updater? {
+        let signer = CodeSignature.developerIDSigner()
+        guard
+            let copy = UpdatableCopy(
+                placement: placement, developerIDSigned: signer != nil,
+                canReplaceItself: SparkleEngine.canReplace(location.running)),
+            let signer
+        else { return nil }
+        return Updater(copy, engine: SparkleEngine(bundle: location.running, signer: signer))
     }
 
     /// The open event exists only from here.

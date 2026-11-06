@@ -68,9 +68,9 @@ import LauncherCore
     @discardableResult
     func launch(
         _ opening: Opening, others: [RunningCopy] = [], alreadyExited: Set<RunningCopy> = [],
-        placement: Placement = .installed, diskImageToEject: DiskImage? = nil
+        placement: Placement = .installed, diskImageToEject: DiskImage? = nil, running: RunningBuild = .development
     ) -> OneProcess {
-        let process = OneProcess(mac: mac, placement: placement, log: log)
+        let process = OneProcess(mac: mac, placement: placement, running: running, log: log)
         process.installer.onEffect = { [unowned self] in snapshots.append(snapshot()) }
         process.installer.onInstalled = { [unowned self] in installedAt = snapshots.count }
         process.copies.listed = others
@@ -81,9 +81,19 @@ import LauncherCore
     }
 
     /// macOS at login: it starts a process, silently, only while the login item is on.
-    func login(others: [RunningCopy] = []) -> OneProcess? {
-        loginItem.isOn ? launch(.atLogin, others: others) : nil
+    func login(others: [RunningCopy] = [], running: RunningBuild = .development) -> OneProcess? {
+        loginItem.isOn ? launch(.atLogin, others: others, running: running) : nil
     }
+}
+
+/// What the process is: `.release` passes the gate wherever it lies, given placement; `.development` does not.
+struct RunningBuild {
+    var developerIDSigned: Bool
+    var canWrite: Bool
+
+    static let development = RunningBuild(developerIDSigned: false, canWrite: true)
+    static let release = RunningBuild(developerIDSigned: true, canWrite: true)
+    static func release(canWrite: Bool) -> RunningBuild { RunningBuild(developerIDSigned: true, canWrite: canWrite) }
 }
 
 @MainActor final class OneProcess {
@@ -108,15 +118,24 @@ import LauncherCore
     /// Kept apart from `lifecycle.launcher`, which is nil once the process is ending.
     private var resident: Launcher?
 
-    init(mac: World, placement: Placement, log: EffectLog) {
+    /// Nil when the gate lets this copy through nowhere.
+    let updater: Updater?
+    let engine = InMemoryUpdateEngine()
+
+    init(mac: World, placement: Placement, running: RunningBuild, log: EffectLog) {
         self.mac = mac
         copies.log = log
         installer.log = log
+        engine.log = log
         startAtLogin = mac.startAtLogin(placement: placement)
         hardware = InMemoryTrackpads(attached: [.macBook14])
+        let engine = self.engine
+        updater = UpdatableCopy(
+            placement: placement, developerIDSigned: running.developerIDSigned, canReplaceItself: running.canWrite
+        ).map { Updater($0, engine: engine) }
         lifecycle = Lifecycle(
             placement: placement, copies: copies, installer: installer, startAtLogin: startAtLogin,
-            makeResident: { [unowned self] in makeResident() })
+            makeResident: { [unowned self] in makeResident() }, updater: updater)
         copies.lifecycle = lifecycle
     }
 

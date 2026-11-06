@@ -94,7 +94,27 @@ import Testing
     ]
 
     static let neverDeclared: [Entry] = [
-        Entry(token: "NSSupportsSuddenTermination", rule: suddenTerminationRule)
+        Entry(token: "NSSupportsSuddenTermination", rule: suddenTerminationRule),
+        Entry(token: "SUEnableSystemProfiling", rule: "no system profile is ever sent"),
+        Entry(token: "SUEnableInstallerLauncherService", rule: "the XPC services stay unused"),
+        Entry(token: "SUEnableDownloaderService", rule: "the XPC services stay unused"),
+    ]
+
+    /// Keys the manifest must carry, and what their value must look like.
+    struct Declared: Sendable, CustomTestStringConvertible {
+        let key: String
+        let valuePrefix: String?
+        let valueSuffix: String?
+        var testDescription: String { key }
+    }
+
+    static let alwaysDeclared: [Declared] = [
+        Declared(key: "SUFeedURL", valuePrefix: "https://", valueSuffix: nil),
+        Declared(key: "SUPublicEDKey", valuePrefix: nil, valueSuffix: nil),
+        Declared(key: "SUEnableAutomaticChecks", valuePrefix: nil, valueSuffix: nil),
+        Declared(key: "SUAutomaticallyUpdate", valuePrefix: nil, valueSuffix: nil),
+        Declared(key: "SUVerifyUpdateBeforeExtraction", valuePrefix: nil, valueSuffix: nil),
+        Declared(key: "TLUpdateDownloads", valuePrefix: "https://", valueSuffix: "/"),
     ]
 
     /// Each permission API lives in exactly one file, the adapter that owns it. Any other hit fails.
@@ -109,6 +129,11 @@ import Testing
     static let confined: [Confined] = [
         Confined(
             token: "http", onlyIn: ["SparkleEngine.swift"], rule: "no address in Swift; only Sparkle's `httpHeaders`"),
+        Confined(token: "import Sparkle", onlyIn: ["SparkleEngine.swift"], rule: "the update engine is one file"),
+        Confined(token: "HTTPCookieStorage", onlyIn: ["SparkleEngine.swift"], rule: "cookies are refused where the engine starts"),
+        Confined(token: "URLCache", onlyIn: ["SparkleEngine.swift"], rule: "nothing is cached where the engine starts"),
+        Confined(token: "org.sparkle-project", onlyIn: ["SparkleEngine.swift"], rule: "Sparkle's private paths have one reader"),
+        Confined(token: "sparkle-updater", onlyIn: ["SparkleEngine.swift"], rule: "Sparkle's private job has one reader"),
         Confined(token: "Data(contentsOf:", onlyIn: ["Apps.swift", "CardContract.swift"], rule: "the one local-file reader; a URL read is a request"),
         Confined(token: "AXIsProcessTrusted", onlyIn: ["SystemPermissions.swift"], rule: "R9 one permission, one adapter"),
         Confined(token: "notify_register", onlyIn: ["SystemPermissions.swift"], rule: "R7 the trust push"),
@@ -231,6 +256,32 @@ import Testing
     func manifestNeverDeclares(_ entry: Entry) throws {
         let hits = try Self.scanManifest(in: Self.packageRoot.deletingLastPathComponent(), for: entry.token)
         #expect(hits.isEmpty, "\(entry.token) must not be declared (\(entry.rule)): \(hits)")
+    }
+
+    @Test(arguments: alwaysDeclared)
+    func manifestAlwaysDeclares(_ entry: Declared) throws {
+        let manifest = Self.packageRoot.deletingLastPathComponent()
+        let problems = try Self.declarationProblems(in: manifest, for: entry)
+        #expect(problems.isEmpty, "\(entry.key): \(problems)")
+    }
+
+    @Test func declarationScanFindsAMissingKeyAndAPlainHTTPValue() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-declared-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let manifest = "info:\n  properties:\n        SUFeedURL: http://example.com/appcast.xml\n        TLUpdateDownloads: https://example.com/x\n"
+        try Data(manifest.utf8).write(to: dir.appending(path: "project.yml"))
+
+        let missing = try Self.declarationProblems(
+            in: dir, for: Declared(key: "SUPublicEDKey", valuePrefix: nil, valueSuffix: nil))
+        let plain = try Self.declarationProblems(
+            in: dir, for: Declared(key: "SUFeedURL", valuePrefix: "https://", valueSuffix: nil))
+        let unterminated = try Self.declarationProblems(
+            in: dir, for: Declared(key: "TLUpdateDownloads", valuePrefix: "https://", valueSuffix: "/"))
+
+        #expect(missing == ["not declared"])
+        #expect(plain == ["value does not start with https://"])
+        #expect(unterminated == ["value does not end with /"])
     }
 
     @Test func manifestScanFindsAPlantedKey() throws {
@@ -373,6 +424,18 @@ import Testing
     /// Throws when `directory` holds no `project.yml`: a moved manifest must fail, not pass unscanned.
     private static func scanManifest(in directory: URL, for token: String) throws -> [String] {
         try hits(in: directory.appending(path: "project.yml"), for: token)
+    }
+
+    /// What is wrong with the `key: value` line of `project.yml`; empty when the key is declared as the entry asks.
+    private static func declarationProblems(in directory: URL, for entry: Declared) throws -> [String] {
+        let text = try String(contentsOf: directory.appending(path: "project.yml"), encoding: .utf8)
+        let lines = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard let line = lines.first(where: { $0.hasPrefix(entry.key + ":") }) else { return ["not declared"] }
+        let value = line.dropFirst(entry.key.count + 1).trimmingCharacters(in: .whitespaces)
+        var problems: [String] = []
+        if let prefix = entry.valuePrefix, !value.hasPrefix(prefix) { problems.append("value does not start with \(prefix)") }
+        if let suffix = entry.valueSuffix, !value.hasSuffix(suffix) { problems.append("value does not end with \(suffix)") }
+        return problems
     }
 
     private static func hits(in file: URL, for token: String) throws -> [String] {

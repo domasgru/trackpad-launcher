@@ -200,3 +200,18 @@ public enum Permission: Hashable, Sendable {
     /// Ejects it; returns at once. A file on it in use leaves it mounted.
     func eject(_ diskImage: DiskImage)
 }
+
+/// Sparkle, and the restart that follows it. No Sparkle type, feed value or version crosses this port.
+/// Real: SparkleEngine. Test: InMemoryUpdateEngine.
+@MainActor public protocol UpdateEngine: AnyObject {
+    var onEvent: (@MainActor (UpdateEngineEvent) -> Void)? { get set }
+    /// Makes no request before this call. Starts the 24-hour schedule.
+    func start()
+    /// One background check.
+    func check()
+    /// Stops the held update installing. Best effort, two layers; if both fail it installs at this process's end.
+    func discardHeldUpdate()
+    /// Arms the start of whichever version /Applications holds once this process has ended. The caller ends the
+    /// process in the same turn. False: nothing is armed.
+    func armRestart() -> Bool
+}
