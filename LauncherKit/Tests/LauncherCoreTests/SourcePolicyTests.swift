@@ -254,7 +254,10 @@ import Testing
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        #expect(throws: (any Error).self) { try Self.scanManifest(in: dir, for: "NSSupportsSuddenTermination") }
+        let error = #expect(throws: CocoaError.self) {
+            try Self.scanManifest(in: dir, for: "NSSupportsSuddenTermination")
+        }
+        #expect(error?.code == .fileReadNoSuchFile)
     }
 
     @Test(arguments: confined)
