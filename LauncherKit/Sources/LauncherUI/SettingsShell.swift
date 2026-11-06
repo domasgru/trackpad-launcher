@@ -161,7 +161,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             // closed while hidden and reopened.
             if NSApp.isHidden { NSApp.unhide(nil) }
             window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            AppActivation.activateOverOtherApps()
         }
     }
 
