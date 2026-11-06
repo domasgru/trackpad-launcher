@@ -37,7 +37,6 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
-        NSSupportsSuddenTermination: true
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
     settings:
       base:

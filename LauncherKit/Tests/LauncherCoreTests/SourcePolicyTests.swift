@@ -1,8 +1,9 @@
 import Foundation
 import Testing
 
-/// Scans every Swift source file the app ships for APIs the product promises never to use.
-/// To forbid something new, add it to `banned`; do not write prose.
+/// Scans every Swift source file the app ships for APIs the product promises never to use, and the
+/// manifest (`project.yml`) for Info.plist keys the bundle must never declare.
+/// To forbid something new, add it to `banned` or `neverDeclared`; do not write prose.
 @Suite struct SourcePolicyTests {
     struct Entry: Sendable, CustomTestStringConvertible {
         let token: String
@@ -10,7 +11,11 @@ import Testing
         var testDescription: String { "\(token) (\(rule))" }
     }
 
+    static let suddenTerminationRule =
+        "loginwindow force-quits, 3 s after a foreground app ends, every child of it that is a UI element without a visible window and declares sudden termination; the new version is that child for its first moments after an update"
+
     static let banned: [Entry] = [
+        Entry(token: "SuddenTermination", rule: suddenTerminationRule),
         Entry(token: "print(", rule: "log"),
         Entry(token: "debugPrint(", rule: "log"),
         Entry(token: "dump(", rule: "log"),
@@ -85,6 +90,10 @@ import Testing
         Entry(token: "SMAppService.loginItem", rule: "nothing relaunches the app"),
         Entry(token: "SMLoginItemSetEnabled", rule: "nothing relaunches the app"),
         Entry(token: "/bin/rm", rule: "the administrator's swap removes nothing"),
+    ]
+
+    static let neverDeclared: [Entry] = [
+        Entry(token: "NSSupportsSuddenTermination", rule: suddenTerminationRule)
     ]
 
     /// Each permission API lives in exactly one file, the adapter that owns it. Any other hit fails.
@@ -222,6 +231,35 @@ import Testing
         #expect(hits.isEmpty, "\(entry.token) is banned (\(entry.rule)): \(hits)")
     }
 
+    @Test(arguments: neverDeclared)
+    func manifestNeverDeclares(_ entry: Entry) throws {
+        let hits = try Self.scanManifest(in: Self.packageRoot.deletingLastPathComponent(), for: entry.token)
+        #expect(hits.isEmpty, "\(entry.token) must not be declared (\(entry.rule)): \(hits)")
+    }
+
+    @Test func manifestScanFindsAPlantedKey() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-manifest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let manifest = "info:\n  properties:\n        NSSupportsSuddenTermination: true\n"
+        try Data(manifest.utf8).write(to: dir.appending(path: "project.yml"))
+
+        let hits = try Self.scanManifest(in: dir, for: "NSSupportsSuddenTermination")
+
+        #expect(hits == ["project.yml:3: NSSupportsSuddenTermination"])
+    }
+
+    @Test func manifestScanFailsWithoutAManifest() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-manifest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let error = #expect(throws: CocoaError.self) {
+            try Self.scanManifest(in: dir, for: "NSSupportsSuddenTermination")
+        }
+        #expect(error?.code == .fileReadNoSuchFile)
+    }
+
     @Test(arguments: confined)
     func onlyItsAdapterUses(_ entry: Confined) throws {
         let hits = try Self.scannedRoots.flatMap { try Self.scan($0, for: entry.token, outside: entry.onlyIn) }
@@ -319,10 +357,19 @@ import Testing
     /// One "<file>:<line>: <token>" string per line containing `token`, skipping every file named in `allowedFiles`.
     private static func scan(_ root: URL, for token: String, outside allowedFiles: Set<String> = []) throws -> [String] {
         try swiftFiles(under: root).filter { !allowedFiles.contains($0.lastPathComponent) }.flatMap { file -> [String] in
-            let text = try String(contentsOf: file, encoding: .utf8)
-            return text.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
-                .filter { $0.element.contains(token) }
-                .map { "\(file.lastPathComponent):\($0.offset + 1): \(token)" }
+            try hits(in: file, for: token)
         }
+    }
+
+    /// Throws when `directory` holds no `project.yml`: a moved manifest must fail, not pass unscanned.
+    private static func scanManifest(in directory: URL, for token: String) throws -> [String] {
+        try hits(in: directory.appending(path: "project.yml"), for: token)
+    }
+
+    private static func hits(in file: URL, for token: String) throws -> [String] {
+        let text = try String(contentsOf: file, encoding: .utf8)
+        return text.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
+            .filter { $0.element.contains(token) }
+            .map { "\(file.lastPathComponent):\($0.offset + 1): \(token)" }
     }
 }
