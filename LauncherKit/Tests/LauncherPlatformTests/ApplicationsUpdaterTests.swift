@@ -672,6 +672,7 @@ private final class Hold: @unchecked Sendable {
 
         let elapsed = failedAt - lastByte.withLock { $0 }!
         #expect(elapsed >= .seconds(30))
-        #expect(elapsed <= .seconds(35))
+        // Takes about 34 s on a quiet Mac. The bound stays under URLSession's own 60 s timeout, which is what it rules out.
+        #expect(elapsed <= .seconds(50))
     }
 }

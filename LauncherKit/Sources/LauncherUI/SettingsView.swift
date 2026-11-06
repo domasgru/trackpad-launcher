@@ -62,10 +62,11 @@ struct SettingsView: View {
                 Section {
                     ThumbCornerRow(launcher: launcher)
                     Toggle(
-                        "Hide background apps",
                         isOn: Binding(
                             get: { launcher.isHideBackgroundAppsOn }, set: { launcher.setHideBackgroundApps(on: $0) })
-                    )
+                    ) {
+                        Text("Hide background apps").formRowContent()
+                    }
                     .toggleStyle(.switch)
                 }
             }
