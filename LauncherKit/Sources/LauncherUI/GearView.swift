@@ -77,7 +77,6 @@ final class GearView: NSView {
     }
 
     @objc private func displayOptionsChanged(_ notification: Notification) {
-        guard window != nil else { return }
         applyReduceMotion()
     }
 
@@ -92,7 +91,6 @@ final class GearView: NSView {
             turn.timingFunction = CAMediaTimingFunction(name: .linear)
             turn.repeatCount = .infinity
             turn.duration = Self.period
-            turn.isRemovedOnCompletion = false
             gearLayer.add(turn, forKey: Self.animationKey)
         }
     }

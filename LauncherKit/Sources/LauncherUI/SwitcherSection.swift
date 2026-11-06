@@ -15,8 +15,8 @@ struct SwitcherSection: View {
             SettingRow(
                 illustration: "window-swipe", title: "Switch windows", corner: launcher.thumbCorner,
                 isOn: Binding(get: { launcher.isWindowSwipeOn }, set: { launcher.setWindowSwipe(on: $0) }))
-            if launcher.screenRecordingHint != nil {
-                ScreenRecordingHintView(launcher: launcher, actions: actions)
+            if let hint = launcher.screenRecordingHint {
+                ScreenRecordingHintView(hint: hint, launcher: launcher, actions: actions)
                     .padding(.leading, SettingRow.titleInset)
             }
         }
@@ -29,24 +29,24 @@ struct SwitcherSection: View {
 /// The screen recording hint, under the Switch windows switch: a warning triangle and the message as one paragraph,
 /// then the button that asks macOS the first time and opens System Settings after.
 struct ScreenRecordingHintView: View {
+    let hint: ScreenRecordingHint
     let launcher: Launcher
     let actions: LauncherActions
 
+    private static let messageWidth: CGFloat = 219
     private static let warning = Color(red: 1, green: 0.8, blue: 0)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("\(Text(Image(systemName: "exclamationmark.triangle.fill")).foregroundStyle(Self.warning)) \(Copy.screenRecordingHint)")
-                .noticeText()
-                .frame(maxWidth: 219, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
+                .hintMessage(maxWidth: Self.messageWidth)
             Button(Copy.openSettingsButton) {
-                switch launcher.screenRecordingHint {
+                switch hint {
                 case .ask: launcher.askForScreenRecording()
                 case .openSettings: actions.openSettings(.screenRecording)
-                case nil: break
                 }
             }
+            .font(SettingsView.labelFont)
             .buttonStyle(.bordered)
             .buttonBorderShape(.roundedRectangle(radius: 6))
         }

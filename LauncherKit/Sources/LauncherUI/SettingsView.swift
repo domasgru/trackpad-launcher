@@ -5,22 +5,21 @@ import SwiftUI
 /// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges: the update card,
 /// while a newer version is known; the Accessibility hint card, while the permission is missing; the settings form, a
 /// SwiftUI grouped Form drawn as System Settings draws one, its sections the five gesture rows and the Animate app
-/// launch switch, the switcher section (the screen recording hint sits in its Switch windows row, while it applies),
-/// and the thumb corner row with the Hide background apps switch below it; the no trackpad notice, while it applies,
-/// in a rounded group; then
-/// *Quit Trackpad Launcher* and *Close*, aligned right. The form keeps the system's own fonts, insets and controls, and
-/// every row of the form is 46 pt tall (`formRowContent()`). The illustrations are 45 × 28 pt. The guide naming the two
+/// launch switch, the switcher section, and the thumb corner row with the Hide background apps switch below it; the
+/// no trackpad notice, while it applies, in a rounded group; then *Quit Trackpad Launcher* and *Close*, aligned
+/// right. The form keeps the system's own fonts, insets and controls, and every row of the form is 46 pt tall
+/// (`formRowContent()`), except the *Switch windows* row, which grows while the screen recording hint sits in it. The illustrations are 45 × 28 pt. The guide naming the two
 /// marks sits over the first illustration for the top-left corner only, where its arrows meet the thumb.
 struct SettingsView: View {
     let launcher: Launcher
     let updater: Updater?
     let actions: LauncherActions
 
-    /// The update card's labels. The form keeps the system's own fonts.
-    private static let labelFont = Font.system(size: 13, weight: .medium)
+    /// The labels of the update card and of the screen recording button. The form keeps the system's own fonts.
+    static let labelFont = Font.system(size: 13, weight: .medium)
     /// The window's edges to the column's parts, the form's sections included.
     private static let inset: CGFloat = 16
-    /// Between the column's parts: the update card, the form, the notices and the buttons.
+    /// Between the column's parts: the update card, the Accessibility hint card, the form, the no trackpad notice and the buttons.
     private static let partSpacing: CGFloat = 20
     /// A grouped Form's own room around its sections: SwiftUI's and not exposed. `contentMargins` leaves the top and
     /// bottom as they are and adds to the sides, so these are measured on macOS 26
@@ -187,9 +186,11 @@ extension View {
         frame(height: 26)
     }
 
-    /// The text of a notice or hint: 11 pt, a point between its lines.
-    func noticeText() -> some View {
-        font(.system(size: 11)).lineSpacing(1)
+    /// The message of a hint: 11 pt, wrapping at `maxWidth` to as many lines as it needs.
+    func hintMessage(maxWidth: CGFloat) -> some View {
+        font(.system(size: 11))
+            .frame(maxWidth: maxWidth, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -270,7 +271,8 @@ struct SettingsNotice: View {
     var body: some View {
         FormGroup {
             Text(message)
-                .noticeText()
+                .font(.system(size: 11))
+                .lineSpacing(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.vertical, 8)
@@ -281,44 +283,47 @@ struct SettingsNotice: View {
 
 /// A regular-size push button drawn in `tint`. Greyed while disabled.
 struct TintedButtonStyle: ButtonStyle {
-    enum FaceKind {
+    enum Fill {
         /// The label in the tint, on a fifth-strength wash of it.
         case wash
         /// A white label on the solid tint.
-        case filled
+        case solid
     }
 
     let tint: Color
-    var face: FaceKind = .wash
+    var fill: Fill = .wash
 
     func makeBody(configuration: Configuration) -> some View {
-        Face(tint: tint, kind: face, configuration: configuration)
+        Face(tint: tint, fill: fill, configuration: configuration)
     }
 
     /// A style does not grey itself, and reads the environment only through a view of its own.
     private struct Face: View {
         let tint: Color
-        let kind: FaceKind
+        let fill: Fill
         let configuration: ButtonStyleConfiguration
         @Environment(\.isEnabled) private var isEnabled
 
         var body: some View {
             let shade = isEnabled ? tint : Color.secondary
-            configuration.label
+            let pressed = isEnabled && configuration.isPressed
+            let label: Color
+            let background: Color
+            switch fill {
+            case .wash:
+                label = shade
+                background = shade.mix(with: .black, by: 0.1).opacity(pressed ? 0.3 : 0.2)
+            case .solid:
+                label = .white
+                background = pressed ? shade.mix(with: .black, by: 0.15) : shade
+            }
+            return configuration.label
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(kind == .filled ? Color.white : shade)
+                .foregroundStyle(label)
                 .padding(.horizontal, 16)
                 .frame(height: 24)
-                .background(RoundedRectangle(cornerRadius: 6).fill(fill(shade)))
+                .background(RoundedRectangle(cornerRadius: 6).fill(background))
                 .contentShape(.rect(cornerRadius: 6))
-        }
-
-        private func fill(_ shade: Color) -> Color {
-            let pressed = isEnabled && configuration.isPressed
-            switch kind {
-            case .wash: return shade.mix(with: .black, by: 0.1).opacity(pressed ? 0.3 : 0.2)
-            case .filled: return pressed ? shade.mix(with: .black, by: 0.15) : shade
-            }
         }
     }
 }

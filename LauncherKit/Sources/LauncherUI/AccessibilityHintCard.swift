@@ -13,18 +13,16 @@ struct AccessibilityHintCard: View {
         let shape = RoundedRectangle(cornerRadius: GroupStyle.cornerRadius)
         VStack(alignment: .leading, spacing: 8) {
             Text(Copy.accessibilityHint)
-                .noticeText()
-                .frame(maxWidth: Self.messageWidth, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
+                .hintMessage(maxWidth: Self.messageWidth)
             Button(Copy.openSettingsButton) { actions.openSettings(.accessibility) }
-                .buttonStyle(TintedButtonStyle(tint: .accentColor, face: .filled))
+                .buttonStyle(TintedButtonStyle(tint: .accentColor, fill: .solid))
         }
         .padding(.vertical, 8)
         .padding(.horizontal, GroupStyle.sideInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(alignment: .topTrailing) {
             TurningGear()
-                .frame(width: 91, height: 91)
+                .frame(width: GearView.side, height: GearView.side)
                 .offset(x: 19, y: -23)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
