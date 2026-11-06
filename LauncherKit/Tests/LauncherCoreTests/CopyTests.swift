@@ -2,9 +2,9 @@ import Testing
 import LauncherCore
 
 @Suite struct CopyTests {
-    @Test func theAccessibilityHintAsksForAccessAndItsButtonNamesThePane() {
+    @Test func theAccessibilityHintAsksForAccessAndBothHintsShareOneButtonTitle() {
         #expect(Copy.accessibilityHint == "Allow Accessibility access to make trackpad gestures work reliably.")
-        #expect(Copy.accessibilityButton == "Open Accessibility Settings…")
+        #expect(Copy.openSettingsButton == "Open Settings…")
     }
 
     @Test func theThumbCornerRowNamesItsFourChoicesInOrder() {
@@ -14,9 +14,8 @@ import LauncherCore
             ThumbCorner.allCases.map(Copy.thumbCornerTitle) == ["Top left", "Top right", "Bottom left", "Bottom right"])
     }
 
-    @Test func theScreenRecordingHintSaysWhatNeedsItAndItsButtonNamesThePane() {
+    @Test func theScreenRecordingHintSaysWhatNeedsIt() {
         #expect(Copy.screenRecordingHint == "Allow Screen Recording access to show previews in the window switcher.")
-        #expect(Copy.screenRecordingButton == "Open Screen Recording Settings…")
     }
 
     @Test func theWindowSwitcherNamesItsBadgeVerbatim() {
