@@ -21,7 +21,6 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     /// What the Debug tuner hands each pick: the animation to play and whether to pretend Reduce motion is on.
     public typealias PickTuning = (animation: PickAnimation, simulateReduceMotion: Bool)
     private let launcher: Launcher
-    private let updater: Updater?
     private let icons = AppIcons { SettingsWindow.pinnedAppearance ?? NSApp.effectiveAppearance }
     private let switcherPresenter: SwitcherPresenter
     private let windowSwitcherPresenter: WindowSwitcherPresenter
@@ -45,12 +44,10 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         let showsAccessibilityHint: Bool
         let isSwipeOn: Bool
         let screenRecordingHint: ScreenRecordingHint?
-        let card: UpdateCard.Layout?
     }
 
-    public init(launcher: Launcher, updater: Updater?, quit: @escaping () -> Void) {
+    public init(launcher: Launcher, quit: @escaping () -> Void) {
         self.launcher = launcher
-        self.updater = updater
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let window = SettingsWindow()
         #if DEBUG
@@ -61,7 +58,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         #endif
         let actions = Self.makeActions(
             launcher: launcher, icons: icons, window: window, quit: quit, tuned: tuned)
-        window.install(content: SettingsView(launcher: launcher, updater: updater, actions: actions))
+        window.install(content: SettingsView(launcher: launcher, actions: actions))
         #if DEBUG
             currentPickAnimation = actions.pickAnimation
         #endif
@@ -80,10 +77,8 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                 for await fit in Observations({
                     Fit(
                         inactiveNotice: launcher.inactiveNotice, showsAccessibilityHint: launcher.showsAccessibilityHint,
-                        isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint,
-                        card: updater?.card?.layout)
+                        isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint)
                 }) {
-                    // The card's progress changes what the observation reads, never what this holds.
                     guard fit != last else { continue }
                     last = fit
                     self?.refit()

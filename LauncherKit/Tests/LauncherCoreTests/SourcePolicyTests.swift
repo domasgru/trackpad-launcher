@@ -12,7 +12,7 @@ import Testing
     }
 
     static let suddenTerminationRule =
-        "loginwindow force-quits, 3 s after a foreground app ends, every child of it that is a UI element without a visible window and declares sudden termination; the new version is that child for its first moments after an update"
+        "loginwindow force-quits, 3 s after a foreground app ends, every child of it that is a UI element without a visible window and declares sudden termination; a move's opening, and an older version's update card, make the new process that child for its first moments"
 
     static let banned: [Entry] = [
         Entry(token: "SuddenTermination", rule: suddenTerminationRule),
@@ -24,14 +24,15 @@ import Testing
         Entry(token: "Logger(", rule: "log"),
         Entry(token: "import OSLog", rule: "log"),
         Entry(token: "import os", rule: "log"),
+        Entry(token: "URLSession", rule: "our Swift makes no request"),
         Entry(token: "URLSession.shared", rule: "network"),
         Entry(token: "URLSessionConfiguration.default", rule: "network"),
         Entry(token: ".background(withIdentifier", rule: "network"),
         Entry(token: "String(contentsOf:", rule: "network"),
         Entry(token: "NSURLConnection", rule: "network"),
         Entry(token: "NSURLDownload", rule: "network"),
-        Entry(token: "downloadTask", rule: "the update archive is received into memory, never into a file"),
-        Entry(token: ".download(", rule: "the update archive is received into memory, never into a file"),
+        Entry(token: "downloadTask", rule: "our Swift downloads nothing"),
+        Entry(token: ".download(", rule: "our Swift downloads nothing"),
         Entry(token: "CFHTTP", rule: "network"),
         Entry(token: "import WebKit", rule: "network"),
         Entry(token: "WKWebView", rule: "network"),
@@ -107,9 +108,7 @@ import Testing
 
     static let confined: [Confined] = [
         Confined(
-            token: "URLSession", onlyIn: ["GitHubReleases.swift"],
-            rule: "the update check and its download are the one network path"),
-        Confined(token: "http", onlyIn: ["GitHubReleases.swift"], rule: "the one network file holds every address"),
+            token: "http", onlyIn: ["SparkleEngine.swift"], rule: "no address in Swift; only Sparkle's `httpHeaders`"),
         Confined(token: "Data(contentsOf:", onlyIn: ["Apps.swift", "CardContract.swift"], rule: "the one local-file reader; a URL read is a request"),
         Confined(token: "AXIsProcessTrusted", onlyIn: ["SystemPermissions.swift"], rule: "R9 one permission, one adapter"),
         Confined(token: "notify_register", onlyIn: ["SystemPermissions.swift"], rule: "R7 the trust push"),
@@ -175,19 +174,16 @@ import Testing
         Confined(token: "renamex_np(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
         Confined(token: "removeItem(", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the move's file operations are in one file"),
         Confined(
-            token: "AppleArchive", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the update's unpacking is in one file"),
+            token: "AppleArchive", onlyIn: ["CardContract.swift"], rule: "the card's rules unpack an archive, frozen"),
         Confined(
-            token: "ArchiveStream", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the update's unpacking is in one file"),
+            token: "ArchiveStream", onlyIn: ["CardContract.swift"], rule: "the card's rules unpack an archive, frozen"),
         Confined(
-            token: "ArchiveByteStream", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the update's unpacking is in one file"),
+            token: "ArchiveByteStream", onlyIn: ["CardContract.swift"], rule: "the card's rules unpack an archive, frozen"),
         Confined(
             token: "removexattr", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the quarantine is cleared in one file"),
         Confined(
             token: "itemReplacementDirectory", onlyIn: ["BundleInstall.swift", "CardContract.swift"],
             rule: "the staging folder is made in one file"),
-        Confined(
-            token: "createsNewApplicationInstance", onlyIn: ["ApplicationsUpdater.swift"],
-            rule: "the new version is opened as a new process in one place"),
         Confined(
             token: "AuthorizationExecuteWithPrivileges", onlyIn: ["PrivilegedInstall.swift"],
             rule: "the one privileged call has one file"),
@@ -204,7 +200,7 @@ import Testing
     @Test func theNetworkBansAreAllStillListed() {
         let listed = Set(Self.banned.map(\.token))
         let required: Set<String> = [
-            "URLSession.shared", "URLSessionConfiguration.default", ".background(withIdentifier", "String(contentsOf:",
+            "URLSession", "URLSession.shared", "URLSessionConfiguration.default", ".background(withIdentifier", "String(contentsOf:",
             "NSURLConnection", "NSURLDownload", "downloadTask", ".download(", "CFHTTP", "import WebKit", "WKWebView", "curl", "NSAppleScript",
             "import Network", "NWConnection", "CFSocket", "CFStream", "Process()", "Process.run(", "executableURL",
             "NSTask", "posix_spawn", "Timer", "asyncAfter", "Task.sleep", ".write(to:", "FileHandle(forWriting",

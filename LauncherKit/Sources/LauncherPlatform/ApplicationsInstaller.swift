@@ -81,7 +81,7 @@ import LauncherCore
         return put(staged, at: destination, by: administrator)
     }
 
-    /// The move's and the update's one swap: `BundleInstall.swap` when the destination's folder and the destination
+    /// The move's one swap: `BundleInstall.swap` when the destination's folder and the destination
     /// are writable, else `PrivilegedInstall.swap`, which shows the prompt. Atomic on both paths; `destination` is
     /// untouched unless `.installed`. The staged copy and its staging folder are gone on every outcome.
     nonisolated static func put(_ staged: URL, at destination: URL, by administrator: any Administrator) -> InstallOutcome {

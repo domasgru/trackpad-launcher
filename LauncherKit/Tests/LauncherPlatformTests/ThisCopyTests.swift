@@ -16,28 +16,6 @@ import Testing
         return event
     }
 
-    @Test(arguments: [("1.0.0", Version(1, 0, 0)), ("1.1", Version(1, 1)), ("26.10.2", Version(26, 10, 2))])
-    func theRunningVersionIsTheBundlesShortVersionStringParsed(text: String, expected: Version) throws {
-        let fixture = try BundleFixture()
-        let app = try fixture.makeBundle(named: "Probe.app", in: fixture.folder("Apps"), version: text)
-        #expect(ThisCopy.version(of: try #require(Bundle(url: app))) == expected)
-    }
-
-    @Test(arguments: ["", "1.0.0-beta", "v1.0", "1..1"])
-    func aShortVersionStringThatIsNotDottedWholeNumbersIsNoVersion(text: String) throws {
-        let fixture = try BundleFixture()
-        let app = try fixture.makeBundle(named: "Probe.app", in: fixture.folder("Apps"), version: text)
-        #expect(ThisCopy.version(of: try #require(Bundle(url: app))) == nil)
-    }
-
-    @Test func aBundleWithoutAShortVersionStringHasNoVersion() throws {
-        let fixture = try BundleFixture()
-        let app = try fixture.folder("Apps").appending(path: "Bare.app")
-        try FileManager.default.createDirectory(at: app.appending(path: "Contents"), withIntermediateDirectories: true)
-        try (["CFBundleIdentifier": "com.example.bare"] as NSDictionary).write(to: app.appending(path: "Contents/Info.plist"))
-        #expect(ThisCopy.version(of: try #require(Bundle(url: app))) == nil)
-    }
-
     @Test func aStartCarryingTheLoginMarkerIsAtLogin() {
         let launch = ThisCopy.launch(event: Self.event(AEEventID(kAEOpenApplication), loginMarker: true), arguments: [])
         #expect(launch == Launch(opening: .atLogin))
