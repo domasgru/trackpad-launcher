@@ -65,7 +65,14 @@ import Testing
         watch.stop()
         try await Task.sleep(for: .seconds(1))
         #expect(reports.seen.isEmpty)
-        #expect(LaunchClock.hostPanel == nil, "the host closes with the last clock")
+        // Other suites' clocks share the host, so it closes with the last of theirs: one this watch leaked never would.
+        let closed = await awaiting("the host to close") { (done: @escaping @Sendable (Bool) -> Void) in
+            Task { @MainActor in
+                while LaunchClock.hostPanel != nil { try? await Task.sleep(for: .milliseconds(20)) }
+                done(true)
+            }
+        }
+        #expect(closed == true, "the host closes with the last clock")
     }
 
     @Test func aDeadlineThatIsNotCancelledPassesOnAnyStopAndACancelledOneNever() {
