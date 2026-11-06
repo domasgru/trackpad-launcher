@@ -132,7 +132,7 @@ import Testing
             rule: "the private ⌘-Tab order has one reader"),
         Confined(token: "AXUIElement", onlyIn: ["FrontmostAppWindows.swift", "LaunchWatch.swift"], rule: "the window reads have two readers"),
         Confined(token: "CGWindowList", onlyIn: ["FrontmostAppWindows.swift", "LaunchWatch.swift"], rule: "the window reads have two readers"),
-        Confined(token: ".hide(", onlyIn: ["WorkspaceActions.swift"], rule: "apps are hidden in one place"),
+        Confined(token: ".hide(", onlyIn: ["BackgroundHider.swift"], rule: "apps are hidden in one place"),
         Confined(token: "SecCode", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
         Confined(token: "SecStaticCode", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
         Confined(token: "SecRequirement", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),

@@ -10,14 +10,7 @@ import LauncherCore
     /// One per watched launch, from `bringToFrontWatching` to `endLaunch`.
     private var launches: [BundleID: Launch] = [:]
     public var onLaunchProgress: (@MainActor (BundleID, LaunchProgress) -> Void)?
-    /// The frontmost app waiting to be hidden until the app being kept has come to the front.
-    private var pendingHide: PendingHide?
-
-    private struct PendingHide {
-        let app: NSRunningApplication
-        let kept: BundleID
-        let observer: any NSObjectProtocol
-    }
+    private let hider = BackgroundHider()
 
     private struct Launch {
         let watch: LaunchWatch
@@ -45,52 +38,7 @@ import LauncherCore
 
     public func bringToFront(_ app: AppEntry) { open(app) }
 
-    public func hideOtherApps(than app: BundleID) {
-        forgetPendingHide()
-        let others = NSWorkspace.shared.runningApplications.filter {
-            $0.activationPolicy == .regular && !$0.isTerminated && $0.bundleIdentifier != app.rawValue
-        }
-        let frontmost = NSWorkspace.shared.frontmostApplication
-        let deferred = others.first { $0.processIdentifier == frontmost?.processIdentifier }
-        let now = others.filter { $0.processIdentifier != deferred?.processIdentifier }
-        // Hiding the frontmost app at once makes macOS activate the next visible app, which would land second in the
-        // ⌘-Tab order above the app the user came from.
-        Task { @MainActor in
-            for other in now { Self.hide(other) }
-        }
-        guard let deferred else { return }
-        // Alive only while the hide is pending.
-        let observer = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
-        ) { [weak self] notification in
-            let activated =
-                (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?
-                .bundleIdentifier
-            MainActor.assumeIsolated { self?.applicationActivated(activated) }
-        }
-        pendingHide = PendingHide(app: deferred, kept: app, observer: observer)
-    }
-
-    /// This process hides with the app's own hide. The activation policy stays regular, so the Dock icon remains.
-    private static func hide(_ app: NSRunningApplication) {
-        if app.processIdentifier == NSRunningApplication.current.processIdentifier {
-            NSApp.hide(nil)
-        } else {
-            app.hide()
-        }
-    }
-
-    private func applicationActivated(_ bundleIdentifier: String?) {
-        guard let pending = pendingHide else { return }
-        forgetPendingHide()
-        if bundleIdentifier == pending.kept.rawValue { Self.hide(pending.app) }
-    }
-
-    private func forgetPendingHide() {
-        guard let pending = pendingHide else { return }
-        NSWorkspace.shared.notificationCenter.removeObserver(pending.observer)
-        pendingHide = nil
-    }
+    public func hideOtherApps(than app: BundleID) { hider.hideOthers(than: app) }
 
     public func hasProcess(_ app: BundleID) -> Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: app.rawValue).allSatisfy(\.isTerminated)

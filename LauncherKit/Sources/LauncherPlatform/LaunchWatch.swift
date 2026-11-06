@@ -5,9 +5,11 @@ import LauncherCore
 
 /// Watches one launch a gesture started, from macOS's answer to `openApplication` until `stop()`: the process's
 /// finishing and ending by key-value observation, which macOS pushes for every kind of app, then one look at its
-/// windows and, with Accessibility, its first window created later. When it cannot be told of that window (no
-/// Accessibility, or the app's Accessibility server not answering yet, as Things' is at finishing), it looks at the
-/// window list again every `relookInterval` instead, until a window shows or `stop()`. Its time (the cap, the limit
+/// windows and, with Accessibility, its first window created later. Only the window list says a window is on screen: an
+/// Accessibility window may be a hidden startup window, so it is a reason to look, never the answer. When it cannot be
+/// told of the next window (no Accessibility, the app's Accessibility server not answering yet, as Things' is at
+/// finishing, or a window that exists but does not show), it looks at the window list again every `relookInterval`
+/// instead, until a window shows or `stop()`. Its time (the cap, the limit
 /// once the app finished launching, the re-look interval) passes on its own `LaunchClock`, made when it starts, so it
 /// runs with or without a bounce and costs nothing before the app is opened. Reports each fact at most once, nothing after `stop()`, and holds nothing once stopped. Every Accessibility call goes to the
 /// app element it creates, whose messaging timeout it sets to `messagingTimeout` itself.
@@ -146,9 +148,9 @@ import LauncherCore
     }
 
     fileprivate func windowCreated() {
-        guard !isStopped, windowObserver != nil else { return }
+        guard !isStopped, windowObserver != nil, let pid = process?.processIdentifier else { return }
         dropWindowObserver()
-        report(.windowShown)
+        relook(pid)
     }
 
     private func wentNowhere() {
@@ -157,25 +159,35 @@ import LauncherCore
         report(.wentNowhere)
     }
 
-    /// The pid's windows on screen now in the window list, below the status-window level: a splash counts, a
-    /// status-level helper does not. Needs no permission. Racy at finishing.
+    /// The pid's windows on screen now in the window list that a user can see. Needs no permission. Racy at finishing.
     nonisolated static func listedWindows(of pid: pid_t) -> Int {
         let all = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
         let statusLevel = Int(CGWindowLevelForKey(.statusWindow))
-        return all.filter { info in
-            (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid
-                && ((info[kCGWindowLayer as String] as? NSNumber)?.intValue ?? statusLevel) < statusLevel
-        }.count
+        return all.filter { isVisibleWindow($0, of: pid, statusLevel: statusLevel) }.count
+    }
+
+    /// One window-list entry. Pure: a splash counts; a status-level helper, a transparent window and a sliver of a
+    /// point or less do not.
+    nonisolated static func isVisibleWindow(_ info: [String: Any], of pid: pid_t, statusLevel: Int) -> Bool {
+        guard (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid,
+            ((info[kCGWindowLayer as String] as? NSNumber)?.intValue ?? statusLevel) < statusLevel,
+            ((info[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1) > 0,
+            let bounds = info[kCGWindowBounds as String] as? [String: Any],
+            let width = (bounds["Width"] as? NSNumber)?.doubleValue,
+            let height = (bounds["Height"] as? NSNumber)?.doubleValue
+        else { return false }
+        return width > 1 && height > 1
     }
 
     enum Registration: Equatable { case registered, notAnswering, noAccess }
     enum Look: Equatable { case shown, watching, relooking }
 
-    /// One look at a launching app's windows when it finished launching. Pure: any window, by either count, is
-    /// `.shown`; none while registered is `.watching`; none otherwise is `.relooking`.
+    /// One look at a launching app's windows when it finished launching. Pure: a listed window is `.shown`. With none,
+    /// an Accessibility window is one that does not show, and showing it creates nothing to be told of, so `.relooking`;
+    /// no window at all while registered is `.watching`; otherwise `.relooking`.
     nonisolated static func look(_ registration: Registration, axWindows: Int, listedWindows: Int) -> Look {
-        if axWindows > 0 || listedWindows > 0 { return .shown }
-        return registration == .registered ? .watching : .relooking
+        if listedWindows > 0 { return .shown }
+        return registration == .registered && axWindows == 0 ? .watching : .relooking
     }
 }
 

@@ -64,8 +64,9 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// Hides every running app with a Dock icon whose bundle identifier differs from `app` (every copy of `app` stays),
     /// on every display and Space, full-screen apps included; menu bar apps stay. Trackpad Launcher itself is included
     /// while its Dock icon shows (its settings window is open), unless it is `app`. Idempotent; needs no permission;
-    /// returns at once. The app frontmost at the call, when it is not `app`, is hidden only once `app` has come to the
-    /// front; the others go out on the next main-actor turn.
+    /// returns at once. Nothing hides until `app` is active and no longer hidden, whichever comes last, and within about
+    /// 3 s or not at all; a later call replaces the goal and hides whatever this one had not. Hides that do not land are
+    /// sent again within about half a second, while `app` stays in front.
     func hideOtherApps(than app: BundleID)
     /// The apps the next launch animations and launch bounces may be for. Each call replaces the previous set. Readies
     /// whatever a later `playLaunchAnimation` or `bringToFrontWatching` for one of them needs now, so that call does no

@@ -270,6 +270,27 @@ Turning the setting on or hiding apps MUST NOT trigger a permission prompt.
 - **WHEN** the user turns the switch on and taps a gesture
 - **THEN** the other apps hide and no permission prompt shows
 
+### R22. The app brought forward keeps the front
+Hiding MUST NOT take the front from the app brought forward, whether that app was hidden or not, with single gestures or rapid ones. Every other app MUST end up hidden.
+
+#### Scenario: Bringing back a hidden app
+- **GIVEN** the setting is on and Calculator is hidden behind Dictionary
+- **WHEN** a gesture brings Calculator to the front
+- **THEN** Calculator is in front and Dictionary is hidden, and no third app takes the front
+
+#### Scenario: Another app activates meanwhile
+- **GIVEN** the setting is on
+- **WHEN** a helper activates itself before the target app comes to the front
+- **THEN** every other app still hides once the target app is in front
+
+### R23. A launch hides on a window the user can see
+A launch MUST count a window only when it is on screen. A hidden startup window MUST NOT hide other apps. The launch keeps watching until a window shows or its time limit passes.
+
+#### Scenario: Hidden startup window
+- **GIVEN** the setting is on and a launching app creates a hidden window, then shows its real window later
+- **WHEN** the hidden window is created
+- **THEN** no app hides until the real window is on screen
+
 ## Non-goals
 
 - Hiding after actions outside Trackpad Launcher, such as ⌘-Tab, Dock clicks or Spotlight. The user asked for Trackpad Launcher's own actions, and it does not react to these today.
