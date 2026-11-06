@@ -3,10 +3,11 @@ import LauncherCore
 import SwiftUI
 
 /// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges: the update card,
-/// while a newer version is known; the Accessibility hint card, while the permission is missing; the settings form, a SwiftUI grouped Form drawn as System Settings draws one, its
-/// sections the five gesture rows and the Animate app launch switch, the switcher section, and the thumb corner row
-/// with the Hide background apps switch below it; the notices, while any applies, 10 pt apart: the no trackpad notice
-/// or the tap-bound settings notice, and the screen recording hint, one rounded group each; then
+/// while a newer version is known; the Accessibility hint card, while the permission is missing; the settings form, a
+/// SwiftUI grouped Form drawn as System Settings draws one, its sections the five gesture rows and the Animate app
+/// launch switch, the switcher section (the screen recording hint sits in its Switch windows row, while it applies),
+/// and the thumb corner row with the Hide background apps switch below it; the no trackpad notice, while it applies,
+/// in a rounded group; then
 /// *Quit Trackpad Launcher* and *Close*, aligned right. The form keeps the system's own fonts, insets and controls, and
 /// every row of the form is 46 pt tall (`formRowContent()`). The illustrations are 45 × 28 pt. The guide naming the two
 /// marks sits over the first illustration for the top-left corner only, where its arrows meet the thumb.
@@ -15,22 +16,16 @@ struct SettingsView: View {
     let updater: Updater?
     let actions: LauncherActions
 
-    /// The update card's and the notices' labels. The form keeps the system's own fonts.
+    /// The update card's labels. The form keeps the system's own fonts.
     private static let labelFont = Font.system(size: 13, weight: .medium)
     /// The window's edges to the column's parts, the form's sections included.
     private static let inset: CGFloat = 16
     /// Between the column's parts: the update card, the form, the notices and the buttons.
     private static let partSpacing: CGFloat = 20
-    /// Between two notices, as between the form's own sections.
-    private static let noticeSpacing: CGFloat = 10
     /// A grouped Form's own room around its sections: SwiftUI's and not exposed. `contentMargins` leaves the top and
     /// bottom as they are and adds to the sides, so these are measured on macOS 26
     /// (`plans/030-thumb-corner-popup-style`, `plans/036-settings-form-padding`).
     private static let formMargins = (top: CGFloat(20), bottom: CGFloat(20), side: CGFloat(20))
-
-    private var hasNotices: Bool {
-        launcher.inactiveNotice != nil || launcher.screenRecordingHint != nil
-    }
 
     var body: some View {
         VStack(spacing: Self.partSpacing) {
@@ -57,7 +52,7 @@ struct SettingsView: View {
                     }
                     .toggleStyle(.switch)
                 }
-                Section { SwitcherSection(launcher: launcher) }
+                Section { SwitcherSection(launcher: launcher, actions: actions) }
                 Section {
                     ThumbCornerRow(launcher: launcher)
                     Toggle(
@@ -78,24 +73,8 @@ struct SettingsView: View {
             .padding(.horizontal, Self.inset - Self.formMargins.side)
             // Under its neighbours, so the margins it lays over them never cover or take their clicks.
             .zIndex(-1)
-            if hasNotices {
-                VStack(spacing: Self.noticeSpacing) {
-                    if let notice = launcher.inactiveNotice {
-                        SettingsNotice(message: notice)
-                    }
-                    if let hint = launcher.screenRecordingHint {
-                        SettingsNotice(
-                            message: Copy.screenRecordingHint,
-                            button: NoticeButton(title: Copy.openSettingsButton) {
-                                switch hint {
-                                case .ask: launcher.askForScreenRecording()
-                                case .openSettings: actions.openSettings(.screenRecording)
-                                }
-                            })
-                    }
-                }
-                .font(Self.labelFont)
-                .padding(.horizontal, Self.inset)
+            if let notice = launcher.inactiveNotice {
+                SettingsNotice(message: notice).padding(.horizontal, Self.inset)
             }
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
@@ -193,7 +172,7 @@ struct Illustration: View {
     let name: String
     let corner: ThumbCorner
 
-    private static let size = CGSize(width: 45, height: 28)
+    static let size = CGSize(width: 45, height: 28)
 
     var body: some View {
         BundleImage.view(corner.illustration(name), type: "png", size: Self.size)
@@ -284,38 +263,18 @@ struct ThumbCornerRow: View {
     }
 }
 
-/// A button's title and what it does.
-struct NoticeButton {
-    let title: String
-    let perform: () -> Void
-}
-
-/// A message and, optionally, a button, in a group of its own. The no trackpad notice, the tap-bound settings notice,
-/// the Accessibility hint and the screen recording hint share it.
+/// A message in a group of its own: the no trackpad notice.
 struct SettingsNotice: View {
     let message: String
-    let button: NoticeButton?
-
-    init(message: String, button: NoticeButton? = nil) {
-        self.message = message
-        self.button = button
-    }
 
     var body: some View {
         FormGroup {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(message)
-                    .noticeText()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let button {
-                    Button(button.title, action: button.perform)
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.roundedRectangle(radius: 6))
-                }
-            }
-            .padding(.vertical, 8)
-            .frame(minHeight: 42)
+            Text(message)
+                .noticeText()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 8)
+                .frame(minHeight: 42)
         }
     }
 }
