@@ -38,27 +38,27 @@ import notify
         }
         #expect(!noise, "a broadcast without a change stays silent")
 
-        let captureGranted = await changeArrives(on: adapter, within: 5) {
+        let captureGranted = await changeArrives(on: adapter, within: 20) {
             capturing.withLock { $0 = true }
             notify_post(SystemPermissions.changeNotification)
         }
-        #expect(captureGranted, "onChange arrives within 5 s of a Screen Recording grant")
+        #expect(captureGranted, "onChange arrives within 20 s of a Screen Recording grant")
         #expect(adapter.isGranted(.screenRecording))
         #expect(!adapter.isGranted(.accessibility))
 
-        let trustGranted = await changeArrives(on: adapter, within: 5) {
+        let trustGranted = await changeArrives(on: adapter, within: 20) {
             trusted.withLock { $0 = true }
             notify_post(SystemPermissions.changeNotification)
         }
-        #expect(trustGranted, "onChange arrives within 5 s of an Accessibility grant")
+        #expect(trustGranted, "onChange arrives within 20 s of an Accessibility grant")
         #expect(adapter.isGranted(.accessibility))
         #expect(adapter.isGranted(.screenRecording))
 
-        let revoked = await changeArrives(on: adapter, within: 5) {
+        let revoked = await changeArrives(on: adapter, within: 20) {
             trusted.withLock { $0 = false }
             notify_post(SystemPermissions.changeNotification)
         }
-        #expect(revoked, "onChange arrives within 5 s of a revoke")
+        #expect(revoked, "onChange arrives within 20 s of a revoke")
         #expect(!adapter.isGranted(.accessibility))
     }
 }

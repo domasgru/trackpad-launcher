@@ -34,15 +34,21 @@ import Testing
 
     @Test(.enabled(if: hasSpotlightData, "Spotlight has no last-used dates on this Mac"))
     func readerAgreesWithMdlsAndTheNewestLaunchIsFirst() throws {
-        let dates = Self.mdlsDates(for: Self.listed.map(\.url))
-        try #require(dates.count == Self.listed.count)
+        // An app in use moves its own date, so each read is held to `mdls` on either side of it.
+        let seconds = { (date: Date?) in date.map { Int($0.timeIntervalSince1970) } }
+        let before = Self.mdlsDates(for: Self.listed.map(\.url))
+        let reads = Self.listed.map { AppCatalog.spotlightLastUsed($0.url) }
+        let after = Self.mdlsDates(for: Self.listed.map(\.url))
+        try #require(before.count == Self.listed.count)
+        try #require(after.count == Self.listed.count)
 
-        for (entry, expected) in zip(Self.listed, dates) {
-            let read = AppCatalog.spotlightLastUsed(entry.url)
-            #expect(read.map { Int($0.timeIntervalSince1970) } == expected.map { Int($0.timeIntervalSince1970) }, "\(entry.name)")
+        for index in Self.listed.indices {
+            let read = seconds(reads[index])
+            #expect(read == seconds(before[index]) || read == seconds(after[index]), "\(Self.listed[index].name)")
         }
 
         let recent = AppCatalog.system.installedApps().recent
+        let dates = Self.mdlsDates(for: Self.listed.map(\.url))
         let newest = dates.compactMap { $0 }.max()
         let first = try #require(recent.first)
         let firstDate = try #require(Self.listed.firstIndex(of: first).flatMap { dates[$0] })
