@@ -1,0 +1,73 @@
+=== host.log
+23:58:47.243 v1 pid=91850 willFinishLaunching args=[] event=nil front=Files App
+23:58:47.262 v1 pid=91850 didFinishLaunching event=1634039412 1868656752 propData=nil isDefault=1 parent=1 active=false policy=1 front=Files App
+23:58:47.263 v1 pid=91850 started automaticChecks=true automaticDownloads=true interval=86400.0 canCheck=true
+23:58:47.280 v1 pid=91850 delegate: found 2 url=http://127.0.0.1:8765/SpikeHost-2.aar
+23:58:47.288 v1 pid=91850 delegate: downloaded
+23:58:47.288 v1 pid=91850 delegate: will extract
+23:58:47.307 v1 pid=91850 delegate: did extract
+23:58:47.572 v1 pid=91850 delegate: WILL INSTALL ON QUIT 2 sessionInProgress=true extracted=/Users/dominykasgrubys/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/Installation/fmF5B9IXD/PKO3b9dmA/SpikeHost.app front=Files App
+23:58:48.288 v1 pid=91850 one second in: active=false front=Finder
+23:58:49.690 v1 pid=91850 relauncher submitted: true 
+23:58:49.692 v1 pid=91850 ending this process front=Files App
+23:58:49.881 v2 pid=92108 willFinishLaunching args=["--after-update"] event=nil front=Files App
+23:58:49.900 v2 pid=92108 didFinishLaunching event=1634039412 1868656752 propData=nil isDefault=1 parent=1 active=false policy=1 front=Files App
+23:58:49.901 v2 pid=92108 started automaticChecks=true automaticDownloads=true interval=86400.0 canCheck=true
+23:58:49.911 v2 pid=92108 delegate: not found code=1001 reason=1
+23:58:49.912 v2 pid=92108 delegate: aborted domain=SUSparkleErrorDomain code=1001 under=-/0 You’re up to date!
+23:58:49.912 v2 pid=92108 delegate: cycle finished check=1 error=1001
+23:58:49.912 v2 pid=92108 delegate: next check in 86400 s
+23:58:50.947 v2 pid=92108 one second in: active=false front=Files App
+=== relauncher.log
+23:58:49 relauncher started, waiting for pid 91850
+23:58:49 old process gone
+23:58:49 version now 2 after 0 waits
+23:58:49 open returned 0
+=== installed
+2
+
+drwxr-xr-x@ 3 dominykasgrubys  admin  96 Nov  6 23:58 /Applications/SpikeHost.app
+=== running
+92108 /Applications/SpikeHost.app/Contents/MacOS/SpikeHost --after-update
+=== requests
+--- 23:58:47 GET /appcast.xml
+Host: 127.0.0.1:8765
+Accept: application/rss+xml,*/*;q=0.1
+Accept-Language: en
+Connection: keep-alive
+Accept-Encoding: gzip, deflate
+User-Agent: TrackpadLauncher
+--- 23:58:47 GET /SpikeHost-2.aar
+Host: 127.0.0.1:8765
+Accept: */*
+Accept-Language: en
+Connection: keep-alive
+Accept-Encoding: gzip, deflate
+User-Agent: TrackpadLauncher
+--- 23:58:47 GET /assets/SpikeHost-2.aar?token=abc
+Host: 127.0.0.1:8765
+Accept: */*
+Accept-Language: en
+Connection: keep-alive
+Accept-Encoding: gzip, deflate
+User-Agent: TrackpadLauncher
+--- 23:58:49 GET /appcast.xml
+Host: 127.0.0.1:8765
+Accept: application/rss+xml,*/*;q=0.1
+Accept-Language: en
+Connection: keep-alive
+Accept-Encoding: gzip, deflate
+User-Agent: TrackpadLauncher
+=== sparkle log
+2026-11-06 23:58:49.831 Df tccd[412:40529a] [com.apple.TCC:access] AUTHREQ_ATTRIBUTION: msgID=92108.1, attribution={requesting={TCCDProcess: identifier=com.domasgru.sparklespike, p
+2026-11-06 23:58:49.833 Df tccd[412:40529a] [com.apple.TCC:access] -[TCCDAccessIdentity staticCode]: static code for: identifier com.domasgru.sparklespike, type: 0: 0x7bc90f1800 at
+2026-11-06 23:58:49.837 Df tccd[412:40529a] [com.apple.TCC:access] AUTHREQ_ATTRIBUTION: msgID=411.9720, attribution={accessing={TCCDProcess: identifier=com.domasgru.sparklespike, p
+2026-11-06 23:58:49.837 Df tccd[412:40529a] [com.apple.TCC:access] requestor: TCCDProcess: identifier=com.apple.WindowServer, pid=411, auid=88, euid=88, binary_path=/System/Library
+2026-11-06 23:58:49.839 Df tccd[412:40529a] [com.apple.TCC:access] -[TCCDAccessIdentity staticCode]: static code for: identifier com.domasgru.sparklespike, type: 0: 0x7bc90f1800 at
+2026-11-06 23:58:49.842 Df tccd[412:40529a] [com.apple.TCC:access] AUTHREQ_ATTRIBUTION: msgID=411.9721, attribution={accessing={TCCDProcess: identifier=com.domasgru.sparklespike, p
+2026-11-06 23:58:49.842 Df tccd[412:40529a] [com.apple.TCC:access] requestor: TCCDProcess: identifier=com.apple.WindowServer, pid=411, auid=88, euid=88, binary_path=/System/Library
+2026-11-06 23:58:49.842 Df tccd[412:40529a] [com.apple.TCC:access] -[TCCDAccessIdentity staticCode]: static code for: identifier com.domasgru.sparklespike, type: 0: 0x7bc90f1800 at
+2026-11-06 23:58:49.879 Df tccd[412:405c33] [com.apple.TCC:access] -[TCCDAccessIdentity staticCode]: static code for: identifier com.domasgru.sparklespike, type: 0: 0x7bc90f1800 at
+2026-11-06 23:58:49.882 E  tccd[412:405c33] [com.apple.TCC:access] Prompting policy for hardened runtime; service: kTCCServiceAppleEvents requires entitlement com.apple.security.au
+/Users/dominykasgrubys/code/trackpad-launcher/.claude/worktrees/039-auto-updates/plans/039-auto-updates/.temp/architect/grounding/probes/sparkle-spike/applications.sh: line 38: 91786 Terminated: 15          /usr/bin/python3 -I -B "$spike/server-redirect.py" "$spike/feed" "$run/requests.log" 8765
+ls: /Applications/SpikeHost.app: No such file or directory

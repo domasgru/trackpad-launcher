@@ -1,0 +1,52 @@
+=== host.log
+23:52:38.481 v1 pid=51665 willFinishLaunching args=[] event=nil front=Files App
+23:52:38.501 v1 pid=51665 didFinishLaunching event=1634039412 1868656752 propData=nil isDefault=1 parent=1 active=false policy=1 front=Files App
+23:52:38.503 v1 pid=51665 started automaticChecks=true automaticDownloads=true interval=86400.0 canCheck=true
+23:52:38.524 v1 pid=51665 delegate: found 2 url=http://127.0.0.1:8765/SpikeHost-2.aar
+23:52:38.532 v1 pid=51665 delegate: downloaded
+23:52:38.532 v1 pid=51665 delegate: will extract
+23:52:38.553 v1 pid=51665 delegate: did extract
+23:52:38.953 v1 pid=51665 delegate: WILL INSTALL ON QUIT 2 sessionInProgress=true extracted=/Users/dominykasgrubys/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/Installation/7rt0YAMtU/5ANktemE4/SpikeHost.app front=Files App
+23:52:39.553 v1 pid=51665 one second in: active=false front=Files App
+23:52:41.059 v1 pid=51665 relauncher submitted: true 
+23:52:41.060 v1 pid=51665 ending this process front=Files App
+23:52:41.263 v2 pid=52243 willFinishLaunching args=["--after-update"] event=nil front=Files App
+23:52:41.282 v2 pid=52243 didFinishLaunching event=1634039412 1868656752 propData=nil isDefault=1 parent=1 active=false policy=1 front=Files App
+23:52:41.283 v2 pid=52243 started automaticChecks=true automaticDownloads=true interval=86400.0 canCheck=true
+23:52:41.298 v2 pid=52243 delegate: not found code=1001 reason=1
+23:52:41.298 v2 pid=52243 delegate: aborted domain=SUSparkleErrorDomain code=1001 under=-/0 You’re up to date!
+23:52:41.298 v2 pid=52243 delegate: cycle finished check=1 error=1001
+23:52:41.299 v2 pid=52243 delegate: next check in 86400 s
+23:52:42.303 v2 pid=52243 one second in: active=false front=Files App
+=== relauncher.log
+23:52:41 relauncher started, waiting for pid 51665
+23:52:41 old process gone
+23:52:41 version now 2 after 0 waits
+23:52:41 open returned 0
+=== front.log
+23:52:37 front: Files App ASN:0x0-0xb32b32: (in front) 
+    bundleID=[ NULL ] 
+    bundle path=[ NULL ] 
+    executable path=[ NULL ] 
+ !cgsConnection !signalled type=[ NULL ]  flavor=[ NULL ]  Version=[ NULL ]  Arch=!!none 
+=== installed version
+2
+
+=== running
+52243 /private/tmp/039-sparkle/spike/install/SpikeHost.app/Contents/MacOS/SpikeHost --after-update
+=== launchd jobs
+52243	0	application.com.domasgru.sparklespike.703021393.703021532
+=== cache
+~/Library/Caches/com.domasgru.sparklespike
+~/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle
+~/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/Installation
+~/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/PersistentDownloads
+~/Library/Caches/com.domasgru.sparklespike/fsCachedData
+~/Library/Caches/com.domasgru.sparklespike/Cache.db-shm
+~/Library/Caches/com.domasgru.sparklespike/Cache.db-wal
+~/Library/Caches/com.domasgru.sparklespike/Cache.db
+=== sparkle log
+2026-11-06 23:52:38.569 E  Autoupdate[51754:3f13cd] [org.sparkle-project.Sparkle:Sparkle] Error: bookmark data for update download is stale.. but still continuing.
+2026-11-06 23:52:38.573 Df Autoupdate[51754:3f13cd] [org.sparkle-project.Sparkle:Sparkle] OK: EdDSA signature is correct for update
+2026-11-06 23:52:38.573 Df Autoupdate[51754:3f13d5] [org.sparkle-project.Sparkle:Sparkle] Extracting using '/usr/bin/aa' 'extract' '-d' < '/Users/dominykasgrubys/Library/Caches/com.domasgru.sparklespi
+/Users/dominykasgrubys/code/trackpad-launcher/.claude/worktrees/039-auto-updates/plans/039-auto-updates/.temp/architect/grounding/probes/sparkle-spike/scenario.sh: line 58: 51648 Terminated: 15          /usr/bin/python3 -I -B "$spike/server.py" "$spike/feed" "$run/requests.log" 8765

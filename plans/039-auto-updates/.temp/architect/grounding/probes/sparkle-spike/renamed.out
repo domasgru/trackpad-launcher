@@ -1,0 +1,76 @@
+=== host.log
+00:01:25.258 v1 pid=4790 willFinishLaunching args=[] event=nil front=Finder
+00:01:25.277 v1 pid=4790 didFinishLaunching event=1634039412 1868656752 propData=nil isDefault=1 parent=1 active=false policy=1 front=Finder
+00:01:25.279 v1 pid=4790 started automaticChecks=true automaticDownloads=true interval=86400.0 canCheck=true
+00:01:25.321 v1 pid=4790 delegate: found 2 url=http://127.0.0.1:8765/Renamed-2.aar
+00:01:25.332 v1 pid=4790 delegate: downloaded
+00:01:25.333 v1 pid=4790 delegate: will extract
+00:01:25.363 v1 pid=4790 delegate: did extract
+00:01:25.856 v1 pid=4790 delegate: WILL INSTALL ON QUIT 2 sessionInProgress=true extracted=/Users/dominykasgrubys/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/Installation/zTh7rUUfO/rfI2GhlIJ/TrackpadLauncher.app front=Finder
+00:01:26.319 v1 pid=4790 one second in: active=false front=Finder
+00:01:27.957 v1 pid=4790 relauncher submitted: true 
+00:01:27.958 v1 pid=4790 ending this process front=Finder
+00:01:28.270 v2 pid=5217 willFinishLaunching args=["--after-update"] event=nil front=Finder
+00:01:28.290 v2 pid=5217 didFinishLaunching event=1634039412 1868656752 propData=nil isDefault=1 parent=1 active=false policy=1 front=Finder
+00:01:28.292 v2 pid=5217 started automaticChecks=true automaticDownloads=true interval=86400.0 canCheck=true
+00:01:28.310 v2 pid=5217 delegate: not found code=1001 reason=1
+00:01:28.311 v2 pid=5217 delegate: aborted domain=SUSparkleErrorDomain code=1001 under=-/0 You’re up to date!
+00:01:28.311 v2 pid=5217 delegate: cycle finished check=1 error=1001
+00:01:28.311 v2 pid=5217 delegate: next check in 86400 s
+00:01:29.310 v2 pid=5217 one second in: active=false front=Finder
+=== relauncher.log
+00:01:27 relauncher started, waiting for pid 4790
+00:01:27 old process gone
+00:01:28 version now 2 after 1 waits
+00:01:28 open returned 0
+=== front.log
+00:01:25 front: Finder ASN:0x0-0x20020: (in front) 
+    bundleID=[ NULL ] 
+    bundle path=[ NULL ] 
+    executable path=[ NULL ] 
+ !cgsConnection !signalled type=[ NULL ]  flavor=[ NULL ]  Version=[ NULL ]  Arch=!!none 
+=== installed version
+2
+
+=== running
+5217 /private/tmp/039-sparkle/spike/install/SpikeHost.app/Contents/MacOS/SpikeHost --after-update
+=== launchd jobs
+5217	0	application.com.domasgru.sparklespike.703082401.703082539
+=== cache
+~/Library/Caches/com.domasgru.sparklespike
+~/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle
+~/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/Installation
+~/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/PersistentDownloads
+~/Library/Caches/com.domasgru.sparklespike/fsCachedData
+~/Library/Caches/com.domasgru.sparklespike/Cache.db-shm
+~/Library/Caches/com.domasgru.sparklespike/Cache.db-wal
+~/Library/Caches/com.domasgru.sparklespike/Cache.db
+=== requests
+--- 00:01:25 GET /appcast.xml
+Host: 127.0.0.1:8765
+Accept: application/rss+xml,*/*;q=0.1
+Accept-Language: en
+Connection: keep-alive
+Accept-Encoding: gzip, deflate
+User-Agent: TrackpadLauncher
+--- 00:01:25 GET /Renamed-2.aar
+Host: 127.0.0.1:8765
+Accept: */*
+Cookie: probe=abc123
+User-Agent: TrackpadLauncher
+Accept-Language: en
+Accept-Encoding: gzip, deflate
+Connection: keep-alive
+--- 00:01:28 GET /appcast.xml
+Host: 127.0.0.1:8765
+Accept: application/rss+xml,*/*;q=0.1
+Cookie: probe=abc123
+User-Agent: TrackpadLauncher
+Accept-Language: en
+Accept-Encoding: gzip, deflate
+Connection: keep-alive
+=== sparkle log
+2026-11-07 00:01:25.402 E  Autoupdate[4841:40c834] [org.sparkle-project.Sparkle:Sparkle] Error: bookmark data for update download is stale.. but still continuing.
+2026-11-07 00:01:25.408 Df Autoupdate[4841:40c834] [org.sparkle-project.Sparkle:Sparkle] OK: EdDSA signature is correct for update
+2026-11-07 00:01:25.408 Df Autoupdate[4841:40c83e] [org.sparkle-project.Sparkle:Sparkle] Extracting using '/usr/bin/aa' 'extract' '-d' < '/Users/dominykasgrubys/Library/Caches/com.domasgru.sparklespik
+/Users/dominykasgrubys/code/trackpad-launcher/.claude/worktrees/039-auto-updates/plans/039-auto-updates/.temp/architect/grounding/probes/sparkle-spike/scenario.sh: line 58:  4774 Terminated: 15          /usr/bin/python3 -I -B "$spike/server.py" "$spike/feed" "$run/requests.log" 8765
