@@ -1,4 +1,4 @@
 // The version users see (CFBundleShortVersionString) and the build number (CFBundleVersion).
 // Raise both for every release; the build number only ever goes up.
-MARKETING_VERSION = 1.0.12
-CURRENT_PROJECT_VERSION = 13
+MARKETING_VERSION = 1.0.13
+CURRENT_PROJECT_VERSION = 14
