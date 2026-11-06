@@ -3,10 +3,10 @@ import LauncherCore
 import SwiftUI
 
 /// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges: the update card,
-/// while a newer version is known; the settings form, a SwiftUI grouped Form drawn as System Settings draws one, its
+/// while a newer version is known; the Accessibility hint card, while the permission is missing; the settings form, a SwiftUI grouped Form drawn as System Settings draws one, its
 /// sections the five gesture rows and the Animate app launch switch, the switcher section, and the thumb corner row
 /// with the Hide background apps switch below it; the notices, while any applies, 10 pt apart: the no trackpad notice
-/// or the tap-bound settings notice, the Accessibility hint and the screen recording hint, one rounded group each; then
+/// or the tap-bound settings notice, and the screen recording hint, one rounded group each; then
 /// *Quit Trackpad Launcher* and *Close*, aligned right. The form keeps the system's own fonts, insets and controls, and
 /// every row of the form is 46 pt tall (`formRowContent()`). The illustrations are 45 × 28 pt. The guide naming the two
 /// marks sits over the first illustration for the top-left corner only, where its arrows meet the thumb.
@@ -28,12 +28,8 @@ struct SettingsView: View {
     /// (`plans/030-thumb-corner-popup-style`, `plans/036-settings-form-padding`).
     private static let formMargins = (top: CGFloat(20), bottom: CGFloat(20), side: CGFloat(20))
 
-    private var accessibilityButton: NoticeButton {
-        NoticeButton(title: Copy.accessibilityButton) { actions.openSettings(.accessibility) }
-    }
-
     private var hasNotices: Bool {
-        launcher.inactiveNotice != nil || launcher.showsAccessibilityHint || launcher.screenRecordingHint != nil
+        launcher.inactiveNotice != nil || launcher.screenRecordingHint != nil
     }
 
     var body: some View {
@@ -42,6 +38,10 @@ struct SettingsView: View {
                 UpdateCardView(card: card, updateNow: { updater?.updateNow() }, cancel: { updater?.cancel() })
                     // The labels only: the controls keep the system's own fonts.
                     .font(Self.labelFont)
+                    .padding(.horizontal, Self.inset)
+            }
+            if launcher.showsAccessibilityHint {
+                AccessibilityHintCard(actions: actions)
                     .padding(.horizontal, Self.inset)
             }
             Form {
@@ -83,13 +83,10 @@ struct SettingsView: View {
                     if let notice = launcher.inactiveNotice {
                         SettingsNotice(message: notice)
                     }
-                    if launcher.showsAccessibilityHint {
-                        SettingsNotice(message: Copy.accessibilityHint, button: accessibilityButton)
-                    }
                     if let hint = launcher.screenRecordingHint {
                         SettingsNotice(
                             message: Copy.screenRecordingHint,
-                            button: NoticeButton(title: Copy.screenRecordingButton) {
+                            button: NoticeButton(title: Copy.openSettingsButton) {
                                 switch hint {
                                 case .ask: launcher.askForScreenRecording()
                                 case .openSettings: actions.openSettings(.screenRecording)
@@ -117,14 +114,21 @@ struct SettingsView: View {
     }
 }
 
+/// What a rounded group looks like, shared by `FormGroup` and the Accessibility hint card.
+enum GroupStyle {
+    static let cornerRadius: CGFloat = 12
+    static let sideInset: CGFloat = 10
+    static let fill = Color(nsColor: .quaternarySystemFill)
+}
+
 /// A rounded group of rows: 10 pt in from its sides, on the faintest fill.
 struct FormGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(spacing: 0) { content }
-            .padding(.horizontal, 10)
-            .background(Color(nsColor: .quaternarySystemFill), in: .rect(cornerRadius: 12))
+            .padding(.horizontal, GroupStyle.sideInset)
+            .background(GroupStyle.fill, in: .rect(cornerRadius: GroupStyle.cornerRadius))
     }
 }
 
@@ -202,6 +206,11 @@ extension View {
     /// grouped Form ignores `listRowInsets` on macOS 26, measured offscreen in a one-row form.
     func formRowContent() -> some View {
         frame(height: 26)
+    }
+
+    /// The text of a notice or hint: 11 pt, a point between its lines.
+    func noticeText() -> some View {
+        font(.system(size: 11)).lineSpacing(1)
     }
 }
 
@@ -296,8 +305,7 @@ struct SettingsNotice: View {
         FormGroup {
             VStack(alignment: .leading, spacing: 8) {
                 Text(message)
-                    .font(.system(size: 11))
-                    .lineSpacing(1)
+                    .noticeText()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
                 if let button {
@@ -312,17 +320,26 @@ struct SettingsNotice: View {
     }
 }
 
-/// A regular-size push button drawn in `tint`: the label in it, on a fifth-strength wash of it. Greyed while disabled.
+/// A regular-size push button drawn in `tint`. Greyed while disabled.
 struct TintedButtonStyle: ButtonStyle {
+    enum FaceKind {
+        /// The label in the tint, on a fifth-strength wash of it.
+        case wash
+        /// A white label on the solid tint.
+        case filled
+    }
+
     let tint: Color
+    var face: FaceKind = .wash
 
     func makeBody(configuration: Configuration) -> some View {
-        Face(tint: tint, configuration: configuration)
+        Face(tint: tint, kind: face, configuration: configuration)
     }
 
     /// A style does not grey itself, and reads the environment only through a view of its own.
     private struct Face: View {
         let tint: Color
+        let kind: FaceKind
         let configuration: ButtonStyleConfiguration
         @Environment(\.isEnabled) private var isEnabled
 
@@ -330,13 +347,19 @@ struct TintedButtonStyle: ButtonStyle {
             let shade = isEnabled ? tint : Color.secondary
             configuration.label
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(shade)
+                .foregroundStyle(kind == .filled ? Color.white : shade)
                 .padding(.horizontal, 16)
                 .frame(height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(shade.mix(with: .black, by: 0.1).opacity(isEnabled && configuration.isPressed ? 0.3 : 0.2)))
+                .background(RoundedRectangle(cornerRadius: 6).fill(fill(shade)))
                 .contentShape(.rect(cornerRadius: 6))
+        }
+
+        private func fill(_ shade: Color) -> Color {
+            let pressed = isEnabled && configuration.isPressed
+            switch kind {
+            case .wash: return shade.mix(with: .black, by: 0.1).opacity(pressed ? 0.3 : 0.2)
+            case .filled: return pressed ? shade.mix(with: .black, by: 0.15) : shade
+            }
         }
     }
 }
