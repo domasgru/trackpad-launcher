@@ -12,9 +12,10 @@
 #
 # The control file is read on every request, so a row changes behaviour without a restart. It holds words of the form
 # key=value; a missing key or file means ok:
-#   feed=ok|503|404|reset|hold       the feed
+#   feed=ok|503|503once|404|reset|hold   the feed; 503once answers 503 to one request, then the word is removed
 #   asset=ok|503|404|reset           the release path, before its redirect
-#   payload=ok|503|404|reset|hold    the redirect's target, which carries the bytes; hold sends half the body, then waits
+#   payload=ok|503|404|reset|hold    the redirect's target, which carries the bytes; hold sends half the body, then waits,
+#                                    and resets the connection once the word becomes reset
 import hashlib
 import http.server
 import os
@@ -35,6 +36,20 @@ RELEASE = re.compile(r"^/domasgru/trackpad-launcher/releases/download/v[^/]+/([^
 PAYLOAD = re.compile(r"^/assets/([^/]+)$")
 COOKIE = "probe=abc123; Max-Age=31536000; Path=/"
 log_lock = threading.Lock()
+
+
+def consume(key, value):
+    """Removes one word from the control file, so a fault set to happen once happens once."""
+    with log_lock:
+        try:
+            with open(control_path) as handle:
+                words = handle.read().split()
+        except OSError:
+            return
+        kept = [word for word in words if word != f"{key}={value}"]
+        with open(control_path + ".new", "w") as handle:
+            handle.write(" ".join(kept) + "\n")
+        os.replace(control_path + ".new", control_path)
 
 
 def control():
@@ -82,14 +97,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if with_body and body:
             self.wfile.write(body)
 
+    def reset_connection(self):
+        self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+        self.connection.close()
+        self.close_connection = True
+
     def fault(self, mode, with_body):
         if mode in ("503", "404"):
             self.reply(int(mode), with_body=with_body)
             return True
         if mode == "reset":
-            self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
-            self.connection.close()
-            self.close_connection = True
+            self.reset_connection()
             return True
         return False
 
@@ -107,6 +125,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.reply(404, with_body=with_body)
 
     def serve_feed(self, mode, with_body):
+        if mode == "503once":
+            consume("feed", "503once")
+            self.reply(503, with_body=with_body)
+            return
         if self.fault(mode, with_body):
             return
         try:
@@ -125,7 +147,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.reply(304, headers=headers[1:], with_body=False)
             return
         if mode == "hold":
-            self.hold(body, headers)
+            self.hold(body, headers, "feed")
             return
         self.reply(200, body, headers, with_body)
 
@@ -151,11 +173,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         headers = [("Content-Type", "application/octet-stream"), ("Set-Cookie", COOKIE)]
         if mode == "hold":
-            self.hold(body, headers)
+            self.hold(body, headers, "payload")
             return
         self.reply(200, body, headers, with_body)
 
-    def hold(self, body, headers):
+    def hold(self, body, headers, key):
         self.send_response(200)
         for name, value in headers:
             self.send_header(name, value)
@@ -166,6 +188,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.close_connection = True
         deadline = time.time() + 900
         while time.time() < deadline:
+            if control().get(key) == "reset":
+                self.reset_connection()
+                return
             readable, _, _ = select.select([self.connection], [], [], 1.0)
             if readable:
                 try:

@@ -8,9 +8,16 @@
 #   analyze.py same-headers <log> <since-a> <until-a> <since-b> <until-b>
 #   analyze.py samples-ok <samples> [--min N]
 #   analyze.py quiet <samples> [--since MS] [--forbid-owner NAME]... [--max-app-windows N]
+#                      [--no-new-windows [--allow-owner NAME]...]
 #   analyze.py pids <samples> [--since MS] [--max-concurrent N] [--max-distinct N]
 #   analyze.py first-version <samples> --app PATH --version V [--since MS]
 #   analyze.py window-open <samples>
+#   analyze.py first-at <log> --kind K [--since MS]                 prints the time of the first request of that kind
+#   analyze.py gone-at <samples> --pid P [--since MS]               prints the first sample time the pid is gone, once seen
+#   analyze.py new-pid <samples> --exclude P... [--since MS]        prints "time pid" of the first app process not excluded
+#   analyze.py closed-at <samples>                                  prints when the app's windows last all went away
+#   analyze.py first-front <samples> --id BUNDLE-ID [--since MS]    prints the time that app is first frontmost
+#   analyze.py whole <samples> --app PATH --versions V,V...         every read of the bundle is one of those builds, intact
 #   analyze.py absent <samples> --owner NAME...
 import argparse
 import json
@@ -171,6 +178,15 @@ def command_quiet(args):
         for window in sample["windows"]:
             if window[0] in forbidden and window[2] not in already:
                 problems.append(f"a window of {window[0]} appeared")
+    if args.no_new_windows:
+        later = [sample for sample in samples if sample["t"] >= args.since]
+        if later:
+            normal = lambda sample: [w for w in sample["windows"] if w[3] == 0 and w[0] not in args.allow_owner]
+            known = {window[2] for window in normal(later[0])}
+            for sample in later:
+                for window in normal(sample):
+                    if window[2] not in known:
+                        problems.append(f"a new window of {window[0]} appeared")
     seen = {window[2] for sample in samples for window in app_windows(sample)}
     if args.max_app_windows is not None and len(seen) > args.max_app_windows:
         problems.append(f"{len(seen)} app windows appeared, more than {args.max_app_windows}")
@@ -217,6 +233,67 @@ def command_absent(args):
     finish(not seen, f"windows of {', '.join(seen)} appeared" if seen else f"no window of {', '.join(args.owner)} in {len(samples)} samples")
 
 
+def command_first_at(args):
+    for request in read_requests(args.log, args.since):
+        if kind_of(request) == args.kind:
+            print(request["t"])
+            sys.exit(0)
+    sys.exit(1)
+
+
+def command_gone_at(args):
+    seen = False
+    for sample in read_samples(args.samples, args.since):
+        if args.pid in sample["app"]["pids"]:
+            seen = True
+        elif seen:
+            print(sample["t"])
+            sys.exit(0)
+    sys.exit(1)
+
+
+def command_new_pid(args):
+    for sample in read_samples(args.samples, args.since):
+        fresh = [pid for pid in sample["app"]["pids"] if pid not in args.exclude]
+        if fresh:
+            print(sample["t"], fresh[0])
+            sys.exit(0)
+    sys.exit(1)
+
+
+def command_closed_at(args):
+    samples = read_samples(args.samples)
+    if not samples or app_windows(samples[-1]):
+        sys.exit(1)
+    earliest = samples[-1]["t"]
+    for sample in reversed(samples):
+        if app_windows(sample):
+            break
+        earliest = sample["t"]
+    print(earliest)
+    sys.exit(0)
+
+
+def command_first_front(args):
+    for sample in read_samples(args.samples, args.since):
+        if sample["front"]["id"] == args.id:
+            print(sample["t"])
+            sys.exit(0)
+    sys.exit(1)
+
+
+def command_whole(args):
+    wanted = set(args.versions.split(","))
+    samples = read_samples(args.samples)
+    if not samples:
+        finish(False, "no samples")
+    for sample in samples:
+        read = sample["installed"].get(args.app, {})
+        if read.get("version") not in wanted or not read.get("exec"):
+            finish(False, f"a read at {sample['t']} was version {read.get('version')}, executable {read.get('exec')}")
+    finish(True, f"{len(samples)} reads, each a whole build of {sorted(wanted)}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -240,6 +317,7 @@ def main():
     add(
         "quiet", command_quiet, "samples", ("--since", {"type": int, "default": 0}),
         ("--forbid-owner", {"action": "append", "default": []}), ("--max-app-windows", {"type": int, "default": None}),
+        ("--no-new-windows", {"action": "store_true"}), ("--allow-owner", {"action": "append", "default": []}),
     )
     add(
         "pids", command_pids, "samples", ("--since", {"type": int, "default": 0}),
@@ -250,6 +328,15 @@ def main():
         ("--version", {"required": True}), ("--since", {"type": int, "default": 0}),
     )
     add("window-open", command_window_open, "samples")
+    add("first-at", command_first_at, "log", ("--kind", {"required": True}), ("--since", {"type": int, "default": 0}))
+    add("gone-at", command_gone_at, "samples", ("--pid", {"type": int, "required": True}), ("--since", {"type": int, "default": 0}))
+    add(
+        "new-pid", command_new_pid, "samples", ("--exclude", {"type": int, "action": "append", "default": []}),
+        ("--since", {"type": int, "default": 0}),
+    )
+    add("closed-at", command_closed_at, "samples")
+    add("first-front", command_first_front, "samples", ("--id", {"required": True}), ("--since", {"type": int, "default": 0}))
+    add("whole", command_whole, "samples", ("--app", {"required": True}), ("--versions", {"required": True}))
     add("absent", command_absent, "samples", ("--owner", {"action": "append", "required": True}))
 
     args = parser.parse_args()

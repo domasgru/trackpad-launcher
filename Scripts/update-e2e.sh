@@ -4,7 +4,7 @@
 # wire and on screen, which fakes hid in two earlier update plans.
 #
 #   Scripts/update-e2e.sh               every row; needs a person with a Developer ID, a notary profile and sudo
-#   Scripts/update-e2e.sh T58 T59       only those rows
+#   Scripts/update-e2e.sh T58 T59       only those rows; T60, T62, T63, T64, T65, T68 and T72 stop for a person
 #   Scripts/update-e2e.sh --check       no credentials: builds ad-hoc signed, renders the feed through
 #                                       release.sh --feed-only, starts the server and the sampler, and writes the
 #                                       report with every row SKIPPED
@@ -61,7 +61,7 @@ TAB=$'\t'
 log() { echo "[update-e2e] $*" >&2; }
 die() { log "$*"; exit 1; }
 
-# One row per line: id|function|what it proves. A later slice adds its rows here and their functions below.
+# One row per line: id|function|what it proves.
 rows_table() {
   cat <<'TABLE'
 T56|row_T56|card-contract accepts the real stapled archives, nested Sparkle code included
@@ -71,6 +71,16 @@ T59|row_T59|the highest newer release that runs on this Mac is the one downloade
 T60|row_T60|a copy that cannot update itself makes no request and asks for no password
 T61|row_T61|--after-update leaves the 24 hour timer as the only source of a check
 T62|row_T62|Quit Trackpad Launcher ends the app at once and the held update installs without a restart
+T63|row_T63|an idle minute hands over silently: v2 runs with --after-update, gestures work, nothing asks or shows
+T64|row_T64|a finger, then a palm, resting 90 s each keep the held update waiting; it installs a minute after the lift
+T65|row_T65|a download reset half way shows nothing and the next check completes it
+T66|row_T66|a feed that fails once is retried once, 20 of 20 times, and a feed that always fails is not hammered
+T67|row_T67|an update that is not the publisher's, or not from the publisher's host, installs nothing and shows nothing
+T68|row_T68|a failed install reopens the old copy intact, gestures work, and no hand-over loop starts
+T69|row_T69|kill -9 of the app or of Autoupdate at random moments never leaves a half copy or a stuck job
+T70|row_T70|an update that would need a password installs nothing and never shows a password window
+T71|row_T71|a removed installer job ends the cycle with no hand-over and a later check downloads again
+T72|row_T72|a build with an empty update key makes no request and shows nothing
 TABLE
 }
 
@@ -216,7 +226,7 @@ cleanup() {
   stop_sampler
   stop_server
   reset_world
-  rm -rf "$SCRATCH/feedwork" "$TREE" "$ROW_RESULT"
+  rm -rf "$SCRATCH/feedwork" "$TREE" "$TREE-emptykey" "$ROW_RESULT"
   rmdir "$HOME/Applications" 2>/dev/null
   local left
   left="$(leftovers)"
@@ -295,23 +305,108 @@ start_sampler() {
   sleep 0.5
 }
 
+# stage_assets [build name]...: the archives the server hands out. Builds of one version share an archive's file name, so
+# a row with two of them names the one it serves; with no name every archive is served.
 stage_assets() {
   rm -rf "$SERVE/assets"
   mkdir -p "$SERVE/assets"
-  cp "$CACHE"/*/*.aar "$SERVE/assets/" 2>/dev/null
+  if [ $# -eq 0 ]; then
+    cp "$CACHE"/*/*.aar "$SERVE/assets/" 2>/dev/null
+  else
+    local name
+    for name in "$@"; do cp "$(aar_of "$name")" "$SERVE/assets/" 2>/dev/null; done
+  fi
   return 0
 }
 
 # use_feed <build name>...: serves the feed release.sh --feed-only renders with those builds' items.
 use_feed() {
-  stage_assets
+  stage_assets "$@"
   render_feed "$SERVE/feed.xml" "$@" || return 1
 }
+
+# edit_feed <feed.py command> <version> [arguments]: edits the feed being served.
+edit_feed() {
+  local command="$1"
+  shift
+  $PY "$HELPERS/feed.py" "$command" "$SERVE/feed.xml" "$@" > "$SERVE/feed.edit" || return 1
+  mv "$SERVE/feed.edit" "$SERVE/feed.xml"
+}
+
+# The hand-over job and Sparkle's two installer jobs, which no row may leave listed.
+HELPER_JOBS="$E2E_ID(\\.hand-over|-sparkle-)"
+count_helper_jobs() { launchctl list 2>/dev/null | awk '{ print $3 }' | grep -cE "^$HELPER_JOBS"; }
+# job_listed <label suffix>: .hand-over, -sparkle-updater or -sparkle-progress.
+job_listed() { launchctl list 2>/dev/null | awk -v label="$E2E_ID$1" '$3 == label { found = 1 } END { exit !found }'; }
+
+# wait_job <seconds> <label suffix>: polls fast, because the instant the job appears is a measurement.
+wait_job() {
+  local end=$((SECONDS + $1))
+  while [ "$SECONDS" -lt "$end" ]; do
+    job_listed "$2" && return 0
+    sleep 0.1
+  done
+  return 1
+}
+
+# wait_gone <pid> <seconds>
+wait_gone() {
+  local end=$((SECONDS + $2))
+  while [ "$SECONDS" -lt "$end" ]; do
+    kill -0 "$1" 2>/dev/null || return 0
+    sleep 0.05
+  done
+  return 1
+}
+
+bundle_version() { /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$1/Contents/Info.plist"; }
 
 # ask_person <instruction>: what nothing can synthesise. The time after the Return is the row's clock.
 ask_person() {
   printf '\n>>> %s\n    Press Return here when ready: ' "$1" > /dev/tty
   read -r _ < /dev/tty
+}
+
+# tell_person <instruction>: for a moment the script finds for itself, so nothing waits on a Return.
+tell_person() { printf '\n>>> %s\n' "$1" > /dev/tty; }
+
+# The gesture rows time a person's 1-finger gesture through the app's real settings window: this app is assigned to it,
+# so its reaching the front is the only outside sign that gestures run.
+GESTURE_APP_ID=com.apple.calculator
+GESTURE_APP_NAME=Calculator
+
+quit_gesture_app() { osascript -e "tell application \"$GESTURE_APP_NAME\" to quit" >/dev/null 2>&1; return 0; }
+
+# assign_gesture <app path>: the running copy's settings window opens, the person assigns the app and closes it again.
+assign_gesture() {
+  quit_gesture_app
+  /usr/bin/open -g "$1"
+  wait_for 15 analyze window-open "$SAMPLES" || return 1
+  ask_person "In the settings window of Trackpad Launcher E2E, assign $GESTURE_APP_NAME to the 1-finger tap gesture, close the window with its red button, and stay off the trackpad."
+  wait_for 15 window_closed
+}
+
+# check_gesture <description> <since ms> [limit ms]: the person has been told to tap; the time the app first came to the
+# front after <since> is measured from the sampler, so it includes their reaction.
+check_gesture() {
+  local reached limit="${3:-10000}"
+  wait_for $((limit / 1000 + 2)) analyze first-front "$SAMPLES" --id "$GESTURE_APP_ID" --since "$2"
+  reached="$(analyze first-front "$SAMPLES" --id "$GESTURE_APP_ID" --since "$2")"
+  if [ -n "$reached" ] && [ $((reached - $2)) -lt "$limit" ]; then
+    ROW_NOTES+=("$1: $GESTURE_APP_NAME reached the front $((reached - $2)) ms after the mark")
+  else
+    ROW_FAILS+=("$1: $GESTURE_APP_NAME did not reach the front within $((limit / 1000)) s of the mark")
+  fi
+  quit_gesture_app
+}
+
+# within <description> <value ms> <least> <most>
+within() {
+  if [ -n "$2" ] && [ "$2" -ge "$3" ] && [ "$2" -le "$4" ]; then
+    ROW_NOTES+=("$1: $2 ms")
+  else
+    ROW_FAILS+=("$1: ${2:-nothing} ms, wanted $3 to $4")
+  fi
 }
 
 # --- verdicts. A row is a function run in a subshell: it calls check, expect_count, row_fail or row_skip, and the
@@ -419,14 +514,16 @@ ensure_sparkle_tools() {
 
 # A copy of the tree with project.yml patched; the real one is never edited.
 prepare_tree() {
-  [ -f "$TREE/.ready" ] && return 0
-  rm -rf "$TREE"
-  mkdir -p "$TREE"
+  local variant="${1:-}" tree="$TREE${1:+-$1}"
+  [ -f "$tree/.ready" ] && return 0
+  rm -rf "$tree"
+  mkdir -p "$tree"
   rsync -a --exclude /.git --exclude /build --exclude /plans --exclude /.claude --exclude /DerivedData \
     --exclude /LauncherKit/.build --exclude /LauncherKit/.swiftpm --exclude /TrackpadLauncher.xcodeproj \
-    "$ROOT/" "$TREE/" || return 1
-  local key patched="$TREE/project.yml.patched"
+    "$ROOT/" "$tree/" || return 1
+  local key patched="$tree/project.yml.patched"
   key="$(cat "$SCRATCH/key/ed.pub")"
+  [ "$variant" = emptykey ] && key='""'
   awk -v feed="$FEED_URL" -v downloads="$DOWNLOADS_BASE/" -v key="$key" '
     /PRODUCT_BUNDLE_IDENTIFIER: com.domasgru.TrackpadLauncherApp$/ { sub(/TrackpadLauncherApp$/, "TrackpadLauncherApp.e2e") }
     /SUFeedURL:/ { sub(/SUFeedURL:.*/, "SUFeedURL: " feed) }
@@ -438,27 +535,32 @@ prepare_tree() {
       print "          NSAllowsLocalNetworking: true"
       next
     }
-    { print }' "$TREE/project.yml" > "$patched" || return 1
-  mv "$patched" "$TREE/project.yml"
+    { print }' "$tree/project.yml" > "$patched" || return 1
+  mv "$patched" "$tree/project.yml"
   local expectation
   for expectation in "PRODUCT_BUNDLE_IDENTIFIER: $E2E_ID" "SUFeedURL: $FEED_URL" "SUPublicEDKey: $key" \
     "TLUpdateDownloads: $DOWNLOADS_BASE/" "NSAllowsLocalNetworking: true"; do
-    grep -qF -- "$expectation" "$TREE/project.yml" || { log "the patched project.yml lacks: $expectation"; return 1; }
+    grep -qF -- "$expectation" "$tree/project.yml" || { log "the patched project.yml lacks: $expectation"; return 1; }
   done
-  (cd "$TREE" && xcodegen generate) >"$SCRATCH/logs-xcodegen.txt" 2>&1 || { tail -20 "$SCRATCH/logs-xcodegen.txt" >&2; return 1; }
-  touch "$TREE/.ready"
+  (cd "$tree" && xcodegen generate) >"$SCRATCH/logs-xcodegen.txt" 2>&1 || { tail -20 "$SCRATCH/logs-xcodegen.txt" >&2; return 1; }
+  touch "$tree/.ready"
 }
 
-# build <name> <version> <build number> <release|appledev>: leaves the app and its update archive in $CACHE/<name>.
-# Under --check every kind is ad-hoc signed, with no export and no notarising.
+# ensure_build <name> <version> <build number> <kind> [bundle identifier] [tree variant]: leaves the app and its update
+# archive in $CACHE/<name>. Kinds: release (Developer ID, notarised), unnotarised (Developer ID only), appledev. The
+# identifier defaults to the e2e one, and the variant emptykey ships an empty update key. Under --check every kind is
+# ad-hoc signed, with no export and no notarising.
 ensure_build() {
-  local name="$1" version="$2" number="$3" kind="$4"
+  local name="$1" version="$2" number="$3" kind="$4" identifier="${5:-$E2E_ID}" variant="${6:-}"
   [ -f "$CACHE/$name/.done" ] && return 0
-  log "building $name ($version, build $number, $kind)"
-  prepare_tree || return 1
+  log "building $name ($version, build $number, $kind${5:+, $identifier}${variant:+, $variant})"
+  prepare_tree "$variant" || return 1
+  local tree="$TREE${variant:+-$variant}"
   local work="$SCRATCH/work/$name" build_log="$SCRATCH/logs/$name.log" app signing
   rm -rf "$work"
   mkdir -p "$work" "$SCRATCH/logs"
+  local identifier_setting=()
+  [ "$identifier" = "$E2E_ID" ] || identifier_setting=("PRODUCT_BUNDLE_IDENTIFIER=$identifier")
   if [ "$MODE" = check ]; then
     signing=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=-" DEVELOPMENT_TEAM= OTHER_CODE_SIGN_FLAGS=)
   elif [ "$kind" = appledev ]; then
@@ -469,17 +571,18 @@ ensure_build() {
 
   xcodebuild archive \
     -packageAuthorizationProvider netrc \
-    -project "$TREE/TrackpadLauncher.xcodeproj" \
+    -project "$tree/TrackpadLauncher.xcodeproj" \
     -scheme TrackpadLauncher \
     -configuration Release \
     -destination 'generic/platform=macOS' \
     -archivePath "$work/TrackpadLauncher.xcarchive" \
     -derivedDataPath "$SCRATCH/derived" \
     "${signing[@]}" \
+    "${identifier_setting[@]}" \
     MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$number" >"$build_log" 2>&1 ||
     { tail -30 "$build_log" >&2; return 1; }
 
-  if [ "$MODE" = full ] && [ "$kind" = release ]; then
+  if [ "$MODE" = full ] && [ "$kind" != appledev ]; then
     cat > "$work/ExportOptions.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -504,18 +607,20 @@ PLIST
     signature="$(codesign -dv --verbose=2 "$app" 2>&1)"
     grep -q "Authority=Developer ID Application" <<<"$signature" || { log "$name is not Developer ID signed"; return 1; }
     grep -q "flags=0x10000(runtime)" <<<"$signature" || { log "$name lacks the hardened runtime"; return 1; }
-    ditto -c -k --keepParent "$app" "$work/notarize.zip"
-    xcrun notarytool submit "$work/notarize.zip" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1 | tee -a "$build_log" |
-      grep -q "status: Accepted" || { log "notarisation of $name was not accepted; see $build_log"; return 1; }
-    xcrun stapler staple "$app" >>"$build_log" 2>&1 && xcrun stapler validate "$app" >>"$build_log" 2>&1 ||
-      { log "cannot staple $name"; return 1; }
+    if [ "$kind" = release ]; then
+      ditto -c -k --keepParent "$app" "$work/notarize.zip"
+      xcrun notarytool submit "$work/notarize.zip" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1 | tee -a "$build_log" |
+        grep -q "status: Accepted" || { log "notarisation of $name was not accepted; see $build_log"; return 1; }
+      xcrun stapler staple "$app" >>"$build_log" 2>&1 && xcrun stapler validate "$app" >>"$build_log" 2>&1 ||
+        { log "cannot staple $name"; return 1; }
+    fi
   else
     app="$work/TrackpadLauncher.xcarchive/Products/Applications/$BUNDLE_NAME"
     [ -d "$app" ] || { log "archive holds no $app"; return 1; }
   fi
 
   local plist="$app/Contents/Info.plist" minimum
-  [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = "$E2E_ID" ] || { log "$name has the wrong identifier"; return 1; }
+  [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = "$identifier" ] || { log "$name has the wrong identifier"; return 1; }
   minimum="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$plist")"
   mkdir -p "$CACHE/$name"
   rm -rf "$CACHE/$name/$BUNDLE_NAME"
@@ -886,6 +991,351 @@ row_T62() {
 }
 
 # ---------------------------------------------------------------------------------------------------------------
+# The hand-over rows
+
+# start_held <label> <app path> [launch argument]...: v1 is installed at that path and launched with an overdue check.
+# Returns once the update is held (Sparkle's installer job is listed); HELD_AT is that instant.
+start_held() {
+  local label="$1" app="$2" started
+  shift 2
+  use_feed v2 || row_fail "cannot render the feed"
+  install_copy v1 "$app"
+  set_last_check $((30 * 3600))
+  start_sampler "$label" "$app"
+  started="$(now_ms)"
+  launch_hidden "$app" "$@"
+  wait_count 60 payload "$started" 1 || row_fail "no download began"
+  wait_job 150 -sparkle-updater || row_fail "the update was never held"
+  HELD_AT="$(now_ms)"
+}
+
+first_process() { app_processes | head -1; }
+
+# process_runs <pid> <app path>: the process runs that copy's executable with --after-update.
+process_runs() { ps -o args= -p "$1" | grep -q -- "^$2/Contents/MacOS/.* --after-update\$"; }
+
+# after_exit <description> <old pid>: once the old pid has ended, finds the copy that follows it. Sets GONE_AT, NEW_AT and
+# NEW_PID from the sampler.
+after_exit() {
+  local description="$1" old="$2"
+  wait_for 5 analyze gone-at "$SAMPLES" --pid "$old" || row_fail "$description: the sampler never saw the old process end"
+  GONE_AT="$(analyze gone-at "$SAMPLES" --pid "$old")"
+  wait_for 20 analyze new-pid "$SAMPLES" --exclude "$old" --since "$GONE_AT" || row_fail "$description: no copy started after the old one ended"
+  read -r NEW_AT NEW_PID <<<"$(analyze new-pid "$SAMPLES" --exclude "$old" --since "$GONE_AT")"
+}
+
+# wait_until <ms>
+wait_until() { while [ "$(now_ms)" -lt "$1" ]; do sleep 1; done; }
+
+row_T63() {
+  local app="/Applications/$APP_NAME" old closed mark until
+  start_held T63 "$app"
+  old="$(first_process)"
+  assign_gesture "$app" || row_fail "the gesture could not be assigned, or the window did not close"
+  closed="$(analyze closed-at "$SAMPLES")" || row_fail "the settings window did not close"
+  mark=$((HELD_AT > closed ? HELD_AT : closed))
+  tell_person "Stay off the trackpad. When TAP NOW appears, tap the gesture once a second until this row ends."
+  wait_gone "$old" 100 || row_fail "the old copy was still running 100 s after the window closed"
+  tell_person "TAP NOW: the gesture, once a second."
+  after_exit "v2 start" "$old"
+  within "the old process ended after the later of the hold and the window closing" $((GONE_AT - mark)) 60000 63000
+  within "v2 started after the old process ended" $((NEW_AT - GONE_AT)) 0 1000
+  check "the new process runs from /Applications with --after-update" process_runs "$NEW_PID" "$app"
+  check "the bundle is v2" test "$(bundle_version "$app")" = 2000
+  check_gesture "gesture after the hand-over" "$GONE_AT"
+  check "no window from any other process, UIElement, neither the app nor a Sparkle helper frontmost" \
+    analyze quiet "$SAMPLES" --since "$closed" --forbid-owner SecurityAgent --no-new-windows --allow-owner "$GESTURE_APP_NAME"
+  until=$((NEW_AT + 180000))
+  wait_until "$until"
+  expect_count "feed requests from v2 for 180 s" -eq 0 count_in feed "$NEW_AT" "$until"
+  expect_count "helper jobs listed at 180 s" -eq 0 count_helper_jobs
+  check "the pid of v2 is unchanged at 180 s" kill -0 "$NEW_PID"
+  check "one app process over the 180 s" analyze pids "$SAMPLES" --since "$NEW_AT" --max-distinct 1
+  ask_person "Open Trackpad Launcher E2E with Spotlight (Command-Space, its name, Return), then press Return here."
+  wait_for 10 analyze window-open "$SAMPLES"
+  check "Spotlight opened the settings window" analyze window-open "$SAMPLES"
+}
+
+row_T64() {
+  local app="/Applications/$APP_NAME" old lifted gone
+  ask_person "Rest one finger on the trackpad and leave it there. With the other hand press Return here: the run starts."
+  start_held T64 "$app"
+  old="$(first_process)"
+  sleep 90
+  check "a finger resting past 90 s kept the old copy alive" kill -0 "$old"
+  ask_person "Lay a palm on the trackpad, lift the finger, and press Return here. Keep the palm down."
+  sleep 90
+  check "a palm resting 90 s kept the old copy alive" kill -0 "$old"
+  ask_person "Lift the palm and press Return here the moment it is off."
+  lifted="$(now_ms)"
+  wait_gone "$old" 100 || row_fail "the old copy did not end within 100 s of the lift"
+  wait_for 5 analyze gone-at "$SAMPLES" --pid "$old"
+  gone="$(analyze gone-at "$SAMPLES" --pid "$old")"
+  within "the old process ended after the lift, the Return pressed up to 3 s late" $((gone - lifted)) 57000 63000
+}
+
+row_T65() {
+  local app="/Applications/$APP_NAME" started asked pid closed
+  use_feed v2 || row_fail "cannot render the feed"
+  set_control "payload=hold"
+  install_copy v1 "$app"
+  set_last_check $((30 * 3600))
+  start_sampler T65 "$app"
+  started="$(now_ms)"
+  launch_hidden "$app"
+  wait_count 60 payload "$started" 1 || row_fail "no download began"
+  pid="$(first_process)"
+  assign_gesture "$app" || row_fail "the gesture could not be assigned, or the window did not close"
+  closed="$(analyze closed-at "$SAMPLES")" || row_fail "the settings window did not close"
+  asked="$(now_ms)"
+  ask_person "Tap the gesture once, then press Return here."
+  check_gesture "gesture during the stalled download, a person's reaction included" "$asked" 60000
+  set_control "payload=reset"
+  sleep 5
+  set_control ""
+  check "v1 keeps running after the reset" kill -0 "$pid"
+  check "the bundle is still v1" test "$(bundle_version "$app")" = 1000
+  check "nothing showed" analyze quiet "$SAMPLES" --since "$closed" --forbid-owner SecurityAgent --no-new-windows \
+    --allow-owner "$GESTURE_APP_NAME"
+  if ! wait_count 20 payload "$started" 2; then
+    stop_app
+    set_last_check $((30 * 3600))
+    launch_hidden "$app"
+    wait_count 60 payload "$started" 2 || row_fail "no second GET followed the reset"
+  fi
+  wait_job 120 -sparkle-updater || ROW_FAILS+=("the second GET did not complete the download")
+  expect_count "archive GETs" -ge 2 count_in payload "$started"
+}
+
+row_T66() {
+  local app="/Applications/$APP_NAME" round started first total inside good=0
+  use_feed v2 || row_fail "cannot render the feed"
+  for round in $(seq 1 20); do
+    reset_world
+    install_copy v1 "$app"
+    set_control "feed=503once"
+    set_last_check $((30 * 3600))
+    started="$(now_ms)"
+    launch_hidden "$app"
+    if wait_count 30 feed "$started" 1; then
+      first="$(analyze first-at "$LOG" --kind feed --since "$started")"
+      sleep 3
+      total="$(count_in feed "$started")"
+      inside="$(count_in feed "$started" $((first + 2000)))"
+      if [ "$total" = 2 ] && [ "$inside" = 2 ]; then
+        good=$((good + 1))
+      else
+        ROW_NOTES+=("round $round: $total feed requests, $inside within 2 s")
+      fi
+    else
+      ROW_NOTES+=("round $round: no feed request")
+    fi
+    stop_app
+  done
+  expect_count "rounds of 20 with exactly 2 feed requests within 2 s" -eq 20 echo "$good"
+
+  reset_world
+  install_copy v1 "$app"
+  set_control "feed=503"
+  set_last_check $((30 * 3600))
+  started="$(now_ms)"
+  launch_hidden "$app"
+  sleep 60
+  expect_count "feed requests in 60 s against a feed that always fails" -eq 2 count_in feed "$started"
+}
+
+# t67_case <label> <description> <yes|no: the archive is asked for> <build> [feed.py command and arguments]...
+t67_case() {
+  local label="$1" description="$2" wanted="$3" build="$4" app="/Applications/$APP_NAME" started later
+  shift 4
+  reset_world
+  use_feed "$build" || row_fail "$description: cannot render the feed"
+  if [ $# -gt 0 ]; then edit_feed "$@" || row_fail "$description: cannot edit the feed"; fi
+  install_copy v1 "$app"
+  set_last_check $((30 * 3600))
+  start_sampler "T67-$label" "$app"
+  started="$(now_ms)"
+  launch_hidden "$app"
+  wait_count 45 feed "$started" 1 || { ROW_FAILS+=("$description: no feed request"); return; }
+  if [ "$wanted" = yes ]; then
+    wait_count 60 payload "$started" 1 || { ROW_FAILS+=("$description: the archive was never asked for"); return; }
+    sleep 80
+  else
+    sleep 20
+    expect_count "$description: asset requests" -eq 0 count_in download "$started"
+  fi
+  check "$description: v1 never replaced" analyze whole "$SAMPLES" --app "$app" --versions 1000
+  expect_count "$description: processes" -eq 1 count_app_processes
+  check "$description: one pid throughout" analyze pids "$SAMPLES" --since "$started" --max-distinct 1
+  expect_count "$description: helper jobs listed" -eq 0 count_helper_jobs
+  check "$description: nothing shown" analyze quiet "$SAMPLES" --since "$started" --forbid-owner SecurityAgent --max-app-windows 0
+  if [ "$wanted" = yes ]; then
+    stop_app
+    set_last_check $((30 * 3600))
+    later="$(now_ms)"
+    launch_hidden "$app"
+    wait_count 60 payload "$later" 1
+    expect_count "$description: a later check asked for the archive again" -ge 1 count_in payload "$later"
+  fi
+}
+
+row_T67() {
+  local version
+  ensure_build v2dev 2.0.0 2000 appledev || row_fail "cannot build v2 signed with Apple Development"
+  ensure_build v2plain 2.0.0 2000 unnotarised || row_fail "cannot build v2 signed but not notarised"
+  ensure_build v2other 2.0.0 2000 release "$E2E_ID.other" || row_fail "cannot build v2 with another bundle identifier"
+  version="$(version_of v2)"
+  t67_case tampered "a tampered EdDSA signature" yes v2 tamper-signature "$version"
+  t67_case appledev "v2 signed by Apple Development" yes v2dev
+  t67_case plain "v2 signed by the Developer ID, not notarised" yes v2plain
+  t67_case otherid "v2 with another bundle identifier" yes v2other
+  t67_case dmg "an enclosure of a .dmg" no v2 replace "$version" .aar .dmg
+  t67_case host "an enclosure on another host" no v2 replace "$version" "http://127.0.0.1:$PORT" "http://localhost:$PORT"
+}
+
+row_T68() {
+  local folder="/Applications/$FOLDER_NAME" app="/Applications/$FOLDER_NAME/$APP_NAME" old started
+  start_held T68 "$app"
+  old="$(first_process)"
+  assign_gesture "$app" || row_fail "the gesture could not be assigned, or the window did not close"
+  chmod a-w "$folder"
+  tell_person "Stay off the trackpad. When TAP NOW appears, tap the gesture once a second until this row ends."
+  wait_gone "$old" 150 || row_fail "the old copy did not end within 150 s"
+  tell_person "TAP NOW: the gesture, once a second."
+  after_exit "the failed install" "$old"
+  within "the old copy was opened after the exit" $((NEW_AT - GONE_AT)) 5000 7000
+  check "the opened copy is the one in the folder, with --after-update" process_runs "$NEW_PID" "$app"
+  check "the old copy is whole and verifies" /usr/bin/codesign --verify --strict "$app"
+  check "the bundle is v1" test "$(bundle_version "$app")" = 1000
+  check_gesture "gesture after the failed install" "$GONE_AT"
+  wait_until $((NEW_AT + 120000))
+  expect_count "feed requests for 120 s after the reopen" -eq 0 count_in feed "$NEW_AT" $((NEW_AT + 120000))
+  chmod u+w "$folder"
+  stop_app
+  set_last_check $((30 * 3600))
+  started="$(now_ms)"
+  launch_hidden "$app"
+  wait_for 300 analyze first-version "$SAMPLES" --app "$app" --version 2000 --since "$started"
+  check "with the parent writable the next start installed v2" analyze first-version "$SAMPLES" --app "$app" --version 2000 --since "$started"
+}
+
+# t69_verify <description> <armed: yes|no>: what must hold once the kill's effects have settled.
+t69_verify() {
+  local description="$1" armed="$2" app="/Applications/$APP_NAME"
+  sleep 25
+  check "$description: every read was a whole v1 or v2" analyze whole "$SAMPLES" --app "$app" --versions 1000,2000
+  check "$description: the copy verifies" /usr/bin/codesign --verify --strict "$app"
+  if [ "$armed" = yes ]; then
+    expect_count "$description: processes after the kill, hand-over armed" -le 1 count_app_processes
+  else
+    expect_count "$description: processes after the kill, hand-over not armed" -eq 0 count_app_processes
+  fi
+  expect_count "$description: helper jobs left" -eq 0 count_helper_jobs
+  stop_app
+  launch_hidden "$app"
+  sleep 8
+  expect_count "$description: a relaunch runs with" -eq 1 count_app_processes
+  stop_app
+}
+
+t69_app_round() {
+  local round="$1" app="/Applications/$APP_NAME" delay armed=no
+  reset_world
+  use_feed v2 || row_fail "cannot render the feed"
+  install_copy v1 "$app"
+  set_last_check $((30 * 3600))
+  start_sampler "T69-app-$round" "$app"
+  launch_hidden "$app"
+  delay=$((RANDOM % 75 + 1))
+  sleep "$delay"
+  job_listed .hand-over && armed=yes
+  pkill -9 -f "$APP_NAME/Contents/MacOS"
+  job_listed .hand-over && armed=yes
+  t69_verify "app killed at $delay s" "$armed"
+}
+
+# Autoupdate's command line names the bundle identifier, as its path does.
+kill_autoupdate() {
+  local end=$((SECONDS + 2))
+  while [ "$SECONDS" -lt "$end" ]; do
+    pkill -9 -f "Autoupdate.*$E2E_ID|$E2E_ID.*Autoupdate" && return 0
+    sleep 0.02
+  done
+  return 1
+}
+
+t69_installer_round() {
+  local round="$1" app="/Applications/$APP_NAME" old
+  reset_world
+  start_held "T69-installer-$round" "$app"
+  old="$(first_process)"
+  wait_gone "$old" 150 || { ROW_FAILS+=("installer round $round: the old copy never ended"); return; }
+  kill_autoupdate || ROW_FAILS+=("installer round $round: no Autoupdate to kill in the 2 s after the exit")
+  t69_verify "Autoupdate killed, round $round" yes
+}
+
+row_T69() {
+  local round
+  for round in $(seq 1 20); do t69_app_round "$round"; done
+  for round in $(seq 1 10); do t69_installer_round "$round"; done
+}
+
+row_T70() {
+  local folder="/Applications/$FOLDER_NAME" app="/Applications/$FOLDER_NAME/$APP_NAME" started
+  use_feed v2 || row_fail "cannot render the feed"
+  install_copy v1 "$app"
+  start_sampler T70 "$app"
+  set_last_check 86380
+  started="$(now_ms)"
+  launch_hidden "$app" --after-update
+  sleep 5
+  chmod a-w "$folder"
+  wait_count 60 feed "$started" 1 || row_fail "the stamp never fired a check"
+  sleep 150
+  check "no password window appeared" analyze absent "$SAMPLES" --owner SecurityAgent
+  check "the update did not install" analyze whole "$SAMPLES" --app "$app" --versions 1000
+  check "nothing shown" analyze quiet "$SAMPLES" --since "$started" --forbid-owner SecurityAgent --max-app-windows 0
+  expect_count "helper jobs listed at the end" -eq 0 count_helper_jobs
+}
+
+row_T71() {
+  local app="/Applications/$APP_NAME" old later
+  start_held T71 "$app"
+  old="$(first_process)"
+  launchctl remove "$E2E_ID-sparkle-updater"
+  sleep 90
+  check "no hand-over job at the mark" test "$(job_listed .hand-over && echo listed)" != listed
+  check "v1 still runs with the same pid" kill -0 "$old"
+  check "the bundle never changed" analyze whole "$SAMPLES" --app "$app" --versions 1000
+  stop_app
+  remove_launch_jobs
+  set_last_check $((30 * 3600))
+  later="$(now_ms)"
+  launch_hidden "$app"
+  wait_count 60 payload "$later" 1
+  expect_count "a later check downloaded again" -ge 1 count_in payload "$later"
+}
+
+row_T72() {
+  local app="/Applications/$APP_NAME" started asked
+  ensure_build nokey 1.0.0 1000 release "$E2E_ID" emptykey || row_fail "cannot build the copy with an empty update key"
+  use_feed v2 || row_fail "cannot render the feed"
+  install_copy nokey "$app"
+  set_last_check $((30 * 3600))
+  start_sampler T72 "$app"
+  started="$(now_ms)"
+  launch_hidden "$app"
+  sleep 30
+  expect_count "requests in 30 s" -eq 0 count_in any "$started"
+  assign_gesture "$app" || row_fail "the gesture could not be assigned, or the window did not close"
+  asked="$(now_ms)"
+  ask_person "Tap the gesture once, then press Return here."
+  check_gesture "gesture with an empty key, a person's reaction included" "$asked" 60000
+  expect_count "requests at the end" -eq 0 count_in any "$started"
+  check "nothing shown beyond the settings window" analyze quiet "$SAMPLES" --since "$started" --forbid-owner SecurityAgent --max-app-windows 1
+}
+
+# ---------------------------------------------------------------------------------------------------------------
 # The report
 
 write_report() {
@@ -918,8 +1368,6 @@ write_report() {
       fi
       echo "| $id | $title | $status | ${evidence//|/\\|} |"
     done < <(rows_table)
-    echo
-    echo "Hand-over rows are added to the same table by a later slice."
   } > "$REPORT"
   log "report: $REPORT"
 }
