@@ -90,6 +90,8 @@ import LauncherCore
 
     public func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
 
+    public func openWindows(among ids: Set<WindowID>) -> Set<WindowID> { windows.openWindows(among: ids) }
+
     public func prepareLaunchAnimations(for apps: [AppEntry]) {
         overlay.prepare(for: apps)
     }

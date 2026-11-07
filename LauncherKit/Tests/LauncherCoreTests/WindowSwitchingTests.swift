@@ -61,7 +61,7 @@ import LauncherCore
 
     // MARK: Lifting
 
-    @Test func liftingOnAnotherWindowKeepsItInFrontWithTheFrontWindowNextAndTheNextWindowSwipeStartsThere() {
+    @Test func liftingOnAnotherWindowKeepsItInFrontWithTheFrontWindowNextAndTheNextWindowSwipeKeepsTheOrderStartingOnIt() {
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
         world.launcher.openedByHand()
 
@@ -74,8 +74,8 @@ import LauncherCore
         #expect(world.launcher.window == .open(request: 1))
 
         world.play(lifted.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 3.5)))
-        #expect(world.launcher.windowSwitcher?.rows.map(\.title) == ["News", "Docs", "Mail"])
-        #expect(world.launcher.windowSwitcher?.selection.selected == 0)
+        #expect(world.launcher.windowSwitcher?.rows.map(\.title) == ["Docs", "Mail", "News"])
+        #expect(world.launcher.windowSwitcher?.selection.selected == 2)
     }
 
     @Test(arguments: ["back to the first row", "onto the second row"])

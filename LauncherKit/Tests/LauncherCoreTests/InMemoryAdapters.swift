@@ -343,6 +343,27 @@ import LauncherCore
 
     func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
 
+    /// Every `openWindows(among:)` argument, in order.
+    private(set) var openWindowsQueries: [Set<WindowID>] = []
+
+    func openWindows(among ids: Set<WindowID>) -> Set<WindowID> {
+        openWindowsQueries.append(ids)
+        return ids.intersection(windowSets.values.flatMap(\.openIDs))
+    }
+
+    /// The app quits: its windows are gone, and a later `windows(of:)` starts a fresh set with a new launch.
+    func quit(_ app: AppEntry) {
+        windowSets[app.url]?.closeAll()
+        windowSets[app.url] = nil
+    }
+
+    /// The app opens again as a new launch, with no windows yet.
+    @discardableResult
+    func relaunch(_ app: AppEntry) -> FakeWindows {
+        quit(app)
+        return windows(of: app)
+    }
+
     func prepareLaunchAnimations(for apps: [AppEntry]) { preparedLaunchAnimations = apps }
 
     func playLaunchAnimation(for app: AppEntry) {
@@ -460,6 +481,10 @@ import LauncherCore
     private var listed: Set<String> = []
     /// The app's current launch, which its frontmost reads carry.
     let launch: AppLaunch
+    /// Open windows on another Space: not read, but still held by the window server.
+    private var otherSpace: Set<String> = []
+    /// The app is hidden: nothing changes in its windows' order.
+    private(set) var isHidden = false
 
     init(numbers: WindowNumbers) {
         self.numbers = numbers
@@ -479,6 +504,9 @@ import LauncherCore
         for title in visible + minimised { _ = id(title) }
     }
 
+    /// Creates the windows in this order (so they get rising numbers in it) without showing them.
+    func create(_ titles: [String]) { for title in titles { _ = id(title) } }
+
     /// A new visible window, in front.
     func open(_ title: String) {
         _ = id(title)
@@ -495,7 +523,38 @@ import LauncherCore
     func close(_ title: String) {
         onScreenTitles.removeAll { $0 == title }
         minimisedTitles.removeAll { $0 == title }
+        otherSpace.remove(title)
     }
+
+    func closeAll() {
+        for title in onScreenTitles + minimisedTitles + otherSpace { close(title) }
+    }
+
+    /// The user brings a window to the front with a click, the Window menu, Mission Control or the Dock; a minimised
+    /// one is restored.
+    func focus(_ title: String) {
+        minimisedTitles.removeAll { $0 == title }
+        onScreenTitles.removeAll { $0 == title }
+        onScreenTitles.insert(title, at: 0)
+    }
+
+    func moveToAnotherSpace(_ title: String) {
+        guard onScreenTitles.contains(title) else { return }
+        onScreenTitles.removeAll { $0 == title }
+        otherSpace.insert(title)
+    }
+
+    /// Back on this Space, at the back of the visible windows.
+    func returnToThisSpace(_ title: String) {
+        guard otherSpace.remove(title) != nil else { return }
+        onScreenTitles.append(title)
+    }
+
+    func hide() { isHidden = true }
+    func show() { isHidden = false }
+
+    /// The windows the window server holds, on any Space.
+    var openIDs: [WindowID] { (onScreenTitles + minimisedTitles + Array(otherSpace)).map { id($0) } }
 
     func id(_ title: String) -> WindowID {
         if let id = ids[title] { return id }

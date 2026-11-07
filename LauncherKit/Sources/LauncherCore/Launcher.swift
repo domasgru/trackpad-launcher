@@ -68,6 +68,8 @@ public final class Launcher {
 
     private var shown: ShownSwitcher?
     @ObservationIgnored private var windowSwipesBegun = 0
+    /// Each app's window order. Written only by `windowSwipe(.began)`; survives reconciles; never saved.
+    @ObservationIgnored private var windowOrders = WindowOrders()
     /// The launches being watched, one record per launched bundle. Written only by `fire` and `progress(_:of:)`: the one
     /// record of which launches are live; the adapter's watches and bounces follow its commands.
     @ObservationIgnored private var launches: [BundleID: WatchedLaunch] = [:]
@@ -374,7 +376,11 @@ public final class Launcher {
         case .began:
             // A slide up or down is a window swipe only when the one read lists two or more rows. Unconfirmed, the
             // recognizer makes it the slide the setting off would have made, before its next frame.
-            guard activity.isActive, let content = WindowSwitcher.Content(system.frontmostWindows(within: GestureRules.windowReadDeadline)) else { return }
+            guard activity.isActive,
+                let content = windowOrders.list(
+                    system.frontmostWindows(within: GestureRules.windowReadDeadline),
+                    stillOpen: { system.openWindows(among: $0) })
+            else { return }
             hardware.confirmWindowSwipe(on: event.trackpad)
             // One switcher at a time: a second trackpad's window swipe runs its course with none, as its swipe would.
             guard shown == nil else { return }

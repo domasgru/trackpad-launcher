@@ -333,6 +333,26 @@ extension World {
         return world
     }
 
+    /// The windows of this installed app.
+    func windows(of name: String) -> FakeWindows { system.windows(of: app(name)) }
+
+    /// The app is no longer running and its windows are gone.
+    func quit(_ name: String) {
+        let entry = app(name)
+        system.quit(entry)
+        system.running.removeAll { $0.url == entry.url }
+    }
+
+    /// The app opens again as a new launch and creates these windows in the order of `created` (so under rising
+    /// numbers in it), with `front` visible front to back, then `minimised`. It is the frontmost app.
+    func relaunch(_ name: String, created: [String], front: [String], minimised: [String] = []) {
+        let entry = app(name)
+        let windows = system.relaunch(entry)
+        windows.create(created)
+        windows.set(visible: front, minimised: minimised)
+        listFirst(entry)
+    }
+
     /// The fixed number of the frontmost app's window with this title.
     func window(_ title: String) -> WindowID { system.windows.id(title) }
 

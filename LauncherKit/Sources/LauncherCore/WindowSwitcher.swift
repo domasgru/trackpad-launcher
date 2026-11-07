@@ -29,7 +29,39 @@ public struct WindowSwitcher: Equatable, Sendable {
     public struct Content: Equatable, Sendable {
         /// Whose windows these are; their rows show its icon.
         public let app: AppEntry
-        let pick: WindowPick
+        public let rows: Rows
+    }
+
+    public struct Rows: Equatable, Sendable {
+        /// Top to bottom, in the app's window order. A window titled "" reads as the app's name followed by
+        /// " — Window N", N its 1-based row; any other title reads as the app's title rule words it
+        /// (`WindowTitleRule`), which never sees the fallback.
+        public let rows: [Row]
+        /// The app's window in front when the window swipe began; nil when every listed window is minimised.
+        public let frontWindow: WindowID?
+        /// The listed visible windows, front to back, at the start: a lift restores this order behind the selected
+        /// window. Kept apart from the row order, which no longer follows the z-order.
+        let zOrder: [WindowID]
+
+        /// The pick sorted by `order`, every picked window being in it; a row is `.visible` for a picked visible
+        /// window and `.minimised` for a picked minimised one.
+        init(app: AppEntry, pick: WindowPick, order: [WindowID]) {
+            let position = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+            let visible = Set(pick.zOrder)
+            let sorted = pick.windows.sorted { (position[$0.id] ?? .max) < (position[$1.id] ?? .max) }
+            rows = sorted.enumerated().map { index, window in
+                let title = window.title.isEmpty
+                    ? Copy.untitledWindow(of: app.name, position: index + 1)
+                    : WindowTitleRule.displayTitle(window.title, of: app.bundleID)
+                return visible.contains(window.id)
+                    ? Row.visible(window.id, title: title) : Row.minimised(window.id, title: title)
+            }
+            frontWindow = pick.front?.id
+            zOrder = pick.zOrder
+        }
+
+        /// The front window's row; 0 when there is none.
+        var startRow: Int { frontWindow.flatMap { front in rows.firstIndex { $0.window == front } } ?? 0 }
     }
 
     public enum Row: Equatable, Sendable {
@@ -60,36 +92,20 @@ public struct WindowSwitcher: Equatable, Sendable {
     /// Screen Recording was granted when the window swipe began, so visible rows show previews.
     public let showsPreviews: Bool
 
-    /// The selection counts the rows (two to ten) and starts on the first row.
+    /// The selection counts the rows (two to ten) and starts on the front window's row.
     package init(_ content: Content, showsPreviews: Bool, serial: Int, trackpad: TrackpadID) {
         self.content = content
         self.showsPreviews = showsPreviews
         self.serial = serial
         self.trackpad = trackpad
-        selection = SwitcherSelection(count: Self.rows(of: content).count)
+        selection = SwitcherSelection(count: content.rows.rows.count, startingAt: content.rows.startRow)
     }
 
     /// Whose windows these are and whose icon the rows show.
     public var app: AppEntry { content.app }
 
-    /// Top to bottom, two to ten. A window titled "" reads as the app's name followed by " — Window N", N its 1-based
-    /// row; any other title reads as the app's title rule words it (`WindowTitleRule`), which never sees the fallback.
-    public var rows: [Row] { Self.rows(of: content) }
-
-    private static func rows(of content: Content) -> [Row] {
-        let visible = (content.pick.front.map { [$0] } ?? []) + content.pick.others
-        let minimised = content.pick.minimised
-        func title(_ window: AppWindow, at index: Int) -> String {
-            window.title.isEmpty
-                ? Copy.untitledWindow(of: content.app.name, position: index + 1)
-                : WindowTitleRule.displayTitle(window.title, of: content.app.bundleID)
-        }
-        let visibleRows = visible.enumerated().map { Row.visible($1.id, title: title($1, at: $0)) }
-        let minimisedRows = minimised.enumerated().map {
-            Row.minimised($1.id, title: title($1, at: visible.count + $0))
-        }
-        return visibleRows + minimisedRows
-    }
+    /// Top to bottom, two to ten, in the app's window order.
+    public var rows: [Row] { content.rows.rows }
 
     /// The windows to capture: the visible rows while `showsPreviews`, else none.
     public var previewWindows: [WindowID] {
@@ -98,24 +114,10 @@ public struct WindowSwitcher: Equatable, Sendable {
     }
 
     /// The app's window in front when the window swipe began. nil when every listed window is minimised.
-    public var frontWindow: WindowID? {
-        content.pick.front?.id
-    }
+    public var frontWindow: WindowID? { content.rows.frontWindow }
 
     /// The window that comes to the front while its row is selected. nil on a minimised row.
     public var selectedVisibleWindow: WindowID? {
         if case .visible(let id, _) = rows[selection.selected] { id } else { nil }
-    }
-}
-
-extension WindowSwitcher.Content {
-    /// The one parse from what the system read to what the switcher lists, and so whether a slide up or down is a
-    /// window swipe at all. nil for `.noApp`, an app that did not answer, Trackpad Launcher itself, and for fewer than
-    /// two windows in the pick: one window, an only window minimised, no windows, or a full-screen front window.
-    package init?(_ read: FrontmostWindows) {
-        guard case .app(let app, _, .windows(let windows)) = read else { return nil }
-        let pick = WindowPick(windows)
-        guard pick.count >= 2 else { return nil }
-        self.init(app: app, pick: pick)
     }
 }

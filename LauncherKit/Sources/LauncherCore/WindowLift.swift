@@ -44,7 +44,7 @@ extension WindowSwitcher {
     /// - `now` is no app or another app: no raises, silent.
     /// - The selected window has closed: no raises, so no reordering; the haptic plays iff a window is in front now
     ///   and it is not `frontWindow`. Every listed window closed is therefore silent.
-    /// - Otherwise the target is the selected window, then the visible windows in their begin order (the front window
+    /// - Otherwise the target is the selected window, then the visible windows in their begin z-order (the front window
     ///   first) without it, minus any that closed; the haptic plays iff the selected window is not `frontWindow`,
     ///   which covers restoring a minimised one and every row when every window is minimised. Lifting on the front
     ///   window therefore restores the begin order, silently.
@@ -58,10 +58,7 @@ extension WindowSwitcher {
         guard open.contains(selected) else {
             return WindowLift(raises: [], playsHaptic: onScreen.first.map { $0 != frontWindow } ?? false)
         }
-        let visibleAtBegin = rows.compactMap { row -> WindowID? in
-            if case .visible(let id, _) = row { id } else { nil }
-        }
-        let target = [selected] + visibleAtBegin.filter { $0 != selected && open.contains($0) }
+        let target = [selected] + content.rows.zOrder.filter { $0 != selected && open.contains($0) }
         return WindowLift(
             raises: RaiseOrder.raises(current: onScreen, target: target), playsHaptic: selected != frontWindow)
     }

@@ -136,6 +136,9 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// skipped, so nothing on another Space is ever raised. About 2 ms per raise; once the app has timed out, no
     /// further calls go to it for that read. [] does nothing.
     func raiseWindows(_ frontToBack: [WindowID])
+    /// Which of `windows` the window server still holds, on any Space, minimised or not: about 0.2 ms. Window numbers
+    /// are never reused, so one missing here has closed (or its app quit).
+    func openWindows(among windows: Set<WindowID>) -> Set<WindowID>
 }
 
 /// A permission macOS grants the app.

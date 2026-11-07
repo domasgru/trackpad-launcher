@@ -185,7 +185,9 @@ import LauncherCore
         world.play(lifted.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 5)))
 
         #expect(world.hardware.windowSwipeAnswers == [false, true])
-        #expect(world.launcher.windowSwitcher?.rows.map(\.title) == ["Draft", "Letter"])
+        // The one-window slide already set TextEdit's order (Letter), so Draft joins its end and is the window in front.
+        #expect(world.launcher.windowSwitcher?.rows.map(\.title) == ["Letter", "Draft"])
+        #expect(world.launcher.windowSwitcher?.selection.selected == 1)
     }
 
     @Test func withoutAccessibilityASlideDownIsNoWindowSwipeAndAGrantBringsItBackWithTheNextSlide() {
