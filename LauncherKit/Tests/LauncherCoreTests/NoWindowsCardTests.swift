@@ -160,6 +160,15 @@ import LauncherCore
         }
     }
 
+    @Test func aTwoWindowSwipeAsksForTwoHundredMillisecondsAtItsStartAndAtItsLift() {
+        let world = World.windowWorld(visible: ["Docs", "Mail"])
+        world.launcher.setWindowSwipe(on: true)
+
+        world.play(thumb.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 5)).lift())
+
+        #expect(world.system.frontmostDeadlines == [.milliseconds(200), .milliseconds(200)])
+    }
+
     // MARK: The card
 
     enum Case: String, CaseIterable, Sendable {
@@ -221,7 +230,7 @@ import LauncherCore
             if hand == .freshSlidePressLift {
                 let script = hand.script.frames
                 let fingersDown = script.indices.filter { script[$0].touches.count >= 3 }
-                #expect(!fingersDown.isEmpty)
+                #expect(fingersDown.isEmpty == false)
                 #expect(fingersDown.allSatisfy { seen.frames[$0].probe == .drop }, "\(hand)")
                 #expect(seen.broughtToFront.isEmpty && seen.pulses.isEmpty && seen.raised.isEmpty, "\(hand)")
             }
@@ -239,7 +248,7 @@ import LauncherCore
         #expect(world.system.windows.reads == 0)
         let frames = script.frames
         let fingersDown = frames.indices.filter { frames[$0].touches.count >= 3 }
-        #expect(!fingersDown.isEmpty)
+        #expect(fingersDown.isEmpty == false)
         #expect(fingersDown.allSatisfy { seen[$0].1 == .pass })
     }
 
@@ -257,7 +266,7 @@ import LauncherCore
         }
 
         let shownFrames = (startHistory + liftHistory).filter { $0.windowSwitcher != nil }
-        #expect(!shownFrames.isEmpty && shownFrames.allSatisfy { $0.windowSwitcher?.isCard == true })
+        #expect(shownFrames.isEmpty == false && shownFrames.allSatisfy { $0.windowSwitcher?.isCard == true })
         #expect((startHistory + liftHistory).last?.reads == 1)
         #expect(world.hardware.windowSwipeAnswers == [true])
 

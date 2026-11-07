@@ -15,15 +15,16 @@ enum CardFixtures {
     static let notes = AppEntry(
         bundleID: BundleID(rawValue: "com.test.notes"), name: "Notes", url: URL(fileURLWithPath: "/Applications/Notes.app"))
 
-    static func content(windows: [UInt32], in app: AppEntry = notes) -> WindowSwitcher.Content {
+    static func content(windows: [UInt32], in app: AppEntry = notes) throws -> WindowSwitcher.Content {
         var orders = WindowOrders()
         let list = AppWindows(visible: windows.map { AppWindow(id: WindowID(rawValue: $0), title: "W\($0)") }, minimised: [])
-        return orders.list(.app(app, AppLaunch("bench"), .windows(list)), stillOpen: { _ in [] })!
+        let content = orders.list(.app(app, AppLaunch("bench"), .windows(list)), stillOpen: { _ in [] })
+        return try #require(content)
     }
 
-    static func switcher(windows: [UInt32], serial: Int = 1, followMM: Double? = nil) -> WindowSwitcher {
+    static func switcher(windows: [UInt32], serial: Int = 1, followMM: Double? = nil) throws -> WindowSwitcher {
         var switcher = WindowSwitcher(
-            content(windows: windows), showsPreviews: false, serial: serial, trackpad: TrackpadID(rawValue: 1))
+            try content(windows: windows), showsPreviews: false, serial: serial, trackpad: TrackpadID(rawValue: 1))
         if let followMM { switcher.selection.follow(followMM) }
         return switcher
     }
@@ -37,10 +38,10 @@ enum CardFixtures {
     private let layout = WindowColumnLayout(rowCount: 1, displayHeight: 0)
     private let topLeft = NSPoint(x: 100, y: 800)
 
-    private func laidOutPanel() -> WindowSwitcherPanel {
+    private func laidOutPanel() throws -> WindowSwitcherPanel {
         _ = NSApplication.shared
         let panel = WindowSwitcherPanel()
-        guard case .card(let card) = CardFixtures.content(windows: [1]).list else {
+        guard case .card(let card) = try CardFixtures.content(windows: [1]).list else {
             Issue.record("one window is the card")
             return panel
         }
@@ -48,8 +49,8 @@ enum CardFixtures {
         return panel
     }
 
-    @Test func theCardHasTheIconWhereAPreviewSitsAndABoldTitleAboveARegularMessage() {
-        let panel = laidOutPanel()
+    @Test func theCardHasTheIconWhereAPreviewSitsAndABoldTitleAboveARegularMessage() throws {
+        let panel = try laidOutPanel()
 
         let slotCentre = NSPoint(x: layout.inset + layout.slot.width / 2, y: layout.inset + layout.slot.height / 2)
         let icon = panel.cardIcon.frame
@@ -66,12 +67,12 @@ enum CardFixtures {
         #expect(panel.cardTitle.frame.minY > panel.cardMessage.frame.minY)
         #expect(abs(panel.cardTitle.frame.minX - layout.titleLeading) < 0.01)
         #expect(panel.visibleRowCount == 0)
-        #expect(!panel.cardContent.isHidden)
+        #expect(panel.cardContent.isHidden == false)
     }
 
-    @Test func layingOutRowsHidesTheCardAndLayingOutTheCardHidesTheRows() {
-        let panel = laidOutPanel()
-        let rows = CardFixtures.content(windows: [1, 2, 3])
+    @Test func layingOutRowsHidesTheCardAndLayingOutTheCardHidesTheRows() throws {
+        let panel = try laidOutPanel()
+        let rows = try CardFixtures.content(windows: [1, 2, 3])
         guard case .rows(let listed) = rows.list else { Issue.record("three windows are rows"); return }
 
         panel.lay(
@@ -80,15 +81,15 @@ enum CardFixtures {
         #expect(panel.cardContent.isHidden)
         #expect(panel.visibleRowCount == 3)
 
-        guard case .card(let card) = CardFixtures.content(windows: []).list else { Issue.record("none is the card"); return }
+        guard case .card(let card) = try CardFixtures.content(windows: []).list else { Issue.record("none is the card"); return }
         panel.lay(card: card, icon: CardFixtures.icon(), layout: layout, topLeft: topLeft)
-        #expect(!panel.cardContent.isHidden)
+        #expect(panel.cardContent.isHidden == false)
         #expect(panel.visibleRowCount == 0)
         #expect(panel.cardTitle.stringValue == "No open windows")
     }
 
     @Test func movingTheCardMovesThePlateAndItsContentTogetherWithAShortAction() throws {
-        let panel = laidOutPanel()
+        let panel = try laidOutPanel()
 
         panel.moveCard(by: 6, animated: true)
         #expect(CardFixtures.offset(of: panel.highlightLayer) == 6)
@@ -102,7 +103,7 @@ enum CardFixtures {
     }
 
     @Test func settlingTheCardReturnsItToRestOverTheDismissFadeOrAtOnce() throws {
-        let panel = laidOutPanel()
+        let panel = try laidOutPanel()
         panel.moveCard(by: 6, animated: false)
         #expect(panel.highlightLayer?.animation(forKey: "card") == nil)
 
@@ -118,9 +119,9 @@ enum CardFixtures {
         #expect(panel.cardContent.layer?.animation(forKey: "card") == nil)
     }
 
-    @Test func settlingWithRowsLaidOutChangesNothing() {
-        let panel = laidOutPanel()
-        guard case .rows(let listed) = CardFixtures.content(windows: [1, 2]).list else { return }
+    @Test func settlingWithRowsLaidOutChangesNothing() throws {
+        let panel = try laidOutPanel()
+        guard case .rows(let listed) = try CardFixtures.content(windows: [1, 2]).list else { return }
         panel.lay(
             out: listed.rows, icon: CardFixtures.icon(), layout: WindowColumnLayout(rowCount: 2, displayHeight: 0),
             topLeft: topLeft)
@@ -142,7 +143,7 @@ enum CardFixtures {
 
     @Test func theCardFollowsTheFingersThenSettlesBackAsThePanelGoes() throws {
         let (presenter, panel) = presenter(reduceMotion: false)
-        let shown = CardFixtures.switcher(windows: [1], followMM: 40)
+        let shown = try CardFixtures.switcher(windows: [1], followMM: 40)
         #expect(shown.cardOffset == 6)
 
         presenter.render(shown)
@@ -154,10 +155,10 @@ enum CardFixtures {
         #expect(try #require(panel.highlightLayer?.animation(forKey: "card")).duration == 0.15)
     }
 
-    @Test func theCardStaysStillWithReduceMotionOn() {
+    @Test func theCardStaysStillWithReduceMotionOn() throws {
         let (presenter, panel) = presenter(reduceMotion: true)
 
-        presenter.render(CardFixtures.switcher(windows: [1], followMM: 40))
+        presenter.render(try CardFixtures.switcher(windows: [1], followMM: 40))
         #expect(CardFixtures.offset(of: panel.highlightLayer) == 0)
         #expect(panel.highlightLayer?.animation(forKey: "card") == nil)
 
@@ -166,12 +167,12 @@ enum CardFixtures {
         #expect(panel.highlightLayer?.animation(forKey: "card") == nil)
     }
 
-    @Test func rowsOfTheNextWindowSwipeReplaceTheCard() {
+    @Test func rowsOfTheNextWindowSwipeReplaceTheCard() throws {
         let (presenter, panel) = presenter(reduceMotion: false)
-        presenter.render(CardFixtures.switcher(windows: [1], serial: 1))
-        #expect(panel.visibleRowCount == 0 && !panel.cardContent.isHidden)
+        presenter.render(try CardFixtures.switcher(windows: [1], serial: 1))
+        #expect(panel.visibleRowCount == 0 && panel.cardContent.isHidden == false)
 
-        presenter.render(CardFixtures.switcher(windows: [1, 2, 3], serial: 2))
+        presenter.render(try CardFixtures.switcher(windows: [1, 2, 3], serial: 2))
 
         #expect(panel.visibleRowCount == 3)
         #expect(panel.cardContent.isHidden)

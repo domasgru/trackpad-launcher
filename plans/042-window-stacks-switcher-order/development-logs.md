@@ -34,3 +34,15 @@
 - Test planner (pass 2): `WindowCalls` lacked the frame fallback → `listedWindows(of:)`; a non-`cannotComplete` number failure falls back to the frame match; T14 gained the clause.
 - Test planner (pass 2): `launchDate` is nil for apps launched outside LaunchServices → `AppLaunch` from pid plus `sysctl`'s process start time.
 - Phase D: the requirements' Documentation section was orphaned when docs moved out of the slices → `docs/product-overview.md`, `docs/domain-model.md` and `docs/architecture.md` (Concurrency, Privacy) written in Phase D.
+
+## Implement
+- Slices S1 to S5 landed one commit each; full gate (`make test`) green after S5: 1148 tests in five runs.
+- No verification skill in the repo (`.claude/skills/verify-*` absent) → maintenance step skipped.
+- Review (standards): negated `#expect` in new tests → rewritten as `== false`.
+- Review (standards): force-unwraps in new tests → `try #require`; one fixture helper unwraps once with a `preconditionFailure` message.
+- Review (plan): T42 lacked "asks for 200 ms at its start and at its lift" → World test added, seen red with the lift's deadline broken.
+- Review (standards): `readEach`'s default read built a new `AXWindowCalls` (a `dlsym`) per app per swipe, against "resolved once" → `AXWindowCalls.shared`, used by the reader and the default `readOne`.
+- Review (standards): duplicated main-queue hop in `readEach` → one local `hop`; stale "frontmost app's windows" header on `AppWindowReader` → names the frontmost read, the row's counting reads and `openWindows(among:)`.
+- Rejected: live-Mac platform rows (T13, T25, T44 are the plan's chosen real-adapter seam); plain `@Suite` (repo convention); non-`final` panels and `panel:` injection (the bench seam); call-count assertions (the plan's rows assert them); `WindowStackLayout.Copy` name (the plan's); `messagingTimeout` beside `windowReadDeadline` (process default versus per-read budget).
+- Full gate after fixes: green, 1149 tests in five runs.
+- Hand checks still open (no agent ran them): R13 stopped frontmost app; R2 Get Info panel and hidden app across Spaces; R4 hung or cold app; R5 corner clip; R6 rise feel and Reduce motion; R10 long name; R11 card feel.

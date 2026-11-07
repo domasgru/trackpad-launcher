@@ -68,7 +68,7 @@ private final class AnswerLog: Sendable {
             answeredDuringCall = !log.answers.isEmpty
         }
 
-        #expect(!answeredDuringCall)
+        #expect(answeredDuringCall == false)
         guard let answers else { return }
         #expect(answers.count == 2)
         #expect(answers.allSatisfy { $0.onMainThread })

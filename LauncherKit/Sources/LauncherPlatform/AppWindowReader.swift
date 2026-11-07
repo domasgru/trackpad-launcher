@@ -3,10 +3,14 @@ import ApplicationServices
 import CoreGraphics
 import LauncherCore
 
-/// The frontmost app's windows, read through the Accessibility element API and the window server's window list, and
-/// raised through the element API: with `LaunchWatch`, the only file that touches either. The element API defines which
-/// windows exist (titles, roles, minimised, full screen); the window list orders the visible ones and tells which are
-/// on this Space.
+/// Owns three things, read through the Accessibility element API and the window server's window list, and raised
+/// through the element API: with `LaunchWatch`, the only file that touches either.
+/// - The frontmost app's read on the main actor, whose listed windows a raise may name.
+/// - The switcher row's reads, away from the main actor, which are only counted.
+/// - `openWindows(among:)`.
+///
+/// The element API defines which windows exist (titles, roles, minimised, full screen); the window list orders the
+/// visible ones and tells which are on this Space.
 ///
 /// A window's number comes from the private `_AXUIElementGetWindow`, resolved once with `dlsym` from the image
 /// AppKit already loaded; when a macOS drops it, or it fails for one window, that window is matched to the window list
@@ -15,7 +19,7 @@ import LauncherCore
     /// The process default for any element that sets none; every read here sets its own per call.
     static let messagingTimeout: Float = 0.2
 
-    private let calls = AXWindowCalls()
+    private let calls = AXWindowCalls.shared
     /// The windows the latest read listed: the only ones a raise may touch, so nothing on another Space is raised.
     private var listed: [WindowID: AXUIElement] = [:]
     /// The app timed out during the latest read or a raise since: no further calls go to it until the next read.
@@ -108,23 +112,26 @@ import LauncherCore
     func readEach(
         _ apps: [AppEntry], within deadline: Duration,
         readOne: @escaping @Sendable (Target, ReadBudget) -> WindowRead = {
-            AppWindowReader.read($0, budget: $1, calls: AXWindowCalls()).read
+            AppWindowReader.read($0, budget: $1, calls: AXWindowCalls.shared).read
         },
         answer: @escaping @Sendable @MainActor (Int, WindowRead) -> Void
     ) {
         let budget = ReadBudget(from: .now, within: deadline)
         let ownPID = ProcessInfo.processInfo.processIdentifier
+        func hop(_ slot: Int, _ read: WindowRead) {
+            DispatchQueue.main.async { MainActor.assumeIsolated { answer(slot, read) } }
+        }
         for (slot, app) in apps.enumerated() {
             let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID.rawValue)
                 .first { !$0.isTerminated && $0.bundleURL.map { AppEntry.location(ofBundleAtPath: $0.path) } == app.url }
             let target = running.map { Target(pid: $0.processIdentifier, isHidden: $0.isHidden) }
             if target?.pid == ownPID || target == nil {
                 let read: WindowRead = target == nil ? .unanswered : .ownProcess
-                DispatchQueue.main.async { MainActor.assumeIsolated { answer(slot, read) } }
+                hop(slot, read)
             } else if let target {
                 Self.readers.async {
                     let read = readOne(target, budget)
-                    DispatchQueue.main.async { MainActor.assumeIsolated { answer(slot, read) } }
+                    hop(slot, read)
                 }
             }
         }
@@ -278,6 +285,8 @@ struct ReadBudget: Equatable, Sendable {
 /// The real calls: the Accessibility element API, the private window number and the window server's window list.
 struct AXWindowCalls: WindowCalls {
     private typealias GetWindow = @convention(c) (AXUIElement, UnsafeMutablePointer<CGWindowID>) -> AXError
+
+    static let shared = AXWindowCalls()
 
     private let getWindow: GetWindow?
 

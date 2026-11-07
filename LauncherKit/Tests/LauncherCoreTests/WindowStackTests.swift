@@ -23,6 +23,8 @@ import LauncherCore
                 frontmost: safari, running: [safari, mail], leavingOut: [], serial: 1, trackpad: TrackpadID(rawValue: 1)))
     }
 
+    private func stack(_ windows: Int) throws -> WindowStack { try #require(WindowStack(windows: windows)) }
+
     private func read(windows count: Int) -> WindowRead {
         .windows(
             AppWindows(
@@ -39,19 +41,19 @@ import LauncherCore
 
         let taken = switcher.take(read(windows: 3), at: 1)
         #expect(taken)
-        #expect(switcher.stacks == [.pending, .stack(WindowStack(windows: 3)!)])
+        #expect(try switcher.stacks == [.pending, .stack(stack(3))])
 
         let again = switcher.take(read(windows: 2), at: 1)
-        #expect(!again)
-        #expect(switcher.stacks[1] == .stack(WindowStack(windows: 3)!))
+        #expect(again == false)
+        #expect(try switcher.stacks[1] == .stack(stack(3)))
     }
 
     @Test func aSlotOutOfRangeChangesNothing() throws {
         var switcher = try switcher()
         let taken = switcher.take(read(windows: 3), at: 2)
-        #expect(!taken)
+        #expect(taken == false)
         let again = switcher.take(read(windows: 3), at: -1)
-        #expect(!again)
+        #expect(again == false)
         #expect(switcher.stacks == [.pending, .pending])
     }
 
@@ -82,39 +84,42 @@ import LauncherCore
         values.count == expected.count && zip(values, expected).allSatisfy { abs($0 - $1) < 0.0001 }
     }
 
+    private func stack(_ windows: Int) throws -> WindowStack { try #require(WindowStack(windows: windows)) }
+
     private func topEdges(_ copies: [WindowStackLayout.Copy]) -> [Double] { copies.map { $0.rise + $0.side / 2 } }
 
-    @Test func copiesAreSmallerAndPeekSixPointsPerLayerAboveTheIcon() {
+    @Test func copiesAreSmallerAndPeekSixPointsPerLayerAboveTheIcon() throws {
         let layout = WindowStackLayout(row: SwitcherRowLayout(iconCount: 5, displayWidth: 1512))
-        let copies = layout.copies(of: WindowStack(windows: 4)!)
+        let copies = layout.copies(of: try stack(4))
 
         #expect(close(copies.map(\.side), [73.6, 67.2, 60.8]))
         #expect(close(topEdges(copies), [46, 52, 58]))
     }
 
-    @Test func aShrunkRowShrinksTheStackByTheSameFactor() {
+    @Test func aShrunkRowShrinksTheStackByTheSameFactor() throws {
         let row = SwitcherRowLayout(iconCount: 10, displayWidth: 540)
         #expect(row.scale == 0.5)
-        let copies = WindowStackLayout(row: row).copies(of: WindowStack(windows: 4)!)
+        let copies = WindowStackLayout(row: row).copies(of: try stack(4))
 
         #expect(close(copies.map(\.side), [36.8, 33.6, 30.4]))
         #expect(close(topEdges(copies), [23, 26, 29]))
     }
 
-    @Test func aTwoIconStackHasTheFirstCopyOnly() {
+    @Test func aTwoIconStackHasTheFirstCopyOnly() throws {
         let layout = WindowStackLayout(row: SwitcherRowLayout(iconCount: 5, displayWidth: 1512))
-        #expect(layout.copies(of: WindowStack(windows: 2)!).count == 1)
-        #expect(close(layout.copies(of: WindowStack(windows: 3)!).map(\.side), [73.6, 67.2]))
+        #expect(layout.copies(of: try stack(2)).count == 1)
+        #expect(close(layout.copies(of: try stack(3)).map(\.side), [73.6, 67.2]))
     }
 
-    @Test func eachCopyStartsRisingFortyMillisecondsAfterTheOneInFrontAndAllAreAtRestWithinHalfASecond() {
+    @Test func eachCopyStartsRisingFortyMillisecondsAfterTheOneInFrontAndAllAreAtRestWithinHalfASecond() throws {
         let layout = WindowStackLayout(row: SwitcherRowLayout(iconCount: 5, displayWidth: 1512))
-        let delays = layout.copies(of: WindowStack(windows: 4)!).map(\.delay)
+        let delays = try layout.copies(of: stack(4)).map(\.delay)
+        let lastDelay = try #require(delays.last)
 
         #expect(close(delays, [0, 0.04, 0.08]))
         #expect(WindowStackLayout.riseDuration == 0.3)
-        #expect(close([delays.last! + WindowStackLayout.riseDuration], [0.38]))
-        #expect(delays.last! + WindowStackLayout.riseDuration < 0.5)
+        #expect(close([lastDelay + WindowStackLayout.riseDuration], [0.38]))
+        #expect(lastDelay + WindowStackLayout.riseDuration < 0.5)
     }
 
     @Test func theRiseIsASoftEaseOut() {

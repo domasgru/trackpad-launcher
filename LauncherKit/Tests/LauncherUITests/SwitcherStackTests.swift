@@ -53,7 +53,8 @@ import Testing
         #expect(copyLayers.count == 3)
         #expect(copyLayers.allSatisfy { $0.contents as AnyObject === icon.contents as AnyObject })
         let nearestFirst = Array(copyLayers.reversed())
-        #expect(nearestFirst.map { close(topEdge(of: $0, in: slot) - iconTop, 6 * Double(nearestFirst.firstIndex(of: $0)! + 1)) } == [true, true, true])
+        #expect(
+            nearestFirst.enumerated().map { close(topEdge(of: $1, in: slot) - iconTop, 6 * Double($0 + 1)) } == [true, true, true])
         #expect(nearestFirst.map(\.bounds.width).enumerated().allSatisfy { close($1, [73.6, 67.2, 60.8][$0]) })
     }
 
@@ -188,14 +189,14 @@ final class BenchSwitcherPanel: SwitcherPanel {
         #expect(panel.slotLayers.count == 3)
         #expect(copyCounts(panel) == [2, 0, 0])
         #expect(risers(panel).map(\.count) == [2, 0, 0])
-        let first = risers(panel)[0].map { $0.animation(forKey: "rise")! }
+        let first = try risers(panel)[0].map { try #require($0.animation(forKey: "rise")) }
 
         presenter.render(try switcher(serial: 1, stacks: [3, 2, 1], selected: 1))
         #expect(copyCounts(panel) == [2, 1, 0])
         #expect(risers(panel).map(\.count) == [2, 1, 0])
         #expect(zip(risers(panel)[0], first).allSatisfy { $0.animation(forKey: "rise") === $1 })
 
-        let second = risers(panel)[1].map { $0.animation(forKey: "rise")! }
+        let second = try risers(panel)[1].map { try #require($0.animation(forKey: "rise")) }
         presenter.render(try switcher(serial: 1, stacks: [3, 2, 1], selected: 2))
         #expect(copyCounts(panel) == [2, 1, 0])
         #expect(zip(risers(panel)[0], first).allSatisfy { $0.animation(forKey: "rise") === $1 })

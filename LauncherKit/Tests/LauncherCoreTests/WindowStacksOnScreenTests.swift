@@ -9,7 +9,12 @@ import LauncherCore
         world.windows(of: name).set(visible: (0..<count).map { "\(name)\($0)" }, answering: answering)
     }
 
-    private func stack(_ windows: Int) -> SlotStack { .stack(WindowStack(windows: windows)!) }
+    private func stack(_ windows: Int) -> SlotStack {
+        guard let stack = WindowStack(windows: windows) else {
+            preconditionFailure("\(windows) windows make no stack")
+        }
+        return .stack(stack)
+    }
 
     /// Each slot leaves `.pending` at most once, and never changes after.
     private func settlesOnce(_ states: [[SlotStack]]) -> Bool {
@@ -170,7 +175,7 @@ import LauncherCore
         let shown = history.compactMap { $0 }
         #expect(shown.count >= 3)
         #expect(shown.allSatisfy { $0 == [stack(2), .pending, stack(2)] })
-        #expect(history.last! == nil)
+        #expect(history.last == .some(nil))
     }
 
     @Test func anAppThatGivesUpIsAloneFromThenOnAndTheOthersDoNotChange() {
@@ -202,7 +207,7 @@ import LauncherCore
         for _ in world.playFrameByFrame(rest, observing: { states.append(world.launcher.switcher?.stacks ?? []) }) {}
 
         let shown = states.filter { !$0.isEmpty }
-        #expect(!shown.isEmpty)
+        #expect(shown.isEmpty == false)
         #expect(shown.allSatisfy { $0 == [stack(2), .alone] })
         #expect(world.system.countReads.count == 1)
     }
