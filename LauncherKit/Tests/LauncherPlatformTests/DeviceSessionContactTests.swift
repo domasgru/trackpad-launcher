@@ -99,7 +99,7 @@ import Testing
         #expect(delivered.contactChanges == 0)
     }
 
-    @Test func withSensingOffNothingIsDeliveredOccupancyStillTracksAndTheClockIsReadAsOften() {
+    @Test func withSensingOffNothingIsDeliveredOccupancyStillTracksAndTheClockIsReadAsInASessionWithNoContactCode() {
         let silent = Delivered()
         let silentReads = ClockReads()
         let quiet = session(silent, senses: Flag(false), reads: silentReads)
@@ -115,7 +115,8 @@ import Testing
 
         #expect(silent.contactChanges == 0)
         #expect(sensed.contactChanges == 4)
-        #expect(silentReads.count == sensedReads.count)
+        #expect(silentReads.count == 0)
+        #expect(sensedReads.count == 0)
     }
 
     @Test func sensingTurnedOnWithAFingerDownDeliversNothingUntilTheNextFlip() {

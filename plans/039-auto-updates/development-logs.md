@@ -39,3 +39,15 @@
 - `docs/architecture.md` and `docs/domain-model.md` rewritten with this plan, so S12 confirms them against what shipped rather than writing them.
 
 ## Implement
+- Rebased onto `origin/main` (1.0.15) before S1. The settings redesign conflicted in `docs/architecture.md` and `docs/domain-model.md` → kept main's layout and the gear, without the update card.
+- S1: the cold path did not stall: with a scratch `--cache-path` and `--disable-keychain`, `resolve` took about 19 s and `swift build` about 31 s. The vendored fallback was not taken.
+- S3: `isGenuine` needed a type once `Release` went → `ExpectedUpdate` arrived here, not in S8, comparing the sealed strings.
+- S3: R15's grep cannot find nothing as written, because `updateNSView`, `menuNeedsUpdate` and drawing helpers hold the word → checked by hand: 14 lines, none about the app's updates. `Copy` holds no update string.
+- S5, while writing the brief: with no `v*` tag `preflight_build_number` would end the script; a failed feed push left a local commit that made `--feed-only` refuse; a same-second rerun had nothing to commit → all three fixed, each with a test.
+- S8: `LaunchdJob` arrived here, not in S9, because the veto needs `remove`.
+- S9: `SMJobRemove` answers true for a label never loaded → `remove` looks the job up first, so "false when absent" is true.
+- Step 6: this repo has no verification skill, so nothing ran.
+- Review, fixed: the architecture text understated what runs on main (the lookup, and a refused update's veto) and called the whole job's wait bounded → reworded; the code is the plan's. `release.sh` claimed a rerun publishes nothing → a rerun replaces the item, and only a byte-identical feed publishes nothing.
+- Review, fixed: T18 recomputed its table → literal rows. T36 compared two sessions that both carry the contact code → a literal read count, shown to fail against a planted clock read. T1 and T28 did not test what their rows say; one assertion in `LaunchdJobTests` could not fail.
+- Review, not taken: "restart" in `armRestart`, and `public nonisolated canReplace`, are the plan's own names and signature. `sessionInProgress` and the relaunch flag are public Sparkle, so they stay out of `SparkleInternals`. `#expect(!…)` and bare `@Suite` are this repo's existing style. An empty `SUPublicEDKey` is planned, and `release.sh` refuses until it is set.
+- Still open, for a person: `Scripts/update-e2e.sh` has only run as `--check`, so T56 to T72 have never run and every row's helper assumption is unproven; the update key; the performance baseline; every by-hand check under Verified without a test; D-3 and L2 before the first automatic release. `SUPublicEDKey` stays empty until then, so no copy can update and no release can be made.

@@ -42,6 +42,8 @@ import Testing
             #expect(process.updater == nil)
             #expect(process.engine.starts == 0)
             #expect(process.engine.checks == 0)
+            #expect(process.connection.watches == 0)
+            #expect(process.idleClock.waits.isEmpty)
             #expect(Set(world.log.entries).isDisjoint(with: Self.engineEntries))
         }
     }

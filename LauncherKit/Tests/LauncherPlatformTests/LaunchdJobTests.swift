@@ -97,14 +97,12 @@ import Testing
         #expect(rig.openCalls.isEmpty)
 
         rig.killOld()
-        let afterKill = ContinuousClock.now
         try await Task.sleep(for: .milliseconds(500))
         try rig.writeBuild("2")
         let rewritten = ContinuousClock.now
 
         let delay = try #require(await rig.opened(since: rewritten, within: .seconds(3)))
         #expect(seconds(delay) < 1)
-        #expect(afterKill < rewritten)
         try await Task.sleep(for: .milliseconds(500))
         #expect(rig.openCalls == ["-g -a \(rig.bundle.path) --args --after-update"])
         #expect(!Self.isLoaded(rig.label))

@@ -39,7 +39,7 @@
 #                                          in both
 #   Scripts/release.sh --feed-only <version> write and publish the feed item of an already published release: the way
 #                                          to finish a release whose feed push was rejected (the local feed commit
-#                                          is then undone). A feed that already lists the version publishes nothing
+#                                          is then undone). A rerun replaces the version's item; a feed that comes out byte-identical publishes nothing
 set -euo pipefail
 
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
@@ -377,7 +377,7 @@ write_feed() {
 # --feed-only can run again.
 publish_feed() {
   if cmp -s "$OUT/appcast.xml" "$FEED"; then
-    echo "The feed already lists $EXPECTED_VERSION; nothing to publish."
+    echo "The feed is unchanged; nothing to publish."
     return
   fi
   local retry="v$EXPECTED_VERSION is published but the feed is not; run release.sh --feed-only $EXPECTED_VERSION."

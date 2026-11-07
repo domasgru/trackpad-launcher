@@ -122,17 +122,38 @@ import Testing
         #expect(new.window == .open(request: 1))
     }
 
-    @Test(arguments: [Placement.installed, .development, .elsewhere], [true, false])
-    func theRouteOfAnOpeningAfterAnUpdateFollowsTheTable(placement: Placement, olderCopyRuns: Bool) {
-        let expected: Route =
-            switch placement {
-            case .installed: .runSilently
-            case .development: .runWithWindow
-            case .elsewhere: .askToMove
-            }
-        #expect(Route(.afterUpdate, placement: placement, olderCopyRuns: olderCopyRuns) == expected)
-        #expect(Route(.byHand, placement: placement, olderCopyRuns: olderCopyRuns) == (placement == .elsewhere ? .askToMove : .runWithWindow))
-        #expect(Route(.atLogin, placement: placement, olderCopyRuns: olderCopyRuns) == (olderCopyRuns ? .end : .runSilently))
+    nonisolated struct RouteRow: Sendable, CustomTestStringConvertible {
+        let opening: Opening
+        let placement: Placement
+        let olderCopyRuns: Bool
+        let route: Route
+        var testDescription: String { "\(opening) \(placement) olderCopyRuns \(olderCopyRuns)" }
+    }
+
+    nonisolated static let routeTable: [RouteRow] = [
+        RouteRow(opening: .atLogin, placement: .installed, olderCopyRuns: true, route: .end),
+        RouteRow(opening: .atLogin, placement: .installed, olderCopyRuns: false, route: .runSilently),
+        RouteRow(opening: .atLogin, placement: .development, olderCopyRuns: true, route: .end),
+        RouteRow(opening: .atLogin, placement: .development, olderCopyRuns: false, route: .runSilently),
+        RouteRow(opening: .atLogin, placement: .elsewhere, olderCopyRuns: true, route: .end),
+        RouteRow(opening: .atLogin, placement: .elsewhere, olderCopyRuns: false, route: .runSilently),
+        RouteRow(opening: .byHand, placement: .installed, olderCopyRuns: true, route: .runWithWindow),
+        RouteRow(opening: .byHand, placement: .installed, olderCopyRuns: false, route: .runWithWindow),
+        RouteRow(opening: .byHand, placement: .development, olderCopyRuns: true, route: .runWithWindow),
+        RouteRow(opening: .byHand, placement: .development, olderCopyRuns: false, route: .runWithWindow),
+        RouteRow(opening: .byHand, placement: .elsewhere, olderCopyRuns: true, route: .askToMove),
+        RouteRow(opening: .byHand, placement: .elsewhere, olderCopyRuns: false, route: .askToMove),
+        RouteRow(opening: .afterUpdate, placement: .installed, olderCopyRuns: true, route: .runSilently),
+        RouteRow(opening: .afterUpdate, placement: .installed, olderCopyRuns: false, route: .runSilently),
+        RouteRow(opening: .afterUpdate, placement: .development, olderCopyRuns: true, route: .runWithWindow),
+        RouteRow(opening: .afterUpdate, placement: .development, olderCopyRuns: false, route: .runWithWindow),
+        RouteRow(opening: .afterUpdate, placement: .elsewhere, olderCopyRuns: true, route: .askToMove),
+        RouteRow(opening: .afterUpdate, placement: .elsewhere, olderCopyRuns: false, route: .askToMove),
+    ]
+
+    @Test(arguments: routeTable)
+    func everyOpeningPlacementAndOlderCopyRoutesAsTheTableSays(row: RouteRow) {
+        #expect(Route(row.opening, placement: row.placement, olderCopyRuns: row.olderCopyRuns) == row.route)
     }
 
     @Test func anAfterUpdateStartStopsOtherCopiesInsteadOfEndingLikeALoginStartWould() {

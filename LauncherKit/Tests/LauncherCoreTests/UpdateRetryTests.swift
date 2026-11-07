@@ -116,7 +116,7 @@ import Testing
         #expect(process.idleClock.pending == .seconds(60))
     }
 
-    @Test func aDownloadLostMidWayWatchesLikeAFailedCheck() {
+    @Test func aHeldUpdateLostToAFailedRequestWatchesLikeAFailedCheck() {
         let (_, process) = resident()
         process.engine.push(.held(.genuine))
 
@@ -125,6 +125,17 @@ import Testing
         #expect(process.connection.isWatching)
         #expect(!process.hardware.sensesContact)
         #expect(process.idleClock.pending == nil)
+    }
+
+    @Test func aDownloadLostMidWayWatchesLikeAFailedCheckAndRunsAgainWithAConnection() {
+        let (_, process) = resident()
+
+        process.engine.push(.cycleEnded(.requestFailed))
+
+        #expect(process.connection.isWatching)
+        let checks = process.engine.checks
+        process.connection.set(true)
+        #expect(process.engine.checks == checks + 1)
     }
 
     @Test func whileWatchingAQuitEndsAtOnceAndASystemEndIsAllowed() {
