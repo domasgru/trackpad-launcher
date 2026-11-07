@@ -157,6 +157,43 @@ import Testing
         #expect(!process.hardware.sensesContact)
     }
 
+    @Test func aNotGenuineUpdateIsDiscardedFirstAndNothingWaitsOrShowsOrRestarts() {
+        let (world, process) = heldWorld(.byHand)
+        let window = process.window
+
+        process.engine.push(.held(.notGenuine))
+
+        #expect(world.log.entries.last == "discard")
+        #expect(process.engine.discards == 1)
+        #expect(!process.hardware.sensesContact)
+        #expect(process.idleClock.pending == nil)
+        #expect(process.window == window)
+        process.idleClock.advance(by: .seconds(3600))
+        #expect(process.idleClock.waits.isEmpty)
+        process.engine.push(.cycleEnded(.failed))
+        #expect(process.idleClock.waits.isEmpty)
+        #expect(process.window == window)
+        #expect(handOvers(world).isEmpty)
+
+        process.engine.push(.held(.genuine))
+        #expect(process.idleClock.pending == nil)
+        process.closeWindow()
+        #expect(process.idleClock.pending == Self.minute)
+    }
+
+    @Test func quittingRightAfterANotGenuineVerdictDiscardsBeforeEndingAndArmsNothing() {
+        let (world, process) = heldWorld()
+
+        process.engine.push(.held(.notGenuine))
+        process.quit()
+
+        let entries = world.log.entries
+        let discard = entries.firstIndex(of: "discard")
+        let end = entries.firstIndex(of: "end")
+        #expect(discard != nil && end != nil && discard! < end!)
+        #expect(!entries.contains("arm restart"))
+    }
+
     @Test func aLiftLandingAsSensingTurnsOnIsNeitherLostNorStuck() {
         let (_, process) = heldWorld()
         process.touch(.finger)

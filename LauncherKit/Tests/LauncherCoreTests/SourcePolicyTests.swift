@@ -184,6 +184,7 @@ import Testing
             rule: "the plain call is refused when an opening by hand starts the process; it lives only in the Debug tuner, whose click-time call is user intent"),
         Confined(token: "/bin/mv", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's move has one script"),
         Confined(token: "osascript", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's exchange has one script"),
+        Confined(token: "SMJob", onlyIn: ["LaunchdJob.swift"], rule: "the one non-permanent job API has one file"),
         Confined(token: "SMAppService", onlyIn: ["SystemLoginItem.swift"], rule: "one login item, one adapter"),
         Confined(
             token: "setActivationPolicy", onlyIn: ["SettingsShell.swift"],

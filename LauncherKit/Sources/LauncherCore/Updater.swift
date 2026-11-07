@@ -70,7 +70,9 @@ public enum UpdateEngineEvent: Equatable, Sendable {
         guard phase != .handedOver else { return }
         switch event {
         case .held(.genuine): enter(.ready)
-        case .held(.notGenuine): break
+        case .held(.notGenuine):
+            // No restart is ever armed for it; Sparkle ends the cycle itself once its helper has gone.
+            engine.discardHeldUpdate()
         case .cycleEnded: enter(.resting)
         }
     }

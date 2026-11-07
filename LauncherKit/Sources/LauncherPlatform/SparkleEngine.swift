@@ -18,7 +18,7 @@ internal import Sparkle
     public init(bundle: URL, signer: Signer) {
         self.signer = signer
         let prefix = Bundle(url: bundle)?.object(forInfoDictionaryKey: "TLUpdateDownloads") as? String
-        delegate = UpdaterDelegate(prefix: prefix)
+        delegate = UpdaterDelegate(prefix: prefix, signer: signer)
         delegate.emit = { [weak self] event in self?.onEvent?(event) }
     }
 
@@ -42,7 +42,10 @@ internal import Sparkle
 
     public func check() { updater?.checkForUpdatesInBackground() }
 
-    public func discardHeldUpdate() {}
+    public func discardHeldUpdate() {
+        SparkleInternals.veto(job: SparkleInternals.installerJob(of: signer.identifier), extracted: delegate.found)
+        delegate.found = nil
+    }
 
     public func armRestart() -> Bool { false }
 
@@ -76,6 +79,41 @@ enum SparkleInternals {
         return userGroups().contains(info.st_gid)
     }
 
+    /// `Installation/<random>/<random>/` under Sparkle's cache. nil unless the newest such folder holding `build` holds
+    /// exactly one bundle: a logout leaves stale folders, and two bundles cannot be told apart from what Sparkle would
+    /// choose. Proof: `selfquit.out` prints the layout.
+    nonisolated static func extractedUpdate(identifier: String, build: String, caches: URL) -> URL? {
+        let files = FileManager.default
+        let root = caches.appending(path: "\(identifier)/org.sparkle-project.Sparkle/Installation")
+        func children(_ folder: URL) -> [URL] {
+            (try? files.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        }
+        func bundles(in folder: URL) -> [URL] { children(folder).filter { $0.pathExtension == "app" } }
+        func holdsBuild(_ folder: URL) -> Bool {
+            bundles(in: folder).contains {
+                Bundle(url: $0)?.object(forInfoDictionaryKey: "CFBundleVersion") as? String == build
+            }
+        }
+        let inner = children(root).flatMap { children($0) }.filter(holdsBuild)
+        func modified(_ folder: URL) -> Date {
+            (try? folder.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+                ?? .distantPast
+        }
+        guard let newest = inner.max(by: { modified($0) < modified($1) }) else { return nil }
+        let found = bundles(in: newest)
+        return found.count == 1 ? found[0] : nil
+    }
+
+    /// Removing this job ends the installer; Sparkle then aborts with 4005. Proof: `vetonow.out`, `veto.out`.
+    nonisolated static func installerJob(of identifier: String) -> String { "\(identifier)-sparkle-updater" }
+
+    /// Both layers, each whatever the other did: remove the job, then discard the extracted bundle. Takes what it acts
+    /// on, so a test can drive either layer alone. Inside the delegate call. Proof: `vetonow.out`, `discardquit.out`.
+    nonisolated static func veto(job: String, extracted: URL?) {
+        LaunchdJob.remove(label: job)
+        if let extracted { BundleInstall.discard(extracted) }
+    }
+
     private nonisolated static func userGroups() -> Set<gid_t> {
         var groups = Set([getgid(), getegid()])
         let count = getgroups(0, nil)
@@ -100,9 +138,15 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
 
 @MainActor private final class UpdaterDelegate: NSObject, SPUUpdaterDelegate {
     private let prefix: String?
+    private let signer: Signer
     var emit: (@MainActor (UpdateEngineEvent) -> Void)?
+    /// The extracted bundle of the held update, until the engine discards it.
+    var found: URL?
 
-    init(prefix: String?) { self.prefix = prefix }
+    init(prefix: String?, signer: Signer) {
+        self.prefix = prefix
+        self.signer = signer
+    }
 
     /// Runs before any download. Refusing keeps the disk-image key-rotation fallback unreachable, so the update key has
     /// no second door.
@@ -114,13 +158,22 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
         }
     }
 
-    /// Always true and the handler dropped unused, so Sparkle's relaunch flag can never be set and the only way an
-    /// install runs is at the process's end.
+    /// Always true. The handler is dropped unused, so Sparkle's relaunch flag can never be set and the only way an
+    /// install runs is at the process's end. The check runs here, synchronously on main (18 to 31 ms, once per
+    /// release), so no turn exists in which an unchecked update is held. Anything not found or not read is not genuine.
     func updater(
         _ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
         immediateInstallationBlock immediateInstallHandler: @escaping () -> Void
     ) -> Bool {
-        emit?(.held(.genuine))
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        found = caches.flatMap {
+            SparkleInternals.extractedUpdate(identifier: signer.identifier, build: item.versionString, caches: $0)
+        }
+        let offer = ExpectedUpdate(
+            version: item.displayVersionString, build: item.versionString,
+            minimumMacOS: item.minimumSystemVersion ?? "")
+        let genuine = found.map { CodeSignature.isGenuine($0, as: offer, signer: signer) } ?? false
+        emit?(.held(genuine ? .genuine : .notGenuine))
         return true
     }
 
