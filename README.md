@@ -14,8 +14,7 @@ Needs macOS 26 or later.
 2. Open it and drag Trackpad Launcher to Applications.
 3. Open Trackpad Launcher from Applications and allow Accessibility when asked.
 
-Updates come to the app itself: when a newer version is out, the settings window shows *App version X is available*
-with *Update now*.
+Updates come on their own, with nothing to press and nothing shown.
 
 ## Commands
 
@@ -36,7 +35,7 @@ Debug builds also open the launch animation tuner. A Debug build runs as `com.do
 
 ## Releasing
 
-A release is a GitHub release with the disk image and the update archive. It is built, signed with the Developer ID,
+A release is a GitHub release with the disk image and the update archive, and an item in `appcast.xml`. It is built, signed with the Developer ID,
 notarised and published from this Mac, by one command.
 
 ### One-time setup
@@ -59,17 +58,26 @@ From an up-to-date `main` with nothing uncommitted, run `make release-patch` (or
 2. runs every test;
 3. raises the version and the build number in `Config/Version.xcconfig`, in a local commit;
 4. builds the app, has Apple notarise it and the disk image, and checks the signatures as Gatekeeper will;
-5. pushes the version commit and publishes the release.
+5. pushes the version commit and publishes the release;
+6. adds an item for the release to `appcast.xml`, the update list, and pushes it.
 
-If anything fails before step 5, the version commit is undone, so the same command tries the same version again. The
+If anything fails before step 5, the version commit is undone, so the same command tries the same version again. If
+the push in step 6 fails, the release is already published: `Scripts/release.sh --feed-only <version>` finishes it. The
 first time, macOS asks to let Terminal control Finder: allow it, it lays out the disk image's window.
 
 Releases are immutable once published: a broken one is fixed by releasing a higher version.
 
+The update key signs every update. Its private half lives in the login keychain, and it cannot rotate: every installed
+copy trusts only that key. Back it up with `generate_keys -x <file>` (in Sparkle's `bin` folder under
+`LauncherKit/.build/artifacts/sparkle/Sparkle`), and keep the file out of the repository.
+
 ### How users get it
 
-Every installed copy checks for a newer release each time its settings window opens, never in the background, and
-offers it on a card with *Update now*. Drafts and pre-releases are never offered.
+An installed copy checks the update list on GitHub each time it starts and every 24 hours, downloads a newer version in
+the background, installs it when the app is not in use, and restarts silently. A copy does this only when it is signed
+with the Developer ID, lies in /Applications and can write to its own bundle. Drafts and pre-releases never appear,
+because only the release command writes the list. A copy from before automatic updates still offers a release the next
+time its settings window opens.
 
 ## Docs
 

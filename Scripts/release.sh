@@ -2,11 +2,20 @@
 # Releases main: checks every credential and that main is clean and current, runs the tests, optionally raises the
 # version, refuses a version that is not above every earlier release, archives, exports with the developer-id
 # method, notarizes and staples the app, archives it as the update asset, lays out a disk image, signs, notarizes
-# and staples it, and publishes a GitHub release carrying both.
+# and staples it, and publishes a GitHub release carrying both, then adds its item to the update feed.
 # Output: build/release/TrackpadLauncher.dmg
 #         build/release/TrackpadLauncher-<version>-macOS-<minimum>.aar
 #         the release v<version> on GitHub, published and marked latest: every older copy offers it the next
 #         time its settings window opens. gh uploads the assets before it publishes, so no copy sees a half-made one.
+#         the feed item in appcast.xml, committed to main: automatic copies learn of the release from it.
+#
+# The feed, appcast.xml at the repository's root, is served by raw.githubusercontent.com and is the update list of
+# every automatic copy. Only this script writes it: it signs the .aar with the update key (the keychain's, which must
+# be the one project.yml ships as SUPublicEDKey; its private half cannot rotate, so back it up with
+# generate_keys -x), adds an item and keeps the older ones. The order is: publish the release, then the feed, so the
+# feed never names an asset that does not exist. Sparkle compares CFBundleVersion, so the build number must be above
+# every earlier one's; the script refuses a release whose build number is not above the feed's and the last tag's.
+# The card-contract tool runs on the .aar and fails the release should an older copy's update card refuse it.
 #
 # Needs gh authenticated for the repository, the main branch checked out, clean and equal to origin's,
 # a "Developer ID Application" identity in the keychain, a notarytool keychain profile
@@ -28,7 +37,9 @@
 #                                          stapler and Team ID checks are only reported; in the full
 #                                          release they are fatal. The bundle identifier check is fatal
 #                                          in both
-#   Scripts/release.sh --feed-only <version> write and publish the feed item of an already published release
+#   Scripts/release.sh --feed-only <version> write and publish the feed item of an already published release: the way
+#                                          to finish a release whose feed push was rejected (the local feed commit
+#                                          is then undone). A feed that already lists the version publishes nothing
 set -euo pipefail
 
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
