@@ -568,6 +568,86 @@ final class EffectLog {
     var entries: [String] = []
 }
 
+/// Counts the engine's calls and records them in the shared log; a test pushes the events Sparkle would.
+@MainActor final class InMemoryUpdateEngine: UpdateEngine {
+    var log: EffectLog?
+    var onEvent: (@MainActor (UpdateEngineEvent) -> Void)?
+    private(set) var probes = 0
+    private(set) var updates = 0
+    private(set) var discards = 0
+    /// The window flag of each `armRestart`, in order.
+    private(set) var arms: [Bool] = []
+    /// Every `probe()` or `update()` asked while a cycle it started has not yet been answered by a `.cycleEnded`; a
+    /// `.held` keeps the cycle running.
+    private(set) var overlaps = 0
+    private var cycleRuns = false
+    var armWorks = true
+
+    func probe() {
+        probes += 1
+        log?.entries.append("probe")
+        startCycle()
+    }
+
+    func update() {
+        updates += 1
+        log?.entries.append("update")
+        startCycle()
+    }
+
+    private func startCycle() {
+        if cycleRuns { overlaps += 1 }
+        cycleRuns = true
+    }
+
+    func discardHeldUpdate() {
+        discards += 1
+        log?.entries.append("discard")
+    }
+
+    /// Runs before and after each arm restart, as the world's snapshot hook.
+    var onEffect: (() -> Void)?
+
+    func armRestart(opensWindow: Bool) -> Bool {
+        onEffect?()
+        arms.append(opensWindow)
+        if armWorks { log?.entries.append(opensWindow ? "arm restart with window" : "arm restart") }
+        onEffect?()
+        return armWorks
+    }
+
+    /// A cycle's end is recorded before the event is delivered: the answer may start the next cycle.
+    func push(_ event: UpdateEngineEvent) {
+        if case .cycleEnded = event { cycleRuns = false }
+        onEvent?(event)
+    }
+}
+
+/// A network path the test moves. `watch` pushes the present reading inside the call; `set` pushes every time while
+/// watching, an unchanged value included, as a real path monitor does on an interface change.
+@MainActor final class InMemoryConnection: Connection {
+    var onChange: (@MainActor (Bool) -> Void)?
+    /// The reading a `watch` pushes. Settable before a failure.
+    var reading = false
+    private(set) var isWatching = false
+    /// How many times `watch` was called.
+    private(set) var watches = 0
+
+    func watch() {
+        isWatching = true
+        watches += 1
+        onChange?(reading)
+    }
+
+    func stop() { isWatching = false }
+
+    func set(_ connected: Bool) {
+        reading = connected
+        guard isWatching else { return }
+        onChange?(connected)
+    }
+}
+
 /// Holds `done` until a row releases an outcome, and records its calls in the shared log.
 @MainActor final class InMemoryInstaller: Installer {
     var log: EffectLog?
@@ -664,100 +744,10 @@ final class EffectLog {
     }
 
     func endThisCopy() {
-        if lifecycle?.shouldEnd(.other) == true { hasEnded = true }
-    }
-}
-
-/// Holds each fetch's completion until a row answers it, in order. `fetches` counts every request the model made.
-@MainActor final class InMemoryReleaseList: ReleaseList {
-    private(set) var fetches = 0
-    private var open: [(number: Int, done: @MainActor ([Release]) -> Void)] = []
-    private var inlineAnswer: [Release]?
-
-    func fetch(then done: @escaping @MainActor ([Release]) -> Void) {
-        fetches += 1
-        if let answer = inlineAnswer {
-            inlineAnswer = nil
-            done(answer)
-        } else {
-            open.append((fetches, done))
+        if lifecycle?.shouldEnd(.other) == true {
+            hasEnded = true
+            log?.entries.append("end")
         }
-    }
-
-    /// Answers the oldest fetch still open.
-    func deliver(_ list: [Release]) {
-        guard !open.isEmpty else { return }
-        open.removeFirst().done(list)
-    }
-
-    /// Answers fetch number `number` (1-based).
-    func deliver(_ list: [Release], toFetch number: Int) {
-        guard let at = open.firstIndex(where: { $0.number == number }) else { return }
-        open.remove(at: at).done(list)
-    }
-
-    /// The oldest open fetch fails, which the port reports as an empty list.
-    func fail() { deliver([]) }
-
-    /// The next fetch answers inside the call.
-    func answersInline(_ list: [Release]) { inlineAnswer = list }
-}
-
-/// Keeps every attempt's event sink; a row speaks for the live (latest) attempt, or replays into an earlier one.
-@MainActor final class InMemoryUpdateInstaller: UpdateInstaller {
-    /// The releases asked for, one per attempt.
-    private(set) var requests: [Release] = []
-    /// How many times the model asked to stop a download.
-    private(set) var cancels = 0
-    /// How many times the model asked to open the new version.
-    private(set) var opens = 0
-    /// Runs before and after the swap, as `InMemoryInstaller.release(.installed)` does.
-    var onEffect: (() -> Void)?
-    /// Runs after the swap: the moment /Applications changed.
-    var onInstalled: (() -> Void)?
-    private var sinks: [@MainActor (UpdateEvent) -> Void] = []
-    private var failsNext = false
-    private var openAnswers: [@MainActor (Bool) -> Void] = []
-
-    func update(to release: Release, events: @escaping @MainActor (UpdateEvent) -> Void) {
-        requests.append(release)
-        sinks.append(events)
-        if failsNext {
-            failsNext = false
-            events(.failed)
-        }
-    }
-
-    func cancelDownload() { cancels += 1 }
-
-    func openNewVersion(then started: @escaping @MainActor (Bool) -> Void) {
-        opens += 1
-        openAnswers.append(started)
-    }
-
-    func progress(_ fraction: Double) { sinks.last?(.progress(fraction)) }
-    func finishDownload() { sinks.last?(.downloaded) }
-    func decline() { sinks.last?(.declined) }
-    func fail() { sinks.last?(.failed) }
-
-    /// /Applications changes, then the model hears of it.
-    func swapIn() {
-        onEffect?()
-        onInstalled?()
-        onEffect?()
-        sinks.last?(.installed)
-    }
-
-    /// An event of attempt number `attempt` (1-based), however long ago it began.
-    func deliverLate(_ event: UpdateEvent, attempt: Int) { sinks[attempt - 1](event) }
-
-    /// The next attempt fails inside `update(to:events:)`.
-    func failsInline() { failsNext = true }
-
-    /// LaunchServices answers the oldest open still unanswered.
-    func answerOpen(started: Bool) {
-        guard !openAnswers.isEmpty else { return }
-        openAnswers.removeFirst()(started)
     }
 }
 

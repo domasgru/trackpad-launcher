@@ -1,40 +1,33 @@
 import LauncherCore
 import SwiftUI
 
-/// The update card as one rounded group: its text on the left and its button on the right, in a row at least 46 pt
-/// tall. While downloading, a bar runs under the row; while installing there is no button.
+/// The update card: *Update available* above *Update now*, with a tray-and-arrow picture clipped at its right side and
+/// a thin border. It cannot be dismissed and shows no version, progress or error.
 struct UpdateCardView: View {
     let card: UpdateCard
     let updateNow: () -> Void
-    let cancel: () -> Void
+
+    /// The picture's place within the card's padded content.
+    private static let picture = (x: CGFloat(203), y: CGFloat(-8))
 
     var body: some View {
-        FormGroup {
-            switch card {
-            case .available(let version):
-                row(Copy.updateAvailable(version), button: Copy.updateNowButton, action: updateNow)
-            case .downloading(let version, let progress):
-                row(Copy.updateDownloading(version), button: Copy.cancelButton, action: cancel)
-                ProgressView(value: progress)
-                    .padding(.bottom, 10)
-            case .installing(let version):
-                row(Copy.updateInstalling(version), button: nil, action: {})
-            case .failed:
-                row(Copy.updateFailed, button: Copy.tryAgainButton, action: updateNow)
-            }
-        }
-    }
-
-    private func row(_ text: String, button: String?, action: @escaping () -> Void) -> some View {
-        FormRow {
-            Text(text)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(card.text)
                 .font(.system(size: 11))
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let button {
-                Button(button, action: action)
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.roundedRectangle(radius: 6))
-            }
+                .lineSpacing(0)
+                .frame(minHeight: 14)
+            Button(card.buttonTitle, action: updateNow)
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: 6))
+                .disabled(!card.isButtonEnabled)
+        }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+        .padding(.horizontal, GroupStyle.sideInset)
+        .pictureCardFrame(alignment: .topLeading) {
+            DriftingUpdatePicture()
+                .frame(width: UpdatePictureView.width, height: UpdatePictureView.height)
+                .offset(x: GroupStyle.sideInset + Self.picture.x, y: Self.picture.y)
         }
     }
 }

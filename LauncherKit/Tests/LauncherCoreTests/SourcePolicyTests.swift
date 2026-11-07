@@ -12,7 +12,7 @@ import Testing
     }
 
     static let suddenTerminationRule =
-        "loginwindow force-quits, 3 s after a foreground app ends, every child of it that is a UI element without a visible window and declares sudden termination; the new version is that child for its first moments after an update"
+        "loginwindow force-quits, 3 s after a foreground app ends, every child of it that is a UI element without a visible window and declares sudden termination; a move's opening, and an older version's update card, make the new process that child for its first moments"
 
     static let banned: [Entry] = [
         Entry(token: "SuddenTermination", rule: suddenTerminationRule),
@@ -24,14 +24,15 @@ import Testing
         Entry(token: "Logger(", rule: "log"),
         Entry(token: "import OSLog", rule: "log"),
         Entry(token: "import os", rule: "log"),
+        Entry(token: "URLSession", rule: "our Swift makes no request"),
         Entry(token: "URLSession.shared", rule: "network"),
         Entry(token: "URLSessionConfiguration.default", rule: "network"),
         Entry(token: ".background(withIdentifier", rule: "network"),
         Entry(token: "String(contentsOf:", rule: "network"),
         Entry(token: "NSURLConnection", rule: "network"),
         Entry(token: "NSURLDownload", rule: "network"),
-        Entry(token: "downloadTask", rule: "the update archive is received into memory, never into a file"),
-        Entry(token: ".download(", rule: "the update archive is received into memory, never into a file"),
+        Entry(token: "downloadTask", rule: "our Swift downloads nothing"),
+        Entry(token: ".download(", rule: "our Swift downloads nothing"),
         Entry(token: "CFHTTP", rule: "network"),
         Entry(token: "import WebKit", rule: "network"),
         Entry(token: "WKWebView", rule: "network"),
@@ -42,17 +43,17 @@ import Testing
         Entry(token: "executableURL", rule: "no child processes"),
         Entry(token: "NSTask", rule: "no child processes"),
         Entry(token: "posix_spawn", rule: "no child processes"),
-        Entry(token: "import Network", rule: "network"),
         Entry(token: "NWConnection", rule: "network"),
         Entry(token: "CFSocket", rule: "network"),
         Entry(token: "CFStream", rule: "network"),
         Entry(token: "FileHandle(forWriting", rule: "own files"),
         Entry(token: ".write(to:", rule: "own files"),
         Entry(token: "createFile(atPath", rule: "own files"),
-        Entry(token: "Timer", rule: "timer"),
         Entry(token: "asyncAfter", rule: "timer"),
+        Entry(token: "Timer", rule: "no timers: every input is a push"),
+        Entry(token: "makeTimerSource", rule: "no timers: every input is a push"),
+        Entry(token: "DispatchSourceTimer", rule: "no timers: every input is a push"),
         Entry(token: "Task.sleep", rule: "polling"),
-        Entry(token: "makeTimerSource", rule: "timer"),
         Entry(token: "displayLink", rule: "timer"),
         Entry(token: "DisplayLink", rule: "timer"),
         Entry(token: "IOHIDManager", rule: "no Input Monitoring or event posting"),
@@ -85,15 +86,36 @@ import Testing
         Entry(token: "tiffRepresentation", rule: "a preview is never encoded or written"),
         Entry(token: "NSStatusBar", rule: "no menu bar icon"),
         Entry(token: "NSStatusItem", rule: "no menu bar icon"),
-        Entry(token: "SMAppService.agent", rule: "nothing relaunches the app"),
-        Entry(token: "SMAppService.daemon", rule: "nothing relaunches the app"),
-        Entry(token: "SMAppService.loginItem", rule: "nothing relaunches the app"),
-        Entry(token: "SMLoginItemSetEnabled", rule: "nothing relaunches the app"),
+        Entry(token: "SMAppService.agent", rule: "nothing relaunches the app after a crash or a force quit; the hand-over job opens it once after an update"),
+        Entry(token: "SMAppService.daemon", rule: "nothing relaunches the app after a crash or a force quit; the hand-over job opens it once after an update"),
+        Entry(token: "SMAppService.loginItem", rule: "nothing relaunches the app after a crash or a force quit; the hand-over job opens it once after an update"),
+        Entry(token: "SMLoginItemSetEnabled", rule: "nothing relaunches the app after a crash or a force quit; the hand-over job opens it once after an update"),
         Entry(token: "/bin/rm", rule: "the administrator's swap removes nothing"),
     ]
 
     static let neverDeclared: [Entry] = [
-        Entry(token: "NSSupportsSuddenTermination", rule: suddenTerminationRule)
+        Entry(token: "NSSupportsSuddenTermination", rule: suddenTerminationRule),
+        Entry(token: "SUEnableSystemProfiling", rule: "no system profile is ever sent"),
+        Entry(token: "SUEnableDownloaderService", rule: "the downloader XPC service stays unused"),
+        Entry(token: "SUAutomaticallyUpdate", rule: "nothing downloads by itself"),
+        Entry(token: "SUScheduledCheckInterval", rule: "no schedule exists"),
+    ]
+
+    /// Keys the manifest must carry, and what their value must look like.
+    struct Declared: Sendable, CustomTestStringConvertible {
+        let key: String
+        let valuePrefix: String?
+        let valueSuffix: String?
+        var testDescription: String { key }
+    }
+
+    static let alwaysDeclared: [Declared] = [
+        Declared(key: "SUFeedURL", valuePrefix: "https://", valueSuffix: nil),
+        Declared(key: "SUPublicEDKey", valuePrefix: nil, valueSuffix: nil),
+        Declared(key: "SUEnableAutomaticChecks", valuePrefix: "false", valueSuffix: "false"),
+        Declared(key: "SUVerifyUpdateBeforeExtraction", valuePrefix: nil, valueSuffix: nil),
+        Declared(key: "TLUpdateDownloads", valuePrefix: "https://", valueSuffix: "/"),
+        Declared(key: "SUEnableInstallerLauncherService", valuePrefix: "true", valueSuffix: "true"),
     ]
 
     /// Each permission API lives in exactly one file, the adapter that owns it. Any other hit fails.
@@ -107,10 +129,18 @@ import Testing
 
     static let confined: [Confined] = [
         Confined(
-            token: "URLSession", onlyIn: ["GitHubReleases.swift"],
-            rule: "the update check and its download are the one network path"),
-        Confined(token: "http", onlyIn: ["GitHubReleases.swift"], rule: "the one network file holds every address"),
-        Confined(token: "Data(contentsOf:", onlyIn: ["Apps.swift"], rule: "the one local-file reader; a URL read is a request"),
+            token: "http", onlyIn: ["SparkleEngine.swift"], rule: "no address in Swift; only Sparkle's `httpHeaders`"),
+        Confined(
+            token: "import Network", onlyIn: ["SystemConnection.swift"],
+            rule: "the path monitor is one file; it makes no request"),
+        Confined(
+            token: "NWPathMonitor", onlyIn: ["SystemConnection.swift"],
+            rule: "the path monitor is one file; it makes no request"),
+        Confined(token: "import Sparkle", onlyIn: ["SparkleEngine.swift"], rule: "the update engine is one file"),
+        Confined(token: "HTTPCookieStorage", onlyIn: ["SparkleEngine.swift"], rule: "cookies are refused where the engine starts"),
+        Confined(token: "URLCache", onlyIn: ["SparkleEngine.swift"], rule: "nothing is cached where the engine starts"),
+        Confined(token: "org.sparkle-project", onlyIn: ["SparkleEngine.swift"], rule: "Sparkle's private paths have one reader"),
+        Confined(token: "Data(contentsOf:", onlyIn: ["Apps.swift", "CardContract.swift"], rule: "the one local-file reader; a URL read is a request"),
         Confined(token: "AXIsProcessTrusted", onlyIn: ["SystemPermissions.swift"], rule: "R9 one permission, one adapter"),
         Confined(token: "notify_register", onlyIn: ["SystemPermissions.swift"], rule: "R7 the trust push"),
         Confined(
@@ -142,17 +172,21 @@ import Testing
         Confined(token: "AXUIElement", onlyIn: ["FrontmostAppWindows.swift", "LaunchWatch.swift"], rule: "the window reads have two readers"),
         Confined(token: "CGWindowList", onlyIn: ["FrontmostAppWindows.swift", "LaunchWatch.swift"], rule: "the window reads have two readers"),
         Confined(token: ".hide(", onlyIn: ["BackgroundHider.swift"], rule: "apps are hidden in one place"),
-        Confined(token: "SecCode", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
-        Confined(token: "SecStaticCode", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
-        Confined(token: "SecRequirement", onlyIn: ["CodeSignature.swift"], rule: "the code signature is read in one place"),
+        Confined(token: "SecCode", onlyIn: ["CodeSignature.swift", "CardContract.swift"], rule: "the code signature is read in one place"),
+        Confined(token: "SecStaticCode", onlyIn: ["CodeSignature.swift", "CardContract.swift"], rule: "the code signature is read in one place"),
+        Confined(token: "SecRequirement", onlyIn: ["CodeSignature.swift", "CardContract.swift"], rule: "the code signature is read in one place"),
         Confined(
             token: "ignoringOtherApps", onlyIn: ["AppActivation.swift"],
             rule: "the override of the active app has one home, with its reason"),
         Confined(
             token: ".activate()", onlyIn: ["AnimationTuner.swift"],
             rule: "the plain call is refused when an opening by hand starts the process; it lives only in the Debug tuner, whose click-time call is user intent"),
+        Confined(
+            token: "/bin/sh", onlyIn: ["LaunchdJob.swift", "PrivilegedInstall.swift"],
+            rule: "the hand-over job and the administrator's move are the two scripts"),
         Confined(token: "/bin/mv", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's move has one script"),
         Confined(token: "osascript", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's exchange has one script"),
+        Confined(token: "SMJob", onlyIn: ["LaunchdJob.swift"], rule: "the one non-permanent job API has one file"),
         Confined(token: "SMAppService", onlyIn: ["SystemLoginItem.swift"], rule: "one login item, one adapter"),
         Confined(
             token: "setActivationPolicy", onlyIn: ["SettingsShell.swift"],
@@ -170,24 +204,21 @@ import Testing
             token: "forceTerminate", onlyIn: ["SystemRunningCopies.swift"], rule: "other copies are stopped in one place"),
         Confined(token: ".terminate(", onlyIn: ["SystemRunningCopies.swift"], rule: "processes are ended in one place"),
         Confined(token: "copyItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
-        Confined(token: "moveItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
+        Confined(token: "moveItem(", onlyIn: ["BundleInstall.swift", "CardContract.swift", "UpdateArchive.swift"], rule: "the move's file operations are in one file"),
         Confined(token: "replaceItemAt(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
         Confined(token: "renamex_np(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
-        Confined(token: "removeItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
+        Confined(token: "removeItem(", onlyIn: ["BundleInstall.swift", "CardContract.swift", "UpdateArchive.swift"], rule: "the move's file operations are in one file"),
         Confined(
-            token: "AppleArchive", onlyIn: ["BundleInstall.swift"], rule: "the update's unpacking is in one file"),
+            token: "AppleArchive", onlyIn: ["CardContract.swift", "UpdateArchive.swift"], rule: "the card's rules unpack an archive, frozen"),
         Confined(
-            token: "ArchiveStream", onlyIn: ["BundleInstall.swift"], rule: "the update's unpacking is in one file"),
+            token: "ArchiveStream", onlyIn: ["CardContract.swift", "UpdateArchive.swift"], rule: "the card's rules unpack an archive, frozen"),
         Confined(
-            token: "ArchiveByteStream", onlyIn: ["BundleInstall.swift"], rule: "the update's unpacking is in one file"),
+            token: "ArchiveByteStream", onlyIn: ["CardContract.swift", "UpdateArchive.swift"], rule: "the card's rules unpack an archive, frozen"),
         Confined(
-            token: "removexattr", onlyIn: ["BundleInstall.swift"], rule: "the quarantine is cleared in one file"),
+            token: "removexattr", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the quarantine is cleared in one file"),
         Confined(
-            token: "itemReplacementDirectory", onlyIn: ["BundleInstall.swift"],
+            token: "itemReplacementDirectory", onlyIn: ["BundleInstall.swift", "CardContract.swift", "UpdateArchive.swift"],
             rule: "the staging folder is made in one file"),
-        Confined(
-            token: "createsNewApplicationInstance", onlyIn: ["ApplicationsUpdater.swift"],
-            rule: "the new version is opened as a new process in one place"),
         Confined(
             token: "AuthorizationExecuteWithPrivileges", onlyIn: ["PrivilegedInstall.swift"],
             rule: "the one privileged call has one file"),
@@ -204,13 +235,67 @@ import Testing
     @Test func theNetworkBansAreAllStillListed() {
         let listed = Set(Self.banned.map(\.token))
         let required: Set<String> = [
-            "URLSession.shared", "URLSessionConfiguration.default", ".background(withIdentifier", "String(contentsOf:",
+            "URLSession", "URLSession.shared", "URLSessionConfiguration.default", ".background(withIdentifier", "String(contentsOf:",
             "NSURLConnection", "NSURLDownload", "downloadTask", ".download(", "CFHTTP", "import WebKit", "WKWebView", "curl", "NSAppleScript",
-            "import Network", "NWConnection", "CFSocket", "CFStream", "Process()", "Process.run(", "executableURL",
-            "NSTask", "posix_spawn", "Timer", "asyncAfter", "Task.sleep", ".write(to:", "FileHandle(forWriting",
+            "NWConnection", "CFSocket", "CFStream", "Process()", "Process.run(", "executableURL",
+            "NSTask", "posix_spawn", "Timer", "makeTimerSource", "DispatchSourceTimer", "asyncAfter", "Task.sleep", ".write(to:", "FileHandle(forWriting",
             "createFile(atPath",
         ]
         #expect(required.subtracting(listed).isEmpty, "dropped from banned: \(required.subtracting(listed).sorted())")
+    }
+
+    @Test func thePathMonitorBansAreStillScannedInTheConfinedList() {
+        let confinedToTheMonitor = Set(Self.confined.filter { $0.onlyIn == ["SystemConnection.swift"] }.map(\.token))
+        let monitor: Set<String> = ["import Network", "NWPathMonitor"]
+        #expect(monitor.subtracting(confinedToTheMonitor).isEmpty, "dropped from confined: \(monitor.subtracting(confinedToTheMonitor).sorted())")
+    }
+
+    /// The code that runs for a trackpad frame, on the framework's thread or the click tap's. None of it may know
+    /// about updates or contact sensing.
+    static let framePathFiles: [String] = [
+        "FrameStream.swift", "TouchFrameParsing.swift", "MultitouchTrackpads.swift", "MultitouchSupport.swift",
+        "ClickTap.swift", "GestureRecognizer.swift", "GestureRules.swift", "Touch.swift", "TrackpadTapState.swift",
+        "TapFilters.swift", "ClickFilter.swift", "ScrollFilter.swift", "DockSwipeFilter.swift",
+        "CursorTravel.swift", "PointerCurve.swift", "Surface.swift", "Uptime.swift", "UptimeNow.swift",
+    ]
+
+    static let keptOutOfTheFramePath: [String] = [
+        "Updater", "UpdateEngine", "Sparkle", "contactChanged", "isTouched", "sensesContact", "isInUse", "occupied",
+        "IdleClock",
+    ]
+
+    /// One "<file>:<line>: <token>" string per kept-out token on a line of `text`.
+    static func framePathHits(in text: String, file: String) -> [String] {
+        text.split(separator: "\n", omittingEmptySubsequences: false).enumerated().flatMap { line in
+            keptOutOfTheFramePath.filter { line.element.contains($0) }.map { "\(file):\(line.offset + 1): \($0)" }
+        }
+    }
+
+    private static func framePathFileURLs() throws -> [URL] {
+        let all = try scannedRoots.flatMap { try swiftFiles(under: $0) }
+        return framePathFiles.compactMap { name in all.first { $0.lastPathComponent == name } }
+    }
+
+    @Test func everyFramePathFileExists() throws {
+        let found = try Self.framePathFileURLs().map(\.lastPathComponent)
+        #expect(Set(Self.framePathFiles).subtracting(found).isEmpty, "missing: \(Set(Self.framePathFiles).subtracting(found).sorted())")
+    }
+
+    @Test func noFramePathFileHoldsUpdateOrContactCode() throws {
+        let hits = try Self.framePathFileURLs().flatMap {
+            Self.framePathHits(in: try String(contentsOf: $0, encoding: .utf8), file: $0.lastPathComponent)
+        }
+        #expect(hits.isEmpty, "update or contact code on the frame path: \(hits)")
+    }
+
+    @Test func aPlantedContactReadInTheFrameStreamFailsTheFramePathScan() throws {
+        let stream = try #require(Self.framePathFileURLs().first { $0.lastPathComponent == "FrameStream.swift" })
+        let text = try String(contentsOf: stream, encoding: .utf8) + "\nfunc planted() -> Bool { isTouched }\n"
+
+        let hits = Self.framePathHits(in: text, file: "FrameStream.swift")
+
+        #expect(hits.count == 1)
+        #expect(hits.first?.hasSuffix(": isTouched") == true)
     }
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.
@@ -235,6 +320,68 @@ import Testing
     func manifestNeverDeclares(_ entry: Entry) throws {
         let hits = try Self.scanManifest(in: Self.packageRoot.deletingLastPathComponent(), for: entry.token)
         #expect(hits.isEmpty, "\(entry.token) must not be declared (\(entry.rule)): \(hits)")
+    }
+
+    @Test(arguments: alwaysDeclared)
+    func manifestAlwaysDeclares(_ entry: Declared) throws {
+        let manifest = Self.packageRoot.deletingLastPathComponent()
+        let problems = try Self.declarationProblems(in: manifest, for: entry)
+        #expect(problems.isEmpty, "\(entry.key): \(problems)")
+    }
+
+    @Test func declarationScanFindsAMissingKeyAndAPlainHTTPValue() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-declared-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let manifest = "info:\n  properties:\n        SUFeedURL: http://example.com/appcast.xml\n        TLUpdateDownloads: https://example.com/x\n"
+        try Data(manifest.utf8).write(to: dir.appending(path: "project.yml"))
+
+        let missing = try Self.declarationProblems(
+            in: dir, for: Declared(key: "SUPublicEDKey", valuePrefix: nil, valueSuffix: nil))
+        let plain = try Self.declarationProblems(
+            in: dir, for: Declared(key: "SUFeedURL", valuePrefix: "https://", valueSuffix: nil))
+        let unterminated = try Self.declarationProblems(
+            in: dir, for: Declared(key: "TLUpdateDownloads", valuePrefix: "https://", valueSuffix: "/"))
+
+        #expect(missing == ["not declared"])
+        #expect(plain == ["value does not start with https://"])
+        #expect(unterminated == ["value does not end with /"])
+    }
+
+    @Test func theAutomaticChecksKeyIsDeclaredFalseAndAPlantedTrueFails() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-declared-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let entry = try #require(Self.alwaysDeclared.first { $0.key == "SUEnableAutomaticChecks" })
+        try Data("info:\n  properties:\n        SUEnableAutomaticChecks: true\n".utf8).write(to: dir.appending(path: "project.yml"))
+
+        #expect(try Self.declarationProblems(in: dir, for: entry) == ["value does not start with false", "value does not end with false"])
+    }
+
+    @Test func theInstallerLauncherServiceKeyIsDeclaredTrueAndAPlantedFalseFails() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-declared-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let entry = try #require(Self.alwaysDeclared.first { $0.key == "SUEnableInstallerLauncherService" })
+        try Data("info:\n  properties:\n        SUEnableInstallerLauncherService: false\n".utf8).write(to: dir.appending(path: "project.yml"))
+
+        #expect(try Self.declarationProblems(in: dir, for: entry) == ["value does not start with true", "value does not end with true"])
+    }
+
+    @Test(arguments: ["SUAutomaticallyUpdate", "SUScheduledCheckInterval", "SUEnableDownloaderService"])
+    func aNeverDeclaredKeyPlantedInTheRealManifestIsFound(key: String) throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-manifest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let real = Self.packageRoot.deletingLastPathComponent().appending(path: "project.yml")
+        let text = try String(contentsOf: real, encoding: .utf8)
+        let manifest = dir.appending(path: "project.yml")
+        try Data(text.utf8).write(to: manifest)
+        #expect(try Self.scanManifest(in: dir, for: key).isEmpty)
+
+        try Data((text + "\n        \(key): true\n").utf8).write(to: manifest)
+
+        #expect(try Self.scanManifest(in: dir, for: key).count == 1)
     }
 
     @Test func manifestScanFindsAPlantedKey() throws {
@@ -306,7 +453,7 @@ import Testing
 
     @Test func scanVisitsEveryLibraryTarget() throws {
         let visited = try Self.scannedRoots.flatMap { try Self.swiftFiles(under: $0) }.map(\.path)
-        for target in ["LauncherCore", "LauncherPlatform", "LauncherUI"] {
+        for target in ["LauncherCore", "LauncherPlatform", "LauncherUI", "CardContract"] {
             #expect(visited.contains { $0.contains("/Sources/\(target)/") }, "no file scanned under \(target)")
         }
         #expect(visited.contains { $0.contains("/TrackpadLauncher/") }, "no file scanned under the app target")
@@ -318,6 +465,19 @@ import Testing
         let core = Self.packageRoot.appending(path: "Sources/LauncherCore")
         let hits = try Self.disallowedImports(in: core, allowed: Self.coreAllowedImports)
         #expect(hits.isEmpty, "LauncherCore may import only \(Self.coreAllowedImports.sorted()): \(hits)")
+    }
+
+    @Test func cardContractStaysFrozenApartFromTheApp() throws {
+        let sources = Self.packageRoot.appending(path: "Sources")
+        for target in ["CardContract", "card-contract"] {
+            let hits = try Self.disallowedImports(
+                in: sources.appending(path: target), allowed: ["AppleArchive", "CardContract", "Foundation", "Security", "System"])
+            #expect(hits.isEmpty, "\(target) may import neither LauncherCore nor LauncherPlatform: \(hits)")
+        }
+        let manifest = try String(
+            contentsOf: Self.packageRoot.deletingLastPathComponent().appending(path: "project.yml"), encoding: .utf8)
+        #expect(!manifest.contains("CardContract"), "the app links CardContract")
+        #expect(!manifest.contains("card-contract"), "the app links card-contract")
     }
 
     @Test func importScannerFindsAPlantedImport() throws {
@@ -364,6 +524,18 @@ import Testing
     /// Throws when `directory` holds no `project.yml`: a moved manifest must fail, not pass unscanned.
     private static func scanManifest(in directory: URL, for token: String) throws -> [String] {
         try hits(in: directory.appending(path: "project.yml"), for: token)
+    }
+
+    /// What is wrong with the `key: value` line of `project.yml`; empty when the key is declared as the entry asks.
+    private static func declarationProblems(in directory: URL, for entry: Declared) throws -> [String] {
+        let text = try String(contentsOf: directory.appending(path: "project.yml"), encoding: .utf8)
+        let lines = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard let line = lines.first(where: { $0.hasPrefix(entry.key + ":") }) else { return ["not declared"] }
+        let value = line.dropFirst(entry.key.count + 1).trimmingCharacters(in: .whitespaces)
+        var problems: [String] = []
+        if let prefix = entry.valuePrefix, !value.hasPrefix(prefix) { problems.append("value does not start with \(prefix)") }
+        if let suffix = entry.valueSuffix, !value.hasSuffix(suffix) { problems.append("value does not end with \(suffix)") }
+        return problems
     }
 
     private static func hits(in file: URL, for token: String) throws -> [String] {

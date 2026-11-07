@@ -5,29 +5,26 @@ import LauncherCore
 public enum ThisCopy {
     /// The `oapp` of a start (read in didFinishLaunching: the event is nil in willFinishLaunching). `.atLogin` when it
     /// carries the login-item marker; otherwise, and for nil, `.byHand`. `--eject-disk-image <volume>` names the disk
-    /// image the mover ran from; any other argument is ignored.
+    /// image the mover ran from. `--after-update` is the hand-over job's start and wins over the event, and `--with-window`
+    /// beside it brings the settings window; alone it is ignored. `--at-login` reads as a login start with no event, for
+    /// the hand tests. Any other argument is ignored.
     public static func launch(event: NSAppleEventDescriptor?, arguments: [String]) -> Launch {
         let volume = arguments.firstIndex(of: "--eject-disk-image").flatMap { arguments[safe: $0 + 1] }
-        return Launch(opening: opening(of: event), diskImageToEject: volume.map { DiskImage(volume: URL(filePath: $0)) })
+        let opening: Opening
+        if arguments.contains("--after-update") {
+            opening = .afterUpdate(withWindow: arguments.contains("--with-window"))
+        } else if arguments.contains("--at-login") {
+            opening = .atLogin
+        } else {
+            opening = Self.opening(of: event)
+        }
+        return Launch(opening: opening, diskImageToEject: volume.map { DiskImage(volume: URL(filePath: $0)) })
     }
 
     /// A reopen (`aevt/rapp`): `.atLogin` only when it carries the login marker; otherwise, and for nil, `.byHand`.
     public static func opening(of event: NSAppleEventDescriptor?) -> Opening {
         let marker = event?.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue
         return marker == OSType(keyAELaunchedAsLogInItem) ? .atLogin : .byHand
-    }
-
-    /// CFBundleShortVersionString as this process started with it; nil when it is missing or is not dotted whole numbers.
-    public static func version() -> Version? { version(of: .main) }
-
-    static func version(of bundle: Bundle) -> Version? {
-        (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String).flatMap(Version.init)
-    }
-
-    /// ProcessInfo's operatingSystemVersion (major, minor, patch).
-    public static func macOS() -> Version {
-        let version = ProcessInfo.processInfo.operatingSystemVersion
-        return Version(version.majorVersion, version.minorVersion, version.patchVersion)
     }
 
     /// Where this copy lies: a quarantined copy macOS translocated is traced back to the bundle the user opened. The

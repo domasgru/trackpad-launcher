@@ -21,6 +21,9 @@ public final class Launcher {
     /// Every app picker's list. Replaced only by a scan; never emptied while one runs.
     public private(set) var installedApps: InstalledApps
     public var isWindowOpen: Bool { window != .closed }
+    /// Called with true when the settings window goes from closed to open and false from open to closed; never on a
+    /// re-front.
+    @ObservationIgnored public var onWindowEdge: (@MainActor (Bool) -> Void)?
     public var thumbCorner: ThumbCorner { settings.thumbCorner }
     public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
     public var isSwipeOn: Bool { settings.isSwipeOn }
@@ -82,15 +85,13 @@ public final class Launcher {
     @ObservationIgnored private let scanner: any AppScanner
     @ObservationIgnored private let store: SettingsStore
     @ObservationIgnored private let startAtLogin: StartAtLogin
-    @ObservationIgnored private let updater: Updater?
 
     public init(
         hardware: any TrackpadHardware, preferences: any TrackpadPreferences, permissions: any Permissions,
         system: any SystemActions, catalog: AppCatalog, scanner: any AppScanner, store: SettingsStore,
-        startAtLogin: StartAtLogin, updater: Updater? = nil
+        startAtLogin: StartAtLogin
     ) {
         self.startAtLogin = startAtLogin
-        self.updater = updater
         self.hardware = hardware
         self.preferences = preferences
         self.permissions = permissions
@@ -221,20 +222,19 @@ public final class Launcher {
                 startAtLogin.resume()
             }
         }
-        let opens = window == .closed
         openings += 1
+        let wasOpen = isWindowOpen
         window = .open(request: openings)
+        if !wasOpen { onWindowEdge?(true) }
         resolveRows()
         scanner.scan()
-        // A re-front is not an opening: only the edge from closed asks the updater.
-        if opens { updater?.windowOpened() }
     }
 
     /// Close button, ⌘W, Escape, Close Settings (⌘Q), the Dock's Quit. Gestures keep running.
     public func closeWindow() {
         guard window != .closed else { return }
         window = .closed
-        updater?.windowClosed()
+        onWindowEdge?(false)
     }
 
     /// What the trackpads were last run with. A reconcile that would run them the same way leaves them, and any swipe

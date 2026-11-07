@@ -38,6 +38,12 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        SUFeedURL: https://raw.githubusercontent.com/domasgru/trackpad-launcher/main/appcast.xml
+        SUPublicEDKey: 7bU2ETbJmXD69AOzuCQ/dtoiWle+FeITZAx6sFHyz4s=
+        SUEnableAutomaticChecks: false
+        SUVerifyUpdateBeforeExtraction: true
+        SUEnableInstallerLauncherService: true
+        TLUpdateDownloads: https://github.com/domasgru/trackpad-launcher/releases/download/
     settings:
       base:
         # The bundle's file name is the name Finder, the Dock and Spotlight show; CFBundleDisplayName cannot override it.

@@ -1,142 +1,214 @@
 import Foundation
 import Observation
 
-/// The update model, beside `Lifecycle` and `Launcher`. It exists only where an update check is allowed (see
-/// `InstalledRelease`). It owns every update decision: the check each opening makes and dropping a stale one, choosing
-/// the offer, the download's cancel rules, what each outcome does to the card, whether an install is under way and when
-/// the hand-over to the new version is done. `Launcher` reports the settings window's two transitions; `Lifecycle`
-/// reads `isInstalling` and answers `onReplaced`; the window drives `updateNow` and `cancel`.
-@MainActor @Observable
-public final class Updater {
-    /// Every legal situation, and nothing else.
-    private enum Phase {
-        case idle
-        case checking(ticket: Int)
-        case offering(Release)
-        case downloading(Release, ticket: Int, progress: Double)
-        /// Unpacking, verifying, maybe the administrator prompt, the swap. Survives the window closing.
-        case installing(Release, ticket: Int)
-        /// Swapped in and asked to open; ends with this process.
-        case opening(Release)
-        case failed(Release)
+/// The gate: a copy that is signed with a Developer ID and lies in /Applications. Pure, called by the composition root and
+/// the tests, read once at start. Only a copy that can also replace its own bundle runs the login cycle.
+public struct UpdatableCopy: Equatable, Sendable {
+    public let canReplaceItself: Bool
+
+    public init?(placement: Placement, developerIDSigned: Bool, canReplaceItself: Bool) {
+        guard developerIDSigned, placement == .installed else { return nil }
+        self.canReplaceItself = canReplaceItself
     }
+}
 
-    private var phase: Phase = .idle
-    @ObservationIgnored private var tickets = 0
-    @ObservationIgnored private let installed: InstalledRelease
-    @ObservationIgnored private let releases: any ReleaseList
-    @ObservationIgnored private let installer: any UpdateInstaller
-    /// The new version runs: this process ends. Set only by `Lifecycle`.
-    @ObservationIgnored var onReplaced: (@MainActor () -> Void)?
+/// The update card the settings window shows, as values.
+public enum UpdateCard: Equatable, Sendable {
+    case available
+    case updating
 
-    public init(_ installed: InstalledRelease, releases: any ReleaseList, installer: any UpdateInstaller) {
-        self.installed = installed
-        self.releases = releases
-        self.installer = installer
-    }
+    public var text: String { Copy.updateAvailable }
 
-    /// nil while no newer version is known.
-    public var card: UpdateCard? {
-        switch phase {
-        case .idle, .checking: nil
-        case .offering(let release): .available(release.version)
-        case .downloading(let release, _, let progress): .downloading(release.version, progress: progress)
-        case .installing(let release, _), .opening(let release): .installing(release.version)
-        case .failed(let release): .failed(release.version)
+    public var buttonTitle: String {
+        switch self {
+        case .available: Copy.updateNowButton
+        case .updating: Copy.updatingButton
         }
     }
 
-    /// While true, *Quit Trackpad Launcher* is disabled and an ordinary quit only closes the window. The one source of
-    /// that rule.
-    public var isInstalling: Bool {
+    public var isButtonEnabled: Bool { self == .available }
+}
+
+public enum CycleOutcome: Equatable, Sendable {
+    /// A probe found a newer version. Never an update's outcome.
+    case found
+    case nothingNew
+    /// The feed's request failed: what a lost connection looks like, and what earns a login start's retry.
+    case requestFailed
+    /// Anything after the feed was read: a download that failed, a refused enclosure, a cancelled prompt, a bad
+    /// signature, a discarded update.
+    case failed
+}
+
+public enum UpdateEngineEvent: Equatable, Sendable {
+    /// A genuine update is extracted and prepared; it installs at this process's end. Pushed inside Sparkle's
+    /// callback, so nothing else runs on the main actor first.
+    case held
+    /// A cycle ended. For a probe, its one answer.
+    case cycleEnded(CycleOutcome)
+}
+
+/// Owns every update decision. Exists only for a copy the gate lets through.
+@MainActor @Observable
+public final class Updater {
+    /// The process must end now, through `end()`. Set once by `Lifecycle`.
+    @ObservationIgnored public var onHandOver: (@MainActor () -> Void)?
+    /// What the settings window shows above its rows. Derived from the phase, so no phase can show a stale card.
+    public var card: UpdateCard? {
         switch phase {
-        case .installing, .opening: true
+        case .offering: .available
+        case .updatingFromCard: .updating
+        default: nil
+        }
+    }
+
+    @ObservationIgnored private let engine: any UpdateEngine
+    @ObservationIgnored private let connection: any Connection
+    @ObservationIgnored private let canReplaceItself: Bool
+    @ObservationIgnored private weak var launcher: Launcher?
+
+    /// A login start's wait for a connection, carried through the phases it can pass through: none; owed with this
+    /// reading's retry unmade; owed with it made, so only a drop and a return earn another.
+    private enum RetryDebt: Equatable { case none, owed(spent: Bool) }
+
+    private enum Phase: Equatable {
+        case resting
+        /// The login check failed for the network; the path monitor runs. `spent`: this reading's one retry has been
+        /// made, so only a drop and a return earn another. One bit; no timer, no backoff.
+        case awaitingConnection(spent: Bool)
+        /// The login cycle runs: the check, the download, the preparation. `retry`: a returned connection started it, so
+        /// the watch stays through it; `dropped`: the connection fell during that retry, so its network failure owes a
+        /// fresh retry rather than a spent one.
+        case updatingAtLogin(retry: Bool, dropped: Bool)
+        /// Terminal. The restart is armed and the process is ending in this same turn.
+        case handedOver
+        /// The window's check runs. `debt`: what a login start's wait it interrupted still owes; any check that
+        /// completes settles it.
+        case probing(debt: RetryDebt)
+        /// The window closed during its check. The check still runs, its answer is ignored, and no second check starts
+        /// until it has come: one cycle at a time.
+        case droppedProbe(debt: RetryDebt)
+        /// The card shows *Update available*. Nothing of Sparkle exists.
+        case offering
+        /// *Update now*'s cycle runs; the card shows *Updating…*, window open or closed.
+        case updatingFromCard
+    }
+
+    private var phase = Phase.resting
+
+    public init(_ copy: UpdatableCopy, engine: any UpdateEngine, connection: any Connection) {
+        self.engine = engine
+        self.connection = connection
+        canReplaceItself = copy.canReplaceItself
+    }
+
+    /// Once, from a resident only. A login start of a copy that can replace itself runs the update cycle whatever the
+    /// window is doing; a start with its window open makes one check; every other start makes no request.
+    public func start(watching launcher: Launcher, opening: Opening, opensWindow: Bool) {
+        self.launcher = launcher
+        engine.onEvent = { [unowned self] event in handle(event) }
+        connection.onChange = { [unowned self] connected in connectionChanged(connected) }
+        launcher.onWindowEdge = { [unowned self] isOpen in windowEdge(isOpen) }
+        switch opening {
+        case .atLogin where canReplaceItself:
+            enter(.updatingAtLogin(retry: false, dropped: false))
+            engine.update()
+        case .afterUpdate:
+            break
+        case .atLogin, .byHand:
+            if opensWindow { probe(owing: .none) }
+        }
+    }
+
+    /// *Update now*: only while the card offers it.
+    public func updateNow() {
+        guard phase == .offering else { return }
+        enter(.updatingFromCard)
+        engine.update()
+    }
+
+    private func probe(owing debt: RetryDebt) {
+        enter(.probing(debt: debt))
+        engine.probe()
+    }
+
+    private func windowEdge(_ isOpen: Bool) {
+        switch (phase, isOpen) {
+        case (.resting, true): probe(owing: .none)
+        case (.awaitingConnection(let spent), true): probe(owing: .owed(spent: spent))
+        case (.droppedProbe(let debt), true): enter(.probing(debt: debt))
+        case (.probing(let debt), false): enter(.droppedProbe(debt: debt))
+        case (.offering, false): enter(.resting)
+        default: break
+        }
+    }
+
+    private func handle(_ event: UpdateEngineEvent) {
+        switch (phase, event) {
+        case (.updatingAtLogin, .held):
+            handOver(opensWindow: launcher?.isWindowOpen ?? false)
+        case (.updatingFromCard, .held):
+            handOver(opensWindow: true)
+        case (.updatingAtLogin(let retry, let dropped), .cycleEnded(let outcome)):
+            enter(outcome == .requestFailed ? .awaitingConnection(spent: retry && !dropped) : .resting)
+        case (.probing(let debt), .cycleEnded(let outcome)):
+            enter(outcome == .found ? .offering : afterCheck(outcome, owing: debt))
+        case (.droppedProbe(let debt), .cycleEnded(let outcome)):
+            enter(afterCheck(outcome, owing: debt))
+        case (.updatingFromCard, .cycleEnded(let outcome)):
+            enter(outcome != .nothingNew && launcher?.isWindowOpen == true ? .offering : .resting)
+        default: break
+        }
+    }
+
+    private func afterCheck(_ outcome: CycleOutcome, owing debt: RetryDebt) -> Phase {
+        if outcome == .requestFailed, case .owed(let spent) = debt { return .awaitingConnection(spent: spent) }
+        return .resting
+    }
+
+    private func handOver(opensWindow: Bool) {
+        guard engine.armRestart(opensWindow: opensWindow) else {
+            // Refused: the process never ends without a restart armed, so the held update goes; the cycle then ends
+            // `.failed`.
+            engine.discardHeldUpdate()
+            return
+        }
+        enter(.handedOver)
+        onHandOver?()
+    }
+
+    private func connectionChanged(_ connected: Bool) {
+        switch phase {
+        case .awaitingConnection(let spent):
+            if !connected {
+                phase = .awaitingConnection(spent: false)
+            } else if !spent {
+                // Written before the cycle: the engine may answer inside the call.
+                enter(.updatingAtLogin(retry: true, dropped: false))
+                engine.update()
+            }
+        case .updatingAtLogin(true, _):
+            if !connected { phase = .updatingAtLogin(retry: true, dropped: true) }
+        default: break
+        }
+    }
+
+    private func watches(_ phase: Phase) -> Bool {
+        switch phase {
+        case .awaitingConnection, .updatingAtLogin(retry: true, _): true
         default: false
         }
     }
 
-    /// From `Launcher`, only when the window goes from closed to open, after it has opened. An opening while an update
-    /// installs makes no check: the card keeps showing the install.
-    func windowOpened() {
-        guard !isInstalling else { return }
-        let ticket = nextTicket()
-        // First: an in-memory list may answer inside `fetch`.
-        phase = .checking(ticket: ticket)
-        releases.fetch { [unowned self] in checked($0, ticket: ticket) }
-    }
-
-    /// From `Launcher`, only when the window goes from open to closed. A check's result is never kept; a download
-    /// stops; an install continues.
-    func windowClosed() {
-        switch phase {
-        case .downloading:
-            phase = .idle
-            installer.cancelDownload()
-        case .checking, .offering, .failed: phase = .idle
-        case .idle, .installing, .opening: break
+    /// The one place a lasting effect starts or stops, so leaving a phase cannot leave one armed.
+    private func enter(_ next: Phase) {
+        let previous = phase
+        phase = next
+        // After the assignment: the watch pushes the present reading inside the call.
+        if case .awaitingConnection = next {
+            connection.watch()
+        } else if watches(previous), !watches(next) {
+            connection.stop()
         }
-    }
-
-    /// *Update now* and *Try again*.
-    public func updateNow() {
-        switch phase {
-        case .offering(let release), .failed(let release):
-            let ticket = nextTicket()
-            // First: an in-memory installer may answer inside `update`.
-            phase = .downloading(release, ticket: ticket, progress: 0)
-            installer.update(to: release) { [unowned self] in progressed($0, ticket: ticket) }
-        default: break
-        }
-    }
-
-    /// *Cancel*, only while downloading.
-    public func cancel() {
-        guard case .downloading(let release, _, _) = phase else { return }
-        phase = .offering(release)
-        installer.cancelDownload()
-    }
-
-    private var liveTicket: Int? {
-        switch phase {
-        case .checking(let ticket), .downloading(_, let ticket, _), .installing(_, let ticket): ticket
-        case .idle, .offering, .opening, .failed: nil
-        }
-    }
-
-    private func nextTicket() -> Int {
-        tickets += 1
-        return tickets
-    }
-
-    /// A check from an earlier opening, or one the window closed on, is dropped. An empty list (including a failed
-    /// request) is silent.
-    private func checked(_ list: [Release], ticket: Int) {
-        guard ticket == liveTicket else { return }
-        phase = Release.newerVersion(in: list, than: installed.version, on: installed.macOS).map(Phase.offering) ?? .idle
-    }
-
-    private func progressed(_ event: UpdateEvent, ticket: Int) {
-        guard ticket == liveTicket else { return }
-        switch (phase, event) {
-        case (.downloading(let release, _, _), .progress(let fraction)):
-            phase = .downloading(release, ticket: ticket, progress: fraction)
-        case (.downloading(let release, _, _), .downloaded):
-            phase = .installing(release, ticket: ticket)
-        case (.downloading(let release, _, _), .failed), (.installing(let release, _), .failed):
-            phase = .failed(release)
-        case (.installing(let release, _), .declined):
-            phase = .offering(release)
-        case (.installing(let release, _), .installed):
-            phase = .opening(release)
-            installer.openNewVersion { [unowned self] in opened($0) }
-        default: break
-        }
-    }
-
-    /// Started: this process ends, and the new version, opened by hand from /Applications, stops anything left. Not
-    /// started: /Applications holds the new version and *Try again* converges (a same-version swap, a second open).
-    private func opened(_ started: Bool) {
-        guard case .opening(let release) = phase else { return }
-        if started { onReplaced?() } else { phase = .failed(release) }
     }
 }

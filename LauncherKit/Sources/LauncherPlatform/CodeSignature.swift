@@ -53,11 +53,11 @@ public enum CodeSignature {
         return signer(of: code)
     }
 
-    /// Whether a downloaded bundle is the release the card offered: the Developer ID requirement with this copy's team
+    /// Whether an extracted bundle is the offer the feed made: the Developer ID requirement with this copy's team
     /// and identifier and Apple's notarisation, checked with strict validation of every architecture, nested code and
     /// resource, reading the stapled ticket rather than asking the network; and its sealed Info.plist names exactly
-    /// `release.version` and `release.minimumMacOS`.
-    static func isGenuine(_ bundle: URL, as release: Release, signer: Signer) -> Bool {
+    /// `expected`'s version, build and minimum macOS.
+    static func isGenuine(_ bundle: URL, as expected: ExpectedUpdate, signer: Signer) -> Bool {
         let quoted = CharacterSet(charactersIn: "\"\\")
         guard signer.team.rangeOfCharacter(from: quoted) == nil, signer.identifier.rangeOfCharacter(from: quoted) == nil
         else { return false }
@@ -75,10 +75,11 @@ public enum CodeSignature {
         guard SecStaticCodeCheckValidity(code, strict, requirement) == errSecSuccess else { return false }
         guard let values = signingInformation(of: code),
             let plist = values[kSecCodeInfoPList as String] as? [String: Any],
-            let version = (plist["CFBundleShortVersionString"] as? String).flatMap(Version.init),
-            let minimum = (plist["LSMinimumSystemVersion"] as? String).flatMap(Version.init)
+            let version = plist["CFBundleShortVersionString"] as? String,
+            let build = plist["CFBundleVersion"] as? String,
+            let minimum = plist["LSMinimumSystemVersion"] as? String
         else { return false }
-        return version == release.version && minimum == release.minimumMacOS
+        return version == expected.version && build == expected.build && minimum == expected.minimumMacOS
     }
 
     private static func signingInformation(of code: SecStaticCode) -> [String: Any]? {
@@ -108,3 +109,6 @@ public struct Signer: Sendable, Equatable {
     public let team: String
     public let identifier: String
 }
+
+/// The offer, from the feed, that the extracted bundle's sealed Info.plist must equal.
+struct ExpectedUpdate: Sendable { let version, build, minimumMacOS: String }

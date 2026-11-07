@@ -1,0 +1,106 @@
+=== host.log
+23:54:01.374 v1 pid=60850 willFinishLaunching args=[] event=nil front=Files App
+23:54:01.392 v1 pid=60850 didFinishLaunching event=1634039412 1868656752 propData=nil isDefault=1 parent=1 active=false policy=1 front=Files App
+23:54:01.393 v1 pid=60850 started automaticChecks=true automaticDownloads=true interval=86400.0 canCheck=true
+23:54:01.412 v1 pid=60850 delegate: found 2 url=http://127.0.0.1:8765/SpikeHost-2.aar
+23:54:01.419 v1 pid=60850 delegate: downloaded
+23:54:01.419 v1 pid=60850 delegate: will extract
+23:54:01.437 v1 pid=60850 delegate: did extract
+23:54:01.659 v1 pid=60850 delegate: WILL INSTALL ON QUIT 2 sessionInProgress=true extracted=/Users/dominykasgrubys/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/Installation/pyij2HTK1/z2qIMm23t/SpikeHost.app front=Files App
+23:54:02.402 v1 pid=60850 one second in: active=false front=Files App
+23:54:03.759 v1 pid=60850 made /private/tmp/039-sparkle/spike/install read-only: true
+23:54:03.769 v1 pid=60850 relauncher submitted: true 
+23:54:03.770 v1 pid=60850 ending this process
+23:54:11.230 v1 pid=62546 willFinishLaunching args=["--after-update"] event=nil front=Files App
+23:54:11.248 v1 pid=62546 didFinishLaunching event=1634039412 1868656752 propData=nil isDefault=1 parent=1 active=false policy=1 front=Files App
+23:54:11.249 v1 pid=62546 started automaticChecks=true automaticDownloads=true interval=86400.0 canCheck=true
+23:54:11.260 v1 pid=62546 delegate: found 2 url=http://127.0.0.1:8765/SpikeHost-2.aar
+23:54:11.267 v1 pid=62546 delegate: downloaded
+23:54:11.267 v1 pid=62546 delegate: will extract
+23:54:11.268 v1 pid=62546 delegate: found 2 url=http://127.0.0.1:8765/SpikeHost-2.aar
+23:54:11.268 v1 pid=62546 driver: update found stage=1 -> dismiss
+23:54:11.268 v1 pid=62546 driver: dismiss
+23:54:11.268 v1 pid=62546 delegate: cycle finished check=1 error=0
+23:54:11.268 v1 pid=62546 delegate: next check in 86400 s
+23:54:12.256 v1 pid=62546 one second in: active=false front=Files App
+=== relauncher.log
+23:54:03 relauncher started, waiting for pid 60850
+23:54:03 old process gone
+23:54:11 version now 1 after 100 waits
+23:54:11 open returned 0
+=== front.log
+23:54:01 front: Files App ASN:0x0-0xb5ab5a: (in front) 
+    bundleID=[ NULL ] 
+    bundle path=[ NULL ] 
+    executable path=[ NULL ] 
+ !cgsConnection !signalled type=[ NULL ]  flavor=[ NULL ]  Version=[ NULL ]  Arch=!!none 
+23:54:04 front: Finder ASN:0x0-0x20020: (in front) 
+    bundleID=[ NULL ] 
+    bundle path=[ NULL ] 
+    executable path=[ NULL ] 
+ !cgsConnection !signalled type=[ NULL ]  flavor=[ NULL ]  Version=[ NULL ]  Arch=!!none 
+23:54:05 front: Files App ASN:0x0-0xb61b61: (in front) 
+    bundleID=[ NULL ] 
+    bundle path=[ NULL ] 
+    executable path=[ NULL ] 
+ !cgsConnection !signalled type=[ NULL ]  flavor=[ NULL ]  Version=[ NULL ]  Arch=!!none 
+=== installed version
+1
+
+=== running
+62546 /private/tmp/039-sparkle/spike/install/SpikeHost.app/Contents/MacOS/SpikeHost --after-update
+=== launchd jobs
+62546	0	application.com.domasgru.sparklespike.703026431.703026436
+=== cache
+~/Library/Caches/com.domasgru.sparklespike
+~/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle
+~/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/Installation
+~/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/PersistentDownloads
+~/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/PersistentDownloads/5T9TYA9zI
+~/Library/Caches/com.domasgru.sparklespike/org.sparkle-project.Sparkle/PersistentDownloads/5T9TYA9zI/SpikeHost 2
+~/Library/Caches/com.domasgru.sparklespike/fsCachedData
+~/Library/Caches/com.domasgru.sparklespike/Cache.db-shm
+~/Library/Caches/com.domasgru.sparklespike/Cache.db-wal
+~/Library/Caches/com.domasgru.sparklespike/Cache.db
+=== requests
+--- 23:54:01 GET /appcast.xml
+Host: 127.0.0.1:8765
+Accept: application/rss+xml,*/*;q=0.1
+Accept-Language: en
+Connection: keep-alive
+Accept-Encoding: gzip, deflate
+User-Agent: TrackpadLauncher
+--- 23:54:01 GET /SpikeHost-2.aar
+Host: 127.0.0.1:8765
+Accept: */*
+Cookie: probe=abc123
+User-Agent: TrackpadLauncher
+Accept-Language: en
+Accept-Encoding: gzip, deflate
+Connection: keep-alive
+--- 23:54:11 GET /appcast.xml
+Host: 127.0.0.1:8765
+Accept: application/rss+xml,*/*;q=0.1
+Cookie: probe=abc123
+User-Agent: TrackpadLauncher
+Accept-Language: en
+Accept-Encoding: gzip, deflate
+Connection: keep-alive
+--- 23:54:11 GET /SpikeHost-2.aar
+Host: 127.0.0.1:8765
+Accept: */*
+Cookie: probe=abc123
+User-Agent: TrackpadLauncher
+Accept-Language: en
+Accept-Encoding: gzip, deflate
+Connection: keep-alive
+=== sparkle log
+2026-11-06 23:54:01.459 E  Autoupdate[60922:3f63e7] [org.sparkle-project.Sparkle:Sparkle] Error: bookmark data for update download is stale.. but still continuing.
+2026-11-06 23:54:01.462 Df Autoupdate[60922:3f63e7] [org.sparkle-project.Sparkle:Sparkle] OK: EdDSA signature is correct for update
+2026-11-06 23:54:01.462 Df Autoupdate[60922:3f63ea] [org.sparkle-project.Sparkle:Sparkle] Extracting using '/usr/bin/aa' 'extract' '-d' < '/Users/dominykasgrubys/Library/Caches/com.domasgru.sparklespi
+2026-11-06 23:54:03.771 Df Autoupdate[60922:3f63ea] [org.sparkle-project.Sparkle:Sparkle] Invoking fallback from failing to replace original item with error: Error Domain=NSPOSIXErrorDomain Code=13 "P
+2026-11-06 23:54:03.777 E  Autoupdate[60922:3f63e7] [org.sparkle-project.Sparkle:Sparkle] Error: Failed to finalize installation (null) (URL (null))
+2026-11-06 23:54:03.777 E  Autoupdate[60922:3f63e7] [org.sparkle-project.Sparkle:Sparkle] Error: Failed to move the old app at /tmp/039-sparkle/spike/install/SpikeHost.app to a temporary location at /
+2026-11-06 23:54:03.784 E  Autoupdate[60922:3f63e7] [org.sparkle-project.Sparkle:Sparkle] Error: “SpikeHost.app” couldn’t be moved because you don’t have permission to access “NSIRD_Sparkle_b8wjnQ”. Y
+2026-11-06 23:54:03.794 E  Autoupdate[60922:3f63e7] [org.sparkle-project.Sparkle:Sparkle] Error: The operation couldn’t be completed. Permission denied Permission denied (URL (null))
+/Users/dominykasgrubys/code/trackpad-launcher/.claude/worktrees/039-auto-updates/plans/039-auto-updates/.temp/architect/grounding/probes/sparkle-spike/scenario.sh: line 58: 60802 Terminated: 15          /usr/bin/python3 -I -B "$spike/server.py" "$spike/feed" "$run/requests.log" 8765

@@ -21,7 +21,6 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     /// What the Debug tuner hands each pick: the animation to play and whether to pretend Reduce motion is on.
     public typealias PickTuning = (animation: PickAnimation, simulateReduceMotion: Bool)
     private let launcher: Launcher
-    private let updater: Updater?
     private let icons = AppIcons { SettingsWindow.pinnedAppearance ?? NSApp.effectiveAppearance }
     private let switcherPresenter: SwitcherPresenter
     private let windowSwitcherPresenter: WindowSwitcherPresenter
@@ -45,12 +44,11 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         let showsAccessibilityHint: Bool
         let isSwipeOn: Bool
         let screenRecordingHint: ScreenRecordingHint?
-        let card: UpdateCard.Layout?
+        let card: UpdateCard?
     }
 
     public init(launcher: Launcher, updater: Updater?, quit: @escaping () -> Void) {
         self.launcher = launcher
-        self.updater = updater
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let window = SettingsWindow()
         #if DEBUG
@@ -81,9 +79,8 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                     Fit(
                         inactiveNotice: launcher.inactiveNotice, showsAccessibilityHint: launcher.showsAccessibilityHint,
                         isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint,
-                        card: updater?.card?.layout)
+                        card: updater?.card)
                 }) {
-                    // The card's progress changes what the observation reads, never what this holds.
                     guard fit != last else { continue }
                     last = fit
                     self?.refit()

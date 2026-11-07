@@ -1,0 +1,7 @@
+00:01:19.394 v1 pid=4103 willFinishLaunching args=[] event=nil front=Finder
+00:01:19.653 v1 pid=4103 didFinishLaunching event=1634039412 1868656752 propData=nil isDefault=1 parent=1 active=false policy=1 front=Finder
+00:01:19.655 v1 pid=4103 started automaticChecks=true automaticDownloads=true interval=86400.0 canCheck=true
+00:01:19.687 v1 pid=4103 delegate: aborted domain=SUSparkleErrorDomain code=2001 under=SUSparkleErrorDomain/2001 An error occurred in retrieving update information. Please try again later.
+00:01:19.687 v1 pid=4103 delegate: cycle finished check=1 error=2001
+00:01:19.687 v1 pid=4103 delegate: next check in 86400 s
+00:01:20.681 v1 pid=4103 one second in: active=false front=Finder

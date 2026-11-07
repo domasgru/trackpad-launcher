@@ -18,12 +18,13 @@ import LauncherCore
     /// `record` is what an earlier run saved: these apps on these gestures. nil is a Mac that holds no settings.
     init(
         apps: [String] = ["Arc", "Notes"], accessGranted: Bool = true, record: [Gesture: String]? = nil,
-        corner: ThumbCorner = .topLeft, loginItemOn: Bool = false
+        corner: ThumbCorner = .topLeft, hidesBackgroundApps: Bool = false, loginItemOn: Bool = false
     ) {
         mac = World(apps: apps, accessGranted: accessGranted)
         if let record {
             var settings = Settings()
             settings.thumbCorner = corner
+            settings.isHideBackgroundAppsOn = hidesBackgroundApps
             for (gesture, name) in record { settings.assignments[gesture] = AssignedApp(mac.app(name)) }
             mac.freshStore().save(settings)
         }
@@ -68,18 +69,29 @@ import LauncherCore
     @discardableResult
     func launch(
         _ opening: Opening, others: [RunningCopy] = [], alreadyExited: Set<RunningCopy> = [],
-        placement: Placement = .installed, running: RunningBuild = .development, diskImageToEject: DiskImage? = nil
+        placement: Placement = .installed, diskImageToEject: DiskImage? = nil, running: RunningBuild = .development,
+        attached: [Trackpad] = [.macBook14]
     ) -> OneProcess {
-        let process = OneProcess(mac: mac, placement: placement, running: running, log: log)
+        let process = OneProcess(mac: mac, placement: placement, running: running, attached: attached, log: log)
         process.installer.onEffect = { [unowned self] in snapshots.append(snapshot()) }
+        process.engine.onEffect = { [unowned self] in snapshots.append(snapshot()) }
         process.installer.onInstalled = { [unowned self] in installedAt = snapshots.count }
-        process.updates.onEffect = { [unowned self] in snapshots.append(snapshot()) }
-        process.updates.onInstalled = { [unowned self] in installedAt = snapshots.count }
         process.copies.listed = others
         process.copies.alreadyExited = Set(alreadyExited.map(\.id))
         processes.append(process)
         process.launch(opening, diskImageToEject: diskImageToEject)
         return process
+    }
+
+    /// What the hand-over job and Sparkle's installer do once the old process has ended: the next process starts with
+    /// `--after-update`, as a release copy, on this same Mac. `installed: false` is a swap that failed, so the old
+    /// version comes back.
+    @discardableResult
+    func finishHandOver(installed: Bool = true, withWindow: Bool? = nil) -> OneProcess {
+        if installed { installedAt = snapshots.count }
+        let armedWithWindow = processes.compactMap { $0.engine.arms.last }.last ?? false
+        return launch(
+            .afterUpdate(withWindow: withWindow ?? armedWithWindow), placement: .installed, running: .release)
     }
 
     /// macOS at login: it starts a process, silently, only while the login item is on.
@@ -88,30 +100,14 @@ import LauncherCore
     }
 }
 
-/// What the running copy is, as the composition root would read it: a release build signed with a Developer ID at some
-/// version on this Mac's macOS, or a development build. Both go through the real `InstalledRelease` gate.
-enum RunningBuild {
-    case release(String, macOS: String = "26.0")
-    case development
+/// What the process is: `.release` passes the gate wherever it lies, given placement; `.development` does not.
+struct RunningBuild {
+    var developerIDSigned: Bool
+    var canWrite: Bool
 
-    func installed(at placement: Placement) -> InstalledRelease? {
-        switch self {
-        case .release(let version, let macOS):
-            InstalledRelease(placement: placement, developerIDSigned: true, version: Version(version), macOS: Version(macOS)!)
-        case .development:
-            InstalledRelease(placement: placement, developerIDSigned: false, version: Version(1, 0, 0), macOS: Version(26, 0))
-        }
-    }
-}
-
-extension Release {
-    /// A release that needs `macOS` or newer, with a well-formed archive.
-    static func version(_ version: String, needs macOS: String = "26.0") -> Release {
-        Release(
-            version: Version(version)!, minimumMacOS: Version(macOS)!,
-            archive: URL(string: "https://example.invalid/TrackpadLauncher-\(version)-macOS-\(macOS).aar")!,
-            archiveSize: 1000)
-    }
+    static let development = RunningBuild(developerIDSigned: false, canWrite: true)
+    static let release = RunningBuild(developerIDSigned: true, canWrite: true)
+    static func release(canWrite: Bool) -> RunningBuild { RunningBuild(developerIDSigned: true, canWrite: canWrite) }
 }
 
 @MainActor final class OneProcess {
@@ -120,43 +116,45 @@ extension Release {
     private(set) var lifecycle: Lifecycle!
     let copies = InMemoryRunningCopies()
     let installer = InMemoryInstaller()
-    let updates = InMemoryUpdateInstaller()
     let hardware: InMemoryTrackpads
     let preferences = InMemoryTrackpadPreferences()
     let system = RecordingSystemActions()
-    let releases: InMemoryReleaseList
-    /// nil where the real gate refuses an update check: a development build, a copy outside /Applications.
-    let updater: Updater?
     private(set) var residentsBuilt = 0
 
     /// What the settings window shows after an intent.
     struct Published: Equatable {
         let window: Launcher.Window
         let card: UpdateCard?
-        var isInstalling = false
     }
 
-    /// The window and the card after each intent, in order.
+    /// The window and the update card after each intent, in order.
     private(set) var history: [Published] = []
     var windows: [Launcher.Window] { history.map(\.window) }
+    var cards: [UpdateCard?] { history.map(\.card) }
     var card: UpdateCard? { updater?.card }
-    var isInstalling: Bool { updater?.isInstalling == true }
     /// Kept apart from `lifecycle.launcher`, which is nil once the process is ending.
     private var resident: Launcher?
 
-    init(mac: World, placement: Placement, running: RunningBuild, log: EffectLog) {
+    /// Nil when the gate lets this copy through nowhere.
+    let updater: Updater?
+    let engine = InMemoryUpdateEngine()
+    let connection = InMemoryConnection()
+
+    init(mac: World, placement: Placement, running: RunningBuild, attached: [Trackpad], log: EffectLog) {
         self.mac = mac
-        let releases = InMemoryReleaseList()
-        self.releases = releases
-        let updates = updates
-        updater = running.installed(at: placement).map { Updater($0, releases: releases, installer: updates) }
         copies.log = log
         installer.log = log
+        engine.log = log
         startAtLogin = mac.startAtLogin(placement: placement)
-        hardware = InMemoryTrackpads(attached: [.macBook14])
+        hardware = InMemoryTrackpads(attached: attached)
+        let engine = self.engine
+        let connection = self.connection
+        updater = UpdatableCopy(
+            placement: placement, developerIDSigned: running.developerIDSigned, canReplaceItself: running.canWrite
+        ).map { Updater($0, engine: engine, connection: connection) }
         lifecycle = Lifecycle(
             placement: placement, copies: copies, installer: installer, startAtLogin: startAtLogin,
-            updater: updater, makeResident: { [unowned self] in makeResident() })
+            makeResident: { [unowned self] in makeResident() }, updater: updater)
         copies.lifecycle = lifecycle
     }
 
@@ -165,30 +163,12 @@ extension Release {
         let launcher = Launcher(
             hardware: hardware, preferences: preferences, permissions: mac.permissions, system: system,
             catalog: mac.catalog, scanner: InMemoryAppScanner(catalog: mac.catalog), store: mac.freshStore(),
-            startAtLogin: startAtLogin, updater: updater)
+            startAtLogin: startAtLogin)
         resident = launcher
         return launcher
     }
 
-    private func record() { history.append(Published(window: window, card: card, isInstalling: isInstalling)) }
-
-    /// The oldest check still open answers.
-    func deliver(_ list: [Release]) {
-        releases.deliver(list)
-        record()
-    }
-
-    /// Fetch number `number` (1-based) answers, whatever else is open.
-    func deliver(_ list: [Release], toFetch number: Int) {
-        releases.deliver(list, toFetch: number)
-        record()
-    }
-
-    /// The oldest check still open fails.
-    func failCheck() {
-        releases.fail()
-        record()
-    }
+    private func record() { history.append(Published(window: window, card: card)) }
 
     var launcher: Launcher { resident! }
     var window: Launcher.Window { resident?.window ?? .closed }
@@ -247,44 +227,11 @@ extension Release {
         record()
     }
 
-    func updateNow() {
-        updater?.updateNow()
-        record()
-    }
+    func wake() { hardware.wake() }
 
-    func cancel() {
-        updater?.cancel()
-        record()
-    }
-
-    func progress(_ fraction: Double) {
-        updates.progress(fraction)
-        record()
-    }
-
-    func finishDownload() {
-        updates.finishDownload()
-        record()
-    }
-
-    func swapIn() {
-        updates.swapIn()
-        record()
-    }
-
-    func decline() {
-        updates.decline()
-        record()
-    }
-
-    func failUpdate() {
-        updates.fail()
-        record()
-    }
-
-    func answerOpen(started: Bool) {
-        updates.answerOpen(started: started)
-        record()
+    /// Two fingers land and stay: the script has no lift.
+    func restTwoFingers() {
+        hardware.touch(TouchScript(Trackpad.macBook14.surface).land(fingers: 2).frames, on: Trackpad.macBook14.id)
     }
 
     func tap(_ fingers: Int, thumbAtMM thumb: (x: Double, y: Double) = (10, 10)) {
