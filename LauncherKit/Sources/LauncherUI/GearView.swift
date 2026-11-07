@@ -84,10 +84,10 @@ final class GearView: NSView {
         if reduceMotion() {
             gearLayer.removeAnimation(forKey: Self.animationKey)
         } else if gearLayer.animation(forKey: Self.animationKey) == nil {
-            // The view is flipped, so a positive angle turns clockwise on screen.
+            // The view is flipped, so a negative angle turns counter-clockwise on screen.
             let turn = CABasicAnimation(keyPath: "transform.rotation.z")
             turn.fromValue = 0
-            turn.toValue = 2 * Double.pi
+            turn.toValue = -2 * Double.pi
             turn.timingFunction = CAMediaTimingFunction(name: .linear)
             turn.repeatCount = .infinity
             turn.duration = Self.period
