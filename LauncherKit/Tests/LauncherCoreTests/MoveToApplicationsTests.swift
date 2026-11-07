@@ -64,7 +64,7 @@ import Testing
         #expect(sameSuite(world.mac.suiteDomain(), before))
         #expect(world.loginItem.calls.isEmpty)
         #expect(world.permissions.asks.isEmpty)
-        #expect(world.log.entries.isEmpty)
+        #expect(world.log.entries == ["end"])
     }
 
     @Test func aResidentStartedAtLoginKeepsItsGesturesWhileTheDialogAsks() {
@@ -112,7 +112,7 @@ import Testing
         #expect(world.loginItem.calls.isEmpty)
         #expect(world.permissions.asks.isEmpty)
         #expect(world.mac.freshStore().load() == nil)
-        #expect(world.log.entries == ["install", "removeOriginal", "openInstalledCopy"])
+        #expect(world.log.entries == ["install", "removeOriginal", "openInstalledCopy", "end"])
 
         var atRegistration: [Settings?] = []
         var atAsk: [Settings?] = []
@@ -146,7 +146,7 @@ import Testing
 
         #expect(process.installer.openInstalledCopyCalls == 1)
         #expect(process.copies.hasEnded)
-        #expect(world.log.entries == ["install", "unregister", "removeOriginal", "stop", "openInstalledCopy"])
+        #expect(world.log.entries == ["install", "unregister", "removeOriginal", "stop", "openInstalledCopy", "end"])
 
         let installed = world.launch(.byHand, placement: .installed)
 

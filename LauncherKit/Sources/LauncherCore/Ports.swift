@@ -7,6 +7,8 @@ public enum TrackpadEvent: Sendable {
     case swap(SwapEvent)
     /// Attached, detached, or the Mac woke.
     case trackpadsChanged
+    /// Some trackpad went empty or occupied, only while `sensesContact`. Carries no data: re-read `isTouched`.
+    case contactChanged
 
     /// The one mapping from what a recognizer said to what the port carries. Both hardware adapters use it.
     public init(_ event: Recognition.Event, on trackpad: TrackpadID) {
@@ -42,6 +44,10 @@ public enum Haptic: Sendable { case gesture, lightTick }
     func run(
         _ trackpads: [Trackpad], corner: ThumbCorner, blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>,
         swaps: Bool)
+    /// Contact of any kind on any running trackpad, read now: palms yes, hovers no. Reads no clock.
+    var isTouched: Bool { get }
+    /// While true, each flip pushes `.contactChanged`. Off costs one flag read per flip and no hop.
+    var sensesContact: Bool { get set }
     /// One pulse of that kind on that trackpad. No-op if it is gone.
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID)
     /// Only while `onEvent` is handling a `.windowSwipe(.began)` from `trackpad`: makes that slide a window swipe.
@@ -199,6 +205,13 @@ public enum Permission: Hashable, Sendable {
     func openInstalledCopy()
     /// Ejects it; returns at once. A file on it in use leaves it mounted.
     func eject(_ diskImage: DiskImage)
+}
+
+/// One pending wait that does not advance while the Mac sleeps. Real: SystemIdleClock. Test: InMemoryIdleClock.
+@MainActor public protocol IdleClock: AnyObject {
+    /// Replaces any pending wait.
+    func wait(_ duration: Duration, then passed: @escaping @MainActor () -> Void)
+    func cancel()
 }
 
 /// Sparkle, and the restart that follows it. No Sparkle type, feed value or version crosses this port.

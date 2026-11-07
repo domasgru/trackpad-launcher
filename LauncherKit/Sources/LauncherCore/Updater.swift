@@ -37,23 +37,70 @@ public enum UpdateEngineEvent: Equatable, Sendable {
     /// The process must end now, through `end()`. Set once by `Lifecycle`.
     public var onHandOver: (@MainActor () -> Void)?
     private let engine: any UpdateEngine
+    private let clock: any IdleClock
+    private var launcher: Launcher?
 
-    public init(_ copy: UpdatableCopy, engine: any UpdateEngine) {
+    private enum Phase {
+        /// Nothing to do. Sparkle's schedule, or a check, may be running.
+        case resting
+        /// A genuine update is held and installs at this process's end, however it ends. `Launcher`'s use is watched,
+        /// and the idle minute runs exactly while the app is not in use.
+        case ready
+        /// Terminal. The restart is armed and the process is ending in this same turn.
+        case handedOver
+    }
+
+    private var phase = Phase.resting
+
+    public init(_ copy: UpdatableCopy, engine: any UpdateEngine, clock: any IdleClock) {
         self.engine = engine
+        self.clock = clock
     }
 
     /// Once, from a resident only. Starts the engine and checks in the same turn: the one moment Sparkle's docs bless,
     /// and the only way to check at every start, because Sparkle's scheduler checks at start only past 24 hours.
     public func start(watching launcher: Launcher, opening: Opening) {
+        self.launcher = launcher
         engine.onEvent = { [unowned self] event in handle(event) }
         engine.start()
         engine.check()
     }
 
     private func handle(_ event: UpdateEngineEvent) {
+        guard phase != .handedOver else { return }
         switch event {
-        case .held: break
-        case .cycleEnded: break
+        case .held(.genuine): enter(.ready)
+        case .held(.notGenuine): break
+        case .cycleEnded: enter(.resting)
         }
+    }
+
+    private func useChanged(_ inUse: Bool) {
+        guard phase == .ready else { return }
+        if inUse {
+            clock.cancel()
+        } else {
+            clock.wait(.seconds(60)) { [unowned self] in idleMinutePassed() }
+        }
+    }
+
+    private func idleMinutePassed() {
+        // The level, read now: an edge may still be queued on the main actor.
+        guard phase == .ready, launcher?.isInUse == false else { return }
+        // Stays ready when refused: the next idle edge tries again, so there is no loop.
+        guard engine.armRestart() else { return }
+        enter(.handedOver)
+        onHandOver?()
+    }
+
+    /// The one place a lasting effect starts or stops, so leaving a phase cannot leave one armed.
+    private func enter(_ next: Phase) {
+        guard next != phase else { return }
+        if phase == .ready {
+            clock.cancel()
+            launcher?.watchUse(nil)
+        }
+        phase = next
+        if next == .ready { launcher?.watchUse { [unowned self] in useChanged($0) } }
     }
 }

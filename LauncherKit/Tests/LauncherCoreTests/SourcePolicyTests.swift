@@ -50,10 +50,8 @@ import Testing
         Entry(token: "FileHandle(forWriting", rule: "own files"),
         Entry(token: ".write(to:", rule: "own files"),
         Entry(token: "createFile(atPath", rule: "own files"),
-        Entry(token: "Timer", rule: "timer"),
         Entry(token: "asyncAfter", rule: "timer"),
         Entry(token: "Task.sleep", rule: "polling"),
-        Entry(token: "makeTimerSource", rule: "timer"),
         Entry(token: "displayLink", rule: "timer"),
         Entry(token: "DisplayLink", rule: "timer"),
         Entry(token: "IOHIDManager", rule: "no Input Monitoring or event posting"),
@@ -129,6 +127,15 @@ import Testing
     static let confined: [Confined] = [
         Confined(
             token: "http", onlyIn: ["SparkleEngine.swift"], rule: "no address in Swift; only Sparkle's `httpHeaders`"),
+        Confined(
+            token: "Timer", onlyIn: ["SystemIdleClock.swift"],
+            rule: "the one timer is an automatic update's idle minute"),
+        Confined(
+            token: "makeTimerSource", onlyIn: ["SystemIdleClock.swift"],
+            rule: "the one timer is an automatic update's idle minute"),
+        Confined(
+            token: "DispatchSourceTimer", onlyIn: ["SystemIdleClock.swift"],
+            rule: "the one timer is an automatic update's idle minute"),
         Confined(token: "import Sparkle", onlyIn: ["SparkleEngine.swift"], rule: "the update engine is one file"),
         Confined(token: "HTTPCookieStorage", onlyIn: ["SparkleEngine.swift"], rule: "cookies are refused where the engine starts"),
         Confined(token: "URLCache", onlyIn: ["SparkleEngine.swift"], rule: "nothing is cached where the engine starts"),
@@ -228,10 +235,16 @@ import Testing
             "URLSession", "URLSession.shared", "URLSessionConfiguration.default", ".background(withIdentifier", "String(contentsOf:",
             "NSURLConnection", "NSURLDownload", "downloadTask", ".download(", "CFHTTP", "import WebKit", "WKWebView", "curl", "NSAppleScript",
             "import Network", "NWConnection", "CFSocket", "CFStream", "Process()", "Process.run(", "executableURL",
-            "NSTask", "posix_spawn", "Timer", "asyncAfter", "Task.sleep", ".write(to:", "FileHandle(forWriting",
+            "NSTask", "posix_spawn", "asyncAfter", "Task.sleep", ".write(to:", "FileHandle(forWriting",
             "createFile(atPath",
         ]
         #expect(required.subtracting(listed).isEmpty, "dropped from banned: \(required.subtracting(listed).sorted())")
+    }
+
+    @Test func theTimerBansAreStillScannedInTheConfinedList() {
+        let confinedToTheClock = Set(Self.confined.filter { $0.onlyIn == ["SystemIdleClock.swift"] }.map(\.token))
+        let required: Set<String> = ["Timer", "makeTimerSource", "DispatchSourceTimer"]
+        #expect(required.subtracting(confinedToTheClock).isEmpty, "dropped from confined: \(required.subtracting(confinedToTheClock).sorted())")
     }
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.

@@ -68,9 +68,10 @@ import LauncherCore
     @discardableResult
     func launch(
         _ opening: Opening, others: [RunningCopy] = [], alreadyExited: Set<RunningCopy> = [],
-        placement: Placement = .installed, diskImageToEject: DiskImage? = nil, running: RunningBuild = .development
+        placement: Placement = .installed, diskImageToEject: DiskImage? = nil, running: RunningBuild = .development,
+        attached: [Trackpad] = [.macBook14]
     ) -> OneProcess {
-        let process = OneProcess(mac: mac, placement: placement, running: running, log: log)
+        let process = OneProcess(mac: mac, placement: placement, running: running, attached: attached, log: log)
         process.installer.onEffect = { [unowned self] in snapshots.append(snapshot()) }
         process.installer.onInstalled = { [unowned self] in installedAt = snapshots.count }
         process.copies.listed = others
@@ -121,18 +122,20 @@ struct RunningBuild {
     /// Nil when the gate lets this copy through nowhere.
     let updater: Updater?
     let engine = InMemoryUpdateEngine()
+    let idleClock = InMemoryIdleClock()
 
-    init(mac: World, placement: Placement, running: RunningBuild, log: EffectLog) {
+    init(mac: World, placement: Placement, running: RunningBuild, attached: [Trackpad], log: EffectLog) {
         self.mac = mac
         copies.log = log
         installer.log = log
         engine.log = log
         startAtLogin = mac.startAtLogin(placement: placement)
-        hardware = InMemoryTrackpads(attached: [.macBook14])
+        hardware = InMemoryTrackpads(attached: attached)
         let engine = self.engine
+        let idleClock = self.idleClock
         updater = UpdatableCopy(
             placement: placement, developerIDSigned: running.developerIDSigned, canReplaceItself: running.canWrite
-        ).map { Updater($0, engine: engine) }
+        ).map { Updater($0, engine: engine, clock: idleClock) }
         lifecycle = Lifecycle(
             placement: placement, copies: copies, installer: installer, startAtLogin: startAtLogin,
             makeResident: { [unowned self] in makeResident() }, updater: updater)
@@ -207,6 +210,15 @@ struct RunningBuild {
         lifecycle.quit()
         record()
     }
+
+    enum Contact { case finger }
+
+    /// A finger lands and stays.
+    func touch(_ contact: Contact) { hardware.press() }
+
+    func lift() { hardware.lift() }
+
+    func wake() { hardware.wake() }
 
     func tap(_ fingers: Int, thumbAtMM thumb: (x: Double, y: Double) = (10, 10)) {
         hardware.touch(
