@@ -768,7 +768,7 @@ PLIST
     if [ "$kind" = release ]; then
       ditto -c -k --keepParent "$app" "$work/notarize.zip"
       xcrun notarytool submit "$work/notarize.zip" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1 | tee -a "$build_log" |
-        grep -q "status: Accepted" || { log "notarisation of $name was not accepted; see $build_log"; return 1; }
+        grep -E "^ +status: Accepted" >/dev/null || { log "notarisation of $name was not accepted; see $build_log"; return 1; }
       xcrun stapler staple "$app" >>"$build_log" 2>&1 && xcrun stapler validate "$app" >>"$build_log" 2>&1 ||
         { log "cannot staple $name"; return 1; }
     fi
