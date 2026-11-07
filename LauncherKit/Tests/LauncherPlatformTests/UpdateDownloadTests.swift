@@ -65,6 +65,33 @@ import Testing
         #expect(caches.found(build: "2") == nil)
     }
 
+    @Test(arguments: ["Update.dmg", "Update.zip", "Update"])
+    func aFileNamedForAnotherKindOfArchiveIsNone(file: String) throws {
+        let caches = try Caches()
+        try caches.download(file: file)
+
+        #expect(caches.found(build: "2") == nil)
+    }
+
+    @Test(arguments: ["two files", "no folder for the build"])
+    func aLayoutTheLookupCannotResolveEndsWithTheDownloadsGone(layout: String) throws {
+        let caches = try Caches()
+        let archive: URL
+        if layout == "two files" {
+            archive = try caches.download()
+            try Data("second".utf8).write(to: archive.deletingLastPathComponent().appending(path: "other.aar"))
+        } else {
+            archive = try caches.download(folder: "Trackpad Launcher 3")
+        }
+        #expect(caches.found(build: "2") == nil)
+
+        let folder = SparkleInternals.persistentDownloads(identifier: Self.identifier, caches: caches.root)
+        UpdateArchive.discard(downloads: folder)
+
+        #expect(!FileManager.default.fileExists(atPath: archive.path))
+        #expect(!FileManager.default.fileExists(atPath: folder.path))
+    }
+
     @Test func aFolderNamedForAnotherBuildIsNone() throws {
         let caches = try Caches()
         try caches.download(folder: "Trackpad Launcher 3")

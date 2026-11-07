@@ -368,6 +368,22 @@ import Testing
         #expect(try Self.declarationProblems(in: dir, for: entry) == ["value does not start with true", "value does not end with true"])
     }
 
+    @Test(arguments: ["SUAutomaticallyUpdate", "SUScheduledCheckInterval", "SUEnableDownloaderService"])
+    func aNeverDeclaredKeyPlantedInTheRealManifestIsFound(key: String) throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-manifest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let real = Self.packageRoot.deletingLastPathComponent().appending(path: "project.yml")
+        let text = try String(contentsOf: real, encoding: .utf8)
+        let manifest = dir.appending(path: "project.yml")
+        try Data(text.utf8).write(to: manifest)
+        #expect(try Self.scanManifest(in: dir, for: key).isEmpty)
+
+        try Data((text + "\n        \(key): true\n").utf8).write(to: manifest)
+
+        #expect(try Self.scanManifest(in: dir, for: key).count == 1)
+    }
+
     @Test func manifestScanFindsAPlantedKey() throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "tl-manifest-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

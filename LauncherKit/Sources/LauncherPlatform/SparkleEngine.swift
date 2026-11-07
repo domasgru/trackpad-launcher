@@ -175,13 +175,17 @@ enum SparkleInternals {
         return userGroups().contains(info.st_gid)
     }
 
+    nonisolated static func persistentDownloads(identifier: String, caches: URL) -> URL {
+        caches.appending(path: "\(identifier)/org.sparkle-project.Sparkle/PersistentDownloads")
+    }
+
     /// `PersistentDownloads/<random>/<host name> <build>/<file>` under Sparkle's cache for the host. The newest random
     /// folder holding a folder named for `build` holds the downloaded archive; nil unless that folder holds exactly one
     /// file. Proof: `SPUDownloader.m` (`rootPersistentDownloadCachePath`, `downloaderDidFinishWithTemporaryDownloadData`)
     /// and `SPUDownloadDriver.m` (`desiredFilename`).
     nonisolated static func persistentDownload(identifier: String, build: String, caches: URL) -> URL? {
         let files = FileManager.default
-        let root = caches.appending(path: "\(identifier)/org.sparkle-project.Sparkle/PersistentDownloads")
+        let root = persistentDownloads(identifier: identifier, caches: caches)
         func children(_ folder: URL) -> [URL] {
             (try? files.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
         }
@@ -193,7 +197,7 @@ enum SparkleInternals {
             let named = children(random).filter { $0.lastPathComponent.hasSuffix(" \(build)") }
             guard named.count == 1 else { return nil }
             let inside = children(named[0])
-            return inside.count == 1 ? inside[0] : nil
+            return inside.count == 1 && inside[0].pathExtension == "aar" ? inside[0] : nil
         }
         return children(root).sorted { modified($0) > modified($1) }.lazy.compactMap(archive).first
     }
@@ -272,7 +276,12 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
             SparkleInternals.persistentDownload(identifier: identifier, build: item.versionString, caches: $0)
         }
         genuine = false
-        guard let archive, let offer else { return }
+        guard let archive, let offer else {
+            if let caches {
+                UpdateArchive.discard(downloads: SparkleInternals.persistentDownloads(identifier: identifier, caches: caches))
+            }
+            return
+        }
         genuine = UpdateArchive.admit(archive, as: offer, signer: signer)
     }
 

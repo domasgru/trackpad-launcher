@@ -7,10 +7,8 @@ struct AccessibilityHintCard: View {
     let actions: LauncherActions
 
     private static let messageWidth: CGFloat = 216
-    private static let border = Color(red: 0xde / 255, green: 0xde / 255, blue: 0xde / 255)
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: GroupStyle.cornerRadius)
         VStack(alignment: .leading, spacing: 8) {
             Text(Copy.accessibilityHint)
                 .hintMessage(maxWidth: Self.messageWidth)
@@ -20,15 +18,10 @@ struct AccessibilityHintCard: View {
         .padding(.vertical, 8)
         .padding(.horizontal, GroupStyle.sideInset)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(alignment: .topTrailing) {
+        .pictureCardFrame(alignment: .topTrailing) {
             TurningGear()
                 .frame(width: GearView.side, height: GearView.side)
                 .offset(x: 19, y: -23)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
         }
-        .background(GroupStyle.fill, in: shape)
-        .clipShape(shape)
-        .overlay(shape.strokeBorder(Self.border, lineWidth: 1))
     }
 }

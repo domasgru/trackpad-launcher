@@ -111,7 +111,7 @@ elif ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 
 fi
 
 commit_key() {
-  local paths="TrackpadLauncher LauncherKit/Sources LauncherKit/Package.swift LauncherKit/Package.resolved Config project.yml assets"
+  local paths="TrackpadLauncher LauncherKit/Sources LauncherKit/Package.swift LauncherKit/Vendor Config project.yml assets"
   local head tag=""
   head="$(git -C "$ROOT" rev-parse --short=12 HEAD)"
   # shellcheck disable=SC2086

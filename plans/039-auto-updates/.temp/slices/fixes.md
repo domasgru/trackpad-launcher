@@ -1,63 +1,58 @@
 # Fixes after review
 
-Worktree: `/Users/dominykasgrubys/code/trackpad-launcher/.claude/worktrees/039-auto-updates`. The full gate is green at `a2da883`; these are review findings. Do exactly these, nothing else. No production Swift changes. Do not commit: the orchestrator commits.
+Repo root (a git worktree; use absolute paths): `/Users/dominykasgrubys/code/trackpad-launcher/.claude/worktrees/039-auto-updates`. The full gate is `make test` (`Scripts/test.sh`, plain `swift test`); it was green before these fixes and must be green after. The app target must still build (`xcodegen generate` then `xcodebuild build -project TrackpadLauncher.xcodeproj -scheme TrackpadLauncher -configuration Debug -derivedDataPath build/dev -quiet`). Fix each item below as decided, test-first where it changes behaviour, and nothing else. Do not commit. Report each item's outcome, and anything you could not do.
 
-Worktree guard: literal Bash arguments, no shell variables, `$(…)` or loops; create and edit files with Write and Edit; absolute paths.
+## 1. An unfound download fails open
 
-## 1. `docs/architecture.md:19`, the main-actor exception understates what runs on main
+- **Where:** `LauncherKit/Sources/LauncherPlatform/SparkleEngine.swift`, the delegate's `updater(_:didDownloadUpdate:)` (about L266-277).
+- **What is wrong:** when `SparkleInternals.persistentDownload(...)` returns nil (or `offer` is nil), the code sets `genuine = false` and returns, removing nothing. Sparkle then launches its installer for a bundle nobody checked, and a Quit, logout or crash before `showReady`'s *skip* installs it.
+- **Rule it breaks:** the plan's decision 2: "A refused one removes the downloaded archive, so Sparkle's own extraction fails and the cycle ends `.failed`; no installer was ever launched for it, so no quit, crash or termination can install it." And `docs/architecture.md` Concurrency: "…so that no unchecked update is ever prepared." R15: "Otherwise it MUST install nothing."
+- **Fix decided:** fail closed. When the lookup cannot name exactly one archive for this item, or there is no offer, remove this app's whole persistent-download folder (`<caches>/<identifier>/org.sparkle-project.Sparkle/PersistentDownloads`), so whatever Sparkle downloaded is gone and its extraction fails before any installer runs. Put the removal in `SparkleInternals` (or `UpdateArchive`, wherever the existing refused-archive removal lives) as a pure function over a caches folder, so it is testable over a temp folder in Sparkle's layout as `UpdateDownloadTests` already does. Keep every file-removal call inside the files the `SourcePolicyTests` confined rows already allow (`removeItem(` is confined; extend the row only to a file already holding update removal code, if needed). Add a test in `LauncherKit/Tests/LauncherPlatformTests/UpdateDownloadTests.swift`: a layout the lookup cannot resolve (two files in the build folder; no folder for the build) ends with the persistent-download folder gone. Show it fails before the fix.
 
-Rule broken: "Work that would delay a click ... runs off the main actor ... The update's signature check is one exception: it runs on the main actor, 18 to 31 ms once per release, so that no unchecked update is ever held."
+## 2. The lookup accepts any file name
 
-`SparkleEngine.swift:62,108,135` and `LaunchdJob.swift:16` also run on main: the lookup of the extracted bundle, and a refused update's veto (a job removal that waits, and a bundle's removal), inside the same delegate call. That is the plan's design (the veto was proven inside the delegate call), and arming the hand-over runs in the turn that ends the process. So the document is what is wrong.
+- **Where:** `SparkleInternals.persistentDownload` and `UpdateDownloadTests.swift` (T39).
+- **Rule it breaks:** the plan's T39: "one archive under one random folder with the item's file name is it; … another file name is nil." The enclosure is pinned to an `.aar` (`isPinned`).
+- **Fix decided:** the one file in the build folder must end in `.aar`; anything else is nil (and, by item 1, fails closed). Add the T39 row "another file name is nil" (a single `.dmg` or `.zip` in the right folder).
 
-Fix: reword that sentence so the exception covers the check with the bundle lookup before it, and, for a refused update only, the veto after it; all of it inside Sparkle's delegate call, once per release. Keep "18 to 31 ms" attached to the signature check alone. Same voice as the file.
+## 3. T27's planted keys are not tested
 
-## 2. `docs/architecture.md:20`, "bounded wait"
+- **Where:** `LauncherKit/Tests/LauncherCoreTests/SourcePolicyTests.swift` (the `neverDeclared` check; the only plant today is `NSSupportsSuddenTermination`, about L371).
+- **Rule it breaks:** the plan's T27: "`SUAutomaticallyUpdate`, `SUScheduledCheckInterval` and `SUEnableDownloaderService` are absent; a planted one fails." Also "`SUEnableAutomaticChecks` is declared `false` and `SUEnableInstallerLauncherService` `true`; a planted `true` or `false` respectively fails" — check those two plants exist; add any missing.
+- **Fix decided:** a parameterized test that plants each of the three never-declared keys into a copy of `project.yml`'s text and expects the check to fail; and the two value plants if missing.
 
-Rule broken: "the hand-over job's bounded wait, which runs after this process has ended."
+## 4. The E2E build cache ignores the vendored Sparkle
 
-`LaunchdJob.swift:56` first waits for the old pid with no limit, on purpose: a late end must still install and still come back, and the process ends in the same turn the job is armed. Only the wait for the swap is bounded.
+- **Where:** `Scripts/update-e2e.sh` `commit_key()` (about L113-114): `paths` lists the deleted `LauncherKit/Package.resolved` and omits `LauncherKit/Vendor`.
+- **Rule it breaks:** the cache must change when the build's inputs change; re-vendoring Sparkle would reuse stale builds.
+- **Fix decided:** replace `LauncherKit/Package.resolved` with `LauncherKit/Vendor` in `paths`. `bash -n Scripts/update-e2e.sh` must pass.
 
-Fix: reword to say the job waits for the old process to end, then for at most 6 s for the install, all of it after this process has decided to end. Leave the script alone.
+## 5. The product overview's privacy sentence is wrong
 
-## 3. `Scripts/release.sh:42` and `:380`, wrong claim about a rerun
+- **Where:** `docs/product-overview.md` line 8.
+- **What is wrong:** "a copy signed with a Developer ID in /Applications that can write to its own bundle checks … at each login start, if it can write to its own bundle, and each time its settings window opens" puts the writable condition on the window's check too, and states it twice.
+- **Rule it breaks:** the plan's Solution privacy rule: "a copy signed with a Developer ID in /Applications checks a public update list on GitHub at each login start, if it can write to its own bundle, and each time its settings window opens, and downloads a new version from GitHub releases at a login start or when the user presses *Update now*"; R19 "Its settings window MUST check and show the card as usual."
+- **Fix decided:** delete "that can write to its own bundle" after "in /Applications", leaving the rest of the sentence as it is.
 
-Plan: "A version already in the feed is replaced, so --feed-only can run twice." The header says "A feed that already lists the version publishes nothing", and the message at `:380` says "The feed already lists $EXPECTED_VERSION; nothing to publish." `write_feed` renders a fresh `pubDate`, so a later rerun replaces the item and pushes. The `cmp` branch is right only for a byte-identical render, the same second, where `git commit` would otherwise fail with nothing to commit.
+## 6. The update card's frame is a copy of the Accessibility hint card's
 
-Fix: keep the `cmp` branch. Header: a rerun replaces the version's item; a feed that comes out byte-identical publishes nothing. Message at `:380`: "The feed is unchanged; nothing to publish." Keep `publish_feed`'s behaviour. Make `feedOnlyRunTwice…` in `LauncherKit/Tests/ReleaseTests/ReleaseTests.swift` still pass.
+- **Where:** `LauncherKit/Sources/LauncherUI/UpdateCardView.swift` (about L10-38) and `AccessibilityHintCard.swift`.
+- **What is wrong:** the card copies the hint card's whole frame: the `#DEDEDE` border colour, the rounded shape, the group fill, the clip, the overlay border and the corner-picture background.
+- **Rule it breaks:** duplicated code (the review's smell baseline); `docs/architecture.md` Shape: "the shell stays thin".
+- **Fix decided:** extract one shared view modifier (or small view) in `LauncherUI` for "a bordered, clipped group with a picture behind its content" taking the picture view and its placement, used by both cards; the border colour lives once. Both cards must render exactly as before (same insets, offsets, clip, border); existing UI tests stay green. Keep it small; do not touch `GearView` or `UpdatePictureView`'s Reduce motion code.
 
-## 4. T18, `LauncherKit/Tests/LauncherCoreTests/HandOverTests.swift:125-136`, the test recomputes the table
+## 7. The plan's text lags three facts the code proved
 
-Plan's source of truth for T18 is the design's `Route` table. The test's `switch` and ternaries restate the rule, so they would drift with it (tdd `tests.md`).
+- **Where:** `plans/039-auto-updates/plan.md`.
+- **Fix decided:** edit the plan text only, minimally, so it states what shipped:
+  - Decision 2's and Further Notes' persistent download layout: `PersistentDownloads/<random>/<host name> <build>/<file>` (the build folder named by Sparkle's download driver), not `PersistentDownloads/<random>/<file>`; T39's row wording to match (the item's build folder, one `.aar`).
+  - Decision 9: the card's text is SF Pro Regular 11 pt (line height 14) and its button is the *Close* button's style, as the plan's own "Card measurements from Figma" section says, not "13 pt medium" and "the solid accent style".
+  - Decision 10: the arrow layer sits inside a static container masked to outside the tray, so only the shaft above the tray shows while the hole moves with it (the view has more than three layers); the animated layers and their animation are as stated.
+  - T22: on this toolchain's test host WebKit is already loaded, so the check walks Sparkle's own dependency closure for WebKit and AppKit; the person's T37 `vmmap` row is the whole-process check on the real app.
 
-Fix: a literal table of rows: every `Opening` (`.atLogin`, `.byHand`, `.afterUpdate`) × `Placement` × `olderCopyRuns`, 18 rows, each with its expected `Route` written out, parameterised. Values:
+## Not taken (no action)
 
-- `.atLogin`: `olderCopyRuns` true → `.end`, false → `.runSilently`, any placement.
-- `.byHand`: `.elsewhere` → `.askToMove`; `.installed`, `.development` → `.runWithWindow`.
-- `.afterUpdate`: `.installed` → `.runSilently`; `.elsewhere` → `.askToMove`; `.development` → `.runWithWindow`.
-
-## 5. `LauncherKit/Tests/LauncherPlatformTests/LaunchdJobTests.swift:107`, an assertion that cannot fail
-
-`#expect(afterKill < rewritten)` compares two clock reads taken in order. Delete it and the `afterKill` constant if nothing else reads it.
-
-## 6. T36, `LauncherKit/Tests/LauncherPlatformTests/DeviceSessionContactTests.swift:105-108`
-
-Plan: "the injected clock is read as often as in a session with no contact code." The test compares sensing off with sensing on, and both carry the contact code, so a clock read added to `receive` would pass.
-
-Fix: assert a literal read count for the row's frames, derived from what `receive` does for those frames with no contact code. Prove the test bites: temporarily add a clock read at the contact lines in `FrameStream.swift`, see it fail, and take the change out again. Say in your report that you did.
-
-## 7. T1, `LauncherKit/Tests/LauncherCoreTests/UpdaterStartTests.swift:31-46`
-
-Plan: "its whole history holds no engine call, no connection watch and no clock wait." Gated-out rows assert only engine values.
-
-Fix: add `#expect(process.connection.watches == 0)` and `#expect(process.idleClock.waits.isEmpty)` to the gated-out branch. Use the handle names as they are in `InMemoryAdapters.swift`.
-
-## 8. T28, `LauncherKit/Tests/LauncherCoreTests/UpdateRetryTests.swift:119-128`
-
-Plan: "A download lost mid-way, which arrives as `.requestFailed`, watches like a failed check." The test pushes `.held(.genuine)` first, so it tests a held update being lost, not a download.
-
-Fix: rename the existing test for what it proves (a held update lost to a failed request). Add the real row: no `.held` at all, `.cycleEnded(.requestFailed)`, then `isWatching`, and `set(true)` gives one more check.
-
-## Done when
-
-`Scripts/test.sh` is green; use a long Bash timeout (up to 600000 ms) or `run_in_background`.
+- Negated `#expect(!…)` in new tests: this repo's existing style throughout; revision 1's review made the same call.
+- `SparkleEngine.currentUpdater`, the test-only weak reference: the plan's T21 asks for exactly that ("a weak reference the engine exposes for tests").
+- `public nonisolated static func canReplace`: the plan's own signature, called from the composition root before any actor context matters.
+- The other judgement calls (data clumps, primitive obsession, fixed sleeps in pre-existing platform tests, the duplicated `ProcessWait` test helper across two test targets, architecture.md's hand-over detail): not changed.

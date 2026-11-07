@@ -33,6 +33,12 @@ enum UpdateArchive {
         return genuine
     }
 
+    /// Removes the folder of downloads, for when the downloaded archive cannot be named or checked: Sparkle's own
+    /// extraction then fails and no installer is launched for an unchecked bundle.
+    static func discard(downloads folder: URL) {
+        try? FileManager.default.removeItem(at: folder)
+    }
+
     /// Every entry is checked before it is written; the first refused one cancels, which ends the extraction with an
     /// error.
     private static func extract(_ archive: URL, into folder: URL) throws {
