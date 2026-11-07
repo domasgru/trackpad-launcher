@@ -113,7 +113,6 @@ public final class Launcher {
             case .windowSwipe(let event): windowSwipe(event)
             case .swap(let event): swap(event)
             case .trackpadsChanged: reconcile(restart: true)
-            case .contactChanged: reportUse()
             }
         }
         system.onLaunchProgress = { [unowned self] app, progress in self.progress(progress, of: app) }
@@ -221,9 +220,7 @@ public final class Launcher {
             }
         }
         openings += 1
-        let wasClosed = window == .closed
         window = .open(request: openings)
-        if wasClosed { reportUse() }
         resolveRows()
         scanner.scan()
     }
@@ -232,24 +229,7 @@ public final class Launcher {
     public func closeWindow() {
         guard window != .closed else { return }
         window = .closed
-        reportUse()
     }
-
-    /// A finger on any trackpad, or the settings window open, minimised or hidden included.
-    public var isInUse: Bool { window != .closed || hardware.isTouched }
-
-    @ObservationIgnored private var useWatcher: (@MainActor (Bool) -> Void)?
-
-    /// While set: `onChange` now with the present reading, then at each change and after each `run`. nil stops it, and
-    /// contact sensing with it. `Launcher` does not know why it is asked.
-    public func watchUse(_ onChange: (@MainActor (Bool) -> Void)?) {
-        useWatcher = onChange
-        // Sensing first, then the reading: a lift landing as it turns on is neither lost nor stuck.
-        hardware.sensesContact = onChange != nil
-        reportUse()
-    }
-
-    private func reportUse() { useWatcher?(isInUse) }
 
     /// What the trackpads were last run with. A reconcile that would run them the same way leaves them, and any swipe
     /// in progress, alone: preference and trust notifications also fire for writes that change nothing here.
@@ -291,8 +271,6 @@ public final class Launcher {
         shown = nil
         hardware.run(run.trackpads, corner: run.corner, blockClicks: run.blockClicks,
             blockTapClicks: run.blockTapClicks, slides: run.slides, swaps: run.swaps)
-        // `run` replaces sessions, so an in-flight lift can vanish: re-reading the level cannot stick.
-        reportUse()
     }
 
     private func hideOtherApps(than app: BundleID) {

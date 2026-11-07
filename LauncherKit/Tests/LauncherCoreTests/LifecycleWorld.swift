@@ -133,7 +133,6 @@ struct RunningBuild {
     /// Nil when the gate lets this copy through nowhere.
     let updater: Updater?
     let engine = InMemoryUpdateEngine()
-    let idleClock = InMemoryIdleClock()
     let connection = InMemoryConnection()
 
     init(mac: World, placement: Placement, running: RunningBuild, attached: [Trackpad], log: EffectLog) {
@@ -144,11 +143,10 @@ struct RunningBuild {
         startAtLogin = mac.startAtLogin(placement: placement)
         hardware = InMemoryTrackpads(attached: attached)
         let engine = self.engine
-        let idleClock = self.idleClock
         let connection = self.connection
         updater = UpdatableCopy(
             placement: placement, developerIDSigned: running.developerIDSigned, canReplaceItself: running.canWrite
-        ).map { Updater($0, engine: engine, connection: connection, clock: idleClock) }
+        ).map { Updater($0, engine: engine, connection: connection) }
         lifecycle = Lifecycle(
             placement: placement, copies: copies, installer: installer, startAtLogin: startAtLogin,
             makeResident: { [unowned self] in makeResident() }, updater: updater)
@@ -224,14 +222,12 @@ struct RunningBuild {
         record()
     }
 
-    enum Contact { case finger }
-
-    /// A finger lands and stays.
-    func touch(_ contact: Contact) { hardware.press() }
-
-    func lift() { hardware.lift() }
-
     func wake() { hardware.wake() }
+
+    /// Two fingers land and stay: the script has no lift.
+    func restTwoFingers() {
+        hardware.touch(TouchScript(Trackpad.macBook14.surface).land(fingers: 2).frames, on: Trackpad.macBook14.id)
+    }
 
     func tap(_ fingers: Int, thumbAtMM thumb: (x: Double, y: Double) = (10, 10)) {
         hardware.touch(

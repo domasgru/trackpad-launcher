@@ -50,6 +50,9 @@ import Testing
         Entry(token: ".write(to:", rule: "own files"),
         Entry(token: "createFile(atPath", rule: "own files"),
         Entry(token: "asyncAfter", rule: "timer"),
+        Entry(token: "Timer", rule: "no timers: every input is a push"),
+        Entry(token: "makeTimerSource", rule: "no timers: every input is a push"),
+        Entry(token: "DispatchSourceTimer", rule: "no timers: every input is a push"),
         Entry(token: "Task.sleep", rule: "polling"),
         Entry(token: "displayLink", rule: "timer"),
         Entry(token: "DisplayLink", rule: "timer"),
@@ -126,15 +129,6 @@ import Testing
     static let confined: [Confined] = [
         Confined(
             token: "http", onlyIn: ["SparkleEngine.swift"], rule: "no address in Swift; only Sparkle's `httpHeaders`"),
-        Confined(
-            token: "Timer", onlyIn: ["SystemIdleClock.swift"],
-            rule: "the one timer is an automatic update's idle minute"),
-        Confined(
-            token: "makeTimerSource", onlyIn: ["SystemIdleClock.swift"],
-            rule: "the one timer is an automatic update's idle minute"),
-        Confined(
-            token: "DispatchSourceTimer", onlyIn: ["SystemIdleClock.swift"],
-            rule: "the one timer is an automatic update's idle minute"),
         Confined(
             token: "import Network", onlyIn: ["SystemConnection.swift"],
             rule: "the path monitor is one file; it makes no request"),
@@ -244,19 +238,64 @@ import Testing
             "URLSession", "URLSession.shared", "URLSessionConfiguration.default", ".background(withIdentifier", "String(contentsOf:",
             "NSURLConnection", "NSURLDownload", "downloadTask", ".download(", "CFHTTP", "import WebKit", "WKWebView", "curl", "NSAppleScript",
             "NWConnection", "CFSocket", "CFStream", "Process()", "Process.run(", "executableURL",
-            "NSTask", "posix_spawn", "asyncAfter", "Task.sleep", ".write(to:", "FileHandle(forWriting",
+            "NSTask", "posix_spawn", "Timer", "makeTimerSource", "DispatchSourceTimer", "asyncAfter", "Task.sleep", ".write(to:", "FileHandle(forWriting",
             "createFile(atPath",
         ]
         #expect(required.subtracting(listed).isEmpty, "dropped from banned: \(required.subtracting(listed).sorted())")
     }
 
-    @Test func theTimerAndPathMonitorBansAreStillScannedInTheConfinedList() {
-        let confinedToTheClock = Set(Self.confined.filter { $0.onlyIn == ["SystemIdleClock.swift"] }.map(\.token))
-        let timers: Set<String> = ["Timer", "makeTimerSource", "DispatchSourceTimer"]
-        #expect(timers.subtracting(confinedToTheClock).isEmpty, "dropped from confined: \(timers.subtracting(confinedToTheClock).sorted())")
+    @Test func thePathMonitorBansAreStillScannedInTheConfinedList() {
         let confinedToTheMonitor = Set(Self.confined.filter { $0.onlyIn == ["SystemConnection.swift"] }.map(\.token))
         let monitor: Set<String> = ["import Network", "NWPathMonitor"]
         #expect(monitor.subtracting(confinedToTheMonitor).isEmpty, "dropped from confined: \(monitor.subtracting(confinedToTheMonitor).sorted())")
+    }
+
+    /// The code that runs for a trackpad frame, on the framework's thread or the click tap's. None of it may know
+    /// about updates or contact sensing.
+    static let framePathFiles: [String] = [
+        "FrameStream.swift", "TouchFrameParsing.swift", "MultitouchTrackpads.swift", "MultitouchSupport.swift",
+        "ClickTap.swift", "GestureRecognizer.swift", "GestureRules.swift", "Touch.swift", "TrackpadTapState.swift",
+        "TapFilters.swift", "ClickFilter.swift", "ScrollFilter.swift", "DockSwipeFilter.swift",
+        "CursorTravel.swift", "PointerCurve.swift", "Surface.swift", "Uptime.swift", "UptimeNow.swift",
+    ]
+
+    static let keptOutOfTheFramePath: [String] = [
+        "Updater", "UpdateEngine", "Sparkle", "contactChanged", "isTouched", "sensesContact", "isInUse", "occupied",
+        "IdleClock",
+    ]
+
+    /// One "<file>:<line>: <token>" string per kept-out token on a line of `text`.
+    static func framePathHits(in text: String, file: String) -> [String] {
+        text.split(separator: "\n", omittingEmptySubsequences: false).enumerated().flatMap { line in
+            keptOutOfTheFramePath.filter { line.element.contains($0) }.map { "\(file):\(line.offset + 1): \($0)" }
+        }
+    }
+
+    private static func framePathFileURLs() throws -> [URL] {
+        let all = try scannedRoots.flatMap { try swiftFiles(under: $0) }
+        return framePathFiles.compactMap { name in all.first { $0.lastPathComponent == name } }
+    }
+
+    @Test func everyFramePathFileExists() throws {
+        let found = try Self.framePathFileURLs().map(\.lastPathComponent)
+        #expect(Set(Self.framePathFiles).subtracting(found).isEmpty, "missing: \(Set(Self.framePathFiles).subtracting(found).sorted())")
+    }
+
+    @Test func noFramePathFileHoldsUpdateOrContactCode() throws {
+        let hits = try Self.framePathFileURLs().flatMap {
+            Self.framePathHits(in: try String(contentsOf: $0, encoding: .utf8), file: $0.lastPathComponent)
+        }
+        #expect(hits.isEmpty, "update or contact code on the frame path: \(hits)")
+    }
+
+    @Test func aPlantedContactReadInTheFrameStreamFailsTheFramePathScan() throws {
+        let stream = try #require(Self.framePathFileURLs().first { $0.lastPathComponent == "FrameStream.swift" })
+        let text = try String(contentsOf: stream, encoding: .utf8) + "\nfunc planted() -> Bool { isTouched }\n"
+
+        let hits = Self.framePathHits(in: text, file: "FrameStream.swift")
+
+        #expect(hits.count == 1)
+        #expect(hits.first?.hasSuffix(": isTouched") == true)
     }
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.

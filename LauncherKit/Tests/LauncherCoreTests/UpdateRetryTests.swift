@@ -104,27 +104,26 @@ import Testing
         #expect(process.connection.watches == 0)
     }
 
-    @Test func aRetryThatFindsAnUpdateEndsTheWatchAndHoldsItLikeAnyOther() {
-        let (_, process) = resident()
+    @Test func aRetryThatFindsAnUpdateEndsTheWatchAndHandsOverLikeAnyOther() {
+        let (world, process) = resident()
         process.engine.push(.cycleEnded(.requestFailed))
         process.connection.set(true)
 
         process.engine.push(.held(.genuine))
 
         #expect(!process.connection.isWatching)
-        #expect(process.hardware.sensesContact)
-        #expect(process.idleClock.pending == .seconds(60))
+        #expect(world.log.entries.suffix(2) == ["arm restart", "end"])
     }
 
-    @Test func aHeldUpdateLostToAFailedRequestWatchesLikeAFailedCheck() {
-        let (_, process) = resident()
+    @Test func aRefusedHandOverFollowedByAFailedRequestWatchesLikeAFailedCheck() {
+        let (world, process) = resident()
+        process.engine.armWorks = false
         process.engine.push(.held(.genuine))
 
         process.engine.push(.cycleEnded(.requestFailed))
 
         #expect(process.connection.isWatching)
-        #expect(!process.hardware.sensesContact)
-        #expect(process.idleClock.pending == nil)
+        #expect(!world.log.entries.contains("end"))
     }
 
     @Test func aDownloadLostMidWayWatchesLikeAFailedCheckAndRunsAgainWithAConnection() {

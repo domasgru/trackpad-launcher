@@ -56,39 +56,6 @@ import LauncherCore
 
     func connected() -> [Trackpad] { attached }
 
-    private var occupiedPads: Set<TrackpadID> = []
-    private var holdsContactEdges = false
-    private var heldContactEdges = 0
-    var isTouched: Bool { !occupiedPads.isEmpty }
-    /// Runs right after each set, so a test can change the world as sensing turns on.
-    var onSensesContactSet: (() -> Void)?
-    var sensesContact = false {
-        didSet { onSensesContactSet?() }
-    }
-
-    /// A finger lands on a trackpad, as a frame with a touch would.
-    func press(on id: TrackpadID = Trackpad.macBook14.id) { setOccupied(true, on: id) }
-
-    /// Every finger lifts, as an empty frame would.
-    func lift() { for id in occupiedPads { setOccupied(false, on: id) } }
-
-    /// Contact edges queue instead of arriving: the main actor has not got to them yet.
-    func holdContactEdges() { holdsContactEdges = true }
-
-    func releaseContactEdges() {
-        holdsContactEdges = false
-        let held = heldContactEdges
-        heldContactEdges = 0
-        for _ in 0..<held { onEvent?(.contactChanged) }
-    }
-
-    private func setOccupied(_ occupied: Bool, on id: TrackpadID) {
-        let was = isTouched
-        if occupied { occupiedPads.insert(id) } else { occupiedPads.remove(id) }
-        guard was != isTouched, sensesContact else { return }
-        if holdsContactEdges { heldContactEdges += 1 } else { onEvent?(.contactChanged) }
-    }
-
     /// How many times `run` was called.
     private(set) var runCount = 0
 
@@ -102,8 +69,6 @@ import LauncherCore
                 ($0.id, GestureRecognizer(corner: corner, surface: $0.surface, slides: slides, swaps: swaps, travel: .linear))
             })
         deaf = []
-        occupiedPads = []
-        heldContactEdges = 0
         states = [:]
         buttonWasDown = false
         pressInProgress = nil
@@ -145,7 +110,6 @@ import LauncherCore
     func touch(_ frames: [TouchFrame], on id: TrackpadID) {
         for frame in frames {
             guard !deaf.contains(id), running[id] != nil else { return }
-            setOccupied(!frame.touches.isEmpty, on: id)
             let buttonDown = frame.press != nil
             deliverPressEdge(buttonDown: buttonDown)
             let sampled = TouchFrame(
@@ -291,40 +255,6 @@ import LauncherCore
 
     /// An event the frame thread recognised just before activity flipped, delivered regardless of `running`.
     func inject(_ event: TrackpadEvent) { _ = confirmation.deliver(event, to: onEvent) }
-}
-
-/// A wait the test passes, or lets run out by advancing. Logs nothing.
-@MainActor final class InMemoryIdleClock: IdleClock {
-    /// The duration of the wait in force; nil with none.
-    private(set) var pending: Duration?
-    /// Every duration asked for, in order.
-    private(set) var waits: [Duration] = []
-    private var remaining = Duration.zero
-    private var passed: (@MainActor () -> Void)?
-
-    func wait(_ duration: Duration, then passed: @escaping @MainActor () -> Void) {
-        pending = duration
-        remaining = duration
-        waits.append(duration)
-        self.passed = passed
-    }
-
-    func cancel() {
-        pending = nil
-        passed = nil
-    }
-
-    func pass() {
-        guard let passed else { return }
-        cancel()
-        passed()
-    }
-
-    func advance(by duration: Duration) {
-        guard pending != nil else { return }
-        remaining -= duration
-        if remaining <= .zero { pass() }
-    }
 }
 
 @MainActor final class InMemoryTrackpadPreferences: TrackpadPreferences {

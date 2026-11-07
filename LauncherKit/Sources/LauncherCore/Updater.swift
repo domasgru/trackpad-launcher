@@ -38,15 +38,10 @@ public enum UpdateEngineEvent: Equatable, Sendable {
     public var onHandOver: (@MainActor () -> Void)?
     private let engine: any UpdateEngine
     private let connection: any Connection
-    private let clock: any IdleClock
-    private var launcher: Launcher?
 
     private enum Phase: Equatable {
         /// Nothing to do. Sparkle's schedule, or a check, may be running.
         case resting
-        /// A genuine update is held and installs at this process's end, however it ends. `Launcher`'s use is watched,
-        /// and the idle minute runs exactly while the app is not in use.
-        case ready
         /// The last cycle's request failed, and the connection watch runs. `retrySpent`: this reading's one retry has
         /// been made, so only a drop and a return earn another. One bit; no timer, no backoff.
         case awaitingConnection(retrySpent: Bool)
@@ -56,16 +51,14 @@ public enum UpdateEngineEvent: Equatable, Sendable {
 
     private var phase = Phase.resting
 
-    public init(_ copy: UpdatableCopy, engine: any UpdateEngine, connection: any Connection, clock: any IdleClock) {
+    public init(_ copy: UpdatableCopy, engine: any UpdateEngine, connection: any Connection) {
         self.engine = engine
         self.connection = connection
-        self.clock = clock
     }
 
     /// Once, from a resident only. Starts the engine and, unless this process is the hand-over's, checks in the same
     /// turn. A failed install must not check at once, or it would hand over once a minute for ever.
     public func start(watching launcher: Launcher, opening: Opening) {
-        self.launcher = launcher
         engine.onEvent = { [unowned self] event in handle(event) }
         connection.onChange = { [unowned self] connected in connectionChanged(connected) }
         engine.start()
@@ -75,7 +68,14 @@ public enum UpdateEngineEvent: Equatable, Sendable {
     private func handle(_ event: UpdateEngineEvent) {
         guard phase != .handedOver else { return }
         switch event {
-        case .held(.genuine): enter(.ready)
+        case .held(.genuine):
+            // Refused: the process never ends without a restart armed, so the held update goes and the cycle ends.
+            guard engine.armRestart() else {
+                engine.discardHeldUpdate()
+                return
+            }
+            enter(.handedOver)
+            onHandOver?()
         case .held(.notGenuine):
             // No restart is ever armed for it; Sparkle ends the cycle itself once its helper has gone.
             engine.discardHeldUpdate()
@@ -98,24 +98,6 @@ public enum UpdateEngineEvent: Equatable, Sendable {
         }
     }
 
-    private func useChanged(_ inUse: Bool) {
-        guard phase == .ready else { return }
-        if inUse {
-            clock.cancel()
-        } else {
-            clock.wait(.seconds(60)) { [unowned self] in idleMinutePassed() }
-        }
-    }
-
-    private func idleMinutePassed() {
-        // The level, read now: an edge may still be queued on the main actor.
-        guard phase == .ready, launcher?.isInUse == false else { return }
-        // Stays ready when refused: the next idle edge tries again, so there is no loop.
-        guard engine.armRestart() else { return }
-        enter(.handedOver)
-        onHandOver?()
-    }
-
     /// The one place a lasting effect starts or stops, so leaving a phase cannot leave one armed.
     private func enter(_ next: Phase) {
         guard next != phase else { return }
@@ -124,13 +106,8 @@ public enum UpdateEngineEvent: Equatable, Sendable {
         let willAwait: Bool
         if case .awaitingConnection = next { willAwait = true } else { willAwait = false }
         if wasAwaiting && !willAwait { connection.stop() }
-        if phase == .ready {
-            clock.cancel()
-            launcher?.watchUse(nil)
-        }
         phase = next
         // After the assignment: the watch may push inside the call.
         if willAwait && !wasAwaiting { connection.watch() }
-        if next == .ready { launcher?.watchUse { [unowned self] in useChanged($0) } }
     }
 }

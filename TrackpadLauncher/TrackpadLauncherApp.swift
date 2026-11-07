@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let signer
         else { return nil }
         return Updater(copy, engine: SparkleEngine(bundle: location.running, signer: signer),
-            connection: SystemConnection(), clock: SystemIdleClock())
+            connection: SystemConnection())
     }
 
     /// The open event exists only from here.

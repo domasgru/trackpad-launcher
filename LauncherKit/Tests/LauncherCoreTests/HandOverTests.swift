@@ -3,7 +3,6 @@ import LauncherCore
 import Testing
 
 @MainActor @Suite struct HandOverTests {
-    private static let minute = Duration.seconds(60)
     private static let rightThumb = (x: 114.8, y: 10.0)
 
     private func armings(_ world: LifecycleWorld) -> Int {
@@ -21,26 +20,35 @@ import Testing
         return process
     }
 
-    @Test func aRefusedRestartLeavesTheProcessRunningAndTriesAgainOnTheNextIdleEdge() throws {
-        let world = seededWorld()
-        let process = try heldLogin(world)
+    private func heldLoginRefused(_ world: LifecycleWorld) throws -> OneProcess {
+        let process = try #require(world.login(running: .release))
         process.engine.armWorks = false
+        process.engine.push(.held(.genuine))
+        return process
+    }
 
-        process.idleClock.advance(by: Self.minute)
+    @Test(arguments: [true, false])
+    func aHeldUpdateHandsOverInTheSameTurnWhateverTheTrackpadAndTheWindowAreDoing(windowOpen: Bool) throws {
+        let world = seededWorld()
+        let process = try #require(world.login(running: .release))
+        process.restTwoFingers()
+        if windowOpen { process.openAgain(.byHand) } else { process.openAgain(.byHand); process.closeWindow() }
+        let before = world.log.entries.count
+
+        process.engine.push(.held(.genuine))
+
+        #expect(Array(world.log.entries.dropFirst(before)) == ["arm restart", "end"])
+    }
+
+    @Test func aRefusedRestartDiscardsTheHeldUpdateAndLeavesTheProcessRunningWithoutEnding() throws {
+        let world = seededWorld()
+        let process = try heldLoginRefused(world)
+
+        #expect(world.log.entries.suffix(2) == ["arm restart", "discard"])
         #expect(armings(world) == 1)
         #expect(!process.copies.hasEnded)
-        #expect(process.idleClock.pending == nil)
-
-        process.idleClock.advance(by: .seconds(3600))
-        #expect(armings(world) == 1)
         process.tap(1, thumbAtMM: Self.rightThumb)
         #expect(process.system.broughtToFront == [world.mac.app("Arc")])
-
-        process.touch(.finger)
-        process.lift()
-        process.engine.armWorks = true
-        process.idleClock.advance(by: Self.minute)
-        #expect(world.log.entries.suffix(2) == ["arm restart", "end"])
     }
 
     @Test(arguments: [true, false])
@@ -50,11 +58,8 @@ import Testing
         #expect(waiting.shouldEnd(.system))
 
         let next = try #require(world.login(running: .release))
-        if newVersion {
-            #expect(next.idleClock.pending == nil)
-        } else {
+        if !newVersion {
             next.engine.push(.held(.genuine))
-            next.idleClock.advance(by: Self.minute)
             #expect(world.log.entries.suffix(2) == ["arm restart", "end"])
         }
         #expect(next.windows == [.closed])
@@ -67,9 +72,7 @@ import Testing
         let world = seededWorld()
         let seedSuite = world.mac.suiteDomain()
         let seedPermissions = world.permissions.granted
-        let old = try heldLogin(world)
-
-        old.idleClock.advance(by: Self.minute)
+        _ = try heldLogin(world)
 
         #expect(world.log.entries.suffix(2) == ["arm restart", "end"])
         #expect(world.loginItem.calls.isEmpty)
@@ -92,7 +95,7 @@ import Testing
         let world = seededWorld()
         let seedSuite = world.mac.suiteDomain()
         let seedPermissions = world.permissions.granted
-        try heldLogin(world).idleClock.advance(by: Self.minute)
+        _ = try heldLogin(world)
         let aroundArming = Array(world.snapshots.suffix(2))
         #expect(aroundArming.count == 2)
 
@@ -114,7 +117,7 @@ import Testing
 
     @Test func openingTheNewCopyByHandAfterwardsOpensTheWindowAsUsual() throws {
         let world = seededWorld()
-        try heldLogin(world).idleClock.advance(by: Self.minute)
+        _ = try heldLogin(world)
         let new = world.finishHandOver()
 
         new.openAgain(.byHand)
@@ -174,33 +177,20 @@ import Testing
 
     @Test func aFailedInstallBringsTheOldVersionBackWithoutCheckingAndAHoldHandsOverAgain() throws {
         let world = seededWorld()
-        try heldLogin(world).idleClock.advance(by: Self.minute)
+        _ = try heldLogin(world)
 
         let back = world.finishHandOver(installed: false)
 
         #expect(back.windows == [.closed])
         #expect(back.engine.checks == 0)
-        #expect(back.idleClock.pending == nil)
-        let before = world.log.entries
-        back.idleClock.advance(by: .seconds(3600))
-        #expect(world.log.entries == before)
 
         back.engine.push(.held(.genuine))
-        back.idleClock.advance(by: Self.minute)
         #expect(armings(world) == 2)
     }
 
-    @Test(arguments: [Phase.cycleRunning, .heldInUse, .minuteRunning])
-    func quitEndsTheProcessInEveryPhaseAndNeverArmsARestart(phase: Phase) throws {
+    @Test func quitEndsTheProcessAndNeverArmsARestart() throws {
         let world = seededWorld()
         let process = try #require(world.login(running: .release))
-        switch phase {
-        case .cycleRunning: break
-        case .heldInUse:
-            process.engine.push(.held(.genuine))
-            process.touch(.finger)
-        case .minuteRunning: process.engine.push(.held(.genuine))
-        }
         process.openAgain(.byHand)
         process.closeWindow()
 
@@ -216,16 +206,12 @@ import Testing
         #expect(world.loginItem.isOn)
     }
 
-    @Test(arguments: [Phase.cycleRunning, .heldInUse, .minuteRunning])
-    func anOrdinaryQuitClosesOnlyTheWindowAndASystemQuitAlwaysEnds(phase: Phase) throws {
+    @Test func anOrdinaryQuitClosesOnlyTheWindowAndASystemQuitAlwaysEnds() {
         let world = seededWorld()
         let process = world.launch(.byHand, running: .release)
-        if phase != .cycleRunning { process.engine.push(.held(.genuine)) }
-        if phase == .heldInUse { process.touch(.finger) }
 
         #expect(!process.shouldEnd(.other))
         #expect(process.window == .closed)
-        if phase == .minuteRunning { #expect(process.idleClock.pending == Self.minute) }
         #expect(process.shouldEnd(.other))
         #expect(process.shouldEnd(.system))
         #expect(armings(world) == 0)
@@ -237,11 +223,8 @@ import Testing
     @Test func afterAHandOverEndedTheProcessEveryWayOfQuittingAnswersYes() throws {
         let world = seededWorld()
         let old = try heldLogin(world)
-        old.idleClock.advance(by: Self.minute)
 
         #expect(old.shouldEnd(.other))
         #expect(old.shouldEnd(.system))
     }
-
-    enum Phase: CaseIterable { case cycleRunning, heldInUse, minuteRunning }
 }

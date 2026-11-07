@@ -1,12 +1,6 @@
 import AppKit
 import IOKit
 import LauncherCore
-import Synchronization
-
-/// The contact-sensing flag, which outlives `run`: a session does not. One writer, main.
-private final class ContactSensing: Sendable {
-    let isOn = Mutex(false)
-}
 
 /// TrackpadHardware over MultitouchSupport and IOKit.
 /// Frames arrive on MultitouchSupport's thread and are recognised there; only recognised events hop to main.
@@ -27,14 +21,6 @@ private final class ContactSensing: Sendable {
     private var runs = 0
     /// Every event reaches `onEvent` through it, so a window swipe start comes back with its answer.
     private let confirmation = WindowSwipeConfirmation()
-    private let contact = ContactSensing()
-
-    public var isTouched: Bool { isAnyTrackpadTouched() }
-
-    public var sensesContact: Bool {
-        get { contact.isOn.withLock { $0 } }
-        set { contact.isOn.withLock { $0 = newValue } }
-    }
 
     /// On a failed `dlopen`, `connected()` is empty: the app shows "No trackpad connected".
     public init() {
@@ -104,12 +90,11 @@ private final class ContactSensing: Sendable {
         if blockClicks && !devices.isEmpty { clickTap = ClickTap.install(blocksTapClicks: blockTapClicks) }
         for (device, trackpad) in devices {
             let ref = Unmanaged.passUnretained(device).toOpaque()
-            let sensing = contact
             let session = DeviceSession(
                 trackpad: trackpad.id,
                 recognizer: GestureRecognizer(corner: corner, surface: trackpad.surface, slides: slides, swaps: swaps, travel: .linear),
                 pointerCurves: CursorTravel.curves(of: framework.getService(ref)),
-                tap: clickTap, clock: { .now }, sensesContact: { sensing.isOn.withLock { $0 } },
+                tap: clickTap, clock: { .now },
                 deliver: { [weak self] event, reply in
                     // The main queue is FIFO from one frame thread, so events keep their frame order. An event
                     // from a replaced session is dropped, reply and all: a stale swipe start could never be ended.

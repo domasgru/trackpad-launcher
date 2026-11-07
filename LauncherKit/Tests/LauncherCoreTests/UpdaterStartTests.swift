@@ -43,7 +43,6 @@ import Testing
             #expect(process.engine.starts == 0)
             #expect(process.engine.checks == 0)
             #expect(process.connection.watches == 0)
-            #expect(process.idleClock.waits.isEmpty)
             #expect(Set(world.log.entries).isDisjoint(with: Self.engineEntries))
         }
     }
@@ -62,8 +61,6 @@ import Testing
         #expect(byHand.engine.checks == 1)
         #expect(atLogin.connection.watches == 0)
         #expect(byHand.connection.watches == 0)
-        #expect(atLogin.idleClock.waits.isEmpty)
-        #expect(byHand.idleClock.waits.isEmpty)
     }
 
     @Test func openingAndClosingTheWindowAddsNoCheck() {
@@ -78,7 +75,6 @@ import Testing
         #expect(process.engine.starts == 1)
         #expect(process.engine.checks == 1)
         #expect(process.connection.watches == 0)
-        #expect(process.idleClock.waits.isEmpty)
     }
 
     @Test func aLoginStartThatEndsForAnOlderCopyNeverStartsTheEngine() {

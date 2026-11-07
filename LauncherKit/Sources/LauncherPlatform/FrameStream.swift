@@ -36,17 +36,13 @@ final class DeviceSession: Sendable {
     /// start.
     private let answer = Mutex<WindowSwipeAnswer?>(nil)
     private let deliver: @Sendable (TrackpadEvent, _ reply: (@Sendable (Bool) -> Void)?) -> Void
-    /// Writer: this device's frame callback. Reader: main, through `isTouched`.
-    private let occupied = Mutex(false)
-    private let sensesContact: @Sendable () -> Bool
-    var isOccupied: Bool { occupied.withLock { $0 } }
 
     /// `deliver` carries, for a frame that reported `.windowSwipe(.began)`, the reply for that start: called once on the
     /// main actor, it records whether the start is a window swipe for the recognizer's next frame. nil for every other
     /// event.
     init(
         trackpad: TrackpadID, recognizer: GestureRecognizer, pointerCurves: [PointerCurve.Point],
-        tap: (any TapLink)?, clock: @escaping @Sendable () -> Uptime, sensesContact: @escaping @Sendable () -> Bool,
+        tap: (any TapLink)?, clock: @escaping @Sendable () -> Uptime,
         deliver: @escaping @Sendable (TrackpadEvent, _ reply: (@Sendable (Bool) -> Void)?) -> Void
     ) {
         self.trackpad = trackpad
@@ -54,19 +50,11 @@ final class DeviceSession: Sendable {
         self.pointerCurves = pointerCurves
         self.tap = tap
         self.clock = clock
-        self.sensesContact = sensesContact
         self.deliver = deliver
     }
 
     /// Frame thread.
     func receive(_ frame: TouchFrame) {
-        // Before the recognizer's palm filter, so palms count; reads no clock.
-        let touched = !frame.touches.isEmpty
-        let contactFlipped = occupied.withLock { was in
-            defer { was = touched }
-            return was != touched
-        }
-        if contactFlipped, sensesContact() { deliver(.contactChanged, nil) }
         let latestAnswer = answer.withLock { $0 }
         let recognition = recognizer.withLock {
             if let latestAnswer {
@@ -132,9 +120,3 @@ func anyMouseButtonDown() -> Bool {
 func mergedTapState(at now: Uptime) -> (blocking: Blocking, liftWindowIsOpen: Bool) {
     TrackpadTapState.merged(Array(sessions.withLock { $0.values }).map(\.tapState), at: now)
 }
-
-/// Main: whether any of `sessions` has a finger on its trackpad.
-func anyOccupied(_ sessions: [DeviceSession]) -> Bool { sessions.contains { $0.isOccupied } }
-
-/// Main: contact on any running trackpad. Copies the sessions out first: never two locks at once.
-func isAnyTrackpadTouched() -> Bool { anyOccupied(Array(sessions.withLock { $0.values })) }
