@@ -8,7 +8,7 @@ import Testing
         #expect(bench.view.gearLayer.animationKeys() == [GearView.animationKey], sourceLocation: sourceLocation)
         #expect(turn.keyPath == "transform.rotation.z", sourceLocation: sourceLocation)
         #expect(turn.fromValue as? Double == 0, sourceLocation: sourceLocation)
-        #expect(turn.toValue as? Double == 2 * Double.pi, sourceLocation: sourceLocation)
+        #expect(turn.toValue as? Double == -2 * Double.pi, sourceLocation: sourceLocation)
         #expect(turn.duration == 30, sourceLocation: sourceLocation)
         #expect(turn.repeatCount == .infinity, sourceLocation: sourceLocation)
         // The bench's window is never ordered in, so it cannot see this one: see the comment in `GearView`.
