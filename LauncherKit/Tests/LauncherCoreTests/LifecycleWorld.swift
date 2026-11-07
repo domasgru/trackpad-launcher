@@ -134,6 +134,7 @@ struct RunningBuild {
     let updater: Updater?
     let engine = InMemoryUpdateEngine()
     let idleClock = InMemoryIdleClock()
+    let connection = InMemoryConnection()
 
     init(mac: World, placement: Placement, running: RunningBuild, attached: [Trackpad], log: EffectLog) {
         self.mac = mac
@@ -144,9 +145,10 @@ struct RunningBuild {
         hardware = InMemoryTrackpads(attached: attached)
         let engine = self.engine
         let idleClock = self.idleClock
+        let connection = self.connection
         updater = UpdatableCopy(
             placement: placement, developerIDSigned: running.developerIDSigned, canReplaceItself: running.canWrite
-        ).map { Updater($0, engine: engine, clock: idleClock) }
+        ).map { Updater($0, engine: engine, connection: connection, clock: idleClock) }
         lifecycle = Lifecycle(
             placement: placement, copies: copies, installer: installer, startAtLogin: startAtLogin,
             makeResident: { [unowned self] in makeResident() }, updater: updater)

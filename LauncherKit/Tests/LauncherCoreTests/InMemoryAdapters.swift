@@ -675,6 +675,31 @@ final class EffectLog {
     func push(_ event: UpdateEngineEvent) { onEvent?(event) }
 }
 
+/// A network path the test moves. `watch` pushes the present reading inside the call; `set` pushes every time while
+/// watching, an unchanged value included, as a real path monitor does on an interface change.
+@MainActor final class InMemoryConnection: Connection {
+    var onChange: (@MainActor (Bool) -> Void)?
+    /// The reading a `watch` pushes. Settable before a failure.
+    var reading = false
+    private(set) var isWatching = false
+    /// How many times `watch` was called.
+    private(set) var watches = 0
+
+    func watch() {
+        isWatching = true
+        watches += 1
+        onChange?(reading)
+    }
+
+    func stop() { isWatching = false }
+
+    func set(_ connected: Bool) {
+        reading = connected
+        guard isWatching else { return }
+        onChange?(connected)
+    }
+}
+
 /// Holds `done` until a row releases an outcome, and records its calls in the shared log.
 @MainActor final class InMemoryInstaller: Installer {
     var log: EffectLog?

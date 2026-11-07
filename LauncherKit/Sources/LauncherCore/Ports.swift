@@ -214,13 +214,22 @@ public enum Permission: Hashable, Sendable {
     func cancel()
 }
 
+/// Whether a network path exists. Real: SystemConnection. Test: InMemoryConnection.
+@MainActor public protocol Connection: AnyObject {
+    var onChange: (@MainActor (Bool) -> Void)? { get set }
+    /// Pushes the present reading, then every change, until `stop`. Nothing runs before or after.
+    func watch()
+    func stop()
+}
+
 /// Sparkle, and the restart that follows it. No Sparkle type, feed value or version crosses this port.
 /// Real: SparkleEngine. Test: InMemoryUpdateEngine.
 @MainActor public protocol UpdateEngine: AnyObject {
     var onEvent: (@MainActor (UpdateEngineEvent) -> Void)? { get set }
     /// Makes no request before this call. Starts the 24-hour schedule.
     func start()
-    /// One background check.
+    /// One background check. Asked while a cycle runs or is ending, it runs once that cycle has finished, so a retry is
+    /// never lost. It never runs while an update is held.
     func check()
     /// Stops the held update installing. Best effort, two layers; if both fail it installs at this process's end.
     func discardHeldUpdate()

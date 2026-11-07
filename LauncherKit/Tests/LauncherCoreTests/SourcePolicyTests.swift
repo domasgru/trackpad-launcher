@@ -43,7 +43,6 @@ import Testing
         Entry(token: "executableURL", rule: "no child processes"),
         Entry(token: "NSTask", rule: "no child processes"),
         Entry(token: "posix_spawn", rule: "no child processes"),
-        Entry(token: "import Network", rule: "network"),
         Entry(token: "NWConnection", rule: "network"),
         Entry(token: "CFSocket", rule: "network"),
         Entry(token: "CFStream", rule: "network"),
@@ -136,6 +135,12 @@ import Testing
         Confined(
             token: "DispatchSourceTimer", onlyIn: ["SystemIdleClock.swift"],
             rule: "the one timer is an automatic update's idle minute"),
+        Confined(
+            token: "import Network", onlyIn: ["SystemConnection.swift"],
+            rule: "the path monitor is one file; it makes no request"),
+        Confined(
+            token: "NWPathMonitor", onlyIn: ["SystemConnection.swift"],
+            rule: "the path monitor is one file; it makes no request"),
         Confined(token: "import Sparkle", onlyIn: ["SparkleEngine.swift"], rule: "the update engine is one file"),
         Confined(token: "HTTPCookieStorage", onlyIn: ["SparkleEngine.swift"], rule: "cookies are refused where the engine starts"),
         Confined(token: "URLCache", onlyIn: ["SparkleEngine.swift"], rule: "nothing is cached where the engine starts"),
@@ -238,17 +243,20 @@ import Testing
         let required: Set<String> = [
             "URLSession", "URLSession.shared", "URLSessionConfiguration.default", ".background(withIdentifier", "String(contentsOf:",
             "NSURLConnection", "NSURLDownload", "downloadTask", ".download(", "CFHTTP", "import WebKit", "WKWebView", "curl", "NSAppleScript",
-            "import Network", "NWConnection", "CFSocket", "CFStream", "Process()", "Process.run(", "executableURL",
+            "NWConnection", "CFSocket", "CFStream", "Process()", "Process.run(", "executableURL",
             "NSTask", "posix_spawn", "asyncAfter", "Task.sleep", ".write(to:", "FileHandle(forWriting",
             "createFile(atPath",
         ]
         #expect(required.subtracting(listed).isEmpty, "dropped from banned: \(required.subtracting(listed).sorted())")
     }
 
-    @Test func theTimerBansAreStillScannedInTheConfinedList() {
+    @Test func theTimerAndPathMonitorBansAreStillScannedInTheConfinedList() {
         let confinedToTheClock = Set(Self.confined.filter { $0.onlyIn == ["SystemIdleClock.swift"] }.map(\.token))
-        let required: Set<String> = ["Timer", "makeTimerSource", "DispatchSourceTimer"]
-        #expect(required.subtracting(confinedToTheClock).isEmpty, "dropped from confined: \(required.subtracting(confinedToTheClock).sorted())")
+        let timers: Set<String> = ["Timer", "makeTimerSource", "DispatchSourceTimer"]
+        #expect(timers.subtracting(confinedToTheClock).isEmpty, "dropped from confined: \(timers.subtracting(confinedToTheClock).sorted())")
+        let confinedToTheMonitor = Set(Self.confined.filter { $0.onlyIn == ["SystemConnection.swift"] }.map(\.token))
+        let monitor: Set<String> = ["import Network", "NWPathMonitor"]
+        #expect(monitor.subtracting(confinedToTheMonitor).isEmpty, "dropped from confined: \(monitor.subtracting(confinedToTheMonitor).sorted())")
     }
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.

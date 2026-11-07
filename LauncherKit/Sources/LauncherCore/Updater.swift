@@ -37,23 +37,28 @@ public enum UpdateEngineEvent: Equatable, Sendable {
     /// The process must end now, through `end()`. Set once by `Lifecycle`.
     public var onHandOver: (@MainActor () -> Void)?
     private let engine: any UpdateEngine
+    private let connection: any Connection
     private let clock: any IdleClock
     private var launcher: Launcher?
 
-    private enum Phase {
+    private enum Phase: Equatable {
         /// Nothing to do. Sparkle's schedule, or a check, may be running.
         case resting
         /// A genuine update is held and installs at this process's end, however it ends. `Launcher`'s use is watched,
         /// and the idle minute runs exactly while the app is not in use.
         case ready
+        /// The last cycle's request failed, and the connection watch runs. `retrySpent`: this reading's one retry has
+        /// been made, so only a drop and a return earn another. One bit; no timer, no backoff.
+        case awaitingConnection(retrySpent: Bool)
         /// Terminal. The restart is armed and the process is ending in this same turn.
         case handedOver
     }
 
     private var phase = Phase.resting
 
-    public init(_ copy: UpdatableCopy, engine: any UpdateEngine, clock: any IdleClock) {
+    public init(_ copy: UpdatableCopy, engine: any UpdateEngine, connection: any Connection, clock: any IdleClock) {
         self.engine = engine
+        self.connection = connection
         self.clock = clock
     }
 
@@ -62,6 +67,7 @@ public enum UpdateEngineEvent: Equatable, Sendable {
     public func start(watching launcher: Launcher, opening: Opening) {
         self.launcher = launcher
         engine.onEvent = { [unowned self] event in handle(event) }
+        connection.onChange = { [unowned self] connected in connectionChanged(connected) }
         engine.start()
         if opening != .afterUpdate { engine.check() }
     }
@@ -73,7 +79,22 @@ public enum UpdateEngineEvent: Equatable, Sendable {
         case .held(.notGenuine):
             // No restart is ever armed for it; Sparkle ends the cycle itself once its helper has gone.
             engine.discardHeldUpdate()
+        case .cycleEnded(.requestFailed):
+            // Already awaiting: stay as it is, so a drop during the retry still earns the next one.
+            if case .awaitingConnection = phase { return }
+            enter(.awaitingConnection(retrySpent: false))
         case .cycleEnded: enter(.resting)
+        }
+    }
+
+    private func connectionChanged(_ connected: Bool) {
+        guard case .awaitingConnection(let spent) = phase else { return }
+        if !connected {
+            phase = .awaitingConnection(retrySpent: false)
+        } else if !spent {
+            // Written before the check: the engine may answer inside the call.
+            phase = .awaitingConnection(retrySpent: true)
+            engine.check()
         }
     }
 
@@ -98,11 +119,18 @@ public enum UpdateEngineEvent: Equatable, Sendable {
     /// The one place a lasting effect starts or stops, so leaving a phase cannot leave one armed.
     private func enter(_ next: Phase) {
         guard next != phase else { return }
+        let wasAwaiting: Bool
+        if case .awaitingConnection = phase { wasAwaiting = true } else { wasAwaiting = false }
+        let willAwait: Bool
+        if case .awaitingConnection = next { willAwait = true } else { willAwait = false }
+        if wasAwaiting && !willAwait { connection.stop() }
         if phase == .ready {
             clock.cancel()
             launcher?.watchUse(nil)
         }
         phase = next
+        // After the assignment: the watch may push inside the call.
+        if willAwait && !wasAwaiting { connection.watch() }
         if next == .ready { launcher?.watchUse { [unowned self] in useChanged($0) } }
     }
 }

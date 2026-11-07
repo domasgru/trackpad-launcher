@@ -47,7 +47,16 @@ internal import Sparkle
         }
     }
 
-    public func check() { updater?.checkForUpdatesInBackground() }
+    /// Sparkle's session stays on for an async probe after a cycle's end, and a connection reading lands in that
+    /// window; nothing else would ask again, so the check is remembered and runs once the session is off.
+    public func check() {
+        guard let updater else { return }
+        if updater.sessionInProgress {
+            delegate.checkPending = true
+        } else {
+            updater.checkForUpdatesInBackground()
+        }
+    }
 
     public func discardHeldUpdate() {
         SparkleInternals.veto(job: SparkleInternals.installerJob(of: signer.identifier), extracted: delegate.found)
@@ -156,6 +165,8 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
     var emit: (@MainActor (UpdateEngineEvent) -> Void)?
     /// The extracted bundle of the held update, until the engine discards it.
     var found: URL?
+    /// A check refused while Sparkle's session was on.
+    var checkPending = false
 
     init(prefix: String?, signer: Signer) {
         self.prefix = prefix
@@ -179,6 +190,7 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
         _ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
         immediateInstallationBlock immediateInstallHandler: @escaping () -> Void
     ) -> Bool {
+        checkPending = false
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
         found = caches.flatMap {
             SparkleInternals.extractedUpdate(identifier: signer.identifier, build: item.versionString, caches: $0)
@@ -189,6 +201,14 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
         let genuine = found.map { CodeSignature.isGenuine($0, as: offer, signer: signer) } ?? false
         emit?(.held(genuine ? .genuine : .notGenuine))
         return true
+    }
+
+    /// The cycle has fully ended and the session is off: a check `check()` remembered runs here. It re-arms the
+    /// 24-hour timer through its own cycle.
+    func updater(_ updater: SPUUpdater, willScheduleUpdateCheckAfterDelay delay: TimeInterval) {
+        guard checkPending else { return }
+        checkPending = false
+        updater.checkForUpdatesInBackground()
     }
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {

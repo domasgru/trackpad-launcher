@@ -49,7 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 canReplaceItself: SparkleEngine.canReplace(location.running)),
             let signer
         else { return nil }
-        return Updater(copy, engine: SparkleEngine(bundle: location.running, signer: signer), clock: SystemIdleClock())
+        return Updater(copy, engine: SparkleEngine(bundle: location.running, signer: signer),
+            connection: SystemConnection(), clock: SystemIdleClock())
     }
 
     /// The open event exists only from here.
