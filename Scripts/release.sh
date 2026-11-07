@@ -141,7 +141,8 @@ read_setting() {
 # to origin's main: the release targets this commit, and a version commit goes on top of it.
 preflight_checkout() {
   gh auth status >/dev/null 2>&1 || fail "gh is not authenticated; run 'gh auth login' and retry."
-  security find-identity -v -p codesigning | grep -q "Developer ID Application" ||
+  # Captured first, here and below: grep -q leaves at its match, and the writer dying of SIGPIPE fails pipefail.
+  grep -q "Developer ID Application" <<<"$(security find-identity -v -p codesigning)" ||
     fail "no 'Developer ID Application' signing identity in the keychain; install the certificate and retry."
   xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 ||
     fail "notarytool cannot use keychain profile '$NOTARY_PROFILE'; create it with 'xcrun notarytool store-credentials $NOTARY_PROFILE' or set NOTARY_PROFILE."
@@ -263,10 +264,10 @@ archive_and_check() {
     $stapled || fail "the unpacked app has no valid stapled ticket."
     $signed || fail "the unpacked app is not signed by team $TEAM_ID."
     # Sparkle's atomic swap needs its installer and the update on one team.
-    codesign -dv "$copy/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" 2>&1 |
-      grep -qx "TeamIdentifier=$TEAM_ID" || fail "Sparkle's installer is not signed by team $TEAM_ID."
-    codesign -dv "$copy/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" 2>&1 |
-      grep -qx "TeamIdentifier=$TEAM_ID" || fail "Sparkle's installer launcher service is not signed by team $TEAM_ID."
+    grep -qx "TeamIdentifier=$TEAM_ID" <<<"$(codesign -dv "$copy/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" 2>&1)" ||
+      fail "Sparkle's installer is not signed by team $TEAM_ID."
+    grep -qx "TeamIdentifier=$TEAM_ID" <<<"$(codesign -dv "$copy/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" 2>&1)" ||
+      fail "Sparkle's installer launcher service is not signed by team $TEAM_ID."
   fi
   # The kernel stamps com.apple.provenance on files this process creates; it cannot be excluded, anything else can.
   [ -z "$(xattr -lr "$copy" | grep -v ': com.apple.provenance: ')" ] || fail "the unpacked app carries extended attributes."
@@ -319,7 +320,7 @@ build_image() {
 
   # Finder learns about a fresh mount a moment after hdiutil returns.
   local tries=0
-  until osascript -e "tell application \"Finder\" to exists disk \"$disk_name\"" 2>/dev/null | grep -q true; do
+  until grep -q true <<<"$(osascript -e "tell application \"Finder\" to exists disk \"$disk_name\"" 2>/dev/null)"; do
     tries=$((tries + 1))
     [ "$tries" -lt 20 ] || fail "Finder does not see the mounted volume '$disk_name' (or Automation permission for Finder is missing)."
     sleep 1
