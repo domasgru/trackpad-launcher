@@ -5,12 +5,12 @@
 # and staples it, and publishes a GitHub release carrying both, then adds its item to the update feed.
 # Output: build/release/TrackpadLauncher.dmg
 #         build/release/TrackpadLauncher-<version>-macOS-<minimum>.aar
-#         the release v<version> on GitHub, published and marked latest: every older copy offers it the next
-#         time its settings window opens. gh uploads the assets before it publishes, so no copy sees a half-made one.
-#         the feed item in appcast.xml, committed to main: automatic copies learn of the release from it.
+#         the release v<version> on GitHub, published and marked latest: copies from before automatic updates
+#         offer it on their old card the next time their settings window opens. gh uploads the assets before it publishes, so no copy sees a half-made one.
+#         the feed item in appcast.xml, committed to main: newer copies learn of the release from it, at a login start or when their settings window opens.
 #
 # The feed, appcast.xml at the repository's root, is served by raw.githubusercontent.com and is the update list of
-# every automatic copy. Only this script writes it: it signs the .aar with the update key (the keychain's, which must
+# every copy with automatic updates. Only this script writes it: it signs the .aar with the update key (the keychain's, which must
 # be the one project.yml ships as SUPublicEDKey; its private half cannot rotate, so back it up with
 # generate_keys -x), adds an item and keeps the older ones. The order is: publish the release, then the feed, so the
 # feed never names an asset that does not exist. Sparkle compares CFBundleVersion, so the build number must be above

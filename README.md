@@ -14,11 +14,11 @@ Needs macOS 26 or later.
 2. Open it and drag Trackpad Launcher to Applications.
 3. Open Trackpad Launcher from Applications and allow Accessibility when asked.
 
-Updates come on their own, with nothing to press and nothing shown.
+Updates come on their own at login, with nothing to press and nothing shown, when the copy can write to its own bundle. Otherwise the settings window shows an update card with *Update now*.
 
 ## Commands
 
-Run `make` to list them. Each one calls a script in `Scripts/`.
+Run `make` to list them. Each one calls a script in `Scripts/`. `Scripts/build-sparkle.sh` rebuilds the vendored Sparkle in `LauncherKit/Vendor/Sparkle` from its pinned source; it is not part of the normal build.
 
 | Command | What it does |
 |---|---|
@@ -72,11 +72,14 @@ copy trusts only that key. Back it up with `generate_keys -x <file>` (in `Launch
 
 ### How users get it
 
-An installed copy checks the update list on GitHub each time it starts and every 24 hours, downloads a newer version in
-the background, installs it when the app is not in use, and restarts silently. A copy does this only when it is signed
-with the Developer ID, lies in /Applications and can write to its own bundle. Drafts and pre-releases never appear,
-because only the release command writes the list. A copy from before automatic updates still offers a release the next
-time its settings window opens.
+A copy signed with the Developer ID that lies in /Applications makes an update check at each login start, if it can
+write to its own bundle. Finding a newer version, it downloads and installs it straight away (a login update) and
+restarts silently; gestures may stop for up to 10 seconds. At any other time nothing updates by itself: opening the
+settings window makes one check, and a newer version shows the update card at the top of the window. *Update now*
+reads the update list once more, downloads and installs the version, asking an administrator's name and password
+when the account cannot write to /Applications, and the new version opens with its settings window. Drafts and
+pre-releases never appear, because only the release command writes the list. A copy from before automatic updates
+still offers a release on its old card, through the GitHub release, the next time its settings window opens.
 
 ## Docs
 
