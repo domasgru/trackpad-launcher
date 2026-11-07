@@ -70,6 +70,11 @@ Releases are immutable once published: a broken one is fixed by releasing a high
 The update key signs every update. Its private half lives in the login keychain, and it cannot rotate: every installed
 copy trusts only that key. Back it up with `generate_keys -x <file>` (in `LauncherKit/Vendor/Sparkle/bin`), and keep the file out of the repository.
 
+After each release, update a copy of the previous version by hand: open its settings window and press *Update now*,
+and once restart the Mac with it installed. Check that the new version runs, its gestures work, and its settings and
+permissions are unchanged. Do it right after publishing: installed copies take the release at their next login, and a
+release whose updater is broken cannot be replaced by an update.
+
 ### How users get it
 
 A copy signed with the Developer ID that lies in /Applications makes an update check at each login start, if it can
