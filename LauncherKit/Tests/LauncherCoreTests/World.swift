@@ -336,6 +336,18 @@ extension World {
     /// The windows of this installed app.
     func windows(of name: String) -> FakeWindows { system.windows(of: app(name)) }
 
+    /// Answers every held count read of this app, in request order, from the snapshot taken at its request.
+    func answerCountReads(of name: String) {
+        let entry = app(name)
+        for request in system.countReads { request.answer(app: entry) }
+    }
+
+    /// Answers them `.unanswered`, as the adapter does past 0.2 s.
+    func giveUpCountReads(of name: String) {
+        let entry = app(name)
+        for request in system.countReads { request.answer(app: entry, with: .unanswered) }
+    }
+
     /// The app is no longer running and its windows are gone.
     func quit(_ name: String) {
         let entry = app(name)

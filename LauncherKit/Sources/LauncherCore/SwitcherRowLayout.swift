@@ -48,3 +48,32 @@ public struct SwitcherRowLayout: Equatable, Sendable {
     /// The vertical centre of icons and highlight: half the panel's height.
     public var centreY: Double { panelSize.height / 2 }
 }
+
+/// Where a window stack's copies sit behind an icon of `row`'s size, from the icon's centre, y up. The front icon is the
+/// lone icon unchanged, so the row's spacing, the highlight and the panel stay as they are; copies grow with the
+/// selected icon because they live in its slot, whose transform the panel scales.
+public struct WindowStackLayout: Equatable, Sendable {
+    /// Each copy's side as a share of the icon's, nearest first. `copyScales.count == WindowStack.maxIcons - 1`.
+    public static let copyScales = [0.92, 0.84, 0.76]
+    /// How far each copy's top edge peeks above the top edge of the one in front of it, at full size.
+    public static let fullPeek = 6.0
+
+    public let row: SwitcherRowLayout
+
+    public init(row: SwitcherRowLayout) { self.row = row }
+
+    public struct Copy: Equatable, Sendable {
+        /// Side, in points: `row.iconSide × copyScales[k]`.
+        public let side: Double
+        /// Centre at rest above the icon's centre: `fullPeek × (k + 1) × row.scale + (row.iconSide − side) / 2`.
+        public let rise: Double
+    }
+
+    /// Nearest first: one per copy of `stack`.
+    public func copies(of stack: WindowStack) -> [Copy] {
+        Self.copyScales.prefix(stack.copies).enumerated().map { index, share in
+            let side = row.iconSide * share
+            return Copy(side: side, rise: Self.fullPeek * Double(index + 1) * row.scale + (row.iconSide - side) / 2)
+        }
+    }
+}

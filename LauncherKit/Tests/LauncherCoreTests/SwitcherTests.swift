@@ -18,7 +18,7 @@ import LauncherCore
         try #require(
             Switcher(
                 frontmost: frontmost ?? safari, running: running ?? [safari, mail, slack, notes],
-                leavingOut: [], trackpad: Trackpad.macBook14.id))
+                leavingOut: [], serial: 1, trackpad: Trackpad.macBook14.id))
     }
 
     /// A four-item selection, as over the default four-app row.
@@ -102,9 +102,9 @@ import LauncherCore
 
     @Test func aRowNeedsAnotherIconBesidesTheFrontmostApp() {
         let trackpad = Trackpad.macBook14.id
-        #expect(Switcher(frontmost: safari, running: [mail], leavingOut: [], trackpad: trackpad)?.row.count == 2)
-        #expect(Switcher(frontmost: safari, running: [], leavingOut: [], trackpad: trackpad) == nil)
-        #expect(Switcher(frontmost: safari, running: [safari], leavingOut: [], trackpad: trackpad) == nil)
+        #expect(Switcher(frontmost: safari, running: [mail], leavingOut: [], serial: 1, trackpad: trackpad)?.row.count == 2)
+        #expect(Switcher(frontmost: safari, running: [], leavingOut: [], serial: 1, trackpad: trackpad) == nil)
+        #expect(Switcher(frontmost: safari, running: [safari], leavingOut: [], serial: 1, trackpad: trackpad) == nil)
     }
 
     @Test(arguments: [

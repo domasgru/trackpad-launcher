@@ -88,6 +88,13 @@ import LauncherCore
         windows.readFrontmost(within: deadline)
     }
 
+    public func readWindows(
+        of apps: [AppEntry], within deadline: Duration,
+        answer: @escaping @Sendable @MainActor (Int, WindowRead) -> Void
+    ) {
+        windows.readEach(apps, within: deadline, answer: answer)
+    }
+
     public func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
 
     public func openWindows(among ids: Set<WindowID>) -> Set<WindowID> { windows.openWindows(among: ids) }

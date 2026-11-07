@@ -88,10 +88,50 @@ import LauncherCore
 
     struct Target: Sendable {
         let pid: pid_t
+        let isHidden: Bool
+
+        init(pid: pid_t, isHidden: Bool = false) {
+            self.pid = pid
+            self.isHidden = isHidden
+        }
+    }
+
+    private static let readers = DispatchQueue(
+        label: "launcher.window-reads", qos: .userInitiated, attributes: .concurrent)
+
+    /// On the main actor: resolves each entry to its running copy (bundle identifier plus `bundleURL == app.url`, its
+    /// hidden state, and whether it is this process), stamps one `ReadBudget` for all, then one GCD work item per
+    /// process, never the cooperative pool: a call into an app that does not answer blocks its thread until its budget
+    /// runs out and holds up no other read. Own process and no process answer at once, still through the hop. Each work
+    /// item runs `readOne` and hops only its `WindowRead` back; no Accessibility element leaves a work item. Returns
+    /// before any answer; `answer` runs on the main actor exactly once per slot.
+    func readEach(
+        _ apps: [AppEntry], within deadline: Duration,
+        readOne: @escaping @Sendable (Target, ReadBudget) -> WindowRead = {
+            AppWindowReader.read($0, budget: $1, calls: AXWindowCalls()).read
+        },
+        answer: @escaping @Sendable @MainActor (Int, WindowRead) -> Void
+    ) {
+        let budget = ReadBudget(from: .now, within: deadline)
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        for (slot, app) in apps.enumerated() {
+            let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID.rawValue)
+                .first { !$0.isTerminated && $0.bundleURL.map { AppEntry.location(ofBundleAtPath: $0.path) } == app.url }
+            let target = running.map { Target(pid: $0.processIdentifier, isHidden: $0.isHidden) }
+            if target?.pid == ownPID || target == nil {
+                let read: WindowRead = target == nil ? .unanswered : .ownProcess
+                DispatchQueue.main.async { MainActor.assumeIsolated { answer(slot, read) } }
+            } else if let target {
+                Self.readers.async {
+                    let read = readOne(target, budget)
+                    DispatchQueue.main.async { MainActor.assumeIsolated { answer(slot, read) } }
+                }
+            }
+        }
     }
 
     /// One app's whole read, on the calling thread, through `calls`: kAXWindows; one multiple-attribute call per window
-    /// (role, subrole, title, minimised, full screen, position, size); the window's number; the on-screen window list
+    /// (role, subrole, title, minimised, full screen, position, size, full-screen button); the window's number; the on-screen window list
     /// for order (and the full list only for the frame fallback when the number cannot be had). Before each call into
     /// the app, the element's messaging timeout is set to `budget.timeout(at: calls.now())`.
     /// - kAXWindows: success lists; no value is no windows; anything else is `.unanswered`.
@@ -145,7 +185,8 @@ import LauncherCore
                 raw[i].number = number(of: raw[i], among: listedWindows)
             }
         }
-        let sorted = sort(raw, onScreen: calls.onScreenNumbers(of: target.pid))
+        let sorted = sort(
+            raw, onScreen: target.isHidden ? [] : calls.onScreenNumbers(of: target.pid), appIsHidden: target.isHidden)
         guard budget.admits(endedAt: calls.now()) else { return unanswered }
 
         var elementsByID: [WindowID: Calls.Element] = [:]
@@ -160,21 +201,30 @@ import LauncherCore
     /// Which windows are listed, and in what order. Visible: role AXWindow, subrole AXStandardWindow, not minimised,
     /// on screen now (so on this Space), in the window list's order. Minimised: by the minimised flag alone, because a
     /// minimised window reports the AXDialog subrole, in the app's order. A window with no number is left out.
+    ///
+    /// A hidden app's document windows report AXDialog and leave the on-screen list, but keep the full-screen button
+    /// that panels lack: visible is then every AXWindow that is not minimised, not full screen and has that button, in
+    /// the app's order.
     nonisolated static func sort(
-        _ windows: [RawWindow], onScreen: [UInt32]
+        _ windows: [RawWindow], onScreen: [UInt32], appIsHidden: Bool = false
     ) -> (visible: [AppWindow], minimised: [AppWindow]) {
         var standard: [UInt32: AppWindow] = [:]
+        var hiddenVisible: [AppWindow] = []
         var minimised: [AppWindow] = []
         for window in windows {
             guard let number = window.number else { continue }
             if window.isMinimised {
                 minimised.append(AppWindow(id: WindowID(rawValue: number), title: window.title))
+            } else if appIsHidden {
+                if window.role == "AXWindow", !window.isFullScreen, window.hasFullScreenButton {
+                    hiddenVisible.append(AppWindow(id: WindowID(rawValue: number), title: window.title))
+                }
             } else if window.role == "AXWindow", window.subrole == "AXStandardWindow" {
                 standard[number] = AppWindow(
                     id: WindowID(rawValue: number), title: window.title, isFullScreen: window.isFullScreen)
             }
         }
-        return (onScreen.compactMap { standard[$0] }, minimised)
+        return (appIsHidden ? hiddenVisible : onScreen.compactMap { standard[$0] }, minimised)
     }
 
     /// The window's number without the private call: the one listed window with the same frame and, where the list
@@ -233,7 +283,7 @@ struct AXWindowCalls: WindowCalls {
 
     private static let attributeNames = [
         kAXRoleAttribute, kAXSubroleAttribute, kAXTitleAttribute, kAXMinimizedAttribute, "AXFullScreen",
-        kAXPositionAttribute, kAXSizeAttribute,
+        kAXPositionAttribute, kAXSizeAttribute, kAXFullScreenButtonAttribute,
     ]
 
     /// Resolves the private window number once. Missing on a macOS that drops it: every number call then fails.
@@ -293,7 +343,7 @@ struct AXWindowCalls: WindowCalls {
         }
     }
 
-    /// The values in `attributeNames`' order; an attribute the window lacks comes back as an error value and reads as
+    /// The values in `attributeNames`' order (the full-screen button last); an attribute the window lacks comes back as an error value and reads as
     /// nil.
     private static func rawWindow(_ values: [AnyObject]) -> RawWindow {
         func value(_ index: Int) -> AnyObject? { index < values.count ? values[index] : nil }
@@ -309,7 +359,8 @@ struct AXWindowCalls: WindowCalls {
         return RawWindow(
             number: nil, title: value(2) as? String ?? "", role: value(0) as? String, subrole: value(1) as? String,
             isMinimised: value(3) as? Bool ?? false, isFullScreen: value(4) as? Bool ?? false,
-            frame: position.flatMap { origin in size.map { CGRect(origin: origin, size: $0) } })
+            frame: position.flatMap { origin in size.map { CGRect(origin: origin, size: $0) } },
+            hasFullScreenButton: value(7).map { CFGetTypeID($0) == AXUIElementGetTypeID() } ?? false)
     }
 
     private static func windowList(_ options: CGWindowListOption, of pid: pid_t) -> [ListedWindow] {
@@ -336,6 +387,8 @@ struct RawWindow: Sendable {
     let isFullScreen: Bool
     /// Top-left origin, in global display points, as the window list reports bounds.
     let frame: CGRect?
+    /// The window has a full-screen button: document windows do, panels and palettes do not.
+    var hasFullScreenButton = false
 }
 
 /// One entry of the window server's window list.

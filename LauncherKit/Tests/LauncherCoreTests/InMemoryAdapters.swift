@@ -341,6 +341,35 @@ import LauncherCore
         return .app(frontmost, fake.launch, fake.read(isOwnProcess: ownApp?.url == frontmost.url))
     }
 
+    /// One per `readWindows` call, in order.
+    private(set) var countReads: [CountReadRequest] = []
+    /// Runs inside `readWindows` before any answer, as `onPlayLaunchAnimation` runs inside its call.
+    var onReadWindows: (() -> Void)?
+
+    func readWindows(
+        of apps: [AppEntry], within deadline: Duration,
+        answer: @escaping @Sendable @MainActor (Int, WindowRead) -> Void
+    ) {
+        let snapshots = apps.map { app -> (WindowRead, FakeWindows.Answering) in
+            let fake = windows(of: app)
+            return (fake.countRead(isOwnProcess: ownApp?.url == app.url), fake.answering)
+        }
+        let request = CountReadRequest(apps: apps, deadline: deadline, snapshots: snapshots.map(\.0))
+        countReads.append(request)
+        onReadWindows?()
+        for slot in apps.indices.reversed() {
+            if ownApp?.url == apps[slot].url {
+                answer(slot, .ownProcess)
+                continue
+            }
+            switch snapshots[slot].1 {
+            case .now: answer(slot, snapshots[slot].0)
+            case .held: request.held[slot] = { answer(slot, $0) }
+            case .never: break
+            }
+        }
+    }
+
     func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
 
     /// Every `openWindows(among:)` argument, in order.
@@ -431,6 +460,30 @@ import LauncherCore
     /// The launch reports `progress` inline, as the real adapter pushes it on the main actor. A test withholds a report
     /// by not calling this, delivers one late by calling it after the end, and passes time with `.ranOut`.
     func report(_ progress: LaunchProgress, for app: BundleID) { onLaunchProgress?(app, progress) }
+}
+
+/// One `readWindows` call as the fake recorded it.
+@MainActor final class CountReadRequest {
+    let apps: [AppEntry]
+    let deadline: Duration
+    /// Each app's windows as they were at the call, so later opens or closes change nothing.
+    let snapshots: [WindowRead]
+    /// The answers a test has yet to give, by slot.
+    fileprivate(set) var held: [Int: @MainActor (WindowRead) -> Void] = [:]
+
+    init(apps: [AppEntry], deadline: Duration, snapshots: [WindowRead]) {
+        self.apps = apps
+        self.deadline = deadline
+        self.snapshots = snapshots
+    }
+
+    /// Answers every held slot of this app, from its snapshot or, when given, `read`.
+    func answer(app: AppEntry, with read: WindowRead? = nil) {
+        for slot in apps.indices where apps[slot].url == app.url {
+            guard let answer = held.removeValue(forKey: slot) else { continue }
+            answer(read ?? snapshots[slot])
+        }
+    }
 }
 
 /// The one counter every app's windows draw numbers from, as the window server's numbers rise in creation order.
@@ -574,6 +627,16 @@ import LauncherCore
         if isOwnProcess { return .ownProcess }
         guard answering == .now else { return .unanswered }
         listed = Set(onScreenTitles + minimisedTitles)
+        return windowsRead()
+    }
+
+    /// What a count read finds, now. It never changes what a raise may touch; when it answers is the caller's, by
+    /// `answering`.
+    func countRead(isOwnProcess: Bool) -> WindowRead {
+        isOwnProcess ? .ownProcess : windowsRead()
+    }
+
+    private func windowsRead() -> WindowRead {
         let visible = onScreenTitles.enumerated().map { index, title in
             AppWindow(id: id(title), title: self.title(of: title), isFullScreen: index == 0 && fullScreenFront)
         }
