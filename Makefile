@@ -18,7 +18,7 @@ project: ## Regenerate TrackpadLauncher.xcodeproj from project.yml
 
 run: project ## Build the development app and open it, replacing a running one
 	xcodebuild build -project TrackpadLauncher.xcodeproj -scheme TrackpadLauncher -configuration Debug \
-		-derivedDataPath build/dev -quiet -packageAuthorizationProvider netrc
+		-derivedDataPath build/dev -quiet
 	@# Opening the same bundle again would only bring the old process to the front, with the old code.
 	@pkill -f "$(CURDIR)/$(DEV_APP)/Contents/MacOS/Trackpad Launcher" && sleep 1 || true
 	open "$(DEV_APP)"

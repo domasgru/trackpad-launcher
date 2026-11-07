@@ -39,7 +39,7 @@ FOLDER_NAME="Trackpad Launcher E2E Folder"
 REPOSITORY_URL="https://github.com/domasgru/trackpad-launcher/releases/download"
 FEED_URL="http://127.0.0.1:$PORT/domasgru/trackpad-launcher/main/appcast.xml"
 DOWNLOADS_BASE="http://127.0.0.1:$PORT/domasgru/trackpad-launcher/releases/download"
-SPARKLE_BIN="$ROOT/LauncherKit/.build/artifacts/sparkle/Sparkle/bin"
+SPARKLE_BIN="$ROOT/LauncherKit/Vendor/Sparkle/bin"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 PY="python3 -I -B"
 
@@ -507,9 +507,7 @@ ensure_sampler() {
 }
 
 ensure_sparkle_tools() {
-  [ -x "$SPARKLE_BIN/sign_update" ] && return 0
-  (cd "$ROOT/LauncherKit" && swift package --disable-keychain resolve) || die "cannot resolve the package."
-  [ -x "$SPARKLE_BIN/sign_update" ] || die "Sparkle's tools are missing from the resolved package."
+  [ -x "$SPARKLE_BIN/sign_update" ] || die "Sparkle's tools are missing from LauncherKit/Vendor/Sparkle/bin."
 }
 
 # A copy of the tree with project.yml patched; the real one is never edited.
@@ -570,7 +568,6 @@ ensure_build() {
   fi
 
   xcodebuild archive \
-    -packageAuthorizationProvider netrc \
     -project "$tree/TrackpadLauncher.xcodeproj" \
     -scheme TrackpadLauncher \
     -configuration Release \
@@ -596,7 +593,6 @@ ensure_build() {
 </plist>
 PLIST
     xcodebuild -exportArchive \
-      -packageAuthorizationProvider netrc \
       -archivePath "$work/TrackpadLauncher.xcarchive" \
       -exportOptionsPlist "$work/ExportOptions.plist" \
       -exportPath "$work/export" >>"$build_log" 2>&1 || { tail -30 "$build_log" >&2; return 1; }
@@ -658,7 +654,7 @@ render_feed() {
   rm -rf "$work"
   mkdir -p "$work/origin.git" "$work/clone" "$work/state/stubs" "$work/state/releases" "$work/home" "$work/tmp" "$work/out"
   local stubs="$work/state/stubs" clone="$work/clone" bin
-  bin="$clone/LauncherKit/.build/artifacts/sparkle/Sparkle/bin"
+  bin="$clone/LauncherKit/Vendor/Sparkle/bin"
   write_stub "$stubs" '
 case "$1 $2" in
   "auth status") exit 0 ;;
@@ -774,7 +770,7 @@ frame_check() {
 row_T56() {
   local name
   for name in v1 v2; do
-    check "$name archive" swift run --package-path "$ROOT/LauncherKit" --disable-keychain card-contract \
+    check "$name archive" swift run --package-path "$ROOT/LauncherKit" card-contract \
       "$(aar_of "$name")" --team "$TEAM_ID" --identifier "$E2E_ID"
   done
 }

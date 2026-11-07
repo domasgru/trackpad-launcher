@@ -43,6 +43,7 @@ targets:
         SUEnableAutomaticChecks: true
         SUAutomaticallyUpdate: true
         SUVerifyUpdateBeforeExtraction: true
+        SUEnableInstallerLauncherService: true
         TLUpdateDownloads: https://github.com/domasgru/trackpad-launcher/releases/download/
     settings:
       base:

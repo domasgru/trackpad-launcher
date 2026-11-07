@@ -60,7 +60,7 @@ DMG="$OUT/$PROJECT_NAME.dmg"
 REPOSITORY="domasgru/trackpad-launcher"
 VERSION_FILE="$ROOT/Config/Version.xcconfig"
 FEED="$ROOT/appcast.xml"
-SPARKLE_BIN="$ROOT/LauncherKit/.build/artifacts/sparkle/Sparkle/bin"
+SPARKLE_BIN="$ROOT/LauncherKit/Vendor/Sparkle/bin"
 NOTARY_PROFILE="${NOTARY_PROFILE:-trackpad-launcher}"
 # True from the version commit until it is pushed: should the script stop in between, the commit is undone.
 UNPUSHED_BUMP=false
@@ -147,8 +147,8 @@ preflight_checkout() {
     fail "notarytool cannot use keychain profile '$NOTARY_PROFILE'; create it with 'xcrun notarytool store-credentials $NOTARY_PROFILE' or set NOTARY_PROFILE."
   command -v xcodegen >/dev/null ||
     fail "xcodegen is not on the PATH; install it (brew install xcodegen) and retry."
-  (cd "$ROOT/LauncherKit" && swift package --disable-keychain resolve) || fail "cannot resolve the package."
-  [ -x "$SPARKLE_BIN/sign_update" ] || fail "Sparkle's tools are missing from the resolved package."
+  [ -x "$SPARKLE_BIN/sign_update" ] && [ -x "$SPARKLE_BIN/generate_keys" ] ||
+    fail "Sparkle's tools are missing from LauncherKit/Vendor/Sparkle/bin."
   [ "$("$SPARKLE_BIN/generate_keys" -p)" = "$(sed -n 's/^ *SUPublicEDKey: *//p' "$ROOT/project.yml")" ] ||
     fail "the keychain's update key is not the one project.yml ships; import the backup with generate_keys -f."
   xmllint --noout "$FEED" || fail "appcast.xml is not well-formed."
@@ -265,6 +265,8 @@ archive_and_check() {
     # Sparkle's atomic swap needs its installer and the update on one team.
     codesign -dv "$copy/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" 2>&1 |
       grep -qx "TeamIdentifier=$TEAM_ID" || fail "Sparkle's installer is not signed by team $TEAM_ID."
+    codesign -dv "$copy/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" 2>&1 |
+      grep -qx "TeamIdentifier=$TEAM_ID" || fail "Sparkle's installer launcher service is not signed by team $TEAM_ID."
   fi
   # The kernel stamps com.apple.provenance on files this process creates; it cannot be excluded, anything else can.
   [ -z "$(xattr -lr "$copy" | grep -v ': com.apple.provenance: ')" ] || fail "the unpacked app carries extended attributes."
@@ -400,7 +402,7 @@ fi
 if [ "${1:-}" = "--archive-only" ]; then
   [ -n "${2:-}" ] || fail "usage: release.sh --archive-only <path to Trackpad Launcher.app>"
   archive_and_check "$2" lenient
-  swift run --package-path "$ROOT/LauncherKit" --disable-keychain card-contract \
+  swift run --package-path "$ROOT/LauncherKit" card-contract \
     "$AAR" --team "$TEAM_ID" --identifier "$BUNDLE_ID" ||
     echo "note: an older copy's card would refuse this archive (not fatal in --archive-only: the app is not notarised)."
   exit 0
@@ -447,7 +449,6 @@ mkdir -p "$OUT"
 (cd "$ROOT" && xcodegen generate)
 
 xcodebuild archive \
-  -packageAuthorizationProvider netrc \
   -project "$ROOT/$PROJECT_NAME.xcodeproj" \
   -scheme "$PROJECT_NAME" \
   -configuration Release \
@@ -471,7 +472,6 @@ cat > "$OUT/ExportOptions.plist" <<PLIST
 PLIST
 
 xcodebuild -exportArchive \
-  -packageAuthorizationProvider netrc \
   -archivePath "$OUT/$PROJECT_NAME.xcarchive" \
   -exportOptionsPlist "$OUT/ExportOptions.plist" \
   -exportPath "$OUT/export"
@@ -496,7 +496,7 @@ rm -f "$ZIP"
 
 archive_and_check "$APP" strict
 # After archive_and_check strict: the stapled archive, against every shipped card's own rules (R16).
-swift run --package-path "$ROOT/LauncherKit" --disable-keychain card-contract \
+swift run --package-path "$ROOT/LauncherKit" card-contract \
   "$AAR" --team "$TEAM_ID" --identifier "$BUNDLE_ID" || fail "an older copy's card would refuse this release."
 
 build_image "$APP"

@@ -68,8 +68,7 @@ first time, macOS asks to let Terminal control Finder: allow it, it lays out the
 Releases are immutable once published: a broken one is fixed by releasing a higher version.
 
 The update key signs every update. Its private half lives in the login keychain, and it cannot rotate: every installed
-copy trusts only that key. Back it up with `generate_keys -x <file>` (in Sparkle's `bin` folder under
-`LauncherKit/.build/artifacts/sparkle/Sparkle`), and keep the file out of the repository.
+copy trusts only that key. Back it up with `generate_keys -x <file>` (in `LauncherKit/Vendor/Sparkle/bin`), and keep the file out of the repository.
 
 ### How users get it
 

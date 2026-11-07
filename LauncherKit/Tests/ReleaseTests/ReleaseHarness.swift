@@ -13,7 +13,7 @@ final class ReleaseHarness: Sendable {
     static let repository = URL(filePath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
-    static let realSparkleBin = repository.appending(path: "LauncherKit/.build/artifacts/sparkle/Sparkle/bin")
+    static let realSparkleBin = repository.appending(path: "LauncherKit/Vendor/Sparkle/bin")
 
     enum PushKind: String {
         case version = "reject-version"
@@ -27,7 +27,7 @@ final class ReleaseHarness: Sendable {
     let out: URL
     let publicKey: String
 
-    var sparkleBin: URL { clone.appending(path: "LauncherKit/.build/artifacts/sparkle/Sparkle/bin") }
+    var sparkleBin: URL { clone.appending(path: "LauncherKit/Vendor/Sparkle/bin") }
     var feed: URL { clone.appending(path: "appcast.xml") }
 
     init() throws {
@@ -248,6 +248,8 @@ final class ReleaseHarness: Sendable {
         }
         try files.createDirectory(at: sparkleBin, withIntermediateDirectories: true)
         try installSparkleTools()
+        // The stubs stand in for the vendored tools, which the clone must not track: a missing one is the test.
+        try Data("LauncherKit/Vendor/\n".utf8).write(to: clone.appending(path: ".git/info/exclude"), options: .atomic)
         try setShippedKeyBeforeFirstCommit()
         try git("add", "-A")
         try git("commit", "--quiet", "-m", "Initial")
@@ -316,7 +318,7 @@ final class ReleaseHarness: Sendable {
             file="$STUB_CLONE/Config/Version.xcconfig"
             version="$(sed -n 's/^MARKETING_VERSION *= *//p' "$file" | tr -d '[:space:]')"
             build="$(sed -n 's/^CURRENT_PROJECT_VERSION *= *//p' "$file" | tr -d '[:space:]')"
-            mkdir -p "$dest/Contents/MacOS" "$dest/Contents/Frameworks/Sparkle.framework/Versions/B"
+            mkdir -p "$dest/Contents/MacOS" "$dest/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc"
             cat > "$dest/Contents/Info.plist" <<PLIST
             <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

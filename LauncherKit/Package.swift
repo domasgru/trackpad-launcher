@@ -9,14 +9,12 @@ let package = Package(
         .library(name: "LauncherPlatform", targets: ["LauncherPlatform"]),
         .library(name: "LauncherUI", targets: ["LauncherUI"]),
     ],
-    dependencies: [
-        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1"),
-    ],
     targets: [
+        .binaryTarget(name: "Sparkle", path: "Vendor/Sparkle/Sparkle.xcframework"),
         .target(name: "LauncherCore"),
         .target(
             name: "LauncherPlatform",
-            dependencies: ["LauncherCore", .product(name: "Sparkle", package: "Sparkle")]
+            dependencies: ["LauncherCore", "Sparkle"]
         ),
         .target(
             name: "LauncherUI",

@@ -89,16 +89,72 @@ import Testing
         #expect(!SparkleEngine.canReplace(URL(filePath: "/System/Applications/Calculator.app")))
     }
 
-    @Test func sparkleInternalsWereProvenOnThePinnedVersion() throws {
-        let resolved = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appending(path: "Package.resolved")
-        let json = try #require(
-            try JSONSerialization.jsonObject(with: Data(contentsOf: resolved)) as? [String: Any])
-        let pins = try #require(json["pins"] as? [[String: Any]])
-        let sparkle = try #require(pins.first { $0["identity"] as? String == "sparkle" })
-        let state = try #require(sparkle["state"] as? [String: Any])
+    private struct Manifest: Decodable {
+        let tag: String
+        let flags: [String]
+    }
 
-        #expect(SparkleInternals.provenOn == state["version"] as? String)
+    private static func vendoredManifest() throws -> Manifest {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "Vendor/Sparkle/manifest.json")
+        return try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: url))
+    }
+
+    @Test func sparkleInternalsWereProvenOnTheVendoredTag() throws {
+        let manifest = try Self.vendoredManifest()
+
+        #expect(SparkleInternals.provenOn == manifest.tag)
+        #expect(manifest.flags.contains("SPARKLE_BUILD_UI_BITS=0"))
+    }
+
+    @Test @MainActor func touchingSparkleBringsNoWebKitWithIt() throws {
+        let engine = SparkleEngine(bundle: Bundle.main.bundleURL, signer: Signer(team: "TEAM", identifier: "id"))
+        withExtendedLifetime(engine) {}
+
+        #expect(NSClassFromString("SPUUpdater") != nil, "the Sparkle framework is loaded")
+        let sparkle = try #require(Self.imageIndex(endingWith: "Sparkle.framework/Versions/B/Sparkle"))
+        let closure = Self.dependencyClosure(ofImage: sparkle)
+        #expect(closure.contains { $0.hasSuffix("Foundation.framework/Versions/C/Foundation") }, "the walk reaches Foundation")
+        #expect(!closure.contains { $0.contains("WebKit.framework") }, "Sparkle's dependencies hold no WebKit")
+        #expect(!closure.contains { $0.contains("AppKit.framework") }, "Sparkle's dependencies hold no AppKit")
+    }
+
+    private static func imageIndex(endingWith suffix: String) -> UInt32? {
+        (0..<_dyld_image_count()).first { index in
+            _dyld_get_image_name(index).map { String(cString: $0).hasSuffix(suffix) } ?? false
+        }
+    }
+
+    /// Install names a loaded image links, read from its load commands.
+    private static func linkedNames(ofImage index: UInt32) -> [String] {
+        guard let header = _dyld_get_image_header(index) else { return [] }
+        let machHeader = UnsafeRawPointer(header).assumingMemoryBound(to: mach_header_64.self)
+        var command = UnsafeRawPointer(machHeader.advanced(by: 1))
+        var names: [String] = []
+        let linking: Set<UInt32> = [
+            UInt32(LC_LOAD_DYLIB), UInt32(LC_LOAD_WEAK_DYLIB), UInt32(LC_REEXPORT_DYLIB), UInt32(LC_LAZY_LOAD_DYLIB),
+        ]
+        for _ in 0..<machHeader.pointee.ncmds {
+            let load = command.assumingMemoryBound(to: load_command.self).pointee
+            if linking.contains(load.cmd) {
+                let dylib = command.assumingMemoryBound(to: dylib_command.self).pointee
+                let name = (command + Int(dylib.dylib.name.offset)).assumingMemoryBound(to: CChar.self)
+                names.append(String(cString: name))
+            }
+            command += Int(load.cmdsize)
+        }
+        return names
+    }
+
+    private static func dependencyClosure(ofImage root: UInt32) -> Set<String> {
+        var seen: Set<String> = []
+        var pending = linkedNames(ofImage: root)
+        while let name = pending.popLast() {
+            guard seen.insert(name).inserted else { continue }
+            let tail = name.hasPrefix("@rpath/") ? String(name.dropFirst("@rpath/".count)) : name
+            if let index = imageIndex(endingWith: tail) { pending += linkedNames(ofImage: index) }
+        }
+        return seen
     }
 }

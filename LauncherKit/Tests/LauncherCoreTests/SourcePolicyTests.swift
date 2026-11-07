@@ -93,8 +93,7 @@ import Testing
     static let neverDeclared: [Entry] = [
         Entry(token: "NSSupportsSuddenTermination", rule: suddenTerminationRule),
         Entry(token: "SUEnableSystemProfiling", rule: "no system profile is ever sent"),
-        Entry(token: "SUEnableInstallerLauncherService", rule: "the XPC services stay unused"),
-        Entry(token: "SUEnableDownloaderService", rule: "the XPC services stay unused"),
+        Entry(token: "SUEnableDownloaderService", rule: "the downloader XPC service stays unused"),
     ]
 
     /// Keys the manifest must carry, and what their value must look like.
@@ -112,6 +111,7 @@ import Testing
         Declared(key: "SUAutomaticallyUpdate", valuePrefix: nil, valueSuffix: nil),
         Declared(key: "SUVerifyUpdateBeforeExtraction", valuePrefix: nil, valueSuffix: nil),
         Declared(key: "TLUpdateDownloads", valuePrefix: "https://", valueSuffix: "/"),
+        Declared(key: "SUEnableInstallerLauncherService", valuePrefix: "true", valueSuffix: "true"),
     ]
 
     /// Each permission API lives in exactly one file, the adapter that owns it. Any other hit fails.
