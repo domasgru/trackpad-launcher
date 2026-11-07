@@ -53,13 +53,23 @@ public enum UpdateEngineEvent: Equatable, Sendable {
 public final class Updater {
     /// The process must end now, through `end()`. Set once by `Lifecycle`.
     @ObservationIgnored public var onHandOver: (@MainActor () -> Void)?
-    /// What the settings window shows beside its rows; nil in every phase that exists so far.
-    public private(set) var card: UpdateCard?
+    /// What the settings window shows above its rows. Derived from the phase, so no phase can show a stale card.
+    public var card: UpdateCard? {
+        switch phase {
+        case .offering: .available
+        case .updatingFromCard: .updating
+        default: nil
+        }
+    }
 
     @ObservationIgnored private let engine: any UpdateEngine
     @ObservationIgnored private let connection: any Connection
     @ObservationIgnored private let canReplaceItself: Bool
     @ObservationIgnored private weak var launcher: Launcher?
+
+    /// A login start's wait for a connection, carried through the phases it can pass through: none; owed with this
+    /// reading's retry unmade; owed with it made, so only a drop and a return earn another.
+    private enum RetryDebt: Equatable { case none, owed(spent: Bool) }
 
     private enum Phase: Equatable {
         case resting
@@ -72,9 +82,19 @@ public final class Updater {
         case updatingAtLogin(retry: Bool, dropped: Bool)
         /// Terminal. The restart is armed and the process is ending in this same turn.
         case handedOver
+        /// The window's check runs. `debt`: what a login start's wait it interrupted still owes; any check that
+        /// completes settles it.
+        case probing(debt: RetryDebt)
+        /// The window closed during its check. The check still runs, its answer is ignored, and no second check starts
+        /// until it has come: one cycle at a time.
+        case droppedProbe(debt: RetryDebt)
+        /// The card shows *Update available*. Nothing of Sparkle exists.
+        case offering
+        /// *Update now*'s cycle runs; the card shows *Updating…*, window open or closed.
+        case updatingFromCard
     }
 
-    @ObservationIgnored private var phase = Phase.resting
+    private var phase = Phase.resting
 
     public init(_ copy: UpdatableCopy, engine: any UpdateEngine, connection: any Connection) {
         self.engine = engine
@@ -83,33 +103,78 @@ public final class Updater {
     }
 
     /// Once, from a resident only. A login start of a copy that can replace itself runs the update cycle whatever the
-    /// window is doing; every other start makes no request.
+    /// window is doing; a start with its window open makes one check; every other start makes no request.
     public func start(watching launcher: Launcher, opening: Opening, opensWindow: Bool) {
         self.launcher = launcher
         engine.onEvent = { [unowned self] event in handle(event) }
         connection.onChange = { [unowned self] connected in connectionChanged(connected) }
-        guard opening == .atLogin, canReplaceItself else { return }
-        enter(.updatingAtLogin(retry: false, dropped: false))
+        launcher.onWindowEdge = { [unowned self] isOpen in windowEdge(isOpen) }
+        switch opening {
+        case .atLogin where canReplaceItself:
+            enter(.updatingAtLogin(retry: false, dropped: false))
+            engine.update()
+        case .afterUpdate:
+            break
+        case .atLogin, .byHand:
+            if opensWindow { probe(owing: .none) }
+        }
+    }
+
+    /// *Update now*: only while the card offers it.
+    public func updateNow() {
+        guard phase == .offering else { return }
+        enter(.updatingFromCard)
         engine.update()
     }
 
-    private func handle(_ event: UpdateEngineEvent) {
-        guard case .updatingAtLogin(let retry, let dropped) = phase else { return }
-        switch event {
-        case .held:
-            guard engine.armRestart(opensWindow: launcher?.isWindowOpen ?? false) else {
-                // Refused: the process never ends without a restart armed, so the held update goes; the cycle then ends
-                // `.failed`.
-                engine.discardHeldUpdate()
-                return
-            }
-            enter(.handedOver)
-            onHandOver?()
-        case .cycleEnded(.requestFailed):
-            enter(.awaitingConnection(spent: retry && !dropped))
-        case .cycleEnded:
-            enter(.resting)
+    private func probe(owing debt: RetryDebt) {
+        enter(.probing(debt: debt))
+        engine.probe()
+    }
+
+    private func windowEdge(_ isOpen: Bool) {
+        switch (phase, isOpen) {
+        case (.resting, true): probe(owing: .none)
+        case (.awaitingConnection(let spent), true): probe(owing: .owed(spent: spent))
+        case (.droppedProbe(let debt), true): enter(.probing(debt: debt))
+        case (.probing(let debt), false): enter(.droppedProbe(debt: debt))
+        case (.offering, false): enter(.resting)
+        default: break
         }
+    }
+
+    private func handle(_ event: UpdateEngineEvent) {
+        switch (phase, event) {
+        case (.updatingAtLogin, .held):
+            handOver(opensWindow: launcher?.isWindowOpen ?? false)
+        case (.updatingFromCard, .held):
+            handOver(opensWindow: true)
+        case (.updatingAtLogin(let retry, let dropped), .cycleEnded(let outcome)):
+            enter(outcome == .requestFailed ? .awaitingConnection(spent: retry && !dropped) : .resting)
+        case (.probing(let debt), .cycleEnded(let outcome)):
+            enter(outcome == .found ? .offering : afterCheck(outcome, owing: debt))
+        case (.droppedProbe(let debt), .cycleEnded(let outcome)):
+            enter(afterCheck(outcome, owing: debt))
+        case (.updatingFromCard, .cycleEnded(let outcome)):
+            enter(outcome != .nothingNew && launcher?.isWindowOpen == true ? .offering : .resting)
+        default: break
+        }
+    }
+
+    private func afterCheck(_ outcome: CycleOutcome, owing debt: RetryDebt) -> Phase {
+        if outcome == .requestFailed, case .owed(let spent) = debt { return .awaitingConnection(spent: spent) }
+        return .resting
+    }
+
+    private func handOver(opensWindow: Bool) {
+        guard engine.armRestart(opensWindow: opensWindow) else {
+            // Refused: the process never ends without a restart armed, so the held update goes; the cycle then ends
+            // `.failed`.
+            engine.discardHeldUpdate()
+            return
+        }
+        enter(.handedOver)
+        onHandOver?()
     }
 
     private func connectionChanged(_ connected: Bool) {

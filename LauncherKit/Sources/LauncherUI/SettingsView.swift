@@ -2,8 +2,8 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges: the Accessibility hint card,
-/// while the permission is missing; the settings form, a
+/// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges: the update card,
+/// while this opening's check has found a newer version; the Accessibility hint card, while the permission is missing; the settings form, a
 /// SwiftUI grouped Form drawn as System Settings draws one, its sections the five gesture rows and the Animate app
 /// launch switch, the switcher section, and the thumb corner row with the Hide background apps switch below it; the
 /// no trackpad notice, while it applies, in a rounded group; then *Quit Trackpad Launcher* and *Close*, aligned
@@ -12,6 +12,8 @@ import SwiftUI
 /// marks sits over the first illustration for the top-left corner only, where its arrows meet the thumb.
 struct SettingsView: View {
     let launcher: Launcher
+    /// Nil for a copy that never updates.
+    let updater: Updater?
     let actions: LauncherActions
 
     /// The label of the screen recording button. The form keeps the system's own fonts.
@@ -27,6 +29,10 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: Self.partSpacing) {
+            if let card = updater?.card {
+                UpdateCardView(card: card, updateNow: { updater?.updateNow() })
+                    .padding(.horizontal, Self.inset)
+            }
             if launcher.showsAccessibilityHint {
                 AccessibilityHintCard(actions: actions)
                     .padding(.horizontal, Self.inset)

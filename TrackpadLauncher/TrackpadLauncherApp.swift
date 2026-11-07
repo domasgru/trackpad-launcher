@@ -17,6 +17,7 @@ enum TrackpadLauncherApp {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lifecycle: Lifecycle!
     private var shell: SettingsShell?
+    private var updater: Updater?
     private var moveDialog: MoveDialogPresenter?
     private let quitSignals = QuitSignals()
     private var event: NSAppleEventDescriptor? { NSAppleEventManager.shared().currentAppleEvent }
@@ -31,12 +32,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let location = ThisCopy.location()
         let placement = Placement(
             build: CodeSignature.buildOfThisProcess(arguments: CommandLine.arguments), location: location)
+        updater = makeUpdater(placement: placement, location: location)
         let startAtLogin = StartAtLogin(item: SystemLoginItem(), defaults: .standard, placement: placement)
         lifecycle = Lifecycle(
             placement: placement, copies: SystemRunningCopies(), installer: ApplicationsInstaller(location: location),
             startAtLogin: startAtLogin,
             makeResident: { [unowned self] in makeResident(startAtLogin) },
-            updater: makeUpdater(placement: placement, location: location))
+            updater: updater)
         moveDialog = MoveDialogPresenter(lifecycle: lifecycle)
     }
 
@@ -80,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hardware: MultitouchTrackpads(), preferences: SystemTrackpadPreferences(), permissions: SystemPermissions(),
             system: actions, catalog: catalog, scanner: SystemAppScanner(catalog: catalog),
             store: SettingsStore(defaults: .standard), startAtLogin: startAtLogin)
-        shell = SettingsShell(launcher: launcher, quit: { [unowned self] in lifecycle.quit() })
+        shell = SettingsShell(launcher: launcher, updater: updater, quit: { [unowned self] in lifecycle.quit() })
         #if DEBUG
         system = actions
         shell?.pickTuning = { [unowned actions] in actions.pickTuning }

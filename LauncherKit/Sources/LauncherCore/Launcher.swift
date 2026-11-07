@@ -21,6 +21,9 @@ public final class Launcher {
     /// Every app picker's list. Replaced only by a scan; never emptied while one runs.
     public private(set) var installedApps: InstalledApps
     public var isWindowOpen: Bool { window != .closed }
+    /// Called with true when the settings window goes from closed to open and false from open to closed; never on a
+    /// re-front.
+    @ObservationIgnored public var onWindowEdge: (@MainActor (Bool) -> Void)?
     public var thumbCorner: ThumbCorner { settings.thumbCorner }
     public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
     public var isSwipeOn: Bool { settings.isSwipeOn }
@@ -220,7 +223,9 @@ public final class Launcher {
             }
         }
         openings += 1
+        let wasOpen = isWindowOpen
         window = .open(request: openings)
+        if !wasOpen { onWindowEdge?(true) }
         resolveRows()
         scanner.scan()
     }
@@ -229,6 +234,7 @@ public final class Launcher {
     public func closeWindow() {
         guard window != .closed else { return }
         window = .closed
+        onWindowEdge?(false)
     }
 
     /// What the trackpads were last run with. A reconcile that would run them the same way leaves them, and any swipe

@@ -611,7 +611,7 @@ final class EffectLog {
     func armRestart(opensWindow: Bool) -> Bool {
         onEffect?()
         arms.append(opensWindow)
-        log?.entries.append(opensWindow ? "arm restart with window" : "arm restart")
+        if armWorks { log?.entries.append(opensWindow ? "arm restart with window" : "arm restart") }
         onEffect?()
         return armWorks
     }

@@ -75,11 +75,12 @@ import Testing
         #expect(process.engine.overlaps == 0)
     }
 
-    @Test func aStartByHandMakesNoUpdateCycle() {
+    @Test func aStartByHandChecksOnceAndUpdatesNothing() {
         let world = LifecycleWorld(record: [.one: "Arc"], loginItemOn: true)
 
         let process = world.launch(.byHand, running: .release)
 
+        #expect(process.engine.probes == 1)
         #expect(process.engine.updates == 0)
         #expect(process.connection.watches == 0)
         #expect(process.engine.overlaps == 0)

@@ -54,9 +54,10 @@ import Testing
 
         process.engine.push(.held)
 
-        #expect(world.log.entries.suffix(2) == ["arm restart", "discard"])
+        #expect(world.log.entries.suffix(1) == ["discard"])
+        #expect(process.engine.arms == [false])
         #expect(process.engine.discards == 1)
-        #expect(armings(world) == 1)
+        #expect(armings(world) == 0)
         #expect(!process.copies.hasEnded)
         process.tap(1, thumbAtMM: Self.rightThumb)
         #expect(process.system.broughtToFront == [world.mac.app("Arc")])
@@ -65,7 +66,7 @@ import Testing
 
         #expect(!process.connection.isWatching)
         #expect(process.card == nil)
-        #expect(armings(world) == 1)
+        #expect(armings(world) == 0)
         #expect(!world.log.entries.contains("end"))
         #expect(process.engine.overlaps == 0)
     }

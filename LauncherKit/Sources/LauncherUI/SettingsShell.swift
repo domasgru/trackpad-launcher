@@ -44,9 +44,10 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         let showsAccessibilityHint: Bool
         let isSwipeOn: Bool
         let screenRecordingHint: ScreenRecordingHint?
+        let card: UpdateCard?
     }
 
-    public init(launcher: Launcher, quit: @escaping () -> Void) {
+    public init(launcher: Launcher, updater: Updater?, quit: @escaping () -> Void) {
         self.launcher = launcher
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let window = SettingsWindow()
@@ -58,7 +59,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         #endif
         let actions = Self.makeActions(
             launcher: launcher, icons: icons, window: window, quit: quit, tuned: tuned)
-        window.install(content: SettingsView(launcher: launcher, actions: actions))
+        window.install(content: SettingsView(launcher: launcher, updater: updater, actions: actions))
         #if DEBUG
             currentPickAnimation = actions.pickAnimation
         #endif
@@ -77,7 +78,8 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                 for await fit in Observations({
                     Fit(
                         inactiveNotice: launcher.inactiveNotice, showsAccessibilityHint: launcher.showsAccessibilityHint,
-                        isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint)
+                        isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint,
+                        card: updater?.card)
                 }) {
                     guard fit != last else { continue }
                     last = fit
