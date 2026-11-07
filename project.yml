@@ -39,7 +39,7 @@ targets:
         LSUIElement: true
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         SUFeedURL: https://raw.githubusercontent.com/domasgru/trackpad-launcher/main/appcast.xml
-        SUPublicEDKey: ""
+        SUPublicEDKey: 7bU2ETbJmXD69AOzuCQ/dtoiWle+FeITZAx6sFHyz4s=
         SUEnableAutomaticChecks: false
         SUVerifyUpdateBeforeExtraction: true
         SUEnableInstallerLauncherService: true
