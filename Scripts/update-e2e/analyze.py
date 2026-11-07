@@ -19,6 +19,7 @@
 #   analyze.py first-front <samples> --id BUNDLE-ID [--since MS]    prints the time that app is first frontmost
 #   analyze.py whole <samples> --app PATH --versions V,V...         every read of the bundle is one of those builds, intact
 #   analyze.py absent <samples> --owner NAME...
+#   analyze.py shown <samples> --owner NAME                         the last sample holds a window of that owner not there at the start
 import argparse
 import json
 import re
@@ -233,6 +234,15 @@ def command_absent(args):
     finish(not seen, f"windows of {', '.join(seen)} appeared" if seen else f"no window of {', '.join(args.owner)} in {len(samples)} samples")
 
 
+def command_shown(args):
+    samples = read_samples(args.samples)
+    if not samples:
+        finish(False, "no samples")
+    already = standing(samples, {args.owner})
+    now = [w for w in samples[-1]["windows"] if w[0] == args.owner and w[2] not in already]
+    finish(bool(now), f"a window of {args.owner} is up" if now else f"no window of {args.owner} is up")
+
+
 def command_first_at(args):
     for request in read_requests(args.log, args.since):
         if kind_of(request) == args.kind:
@@ -338,6 +348,7 @@ def main():
     add("first-front", command_first_front, "samples", ("--id", {"required": True}), ("--since", {"type": int, "default": 0}))
     add("whole", command_whole, "samples", ("--app", {"required": True}), ("--versions", {"required": True}))
     add("absent", command_absent, "samples", ("--owner", {"action": "append", "required": True}))
+    add("shown", command_shown, "samples", ("--owner", {"required": True}))
 
     args = parser.parse_args()
     args.function(args)

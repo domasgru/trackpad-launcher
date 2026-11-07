@@ -15,7 +15,8 @@
 #   feed=ok|503|503once|404|reset|hold   the feed; 503once answers 503 to one request, then the word is removed
 #   asset=ok|503|404|reset           the release path, before its redirect
 #   payload=ok|503|404|reset|hold    the redirect's target, which carries the bytes; hold sends half the body, then waits,
-#                                    and resets the connection once the word becomes reset
+#                                    and then sends the rest once the word becomes release, or resets the connection once
+#                                    it becomes reset
 import hashlib
 import http.server
 import os
@@ -188,8 +189,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.close_connection = True
         deadline = time.time() + 900
         while time.time() < deadline:
-            if control().get(key) == "reset":
+            word = control().get(key)
+            if word == "reset":
                 self.reset_connection()
+                return
+            if word == "release":
+                self.wfile.write(body[max(1, len(body) // 2) :])
+                self.wfile.flush()
                 return
             readable, _, _ = select.select([self.connection], [], [], 1.0)
             if readable:

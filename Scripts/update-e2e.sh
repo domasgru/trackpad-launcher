@@ -4,7 +4,8 @@
 # wire and on screen, which fakes hid in two earlier update plans.
 #
 #   Scripts/update-e2e.sh               every row; needs a person with a Developer ID, a notary profile and sudo
-#   Scripts/update-e2e.sh T58 T59       only those rows; T60, T62, T63, T64, T65, T68 and T72 stop for a person
+#   Scripts/update-e2e.sh T30 T31       only those rows; most stop for a person (T35 and T36 also want a standard account
+#                                       named in E2E_STANDARD_USER, logged in at the screen; T41 is done by hand)
 #   Scripts/update-e2e.sh --check       no credentials: builds ad-hoc signed, renders the feed through
 #                                       release.sh --feed-only, starts the server and the sampler, and writes the
 #                                       report with every row SKIPPED
@@ -64,23 +65,17 @@ die() { log "$*"; exit 1; }
 # One row per line: id|function|what it proves.
 rows_table() {
   cat <<'TABLE'
-T56|row_T56|card-contract accepts the real stapled archives, nested Sparkle code included
-T57|row_T57|a build started by hand, its window closed, updates with nothing shown and no input
-T58|row_T58|the updater's requests carry no cookie, validator, query or identifying header, on both versions
-T59|row_T59|the highest newer release that runs on this Mac is the one downloaded
-T60|row_T60|a copy that cannot update itself makes no request and asks for no password
-T61|row_T61|--after-update leaves the 24 hour timer as the only source of a check
-T62|row_T62|Quit Trackpad Launcher ends the app at once and the held update installs without a restart
-T63|row_T63|an idle minute hands over silently: v2 runs with --after-update, gestures work, nothing asks or shows
-T64|row_T64|a finger, then a palm, resting 90 s each keep the held update waiting; it installs a minute after the lift
-T65|row_T65|a download reset half way shows nothing and the next check completes it
-T66|row_T66|a feed that fails once is retried once, 20 of 20 times, and a feed that always fails is not hammered
-T67|row_T67|an update that is not the publisher's, or not from the publisher's host, installs nothing and shows nothing
-T68|row_T68|a failed install reopens the old copy intact, gestures work, and no hand-over loop starts
-T69|row_T69|kill -9 of the app or of Autoupdate at random moments never leaves a half copy or a stuck job
-T70|row_T70|an update that would need a password installs nothing and never shows a password window
-T71|row_T71|a removed installer job ends the cycle with no hand-over and a later check downloads again
-T72|row_T72|a build with an empty update key makes no request and shows nothing
+T28|row_T28|a login start downloads and installs at once; v2 runs silently, gestures work, and v2 makes no request
+T29|row_T29|opening the window during a login update checks nothing and shows no card; v2 then opens with its window
+T30|row_T30|each opening of the window probes once; the card shows; Update now downloads and opens v2 with its window
+T31|row_T31|every request carries no cookie, validator, query or identifying header, on both versions
+T32|row_T32|the highest newer release that runs on this Mac is the one downloaded, never an older or pre-release one
+T33|row_T33|no request while the window is closed; a failed feed is tried twice and not hammered
+T34|row_T34|a failed install or a killed process leaves a working copy and no job; a reset download returns the card
+T35|row_T35|an update that is not the publisher's installs nothing and starts no installer
+T36|row_T36|on a standard account a login start asks nothing; Update now asks for a password only after the download
+T37|row_T37|Quit during an update ends the app at once; after a probe no updater and no WebKit remain
+T41|row_T41|by hand: logout, restart and shutdown proceed at once during a login download
 TABLE
 }
 
@@ -141,6 +136,9 @@ app_processes() { pgrep -f "$APP_NAME/Contents/MacOS" 2>/dev/null; }
 kill_app_processes() {
   local pattern
   for pattern in "${PROCESS_PATTERNS[@]}"; do pkill -f "$pattern" 2>/dev/null; done
+  if [ -n "$STD_USER" ] && sudo -n true 2>/dev/null; then
+    for pattern in "${PROCESS_PATTERNS[@]}"; do sudo -n pkill -9 -f "$pattern" 2>/dev/null; done
+  fi
   sleep 0.5
   for pattern in "${PROCESS_PATTERNS[@]}"; do pkill -9 -f "$pattern" 2>/dev/null; done
   return 0
@@ -148,6 +146,7 @@ kill_app_processes() {
 
 stop_app() {
   pkill -f "$APP_NAME/Contents/MacOS" 2>/dev/null
+  [ "$STD_ACTIVE" = 1 ] && sudo -n pkill -f "$APP_NAME/Contents/MacOS" 2>/dev/null
   wait_for 10 no_app_running
 }
 
@@ -181,6 +180,7 @@ remove_copies() {
 stop_sampler() {
   [ -f "$SAMPLER_PIDFILE" ] || return 0
   kill "$(cat "$SAMPLER_PIDFILE")" 2>/dev/null
+  [ "$STD_ACTIVE" = 1 ] && sudo -n pkill -f "$STD_DIR/sampler" 2>/dev/null
   rm -f "$SAMPLER_PIDFILE"
 }
 
@@ -189,6 +189,7 @@ set_control() { printf '%s\n' "$*" > "$CONTROL"; }
 # Everything a row's run can leave behind, then an empty request log and a server that behaves.
 reset_world() {
   stop_sampler
+  watch_sparkle_stop
   kill_app_processes
   remove_launch_jobs
   remove_copies
@@ -197,6 +198,7 @@ reset_world() {
   rm -rf "$library/Caches/$E2E_ID" "$library/HTTPStorages/$E2E_ID" "$library/HTTPStorages/$E2E_ID.binarycookies" \
     "$library/Preferences/$E2E_ID.plist" "$library/Application Support/$E2E_ID" "$library/WebKit/$E2E_ID" \
     "$library/Saved Application State/$E2E_ID.savedState" "$library/Logs/$E2E_ID"
+  reset_std
   [ -d "$SERVE" ] && { : > "$LOG"; set_control ""; }
   return 0
 }
@@ -207,8 +209,100 @@ stop_server() {
   rm -f "$SERVER_PIDFILE"
 }
 
+# Sparkle's own processes for the e2e copy: its framework's helpers, Autoupdate and the copy of it under the cache.
+SPARKLE_PROCESSES="$APP_NAME/Contents/Frameworks/Sparkle.framework|Autoupdate.*$E2E_ID|$E2E_ID.*Autoupdate|$E2E_ID.*org.sparkle-project"
+SPARKLE_SEEN_FILE="$SCRATCH/sparkle-seen.txt"
+WATCH_PIDFILE="$SCRATCH/watch.pid"
+SUDO_PIDFILE="$SCRATCH/sudo.pid"
+
+count_sparkle_processes() { pgrep -f "$SPARKLE_PROCESSES" 2>/dev/null | wc -l | tr -d ' '; }
+
+# watch_sparkle_start: records every 100 ms in which a Sparkle process of the copy exists, so a row can say none ever did.
+watch_sparkle_start() {
+  watch_sparkle_stop
+  : > "$SPARKLE_SEEN_FILE"
+  ( while :; do pgrep -f "$SPARKLE_PROCESSES" >/dev/null 2>&1 && echo seen >> "$SPARKLE_SEEN_FILE"; sleep 0.1; done ) &
+  echo $! > "$WATCH_PIDFILE"
+  disown
+}
+
+watch_sparkle_stop() {
+  [ -f "$WATCH_PIDFILE" ] || return 0
+  kill "$(cat "$WATCH_PIDFILE")" 2>/dev/null
+  rm -f "$WATCH_PIDFILE"
+}
+
+sparkle_seen() { wc -l < "$SPARKLE_SEEN_FILE" | tr -d ' '; }
+
+# The download Sparkle keeps until it installs; a refused update must leave none of it.
+persistent_files() { find "$(user_home)/Library/Caches/$E2E_ID/org.sparkle-project.Sparkle/PersistentDownloads" -type f 2>/dev/null | wc -l | tr -d ' '; }
+
+# --- the standard account: rows T35 and T36 run the copy as E2E_STANDARD_USER, whose session is on the screen.
+STD_USER="${E2E_STANDARD_USER:-}"
+STD_ACTIVE=0
+STD_DIR=/tmp/update-e2e-std
+
+std_home() { dscl . -read "/Users/$STD_USER" NFSHomeDirectory 2>/dev/null | awk '{ print $2 }'; }
+
+# std_unready: prints why the standard-account rows cannot run; nothing when they can.
+std_unready() {
+  [ -n "$STD_USER" ] || { echo "E2E_STANDARD_USER names no account"; return; }
+  id "$STD_USER" >/dev/null 2>&1 || { echo "there is no account $STD_USER"; return; }
+  if dseditgroup -o checkmember -m "$STD_USER" admin >/dev/null 2>&1; then echo "$STD_USER is an administrator"; return; fi
+  [ "$(stat -f %Su /dev/console)" = "$STD_USER" ] || { echo "$STD_USER is not the account at the screen (switch to it with fast user switching)"; return; }
+  sudo -n true 2>/dev/null || echo "sudo has no cached credentials (run sudo -v first)"
+}
+
+as_std() { sudo -n launchctl asuser "$(id -u "$STD_USER")" sudo -n -u "$STD_USER" "$@"; }
+
+# as_user <command...>: as the account the row runs the copy for.
+as_user() { if [ "$STD_ACTIVE" = 1 ]; then as_std "$@"; else "$@"; fi; }
+
+user_home() { if [ "$STD_ACTIVE" = 1 ]; then std_home; else echo "$HOME"; fi; }
+
+console_left() { [ "$(stat -f %Su /dev/console)" != "$STD_USER" ]; }
+
+# keep_sudo: the rows that need root run for long, so the credentials are refreshed until the script ends.
+keep_sudo() {
+  sudo -v || return 1
+  [ -f "$SUDO_PIDFILE" ] && return 0
+  ( while :; do sudo -n true 2>/dev/null; sleep 40; done ) &
+  echo $! > "$SUDO_PIDFILE"
+  disown
+}
+
+stop_keep_sudo() {
+  [ -f "$SUDO_PIDFILE" ] || return 0
+  kill "$(cat "$SUDO_PIDFILE")" 2>/dev/null
+  rm -f "$SUDO_PIDFILE"
+}
+
+# Everything the copy left in the standard account's home and session.
+reset_std() {
+  [ -n "$STD_USER" ] || return 0
+  local home library
+  home="$(std_home)"
+  [ -d "$home" ] || return 0
+  sudo -n true 2>/dev/null || return 0
+  sudo -n pkill -f "$STD_DIR/sampler" 2>/dev/null
+  sudo -n pkill -f "$APP_NAME/Contents/" 2>/dev/null
+  sudo -n -u "$STD_USER" defaults delete "$E2E_ID" 2>/dev/null
+  as_std launchctl list 2>/dev/null | awk -v id="$E2E_ID" 'index($3, id) { print $3 }' |
+    while read -r label; do as_std launchctl remove "$label" 2>/dev/null; done
+  library="$home/Library"
+  sudo -n rm -rf "$library/Caches/$E2E_ID" "$library/HTTPStorages/$E2E_ID" "$library/HTTPStorages/$E2E_ID.binarycookies" \
+    "$library/Preferences/$E2E_ID.plist" "$library/Application Support/$E2E_ID" "$library/WebKit/$E2E_ID" \
+    "$library/Saved Application State/$E2E_ID.savedState" "$library/Logs/$E2E_ID" "$STD_DIR" 2>/dev/null
+  return 0
+}
+
 leftovers() {
   local found=""
+  if [ -n "$STD_USER" ] && sudo -n true 2>/dev/null && [ -d "$(std_home)" ]; then
+    sudo -n -u "$STD_USER" defaults read "$E2E_ID" >/dev/null 2>&1 && found="$found standard-account-defaults-domain"
+    [ -d "$(std_home)/Library/Caches/$E2E_ID" ] && found="$found standard-account-cache"
+  fi
+  if sudo -n true 2>/dev/null && sudo -n sfltool dumpbtm 2>/dev/null | grep -q "$E2E_ID"; then found="$found login-item"; fi
   [ -e "/Applications/$APP_NAME" ] && found="$found /Applications/$APP_NAME"
   [ -e "/Applications/$FOLDER_NAME" ] && found="$found /Applications/$FOLDER_NAME"
   [ -e "$HOME/Applications/$APP_NAME" ] && found="$found ~/Applications/$APP_NAME"
@@ -224,8 +318,10 @@ cleanup() {
   STATUS=$?
   trap - EXIT INT TERM
   stop_sampler
+  watch_sparkle_stop
   stop_server
   reset_world
+  stop_keep_sudo
   rm -rf "$SCRATCH/feedwork" "$TREE" "$TREE-emptykey" "$ROW_RESULT"
   rmdir "$HOME/Applications" 2>/dev/null
   local left
@@ -282,15 +378,15 @@ install_copy() {
   /usr/bin/ditto "$CACHE/$name/$BUNDLE_NAME" "$destination" && "$LSREGISTER" -f "$destination"
 }
 
-# Sets the last check time to <seconds> ago: the engine decides on a request at start from this.
-set_last_check() {
-  defaults write "$E2E_ID" SULastCheckTime -date "$(date -u -v-"$1"S '+%Y-%m-%d %H:%M:%S +0000')"
-}
+# launch_login <app>: the copy started the way a login starts it. launch_hand <app>: opened by hand, with its window; on a
+# running copy it is the window's opening again.
+launch_login() { as_user /usr/bin/open -g "$1" --args --at-login; }
+launch_hand() { as_user /usr/bin/open "$1"; }
 
-launch_hidden() {
-  local app="$1"
-  shift
-  /usr/bin/open -g -j "$app" --args "$@"
+# pid_since <ms>: the first app process the sampler saw from then; fails if none.
+pid_since() {
+  wait_for 20 analyze new-pid "$SAMPLES" --since "$1" || return 1
+  analyze new-pid "$SAMPLES" --since "$1" | awk '{ print $2 }'
 }
 
 # start_sampler <label> [app path]...: SAMPLES names the file the rows read afterwards.
@@ -299,7 +395,14 @@ start_sampler() {
   shift
   SAMPLES="$SCRATCH/samples-$label.jsonl"
   for path in "$@"; do arguments+=(--app "$path"); done
-  SAMPLER_BUNDLE_ID="$E2E_ID" "$SAMPLER" "$SAMPLES" "${arguments[@]}" >/dev/null 2>&1 &
+  if [ "$STD_ACTIVE" = 1 ]; then
+    # The sampler must run in the standard account's session to see its screen, from a place that account can read.
+    mkdir -p "$STD_DIR" && chmod 777 "$STD_DIR" && cp "$SAMPLER" "$STD_DIR/sampler" && chmod 755 "$STD_DIR/sampler"
+    SAMPLES="$STD_DIR/samples-$label.jsonl"
+    as_std env "SAMPLER_BUNDLE_ID=$E2E_ID" "$STD_DIR/sampler" "$SAMPLES" "${arguments[@]}" >/dev/null 2>&1 &
+  else
+    SAMPLER_BUNDLE_ID="$E2E_ID" "$SAMPLER" "$SAMPLES" "${arguments[@]}" >/dev/null 2>&1 &
+  fi
   echo $! > "$SAMPLER_PIDFILE"
   disown
   sleep 0.5
@@ -349,6 +452,24 @@ wait_job() {
   return 1
 }
 
+first_process() { app_processes | head -1; }
+
+# process_runs <pid> <app path> <arguments>: the process runs that copy's executable with exactly those arguments.
+process_runs() { ps -o args= -p "$1" | grep -q -- "^$2/Contents/MacOS/.* $3\$"; }
+
+# after_exit <description> <old pid>: once the old pid has ended, finds the copy that follows it. Sets GONE_AT, NEW_AT and
+# NEW_PID from the sampler.
+after_exit() {
+  local description="$1" old="$2"
+  wait_for 60 analyze gone-at "$SAMPLES" --pid "$old" || row_fail "$description: the sampler never saw the old process end"
+  GONE_AT="$(analyze gone-at "$SAMPLES" --pid "$old")"
+  wait_for 20 analyze new-pid "$SAMPLES" --exclude "$old" --since "$GONE_AT" || row_fail "$description: no copy started after the old one ended"
+  read -r NEW_AT NEW_PID <<<"$(analyze new-pid "$SAMPLES" --exclude "$old" --since "$GONE_AT")"
+}
+
+# wait_until <ms>
+wait_until() { while [ "$(now_ms)" -lt "$1" ]; do sleep 1; done; }
+
 # wait_gone <pid> <seconds>
 wait_gone() {
   local end=$((SECONDS + $2))
@@ -361,26 +482,53 @@ wait_gone() {
 
 bundle_version() { /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$1/Contents/Info.plist"; }
 
+# In the standard account's session the instructions arrive as dialogs there, because the person sits at that screen.
+std_dialog() { as_std osascript -e "display dialog \"${1//\"/\'}\" buttons {$2} default button $3 with title \"Trackpad Launcher E2E\"" 2>/dev/null; }
+
 # ask_person <instruction>: what nothing can synthesise. The time after the Return is the row's clock.
 ask_person() {
+  if [ "$STD_ACTIVE" = 1 ]; then
+    printf '\n>>> %s\n' "$1" > /dev/tty
+    std_dialog "$1" '"Ready"' 1 >/dev/null
+    return 0
+  fi
   printf '\n>>> %s\n    Press Return here when ready: ' "$1" > /dev/tty
   read -r _ < /dev/tty
 }
 
 # tell_person <instruction>: for a moment the script finds for itself, so nothing waits on a Return.
-tell_person() { printf '\n>>> %s\n' "$1" > /dev/tty; }
+tell_person() {
+  printf '\n>>> %s\n' "$1" > /dev/tty
+  if [ "$STD_ACTIVE" = 1 ]; then
+    as_std osascript -e "display notification \"${1//\"/\'}\" with title \"Trackpad Launcher E2E\"" >/dev/null 2>&1 &
+  fi
+}
+
+# ask_yes_no <question>: prints yes, no or skip.
+ask_yes_no() {
+  local answer
+  if [ "$STD_ACTIVE" = 1 ]; then
+    printf '\n>>> %s\n' "$1" > /dev/tty
+    answer="$(std_dialog "$1" '"No","Yes"' 2 | sed -n 's/.*button returned:\(.*\)/\1/p')"
+    case "$answer" in Yes) echo yes ;; *) echo no ;; esac
+    return 0
+  fi
+  printf '\n>>> %s [y/n/s] ' "$1" > /dev/tty
+  read -r answer < /dev/tty
+  case "$answer" in y | Y | yes) echo yes ;; s | S) echo skip ;; *) echo no ;; esac
+}
 
 # The gesture rows time a person's 1-finger gesture through the app's real settings window: this app is assigned to it,
 # so its reaching the front is the only outside sign that gestures run.
 GESTURE_APP_ID=com.apple.calculator
 GESTURE_APP_NAME=Calculator
 
-quit_gesture_app() { osascript -e "tell application \"$GESTURE_APP_NAME\" to quit" >/dev/null 2>&1; return 0; }
+quit_gesture_app() { as_user osascript -e "tell application \"$GESTURE_APP_NAME\" to quit" >/dev/null 2>&1; return 0; }
 
 # assign_gesture <app path>: the running copy's settings window opens, the person assigns the app and closes it again.
 assign_gesture() {
   quit_gesture_app
-  /usr/bin/open -g "$1"
+  as_user /usr/bin/open -g "$1"
   wait_for 15 analyze window-open "$SAMPLES" || return 1
   ask_person "In the settings window of Trackpad Launcher E2E, assign $GESTURE_APP_NAME to the 1-finger tap gesture, close the window with its red button, and stay off the trackpad."
   wait_for 15 window_closed
@@ -407,6 +555,15 @@ within() {
   else
     ROW_FAILS+=("$1: ${2:-nothing} ms, wanted $3 to $4")
   fi
+}
+
+# confirm <description> <question>: what only a person's eyes settle.
+confirm() {
+  case "$(ask_yes_no "$2")" in
+    yes) ROW_NOTES+=("$1: confirmed by the person") ;;
+    skip) ROW_FAILS+=("$1: not answered") ;;
+    *) ROW_FAILS+=("$1: the person answered no") ;;
+  esac
 }
 
 # --- verdicts. A row is a function run in a subshell: it calls check, expect_count, row_fail or row_skip, and the
@@ -763,83 +920,165 @@ frame_check() {
   frame_note "sampler: $(analyze samples-ok "$SAMPLES" --min 5) in one second"
   : > "$LOG"
 }
-
 # ---------------------------------------------------------------------------------------------------------------
 # The rows
 
-row_T56() {
-  local name
-  for name in v1 v2; do
-    check "$name archive" swift run --package-path "$ROOT/LauncherKit" card-contract \
-      "$(aar_of "$name")" --team "$TEAM_ID" --identifier "$E2E_ID"
-  done
-}
-
-row_T57() {
-  local app="/Applications/$APP_NAME" launched closed
+row_T28() {
+  local app="/Applications/$APP_NAME" launched old download
   use_feed v2 || row_fail "cannot render the feed"
   install_copy v1 "$app"
-  set_last_check $((30 * 3600))
-  start_sampler T57 "$app"
-  launched="$(now_ms)"
-  /usr/bin/open -g "$app"
-  wait_for 30 analyze window-open "$SAMPLES" || row_fail "the copy opened by hand showed no window"
-  osascript -e "tell application id \"$E2E_ID\" to quit" >/dev/null 2>&1
-  wait_for 10 window_closed || row_fail "the quit event did not close the window"
-  closed="$(now_ms)"
-  wait_count 90 feed "$launched" 1
-  wait_count 90 payload "$launched" 1
-  sleep 5
-  expect_count "feed requests with no input" -ge 1 count_in feed "$launched"
-  expect_count "archive GETs with no input" -ge 1 count_in download "$launched" "" "/v2.0.0/"
-  check "app kept running" test -n "$(app_processes)"
-  check "no window beyond the one closed, UIElement, never frontmost" \
-    analyze quiet "$SAMPLES" --since "$closed" --forbid-owner SecurityAgent --max-app-windows 1
-}
-
-# One launch of a copy with an overdue check, the feed seen, the app stopped.
-t58_check() {
-  local name="$1" since
-  remove_path "/Applications/$APP_NAME"
-  install_copy "$name" "/Applications/$APP_NAME"
-  set_last_check $((30 * 3600))
-  since="$(now_ms)"
-  launch_hidden "/Applications/$APP_NAME"
-  wait_count 45 feed "$since" 1
-  sleep 4
+  start_sampler T28-assign "$app"
+  assign_gesture "$app" || row_fail "the gesture could not be assigned, or the window did not close"
   stop_app
+  stop_sampler
+  : > "$LOG"
+  ask_person "Rest two fingers on the trackpad and leave them there. With the other hand press Return here: the login start begins."
+  start_sampler T28 "$app"
+  launched="$(now_ms)"
+  launch_login "$app"
+  tell_person "Keep your fingers resting. When TAP NOW appears, tap the gesture once a second until this row ends."
+  old="$(pid_since "$launched")" || row_fail "the login start never ran"
+  wait_count 30 feed "$launched" 1 || row_fail "no feed request came with no input"
+  wait_count 30 payload "$launched" 1 || row_fail "no asset request came with no input"
+  download="$(analyze first-at "$LOG" --kind payload --since "$launched")"
+  after_exit "login install" "$old"
+  tell_person "TAP NOW: the gesture, once a second."
+  within "v2 started after the asset request" $((NEW_AT - download)) 0 10000
+  check "the new process runs from /Applications with --after-update only" process_runs "$NEW_PID" "$app" "--after-update"
+  check "the bundle is v2" test "$(bundle_version "$app")" = 2000
+  check_gesture "gesture after the hand-over" "$GONE_AT"
+  check "no window from any process, UIElement, neither the app nor a Sparkle helper frontmost" \
+    analyze quiet "$SAMPLES" --since "$launched" --forbid-owner SecurityAgent --max-app-windows 0 --no-new-windows \
+    --allow-owner "$GESTURE_APP_NAME"
+  wait_until $((NEW_AT + 180000))
+  expect_count "requests from v2 for 180 s" -eq 0 count_in any "$NEW_AT"
+  expect_count "helper jobs listed at 180 s" -eq 0 count_helper_jobs
+  check "the pid of v2 is unchanged at 180 s" kill -0 "$NEW_PID"
 }
 
-row_T58() {
-  local first second end
+row_T29() {
+  local app="/Applications/$APP_NAME" launched old opened
   use_feed v2 || row_fail "cannot render the feed"
-  set_control "payload=503"
+  set_control "payload=hold"
+  install_copy v1 "$app"
+  start_sampler T29 "$app"
+  launched="$(now_ms)"
+  launch_login "$app"
+  wait_count 60 payload "$launched" 1 || row_fail "no download began"
+  old="$(pid_since "$launched")" || row_fail "the login start never ran"
+  opened="$(now_ms)"
+  launch_hand "$app"
+  wait_for 15 analyze window-open "$SAMPLES" || row_fail "the window did not open"
+  sleep 15
+  expect_count "feed requests after the window opened" -eq 0 count_in feed "$opened"
+  confirm "no card in the window during the login update" "Does the settings window show NO update card?"
+  check "the old copy is still running" kill -0 "$old"
+  set_control "payload=release"
+  after_exit "login update with the window open" "$old"
+  check "v2 runs with --after-update --with-window" process_runs "$NEW_PID" "$app" "--after-update --with-window"
+  wait_for 15 analyze window-open "$SAMPLES" || ROW_FAILS+=("v2 opened without its settings window")
+  expect_count "app processes" -eq 1 count_app_processes
+  check "the bundle is v2" test "$(bundle_version "$app")" = 2000
+  sleep 30
+  expect_count "feed requests at v2's start" -eq 0 count_in feed "$NEW_AT"
+}
+
+row_T30() {
+  local app="/Applications/$APP_NAME" started opened pressed old
+  use_feed v2 || row_fail "cannot render the feed"
+  install_copy v1 "$app"
+  start_sampler T30 "$app"
+  started="$(now_ms)"
+  launch_hand "$app"
+  wait_for 30 analyze window-open "$SAMPLES" || row_fail "the copy opened by hand showed no window"
+  wait_count 30 feed "$started" 1 || row_fail "the start made no probe"
+  ask_person "Close the settings window with its red button."
+  wait_for 15 window_closed || row_fail "the window did not close"
+  sleep 3
+  opened="$(now_ms)"
+  launch_hand "$app"
+  wait_for 15 analyze window-open "$SAMPLES" || row_fail "the window did not open"
+  wait_count 15 feed "$opened" 1
+  sleep 5
+  expect_count "feed requests from the opening" -eq 1 count_in feed "$opened"
+  expect_count "asset requests from the opening" -eq 0 count_in download "$opened"
+  confirm "the card is the window's first group, above the gesture rows, reading Update available" \
+    "Is there a card reading 'Update available' with an 'Update now' button above the gesture rows?"
+  confirm "the arrow drifts about 4 pt every 3 s; tray, text and button stay still" \
+    "Watch the card for ten seconds. Does only the arrow drift, about 4 pt every 3 s, with the tray, text and button still?"
+  ask_person "Close the settings window with its red button."
+  wait_for 15 window_closed || row_fail "the window did not close"
+  sleep 3
+  opened="$(now_ms)"
+  launch_hand "$app"
+  wait_for 15 analyze window-open "$SAMPLES" || row_fail "the window did not reopen"
+  wait_count 15 feed "$opened" 1
+  sleep 3
+  expect_count "feed requests from the second opening" -eq 1 count_in feed "$opened"
+  set_control "payload=hold"
+  pressed="$(now_ms)"
+  tell_person "Press 'Update now' in the settings window."
+  wait_count 120 payload "$pressed" 1 || row_fail "Update now brought no asset request"
+  confirm "the button is greyed and reads Updating…" "Does the card's button read 'Updating…' and look greyed out?"
+  expect_count "feed requests between Update now and the asset GET" -eq 1 count_in feed "$pressed"
+  check "the feed request came before the asset GET" test "$(analyze first-at "$LOG" --kind feed --since "$pressed")" -le \
+    "$(analyze first-at "$LOG" --kind payload --since "$pressed")"
+  old="$(first_process)"
+  set_control "payload=release"
+  after_exit "Update now" "$old"
+  check "v2 runs with --after-update --with-window" process_runs "$NEW_PID" "$app" "--after-update --with-window"
+  wait_for 15 analyze window-open "$SAMPLES" || ROW_FAILS+=("v2 opened without its settings window")
+  confirm "v2's window shows no card" "Does the new window show NO update card?"
+  expect_count "app processes" -eq 1 count_app_processes
+  sleep 30
+  expect_count "requests at v2's start" -eq 0 count_in any "$NEW_AT"
+}
+
+row_T31() {
+  local app="/Applications/$APP_NAME" first second end old
+  use_feed v2 || row_fail "cannot render the feed"
   defaults write "$E2E_ID" AppleLanguages -array de
+  install_copy v1 "$app"
+  start_sampler T31 "$app"
   first="$(now_ms)"
-  t58_check v1
-  t58_check v1
+  launch_hand "$app"
+  wait_count 30 feed "$first" 1 || row_fail "no probe"
+  tell_person "Press 'Update now' in the settings window."
+  wait_count 120 payload "$first" 1 || row_fail "Update now brought no asset request"
+  old="$(first_process)"
+  wait_gone "$old" 60 || row_fail "v1 did not hand over"
+  wait_for 20 analyze new-pid "$SAMPLES" --exclude "$old" --since "$first" || row_fail "v2 never started"
+  sleep 5
+  stop_app
   second="$(now_ms)"
-  t58_check v2
+  launch_hand "$app"
+  wait_count 30 feed "$second" 1 || row_fail "v2 made no probe"
+  sleep 3
+  stop_app
   end="$(now_ms)"
-  expect_count "feed requests" -ge 3 count_in feed "$first"
+  expect_count "feed requests" -ge 2 count_in feed "$first"
   expect_count "downloads reached the redirect" -ge 1 count_in payload "$first"
   check "no query, cookie or validator; fixed User-Agent, Accept-Language, Accept-Encoding" \
     analyze privacy "$LOG" --since "$first" --until "$end"
   check "header sets of both versions" analyze same-headers "$LOG" "$first" "$second" "$second" "$end"
 }
 
-# One scenario of T59: v1 runs against a feed; the paths asked for are the evidence.
-t59_case() {
-  local description="$1" feed="$2" wanted="$3" refused="$4" since
+# One scenario of T32: v1 runs against a feed, started the way <mode> says (login, or card for the person pressing
+# Update now, or probe for a window opening only); the paths asked for are the evidence.
+t32_case() {
+  local description="$1" feed="$2" mode="$3" wanted="$4" refused="$5" since
   reset_world
   stage_assets
   cp "$feed" "$SERVE/feed.xml"
   install_copy v1 "/Applications/$APP_NAME"
-  set_last_check $((30 * 3600))
+  start_sampler "T32-$mode"  "/Applications/$APP_NAME"
   since="$(now_ms)"
-  launch_hidden "/Applications/$APP_NAME"
+  if [ "$mode" = login ]; then launch_login "/Applications/$APP_NAME"; else launch_hand "/Applications/$APP_NAME"; fi
   wait_count 45 feed "$since" 1
-  [ -z "$wanted" ] || wait_count 45 release "$since" 1 "$wanted"
+  if [ "$mode" = card ]; then
+    tell_person "Press 'Update now' in the settings window."
+  fi
+  [ -z "$wanted" ] || wait_count 120 release "$since" 1 "$wanted"
   sleep 12
   expect_count "$description: feed requests" -ge 1 count_in feed "$since"
   if [ -n "$wanted" ]; then expect_count "$description: asked for $wanted" -ge 1 count_in release "$since" "" "$wanted"; fi
@@ -847,376 +1086,135 @@ t59_case() {
     expect_count "$description: asked for $refused" -eq 0 count_in release "$since" "" "$refused"
   else
     expect_count "$description: asset requests" -eq 0 count_in download "$since"
+    confirm "$description: no card" "Does the settings window show NO update card?"
   fi
+  stop_app
 }
 
-row_T59() {
-  local folder="$SCRATCH/t59" mid higher
+row_T32() {
+  local folder="$SCRATCH/t32" mid higher
   ensure_build mid 1.1.0 1100 release || row_fail "cannot build the 1.1.0 copy"
   mkdir -p "$folder"
   mid="$(version_of mid)"
   higher="$(version_of v2)"
   use_feed mid v2 || row_fail "cannot render the feed"
   cp "$SERVE/feed.xml" "$folder/both.xml"
-  t59_case "1.1.0 and 2.0.0 offered" "$folder/both.xml" "/v$higher/" "/v$mid/"
+  t32_case "1.1.0 and 2.0.0 offered, from the card" "$folder/both.xml" card "/v$higher/" "/v$mid/"
+  t32_case "1.1.0 and 2.0.0 offered, at login" "$folder/both.xml" login "/v$higher/" "/v$mid/"
 
   $PY "$HELPERS/feed.py" set-minimum "$folder/both.xml" "$higher" 99.0 > "$folder/needs99.xml"
-  t59_case "2.0.0 needing macOS 99.0" "$folder/needs99.xml" "/v$mid/" "/v$higher/"
+  t32_case "2.0.0 needing macOS 99.0, at login" "$folder/needs99.xml" login "/v$mid/" "/v$higher/"
 
   use_feed v1 || row_fail "cannot render the feed"
-  $PY "$HELPERS/feed.py" derive "$SERVE/feed.xml" "$(version_of v1)" 0.9.0 900 > "$folder/not-newer.xml"
-  t59_case "only the running build and a lower one" "$folder/not-newer.xml" "" ""
+  edit_feed derive "$(version_of v1)" 0.9.0 900 || row_fail "cannot derive a lower release"
+  edit_feed derive "$(version_of v1)" 1.5.0 1500 || row_fail "cannot derive a higher release"
+  edit_feed set-channel 1.5.0 beta || row_fail "cannot make the higher release a pre-release"
+  cp "$SERVE/feed.xml" "$folder/not-newer.xml"
+  t32_case "the running build, a lower one and a pre-release above it" "$folder/not-newer.xml" probe "" ""
 }
 
-# One scenario of T60: the copy placed by the given function runs for 30 seconds against an overdue check.
-t60_case() {
-  local description="$1" place="$2" since
-  reset_world
-  use_feed v2 || row_fail "cannot render the feed"
-  "$place"
-  set_last_check $((30 * 3600))
-  start_sampler "T60-$3" "/Applications/$APP_NAME" "$HOME/Applications/$APP_NAME"
-  since="$(now_ms)"
-  launch_hidden "$4"
-  sleep 30
-  expect_count "$description: requests in 30 s" -eq 0 count_in any "$since"
-  check "$description: no password window" analyze absent "$SAMPLES" --owner SecurityAgent
-}
-
-place_apple_development() {
-  ensure_build appledev 1.0.0 1000 appledev || row_fail "cannot build the Apple Development copy"
-  install_copy appledev "/Applications/$APP_NAME"
-}
-place_in_user_applications() { install_copy v1 "$HOME/Applications/$APP_NAME"; }
-place_root_wheel() {
-  install_copy v1 "/Applications/$APP_NAME"
-  sudo chown -R root:wheel "/Applications/$APP_NAME" && sudo chmod -R u=rwX,go=rX "/Applications/$APP_NAME"
-}
-place_root_admin() {
-  install_copy v1 "/Applications/$APP_NAME"
-  sudo chown -R root:admin "/Applications/$APP_NAME" && sudo chmod -R u=rwX,g=rwX,o=rX "/Applications/$APP_NAME"
-}
-place_foreign_group() {
-  install_copy v1 "/Applications/$APP_NAME"
-  sudo chown -R "$(id -un):daemon" "/Applications/$APP_NAME" && sudo chmod -R u=rwX,go=rX "/Applications/$APP_NAME"
-}
-
-row_T60() {
-  local pressed
-  sudo -v || row_skip "sudo is not available"
-  ensure_build appledev 1.0.0 1000 appledev >/dev/null 2>&1 || log "no Apple Development build; its case will fail"
-  t60_case "Apple Development copy in /Applications" place_apple_development appledev "/Applications/$APP_NAME"
-  t60_case "root:wheel 755" place_root_wheel rootwheel "/Applications/$APP_NAME"
-  t60_case "root:admin group-writable" place_root_admin rootadmin "/Applications/$APP_NAME"
-  t60_case "a group not this user's" place_foreign_group foreign "/Applications/$APP_NAME"
-
-  t60_case "Developer ID copy in ~/Applications, dialog up" place_in_user_applications dialog "$HOME/Applications/$APP_NAME"
-  ask_person "Press 'Move to Applications' in the dialog of Trackpad Launcher E2E, then come back here."
-  pressed="$(now_ms)"
-  wait_count 40 feed "$pressed" 1
-  sleep 5
-  expect_count "after Move to Applications: feed requests" -eq 1 count_in feed "$pressed"
-}
-
-row_T61() {
-  local app="/Applications/$APP_NAME" started
+row_T33() {
+  local app="/Applications/$APP_NAME" started first mark
   use_feed v2 || row_fail "cannot render the feed"
   install_copy v1 "$app"
-  start_sampler T61 "$app"
+  start_sampler T33 "$app"
   started="$(now_ms)"
-  set_last_check 86380
-  launch_hidden "$app" --after-update
-  sleep 19
-  expect_count "requests in the first 19 s at 86,380 s since the last check" -eq 0 count_in any "$started" $((started + 19000))
-  wait_count 20 feed "$started" 1
-  expect_count "feed requests by 36 s" -ge 1 count_in feed "$started" $((started + 36000))
-  check "no restart" analyze pids "$SAMPLES" --since "$started" --max-distinct 1
+  launch_hand "$app"
+  wait_count 30 feed "$started" 1 || row_fail "the start made no probe"
+  ask_person "Close the settings window with its red button, then leave the trackpad and the Mac alone for ten minutes."
+  wait_for 15 window_closed || row_fail "the window did not close"
+  mark="$(now_ms)"
+  sleep 600
+  expect_count "requests in 10 minutes with the window closed" -eq 0 count_in any "$mark"
 
+  reset_world
+  use_feed v2 || row_fail "cannot render the feed"
+  install_copy v1 "$app"
+  set_control "feed=503once"
+  started="$(now_ms)"
+  launch_login "$app"
+  wait_count 30 feed "$started" 1 || row_fail "the login start made no feed request"
+  first="$(analyze first-at "$LOG" --kind feed --since "$started")"
+  sleep 8
+  expect_count "feed requests after one 503" -eq 2 count_in feed "$started"
+  expect_count "feed requests within 5 s of the first" -eq 2 count_in feed "$started" $((first + 5000))
   stop_app
-  reset_world
-  use_feed v2 || row_fail "cannot render the feed"
-  install_copy v1 "$app"
-  start_sampler T61b "$app"
-  started="$(now_ms)"
-  set_last_check $((30 * 3600))
-  launch_hidden "$app" --after-update
-  wait_count 15 feed "$started" 1
-  expect_count "feed requests at 30 h, at once" -ge 1 count_in feed "$started" $((started + 15000))
-}
-
-# One run of T62: the person presses Quit; <stalled> holds the download half way.
-t62_run() {
-  local description="$1" stalled="$2" app="/Applications/$APP_NAME" started pressed gone installed
-  reset_world
-  use_feed v2 || row_fail "cannot render the feed"
-  [ "$stalled" = yes ] && set_control "payload=hold"
-  install_copy v1 "$app"
-  set_last_check $((30 * 3600))
-  start_sampler "T62-$stalled" "$app"
-  started="$(now_ms)"
-  launch_hidden "$app"
-  wait_count 60 payload "$started" 1 || { ROW_FAILS+=("$description: no download began"); return; }
-  sleep 15
-  /usr/bin/open -g "$app"
-  wait_for 15 analyze window-open "$SAMPLES" || { ROW_FAILS+=("$description: the settings window did not open"); return; }
-  ask_person "Press Return here, then at once press 'Quit Trackpad Launcher' in the settings window."
-  pressed="$(now_ms)"
-  wait_for 30 no_app_running || { ROW_FAILS+=("$description: the app did not end"); return; }
-  gone="$(now_ms)"
-  ROW_NOTES+=("$description: the app ended $((gone - pressed)) ms after the Return, a person's reaction included")
-  if [ "$stalled" = yes ]; then
-    sleep 10
-    check "$description: the bundle stays v1" test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")" = 1000
-  else
-    installed="$(analyze first-version "$SAMPLES" --app "$app" --version 2000 --since "$pressed")"
-    if [ -n "$installed" ] && [ $((installed - gone)) -le 5000 ]; then
-      ROW_NOTES+=("$description: the bundle read v2 $((installed - gone)) ms after the process ended")
-    else
-      ROW_FAILS+=("$description: the bundle did not read v2 within 5 s of the process ending")
-    fi
-  fi
-  sleep 120
-  check "$description: nothing ran for 120 s" analyze pids "$SAMPLES" --since $((gone + 2000)) --max-concurrent 0
-  expect_count "$description: processes of the copy now" -eq 0 count_app_processes
-  expect_count "$description: launchd jobs now" -eq 0 count_jobs
-}
-
-row_T62() {
-  t62_run "an update waiting" no
-  t62_run "a stalled download" yes
-}
-
-# ---------------------------------------------------------------------------------------------------------------
-# The hand-over rows
-
-# start_held <label> <app path> [launch argument]...: v1 is installed at that path and launched with an overdue check.
-# Returns once the update is held (Sparkle's installer job is listed); HELD_AT is that instant.
-start_held() {
-  local label="$1" app="$2" started
-  shift 2
-  use_feed v2 || row_fail "cannot render the feed"
-  install_copy v1 "$app"
-  set_last_check $((30 * 3600))
-  start_sampler "$label" "$app"
-  started="$(now_ms)"
-  launch_hidden "$app" "$@"
-  wait_count 60 payload "$started" 1 || row_fail "no download began"
-  wait_job 150 -sparkle-updater || row_fail "the update was never held"
-  HELD_AT="$(now_ms)"
-}
-
-first_process() { app_processes | head -1; }
-
-# process_runs <pid> <app path>: the process runs that copy's executable with --after-update.
-process_runs() { ps -o args= -p "$1" | grep -q -- "^$2/Contents/MacOS/.* --after-update\$"; }
-
-# after_exit <description> <old pid>: once the old pid has ended, finds the copy that follows it. Sets GONE_AT, NEW_AT and
-# NEW_PID from the sampler.
-after_exit() {
-  local description="$1" old="$2"
-  wait_for 5 analyze gone-at "$SAMPLES" --pid "$old" || row_fail "$description: the sampler never saw the old process end"
-  GONE_AT="$(analyze gone-at "$SAMPLES" --pid "$old")"
-  wait_for 20 analyze new-pid "$SAMPLES" --exclude "$old" --since "$GONE_AT" || row_fail "$description: no copy started after the old one ended"
-  read -r NEW_AT NEW_PID <<<"$(analyze new-pid "$SAMPLES" --exclude "$old" --since "$GONE_AT")"
-}
-
-# wait_until <ms>
-wait_until() { while [ "$(now_ms)" -lt "$1" ]; do sleep 1; done; }
-
-row_T63() {
-  local app="/Applications/$APP_NAME" old closed mark until
-  start_held T63 "$app"
-  old="$(first_process)"
-  assign_gesture "$app" || row_fail "the gesture could not be assigned, or the window did not close"
-  closed="$(analyze closed-at "$SAMPLES")" || row_fail "the settings window did not close"
-  mark=$((HELD_AT > closed ? HELD_AT : closed))
-  tell_person "Stay off the trackpad. When TAP NOW appears, tap the gesture once a second until this row ends."
-  wait_gone "$old" 100 || row_fail "the old copy was still running 100 s after the window closed"
-  tell_person "TAP NOW: the gesture, once a second."
-  after_exit "v2 start" "$old"
-  within "the old process ended after the later of the hold and the window closing" $((GONE_AT - mark)) 60000 63000
-  within "v2 started after the old process ended" $((NEW_AT - GONE_AT)) 0 1000
-  check "the new process runs from /Applications with --after-update" process_runs "$NEW_PID" "$app"
-  check "the bundle is v2" test "$(bundle_version "$app")" = 2000
-  check_gesture "gesture after the hand-over" "$GONE_AT"
-  check "no window from any other process, UIElement, neither the app nor a Sparkle helper frontmost" \
-    analyze quiet "$SAMPLES" --since "$closed" --forbid-owner SecurityAgent --no-new-windows --allow-owner "$GESTURE_APP_NAME"
-  until=$((NEW_AT + 180000))
-  wait_until "$until"
-  expect_count "feed requests from v2 for 180 s" -eq 0 count_in feed "$NEW_AT" "$until"
-  expect_count "helper jobs listed at 180 s" -eq 0 count_helper_jobs
-  check "the pid of v2 is unchanged at 180 s" kill -0 "$NEW_PID"
-  check "one app process over the 180 s" analyze pids "$SAMPLES" --since "$NEW_AT" --max-distinct 1
-  ask_person "Open Trackpad Launcher E2E with Spotlight (Command-Space, its name, Return), then press Return here."
-  wait_for 10 analyze window-open "$SAMPLES"
-  check "Spotlight opened the settings window" analyze window-open "$SAMPLES"
-}
-
-row_T64() {
-  local app="/Applications/$APP_NAME" old lifted gone
-  ask_person "Rest one finger on the trackpad and leave it there. With the other hand press Return here: the run starts."
-  start_held T64 "$app"
-  old="$(first_process)"
-  sleep 90
-  check "a finger resting past 90 s kept the old copy alive" kill -0 "$old"
-  ask_person "Lay a palm on the trackpad, lift the finger, and press Return here. Keep the palm down."
-  sleep 90
-  check "a palm resting 90 s kept the old copy alive" kill -0 "$old"
-  ask_person "Lift the palm and press Return here the moment it is off."
-  lifted="$(now_ms)"
-  wait_gone "$old" 100 || row_fail "the old copy did not end within 100 s of the lift"
-  wait_for 5 analyze gone-at "$SAMPLES" --pid "$old"
-  gone="$(analyze gone-at "$SAMPLES" --pid "$old")"
-  within "the old process ended after the lift, the Return pressed up to 3 s late" $((gone - lifted)) 57000 63000
-}
-
-row_T65() {
-  local app="/Applications/$APP_NAME" started asked pid closed
-  use_feed v2 || row_fail "cannot render the feed"
-  set_control "payload=hold"
-  install_copy v1 "$app"
-  set_last_check $((30 * 3600))
-  start_sampler T65 "$app"
-  started="$(now_ms)"
-  launch_hidden "$app"
-  wait_count 60 payload "$started" 1 || row_fail "no download began"
-  pid="$(first_process)"
-  assign_gesture "$app" || row_fail "the gesture could not be assigned, or the window did not close"
-  closed="$(analyze closed-at "$SAMPLES")" || row_fail "the settings window did not close"
-  asked="$(now_ms)"
-  ask_person "Tap the gesture once, then press Return here."
-  check_gesture "gesture during the stalled download, a person's reaction included" "$asked" 60000
-  set_control "payload=reset"
-  sleep 5
-  set_control ""
-  check "v1 keeps running after the reset" kill -0 "$pid"
-  check "the bundle is still v1" test "$(bundle_version "$app")" = 1000
-  check "nothing showed" analyze quiet "$SAMPLES" --since "$closed" --forbid-owner SecurityAgent --no-new-windows \
-    --allow-owner "$GESTURE_APP_NAME"
-  if ! wait_count 20 payload "$started" 2; then
-    stop_app
-    set_last_check $((30 * 3600))
-    launch_hidden "$app"
-    wait_count 60 payload "$started" 2 || row_fail "no second GET followed the reset"
-  fi
-  wait_job 120 -sparkle-updater || ROW_FAILS+=("the second GET did not complete the download")
-  expect_count "archive GETs" -ge 2 count_in payload "$started"
-}
-
-row_T66() {
-  local app="/Applications/$APP_NAME" round started first total inside good=0
-  use_feed v2 || row_fail "cannot render the feed"
-  for round in $(seq 1 20); do
-    reset_world
-    install_copy v1 "$app"
-    set_control "feed=503once"
-    set_last_check $((30 * 3600))
-    started="$(now_ms)"
-    launch_hidden "$app"
-    if wait_count 30 feed "$started" 1; then
-      first="$(analyze first-at "$LOG" --kind feed --since "$started")"
-      sleep 3
-      total="$(count_in feed "$started")"
-      inside="$(count_in feed "$started" $((first + 2000)))"
-      if [ "$total" = 2 ] && [ "$inside" = 2 ]; then
-        good=$((good + 1))
-      else
-        ROW_NOTES+=("round $round: $total feed requests, $inside within 2 s")
-      fi
-    else
-      ROW_NOTES+=("round $round: no feed request")
-    fi
-    stop_app
-  done
-  expect_count "rounds of 20 with exactly 2 feed requests within 2 s" -eq 20 echo "$good"
 
   reset_world
+  use_feed v2 || row_fail "cannot render the feed"
   install_copy v1 "$app"
   set_control "feed=503"
-  set_last_check $((30 * 3600))
   started="$(now_ms)"
-  launch_hidden "$app"
+  launch_login "$app"
   sleep 60
   expect_count "feed requests in 60 s against a feed that always fails" -eq 2 count_in feed "$started"
 }
 
-# t67_case <label> <description> <yes|no: the archive is asked for> <build> [feed.py command and arguments]...
-t67_case() {
-  local label="$1" description="$2" wanted="$3" build="$4" app="/Applications/$APP_NAME" started later
-  shift 4
+# Where a failed install leaves the person: <mode> is login or card.
+t34_failed_install() {
+  local mode="$1" folder="/Applications/$FOLDER_NAME" app="/Applications/$FOLDER_NAME/$APP_NAME" started old suffix
   reset_world
-  use_feed "$build" || row_fail "$description: cannot render the feed"
-  if [ $# -gt 0 ]; then edit_feed "$@" || row_fail "$description: cannot edit the feed"; fi
+  use_feed v2 || row_fail "cannot render the feed"
   install_copy v1 "$app"
-  set_last_check $((30 * 3600))
-  start_sampler "T67-$label" "$app"
+  set_control "payload=hold"
+  start_sampler "T34-$mode" "$app"
   started="$(now_ms)"
-  launch_hidden "$app"
-  wait_count 45 feed "$started" 1 || { ROW_FAILS+=("$description: no feed request"); return; }
-  if [ "$wanted" = yes ]; then
-    wait_count 60 payload "$started" 1 || { ROW_FAILS+=("$description: the archive was never asked for"); return; }
-    sleep 80
+  if [ "$mode" = login ]; then
+    launch_login "$app"
+    suffix="--after-update"
   else
-    sleep 20
-    expect_count "$description: asset requests" -eq 0 count_in download "$started"
+    launch_hand "$app"
+    wait_count 30 feed "$started" 1 || row_fail "$mode: no probe"
+    tell_person "Press 'Update now' in the settings window."
+    suffix="--after-update --with-window"
   fi
-  check "$description: v1 never replaced" analyze whole "$SAMPLES" --app "$app" --versions 1000
-  expect_count "$description: processes" -eq 1 count_app_processes
-  check "$description: one pid throughout" analyze pids "$SAMPLES" --since "$started" --max-distinct 1
-  expect_count "$description: helper jobs listed" -eq 0 count_helper_jobs
-  check "$description: nothing shown" analyze quiet "$SAMPLES" --since "$started" --forbid-owner SecurityAgent --max-app-windows 0
-  if [ "$wanted" = yes ]; then
-    stop_app
-    set_last_check $((30 * 3600))
-    later="$(now_ms)"
-    launch_hidden "$app"
-    wait_count 60 payload "$later" 1
-    expect_count "$description: a later check asked for the archive again" -ge 1 count_in payload "$later"
-  fi
-}
-
-row_T67() {
-  local version
-  ensure_build v2dev 2.0.0 2000 appledev || row_fail "cannot build v2 signed with Apple Development"
-  ensure_build v2plain 2.0.0 2000 unnotarised || row_fail "cannot build v2 signed but not notarised"
-  ensure_build v2other 2.0.0 2000 release "$E2E_ID.other" || row_fail "cannot build v2 with another bundle identifier"
-  version="$(version_of v2)"
-  t67_case tampered "a tampered EdDSA signature" yes v2 tamper-signature "$version"
-  t67_case appledev "v2 signed by Apple Development" yes v2dev
-  t67_case plain "v2 signed by the Developer ID, not notarised" yes v2plain
-  t67_case otherid "v2 with another bundle identifier" yes v2other
-  t67_case dmg "an enclosure of a .dmg" no v2 replace "$version" .aar .dmg
-  t67_case host "an enclosure on another host" no v2 replace "$version" "http://127.0.0.1:$PORT" "http://localhost:$PORT"
-}
-
-row_T68() {
-  local folder="/Applications/$FOLDER_NAME" app="/Applications/$FOLDER_NAME/$APP_NAME" old started
-  start_held T68 "$app"
-  old="$(first_process)"
-  assign_gesture "$app" || row_fail "the gesture could not be assigned, or the window did not close"
+  wait_count 120 payload "$started" 1 || row_fail "$mode: no download began"
+  old="$(pid_since "$started")" || row_fail "$mode: the app never ran"
   chmod a-w "$folder"
-  tell_person "Stay off the trackpad. When TAP NOW appears, tap the gesture once a second until this row ends."
-  wait_gone "$old" 150 || row_fail "the old copy did not end within 150 s"
-  tell_person "TAP NOW: the gesture, once a second."
-  after_exit "the failed install" "$old"
-  within "the old copy was opened after the exit" $((NEW_AT - GONE_AT)) 5000 7000
-  check "the opened copy is the one in the folder, with --after-update" process_runs "$NEW_PID" "$app"
-  check "the old copy is whole and verifies" /usr/bin/codesign --verify --strict "$app"
-  check "the bundle is v1" test "$(bundle_version "$app")" = 1000
-  check_gesture "gesture after the failed install" "$GONE_AT"
-  wait_until $((NEW_AT + 120000))
-  expect_count "feed requests for 120 s after the reopen" -eq 0 count_in feed "$NEW_AT" $((NEW_AT + 120000))
+  set_control "payload=release"
+  after_exit "$mode failed install" "$old"
+  within "$mode: the old copy was opened after the exit" $((NEW_AT - GONE_AT)) 5000 7000
+  check "$mode: the opened copy is the one in the folder, with $suffix" process_runs "$NEW_PID" "$app" "$suffix"
+  check "$mode: the old copy is whole and verifies" /usr/bin/codesign --verify --strict "$app"
+  check "$mode: the bundle is v1" test "$(bundle_version "$app")" = 1000
+  check "$mode: no password window appeared" analyze absent "$SAMPLES" --owner SecurityAgent
+  if [ "$mode" = login ]; then
+    check "login: nothing shown" analyze quiet "$SAMPLES" --since "$started" --forbid-owner SecurityAgent --max-app-windows 0
+  else
+    wait_for 15 analyze window-open "$SAMPLES" || ROW_FAILS+=("card: v1 did not reopen with its window")
+  fi
+  sleep 40
+  expect_count "$mode: requests for 40 s after the reopen" -eq 0 count_in any "$NEW_AT"
   chmod u+w "$folder"
   stop_app
-  set_last_check $((30 * 3600))
-  started="$(now_ms)"
-  launch_hidden "$app"
-  wait_for 300 analyze first-version "$SAMPLES" --app "$app" --version 2000 --since "$started"
-  check "with the parent writable the next start installed v2" analyze first-version "$SAMPLES" --app "$app" --version 2000 --since "$started"
+  launch_hand "$app"
+  wait_for 15 analyze window-open "$SAMPLES"
+  confirm "$mode: the next opening shows the card" "Does the settings window show the update card ('Update available')?"
 }
 
-# t69_verify <description> <armed: yes|no>: what must hold once the kill's effects have settled.
-t69_verify() {
+t34_reset() {
+  local app="/Applications/$APP_NAME" started pid
+  reset_world
+  use_feed v2 || row_fail "cannot render the feed"
+  install_copy v1 "$app"
+  set_control "payload=hold"
+  start_sampler T34-reset "$app"
+  started="$(now_ms)"
+  launch_hand "$app"
+  wait_count 30 feed "$started" 1 || row_fail "reset: no probe"
+  tell_person "Press 'Update now' in the settings window."
+  wait_count 120 payload "$started" 1 || row_fail "reset: no download began"
+  pid="$(first_process)"
+  set_control "payload=reset"
+  sleep 6
+  set_control ""
+  check "reset: v1 keeps running" kill -0 "$pid"
+  check "reset: the bundle is v1" test "$(bundle_version "$app")" = 1000
+  confirm "reset: the card reads Update available" "Does the card read 'Update available' again, with its button ready?"
+}
+
+# t34_verify <description> <armed: yes|no>: what must hold once the kill's effects have settled.
+t34_verify() {
   local description="$1" armed="$2" app="/Applications/$APP_NAME"
   sleep 25
   check "$description: every read was a whole v1 or v2" analyze whole "$SAMPLES" --app "$app" --versions 1000,2000
@@ -1228,31 +1226,30 @@ t69_verify() {
   fi
   expect_count "$description: helper jobs left" -eq 0 count_helper_jobs
   stop_app
-  launch_hidden "$app"
+  launch_login "$app"
   sleep 8
   expect_count "$description: a relaunch runs with" -eq 1 count_app_processes
   stop_app
 }
 
-t69_app_round() {
+t34_app_round() {
   local round="$1" app="/Applications/$APP_NAME" delay armed=no
   reset_world
   use_feed v2 || row_fail "cannot render the feed"
   install_copy v1 "$app"
-  set_last_check $((30 * 3600))
-  start_sampler "T69-app-$round" "$app"
-  launch_hidden "$app"
-  delay=$((RANDOM % 75 + 1))
+  start_sampler "T34-app-$round" "$app"
+  launch_login "$app"
+  delay="$((RANDOM % 4)).$((RANDOM % 10))"
   sleep "$delay"
   job_listed .hand-over && armed=yes
   pkill -9 -f "$APP_NAME/Contents/MacOS"
   job_listed .hand-over && armed=yes
-  t69_verify "app killed at $delay s" "$armed"
+  t34_verify "app killed at $delay s" "$armed"
 }
 
 # Autoupdate's command line names the bundle identifier, as its path does.
 kill_autoupdate() {
-  local end=$((SECONDS + 2))
+  local end=$((SECONDS + 20))
   while [ "$SECONDS" -lt "$end" ]; do
     pkill -9 -f "Autoupdate.*$E2E_ID|$E2E_ID.*Autoupdate" && return 0
     sleep 0.02
@@ -1260,76 +1257,259 @@ kill_autoupdate() {
   return 1
 }
 
-t69_installer_round() {
-  local round="$1" app="/Applications/$APP_NAME" old
+t34_installer_round() {
+  local round="$1" app="/Applications/$APP_NAME"
   reset_world
-  start_held "T69-installer-$round" "$app"
-  old="$(first_process)"
-  wait_gone "$old" 150 || { ROW_FAILS+=("installer round $round: the old copy never ended"); return; }
-  kill_autoupdate || ROW_FAILS+=("installer round $round: no Autoupdate to kill in the 2 s after the exit")
-  t69_verify "Autoupdate killed, round $round" yes
-}
-
-row_T69() {
-  local round
-  for round in $(seq 1 20); do t69_app_round "$round"; done
-  for round in $(seq 1 10); do t69_installer_round "$round"; done
-}
-
-row_T70() {
-  local folder="/Applications/$FOLDER_NAME" app="/Applications/$FOLDER_NAME/$APP_NAME" started
   use_feed v2 || row_fail "cannot render the feed"
   install_copy v1 "$app"
-  start_sampler T70 "$app"
-  set_last_check 86380
-  started="$(now_ms)"
-  launch_hidden "$app" --after-update
-  sleep 5
-  chmod a-w "$folder"
-  wait_count 60 feed "$started" 1 || row_fail "the stamp never fired a check"
-  sleep 150
-  check "no password window appeared" analyze absent "$SAMPLES" --owner SecurityAgent
-  check "the update did not install" analyze whole "$SAMPLES" --app "$app" --versions 1000
-  check "nothing shown" analyze quiet "$SAMPLES" --since "$started" --forbid-owner SecurityAgent --max-app-windows 0
-  expect_count "helper jobs listed at the end" -eq 0 count_helper_jobs
+  start_sampler "T34-installer-$round" "$app"
+  launch_login "$app"
+  kill_autoupdate || ROW_FAILS+=("installer round $round: no Autoupdate appeared to kill")
+  t34_verify "Autoupdate killed, round $round" yes
 }
 
-row_T71() {
-  local app="/Applications/$APP_NAME" old later
-  start_held T71 "$app"
-  old="$(first_process)"
-  launchctl remove "$E2E_ID-sparkle-updater"
-  sleep 90
-  check "no hand-over job at the mark" test "$(job_listed .hand-over && echo listed)" != listed
-  check "v1 still runs with the same pid" kill -0 "$old"
-  check "the bundle never changed" analyze whole "$SAMPLES" --app "$app" --versions 1000
+row_T34() {
+  local round
+  t34_failed_install card
+  t34_failed_install login
+  t34_reset
+  for round in $(seq 1 20); do t34_app_round "$round"; done
+  for round in $(seq 1 10); do t34_installer_round "$round"; done
+}
+
+# One case of T35: <label> <description> <yes|no: the person presses Update now> <build> [feed.py command and arguments].
+# A card case lets the person press Update now; a login case starts the copy at login and waits.
+t35_case() {
+  local label="$1" description="$2" kind="$3" build="$4" app="/Applications/$APP_NAME" started pid
+  shift 4
+  reset_world
+  use_feed "$build" || row_fail "$description: cannot render the feed"
+  if [ $# -gt 0 ]; then edit_feed "$@" || row_fail "$description: cannot edit the feed"; fi
+  install_copy v1 "$app"
+  start_sampler "T35-$label-$kind" "$app"
+  watch_sparkle_start
+  started="$(now_ms)"
+  if [ "$kind" = card ]; then
+    launch_hand "$app"
+    wait_count 45 feed "$started" 1 || { ROW_FAILS+=("$description: no probe"); return; }
+    tell_person "Press 'Update now' in the settings window."
+  else
+    launch_login "$app"
+    wait_count 45 feed "$started" 1 || { ROW_FAILS+=("$description: no feed request"); return; }
+  fi
+  if [ "$label" = dmg ] || [ "$label" = host ]; then
+    sleep 20
+  else
+    wait_count 120 payload "$started" 1 || { ROW_FAILS+=("$description ($kind): the archive was never asked for"); return; }
+    sleep 25
+  fi
+  pid="$(first_process)"
+  check "$description ($kind): v1 never replaced" analyze whole "$SAMPLES" --app "$app" --versions 1000
+  check "$description ($kind): v1 still runs" test -n "$pid"
+  expect_count "$description ($kind): Sparkle helper processes now" -eq 0 count_sparkle_processes
+  expect_count "$description ($kind): files left in the persistent download" -eq 0 persistent_files
+  expect_count "$description ($kind): helper jobs listed" -eq 0 count_helper_jobs
+  check "$description ($kind): no password window" analyze absent "$SAMPLES" --owner SecurityAgent
+  if [ "$kind" = card ]; then
+    confirm "$description (card): the card reads Update available again" "Does the card read 'Update available' again?"
+  else
+    check "$description (login): nothing shown" analyze quiet "$SAMPLES" --since "$started" --forbid-owner SecurityAgent --max-app-windows 0
+  fi
+  if [ "$label" = plain ] || [ "$label" = appledev ] || [ "$label" = otherid ]; then
+    expect_count "$description ($kind): Sparkle helper processes ever seen" -eq 0 sparkle_seen
+  fi
+  watch_sparkle_stop
+}
+
+row_T35() {
+  local version why
+  ensure_build v2dev 2.0.0 2000 appledev || row_fail "cannot build v2 signed with Apple Development"
+  ensure_build v2plain 2.0.0 2000 unnotarised || row_fail "cannot build v2 signed but not notarised"
+  ensure_build v2other 2.0.0 2000 release "$E2E_ID.other" || row_fail "cannot build v2 with another bundle identifier"
+  version="$(version_of v2)"
+  local kind
+  for kind in card login; do
+    t35_case tampered "a tampered EdDSA signature" "$kind" v2 tamper-signature "$version"
+    t35_case appledev "v2 signed by Apple Development" "$kind" v2dev
+    t35_case plain "v2 signed by the Developer ID, not notarised" "$kind" v2plain
+    t35_case otherid "v2 with another bundle identifier" "$kind" v2other
+  done
+  t35_case dmg "an enclosure of a .dmg" login v2 replace "$version" .aar .dmg
+  expect_count "no asset request for the .dmg" -eq 0 count_in download 0
+  t35_case host "an enclosure on another host" login v2 replace "$version" "http://127.0.0.1:$PORT" "http://localhost:$PORT"
+  expect_count "no asset request for the other host" -eq 0 count_in download 0
+
+  why="$(std_unready)"
+  if [ -n "$why" ]; then
+    ROW_FAILS+=("the standard-account case did not run: $why")
+    return
+  fi
+  keep_sudo
+  STD_ACTIVE=1
+  t35_case std "a tampered EdDSA signature on a standard account" card v2 tamper-signature "$version"
+}
+
+# The standard-account row's way to the administrator prompt: v1 in place, the download held, Update now pressed by the
+# person, the download released. Returns once the prompt is up.
+t36_to_prompt() {
+  local label="$1" app="/Applications/$APP_NAME" started
   stop_app
-  remove_launch_jobs
-  set_last_check $((30 * 3600))
-  later="$(now_ms)"
-  launch_hidden "$app"
-  wait_count 60 payload "$later" 1
-  expect_count "a later check downloaded again" -ge 1 count_in payload "$later"
+  stop_sampler
+  remove_path "$app"
+  install_copy v1 "$app"
+  : > "$LOG"
+  set_control "payload=hold"
+  start_sampler "$label" "$app"
+  started="$(now_ms)"
+  launch_hand "$app"
+  wait_count 30 feed "$started" 1 || return 1
+  tell_person "Press 'Update now' in the settings window."
+  wait_count 120 payload "$started" 1 || return 1
+  sleep 3
+  check "$label: no administrator prompt while the download is held" analyze absent "$SAMPLES" --owner SecurityAgent
+  set_control "payload=release"
+  wait_for 60 prompt_up
 }
 
-row_T72() {
-  local app="/Applications/$APP_NAME" started asked
-  ensure_build nokey 1.0.0 1000 release "$E2E_ID" emptykey || row_fail "cannot build the copy with an empty update key"
+prompt_up() { analyze shown "$SAMPLES" --owner SecurityAgent; }
+prompt_gone() { ! prompt_up; }
+
+row_T36() {
+  local why app="/Applications/$APP_NAME" started pressed gone old left
+  why="$(std_unready)"
+  [ -z "$why" ] || row_fail "a standard account is needed: $why"
+  keep_sudo || row_fail "sudo is not available"
+  STD_ACTIVE=1
   use_feed v2 || row_fail "cannot render the feed"
-  install_copy nokey "$app"
-  set_last_check $((30 * 3600))
-  start_sampler T72 "$app"
-  started="$(now_ms)"
-  launch_hidden "$app"
-  sleep 30
-  expect_count "requests in 30 s" -eq 0 count_in any "$started"
+  install_copy v1 "$app"
+  start_sampler T36-assign "$app"
   assign_gesture "$app" || row_fail "the gesture could not be assigned, or the window did not close"
-  asked="$(now_ms)"
-  ask_person "Tap the gesture once, then press Return here."
-  check_gesture "gesture with an empty key, a person's reaction included" "$asked" 60000
-  expect_count "requests at the end" -eq 0 count_in any "$started"
-  check "nothing shown beyond the settings window" analyze quiet "$SAMPLES" --since "$started" --forbid-owner SecurityAgent --max-app-windows 1
+
+  stop_app
+  stop_sampler
+  : > "$LOG"
+  start_sampler T36-login "$app"
+  started="$(now_ms)"
+  launch_login "$app"
+  sleep 60
+  expect_count "standard login start: requests in 60 s" -eq 0 count_in any "$started"
+  check "standard login start: no administrator prompt" analyze absent "$SAMPLES" --owner SecurityAgent
+  stop_app
+
+  t36_to_prompt T36-quit || row_fail "quit run: the administrator prompt never came after the download"
+  old="$(first_process)"
+  tell_person "While the prompt is up, tap the gesture once a second without stopping."
+  pressed="$(now_ms)"
+  check_gesture "gesture while the prompt is up, a person's tap interval included" "$pressed" 2000
+  ask_person "Press Return here after the next line: then at once press 'Quit Trackpad Launcher' in the settings window."
+  pressed="$(now_ms)"
+  wait_for 30 no_app_running || row_fail "the app did not end after Quit while the prompt was up"
+  gone="$(now_ms)"
+  ROW_NOTES+=("Quit during the prompt: the app ended $((gone - pressed)) ms after the Return, a person's reaction included")
+  sleep 3
+  check "the prompt went with the app" prompt_gone
+  check "the bundle stays v1" test "$(bundle_version "$app")" = 1000
+
+  t36_to_prompt T36-cancel || row_fail "cancel run: the administrator prompt never came after the download"
+  old="$(first_process)"
+  tell_person "Cancel the administrator prompt."
+  wait_for 90 prompt_gone || ROW_FAILS+=("the prompt did not go away")
+  sleep 5
+  check "v1 still runs after cancelling" kill -0 "$old"
+  check "the bundle is whole v1" analyze whole "$SAMPLES" --app "$app" --versions 1000
+  confirm "cancelling returns the card to Update available, no error" "Does the card read 'Update available' with no error shown?"
+  set_control ""
+  pressed="$(now_ms)"
+  tell_person "Press 'Update now' again and type the administrator password."
+  wait_for 180 analyze first-version "$SAMPLES" --app "$app" --version 2000 --since "$pressed" ||
+    row_fail "the password did not install v2"
+  after_exit "the installed update" "$old"
+  check "v2 runs with --after-update --with-window" process_runs "$NEW_PID" "$app" "--after-update --with-window"
+  wait_for 15 analyze window-open "$SAMPLES" || ROW_FAILS+=("v2 opened without its settings window")
+
+  t36_to_prompt T36-logout || row_fail "logout run: the administrator prompt never came after the download"
+  tell_person "With the prompt up, log out of $STD_USER (Apple menu, Log Out…). Log back in afterwards if you like."
+  wait_for 300 console_left || row_fail "the account was never logged out"
+  left="$(now_ms)"
+  wait_for 60 no_app_running || row_fail "the app was still running 60 s after the logout"
+  gone="$(now_ms)"
+  if [ $((gone - left)) -le 5000 ]; then
+    ROW_NOTES+=("logout during the prompt: the app ended $((gone - left)) ms after the console changed hands")
+  else
+    ROW_FAILS+=("logout during the prompt: the app ended $((gone - left)) ms after the console changed hands, wanted at most 5000")
+  fi
 }
+
+# inspect_app <pid>: heap and vmmap need the task port, which a hardened app gives only to root.
+inspect_app() {
+  local pid="$1" heap_out vmmap_out
+  heap_out="$(sudo -n heap "$pid" 2>&1)"
+  vmmap_out="$(sudo -n vmmap "$pid" 2>&1)"
+  grep -q "Process" <<<"$heap_out" || { echo "heap printed nothing usable: $(head -c 120 <<<"$heap_out")"; return 1; }
+  grep -q "Process" <<<"$vmmap_out" || { echo "vmmap printed nothing usable: $(head -c 120 <<<"$vmmap_out")"; return 1; }
+  if grep -q "SPUUpdater" <<<"$heap_out"; then echo "heap shows SPUUpdater"; return 1; fi
+  if grep -qi "WebKit" <<<"$vmmap_out"; then echo "vmmap shows WebKit"; return 1; fi
+  echo "heap: no SPUUpdater; vmmap: no WebKit"
+}
+
+row_T37() {
+  local app="/Applications/$APP_NAME" started pressed gone pid
+  keep_sudo || row_fail "sudo is not available"
+  use_feed v2 || row_fail "cannot render the feed"
+  set_control "payload=hold"
+  install_copy v1 "$app"
+  start_sampler T37 "$app"
+  started="$(now_ms)"
+  launch_hand "$app"
+  wait_count 30 feed "$started" 1 || row_fail "no probe"
+  tell_person "Press 'Update now' in the settings window."
+  wait_count 120 payload "$started" 1 || row_fail "Update now brought no asset request"
+  confirm "the button reads Updating…" "Does the card's button read 'Updating…'?"
+  ask_person "Press Return here, then at once press 'Quit Trackpad Launcher' in the settings window."
+  pressed="$(now_ms)"
+  wait_for 30 no_app_running || row_fail "the app did not end"
+  gone="$(now_ms)"
+  ROW_NOTES+=("the app ended $((gone - pressed)) ms after the Return, a person's reaction included")
+  check "the bundle stays v1" test "$(bundle_version "$app")" = 1000
+  sleep 120
+  check "nothing ran for 120 s" analyze pids "$SAMPLES" --since $((gone + 2000)) --max-concurrent 0
+  expect_count "launchd jobs now" -eq 0 count_jobs
+  expect_count "Sparkle helper processes now" -eq 0 count_sparkle_processes
+
+  reset_world
+  use_feed v1 || row_fail "cannot render the feed"
+  install_copy v1 "$app"
+  start_sampler T37-probe "$app"
+  started="$(now_ms)"
+  launch_hand "$app"
+  wait_count 30 feed "$started" 1 || row_fail "no probe"
+  sleep 15
+  pid="$(first_process)"
+  expect_count "Sparkle helper processes after a probe that found nothing" -eq 0 count_sparkle_processes
+  check "the app holds no updater and no WebKit" inspect_app "$pid"
+}
+
+# By hand: a restart or a shutdown ends this script with the Mac, so those cases are done from these steps and answered
+# in a later run; a case not answered fails the row.
+row_T41() {
+  local event state
+  use_feed v2 || row_fail "cannot render the feed"
+  install_copy v1 "/Applications/$APP_NAME"
+  set_control "payload=hold"
+  tell_person "Armed: v2 is offered, the asset is held mid-body, v1 sits in /Applications. For each case:
+  1. open -g '/Applications/$APP_NAME' --args --at-login   (and, for the window-open cases, also: open '/Applications/$APP_NAME')
+  2. Wait until $LOG shows the asset request, then do the event: log out, restart, or shut down.
+  3. A restart or a shutdown ends this script and its server. After logging in, run Scripts/update-e2e.sh T41 again and
+     answer the case you did; answer s to the others.
+  4. For the next login start, open -g '/Applications/$APP_NAME' --args --at-login with the server running and the hold removed."
+  for event in "log out" "restart" "shut down"; do
+    for state in "window closed" "window open"; do
+      confirm "$event with the download held, $state: it proceeded at once with no dialog, and the next login start checked again and installed" \
+        "Case: $event, $state. Did it proceed at once with no dialog, and did the next login start check again and install v2? (y, n, or s if not done)"
+    done
+  done
+}
+
 
 # ---------------------------------------------------------------------------------------------------------------
 # The report

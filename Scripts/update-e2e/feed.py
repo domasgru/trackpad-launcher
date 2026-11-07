@@ -8,6 +8,8 @@
 #       row that expects no download of it never needs a real archive
 #   feed.py replace <feed> <version> <old text> <new text>
 #       <version>'s item with that text replaced, for an enclosure that points at another file type or host
+#   feed.py set-channel <feed> <version> <channel>
+#       <version>'s item now belongs to that channel, which the default channel does not offer
 #   feed.py tamper-signature <feed> <version>
 #       <version>'s EdDSA signature with its first character changed
 import re
@@ -49,6 +51,9 @@ elif command == "replace":
     if old not in item:
         sys.exit(f"feed.py: the item of {version} holds no {old!r}")
     sys.stdout.write(text[: match.start()] + item.replace(old, new) + text[match.end() :])
+elif command == "set-channel":
+    item = match.group(0).replace("</item>", f"<sparkle:channel>{sys.argv[4]}</sparkle:channel>\n</item>")
+    sys.stdout.write(text[: match.start()] + item + text[match.end() :])
 elif command == "tamper-signature":
     item, count = re.subn(
         r'(sparkle:edSignature=")(.)', lambda found: found.group(1) + ("B" if found.group(2) == "A" else "A"), match.group(0)
