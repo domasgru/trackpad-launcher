@@ -9,6 +9,9 @@
 #   Scripts/update-e2e.sh --check       no credentials: builds ad-hoc signed, renders the feed through
 #                                       release.sh --feed-only, starts the server and the sampler, and writes the
 #                                       report with every row SKIPPED
+#   Scripts/update-e2e.sh --build-only  builds, signs and notarises every copy the rows use, into the cache, and stops:
+#                                       no copy is installed or opened and no person is needed, so a later run starts
+#                                       at its first row
 #
 # Without a "Developer ID Application" identity or the notarytool profile (NOTARY_PROFILE, default trackpad-launcher)
 # the script behaves as --check and says why. The gate in the app reads the process's real signature, so only
@@ -85,15 +88,17 @@ row_ids() { rows_table | cut -d'|' -f1; }
 # Arguments and mode
 
 CHECK=0
+BUILD_ONLY=0
 SELECTED=""
 for argument in "$@"; do
   case "$argument" in
     --check) CHECK=1 ;;
-    -h | --help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --build-only) BUILD_ONLY=1 ;;
+    -h | --help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     T[0-9]*)
       row_ids | grep -qx "$argument" || die "no row $argument; rows: $(row_ids | tr '\n' ' ')"
       SELECTED="$SELECTED $argument" ;;
-    *) die "usage: update-e2e.sh [--check] [row...]" ;;
+    *) die "usage: update-e2e.sh [--check | --build-only] [row...]" ;;
   esac
 done
 
@@ -1563,6 +1568,16 @@ main() {
   local kind=release
   ensure_build v1 1.0.0 1000 "$kind" || die "cannot build v1."
   ensure_build v2 2.0.0 2000 "$kind" || die "cannot build v2."
+
+  if [ "$BUILD_ONLY" = 1 ]; then
+    # The builds the rows make for themselves, so that no row waits on a notarisation.
+    ensure_build mid 1.1.0 1100 "$kind" || die "cannot build the 1.1.0 copy."
+    ensure_build v2dev 2.0.0 2000 appledev || die "cannot build v2 signed with Apple Development."
+    ensure_build v2plain 2.0.0 2000 unnotarised || die "cannot build v2 signed but not notarised."
+    ensure_build v2other 2.0.0 2000 "$kind" "$E2E_ID.other" || die "cannot build v2 with another bundle identifier."
+    log "built every copy into $CACHE"
+    exit 0
+  fi
 
   start_server
   frame_check
