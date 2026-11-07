@@ -9,7 +9,7 @@ import Observation
 /// reports launched and for every running app on an appearance change, and dropped when it reports an app terminated.
 /// All of it runs only while the swipe setting is on; off, the observers are removed and the cache is empty.
 final class SwitcherPresenter {
-    private let launcher: Launcher
+    private let readsReduceMotion: () -> Bool
     private let panel = SwitcherPanel()
     private let icons = AppIcons(side: SwitcherRowLayout.fullIconSide)
     private var observations: [Task<Void, Never>] = []
@@ -19,8 +19,14 @@ final class SwitcherPresenter {
     private var layout = SwitcherRowLayout(iconCount: 0, displayWidth: 0)
     private var lastStretch = 0.0
 
-    init(launcher: Launcher) {
-        self.launcher = launcher
+    /// `reduceMotion` is read at each render: the system's setting by default, injected by a bench. Builds the panel.
+    init(reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }) {
+        readsReduceMotion = reduceMotion
+    }
+
+    /// Called once by the shell: observes `launcher.switcher` into `render`, and `launcher.isSwipeOn` into the icon
+    /// passes, the first of them synchronous when the swipe setting is on.
+    func observe(_ launcher: Launcher) {
         if launcher.isSwipeOn { startIconPasses(waiting: true) }
         observations.append(
             Task { [weak self] in
@@ -111,12 +117,12 @@ final class SwitcherPresenter {
 
     /// nil hides: opacity to 0 over 150 ms, then out, unless a switcher opened meanwhile (Reduce motion: at once).
     /// A switcher that is not on screen yet, or whose row differs from the laid-out one, is laid out and shown first.
-    private func render(_ switcher: Switcher?) {
+    func render(_ switcher: Switcher?) {
         guard let switcher else {
             panel.dismiss()
             return
         }
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let reduceMotion = readsReduceMotion()
         if !panel.isPresented || switcher.row != laidOutRow { open(switcher.row) }
         let selection = switcher.selection
         panel.show(position: CGFloat(selection.position), selected: selection.selected, animatesSize: !reduceMotion)

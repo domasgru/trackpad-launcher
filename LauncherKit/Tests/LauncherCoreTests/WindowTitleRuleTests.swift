@@ -12,8 +12,9 @@ private let vsCodeInsiders = AppEntry(
     private func vsCodeWorld(
         visible: [String], minimised: [String] = [], untitled: Set<String> = []
     ) -> World {
-        let world = World.windowWorld(visible: visible, minimised: minimised, untitled: untitled)
+        let world = World.windowWorld()
         world.system.frontmost = vsCode
+        world.system.windows.set(visible: visible, minimised: minimised, untitled: untitled)
         return world
     }
 
@@ -31,8 +32,9 @@ private let vsCodeInsiders = AppEntry(
          shown: ["Apple — Start Page", "how-explorer.md — skills"]),
     ])
     func eachAppsRowsReadAsItsTitleRuleWordsThem(frontmost: AppEntry?, raw: [String], shown: [String]) {
-        let world = World.windowWorld(visible: raw)
+        let world = World.windowWorld()
         if let frontmost { world.system.frontmost = frontmost }
+        world.system.windows.set(visible: raw)
 
         world.windowSwipe(3.5, lift: false)
 

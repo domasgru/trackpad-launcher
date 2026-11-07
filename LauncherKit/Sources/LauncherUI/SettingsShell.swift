@@ -64,9 +64,11 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             currentPickAnimation = actions.pickAnimation
         #endif
         self.window = window
-        switcherPresenter = SwitcherPresenter(launcher: launcher)
-        windowSwitcherPresenter = WindowSwitcherPresenter(launcher: launcher)
+        switcherPresenter = SwitcherPresenter()
+        windowSwitcherPresenter = WindowSwitcherPresenter()
         super.init()
+        switcherPresenter.observe(launcher)
+        windowSwitcherPresenter.observe(launcher)
 
         window.delegate = self
         window.onCancel = { [launcher] in launcher.closeWindow() }

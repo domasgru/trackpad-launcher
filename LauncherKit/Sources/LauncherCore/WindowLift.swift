@@ -1,7 +1,7 @@
 import Foundation
 
 /// How raising windows one at a time, each to the front of its app, reaches an order.
-public enum WindowStack {
+public enum RaiseOrder {
     /// The shortest front part of `target` (front to back) that, raised back to front, leaves the target windows on
     /// screen in `target` order among themselves, with the first in front of every window of the app. `current`: the
     /// app's visible windows now, front to back, including any that opened since the begin. The first target window is
@@ -49,7 +49,9 @@ extension WindowSwitcher {
     ///   which covers restoring a minimised one and every row when every window is minimised. Lifting on the front
     ///   window therefore restores the begin order, silently.
     public func lift(now: FrontmostWindows) -> WindowLift {
-        guard case .app(let nowApp, let visible, let minimised) = now, nowApp.url == app.url else { return .nothing }
+        guard case .app(let nowApp, _, .windows(let windows)) = now, nowApp.url == app.url else { return .nothing }
+        let visible = windows.visible
+        let minimised = windows.minimised
         let selected = rows[selection.selected].window
         let onScreen = visible.map(\.id)
         let open = Set(onScreen + minimised.map(\.id))
@@ -61,6 +63,6 @@ extension WindowSwitcher {
         }
         let target = [selected] + visibleAtBegin.filter { $0 != selected && open.contains($0) }
         return WindowLift(
-            raises: WindowStack.raises(current: onScreen, target: target), playsHaptic: selected != frontWindow)
+            raises: RaiseOrder.raises(current: onScreen, target: target), playsHaptic: selected != frontWindow)
     }
 }

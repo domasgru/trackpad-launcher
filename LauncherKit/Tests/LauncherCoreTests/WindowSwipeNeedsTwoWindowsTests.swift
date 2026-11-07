@@ -34,7 +34,7 @@ import LauncherCore
         let world = World.windowWorld(
             visible: Array(names.prefix(listing.visible)), minimised: Array(names.dropFirst(listing.visible)),
             fullScreenFront: listing.fullScreenFront)
-        world.system.windows.answers = listing.answers
+        world.system.windows.answering = listing.answers ? .now : .held
         let script = thumb.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 5))
 
         let history = world.playFrameByFrame(script)
@@ -53,7 +53,7 @@ import LauncherCore
     }
 
     enum Front: String, CaseIterable, Sendable {
-        case textEditOneWindow, finderNoWindows, noActiveApp, safariFullScreen
+        case textEditOneWindow, finderNoWindows, noActiveApp, safariFullScreen, safariHeld, safariNever
     }
 
     enum Hand: String, CaseIterable, Sendable {
@@ -97,6 +97,12 @@ import LauncherCore
         case .finderNoWindows: world = .windowWorld(frontmost: "Finder")
         case .noActiveApp: world = .windowWorld(frontmost: nil)
         case .safariFullScreen: world = .windowWorld(visible: ["Film", "Docs", "Mail"], fullScreenFront: true)
+        case .safariHeld:
+            world = .windowWorld()
+            world.system.windows.set(visible: ["Docs", "Mail"], answering: .held)
+        case .safariNever:
+            world = .windowWorld()
+            world.system.windows.set(visible: ["Docs", "Mail"], answering: .never)
         }
         world.launcher.setAssignment(.app(world.app("Notes")), for: .one)
         world.launcher.setAssignment(.app(world.app("Mail")), for: .two)
@@ -129,6 +135,7 @@ import LauncherCore
             #expect(seen.frames.allSatisfy { $0.windowSwitcher == nil && $0.switcher == nil }, "\(hand)")
             #expect(on.hardware.windowSwipeAnswers == [false], "\(hand)")
             #expect(on.system.windows.reads == 1, "\(hand)")
+            #expect(on.system.frontmostDeadlines == [.milliseconds(200)], "\(hand)")
 
             let script = hand.script.frames
             let fingersDown = script.indices.filter { script[$0].touches.count >= 3 }
@@ -148,6 +155,14 @@ import LauncherCore
                 #expect(seen.pulses.map(\.haptic) == [.gesture], "\(hand)")
             }
         }
+    }
+
+    @Test func aWindowSwipeAsksForTheWindowsWithinTwoHundredMillisecondsAtItsStartAndAtItsLift() {
+        let world = World.windowWorld(visible: ["Docs", "Mail"])
+
+        world.windowSwipe(5)
+
+        #expect(world.system.frontmostDeadlines == [.milliseconds(200), .milliseconds(200)])
     }
 
     @Test func aWindowThatOpensMidSlideDoesNotMakeItAWindowSwipeButCountsForTheNextSlide() {

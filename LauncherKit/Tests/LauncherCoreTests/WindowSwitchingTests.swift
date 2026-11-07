@@ -209,20 +209,22 @@ import LauncherCore
     @Test(arguments: ["the app stops answering", "Notes becomes the frontmost app", "every listed window closes"])
     func whenTheSelectedWindowCannotBeReachedTheLiftChangesNothingAndIsSilent(change: String) {
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
+        let safari = world.system.windows
         world.launcher.openedByHand()
         let hand = world.windowSwipe(3.5, 12, lift: false)
-        let raisedWhileSliding = world.system.windows.raised.count
-        let before = stack(world)
+        let raisedWhileSliding = safari.raised.count
+        let before = safari.onScreenTitles
 
         switch change {
-        case "the app stops answering": world.system.windows.answers = false
+        case "the app stops answering": safari.answering = .held
         case "Notes becomes the frontmost app": world.makeFrontmost("Notes")
         default: for title in ["Docs", "Mail", "News"] { world.system.windows.close(title) }
         }
         world.play(hand.lift())
 
-        #expect(world.system.windows.raised.dropFirst(raisedWhileSliding).map(\.isEmpty) == [true])
-        #expect(stack(world) == (change == "every listed window closes" ? [] : before))
+        let front = world.system.windows
+        #expect(front.raised.dropFirst(front === safari ? raisedWhileSliding : 0).map(\.isEmpty) == [true])
+        #expect(safari.onScreenTitles == (change == "every listed window closes" ? [] : before))
         #expect(world.hardware.feedback.isEmpty)
         #expect(world.launcher.isWindowOpen)
     }

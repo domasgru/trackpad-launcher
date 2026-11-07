@@ -374,7 +374,7 @@ public final class Launcher {
         case .began:
             // A slide up or down is a window swipe only when the one read lists two or more rows. Unconfirmed, the
             // recognizer makes it the slide the setting off would have made, before its next frame.
-            guard activity.isActive, let content = WindowSwitcher.Content(system.frontmostWindows()) else { return }
+            guard activity.isActive, let content = WindowSwitcher.Content(system.frontmostWindows(within: GestureRules.windowReadDeadline)) else { return }
             hardware.confirmWindowSwipe(on: event.trackpad)
             // One switcher at a time: a second trackpad's window swipe runs its course with none, as its swipe would.
             guard shown == nil else { return }
@@ -395,7 +395,7 @@ public final class Launcher {
             guard case .windows(let open)? = shown, open.trackpad == event.trackpad else { return }
             shown = nil
             // The second read: the lift follows the windows as they are now, whatever the raises while sliding did.
-            let lift = open.lift(now: system.frontmostWindows())
+            let lift = open.lift(now: system.frontmostWindows(within: GestureRules.windowReadDeadline))
             if lift.playsHaptic {
                 hardware.playFeedback(.gesture, on: event.trackpad)
             }

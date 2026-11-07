@@ -310,10 +310,36 @@ import LauncherCore
 
     func runningApps() -> RunningApps { RunningApps(frontmost: frontmost, apps: running) }
 
-    /// The frontmost app's windows the next `frontmostWindows()` answers.
-    let windows = FakeWindows()
+    private let windowNumbers = WindowNumbers()
+    private var windowSets: [URL: FakeWindows] = [:]
+    private let noAppWindows: FakeWindows
+    /// The app whose reads are `.ownProcess`: Trackpad Launcher.
+    var ownApp: AppEntry?
+    /// The deadline each `frontmostWindows(within:)` call asked for, in order.
+    private(set) var frontmostDeadlines: [Duration] = []
 
-    func frontmostWindows() -> FrontmostWindows { windows.read(frontmost: frontmost) }
+    init() { noAppWindows = FakeWindows(numbers: windowNumbers) }
+
+    /// The windows of this app, one set per running location.
+    func windows(of app: AppEntry) -> FakeWindows {
+        if let windows = windowSets[app.url] { return windows }
+        let windows = FakeWindows(numbers: windowNumbers)
+        windowSets[app.url] = windows
+        return windows
+    }
+
+    /// The frontmost app's windows; with no frontmost app, a set no app reads.
+    var windows: FakeWindows { frontmost.map { windows(of: $0) } ?? noAppWindows }
+
+    func frontmostWindows(within deadline: Duration) -> FrontmostWindows {
+        frontmostDeadlines.append(deadline)
+        guard let frontmost else {
+            noAppWindows.noteRead()
+            return .noApp
+        }
+        let fake = windows(of: frontmost)
+        return .app(frontmost, fake.launch, fake.read(isOwnProcess: ownApp?.url == frontmost.url))
+    }
 
     func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
 
@@ -386,38 +412,78 @@ import LauncherCore
     func report(_ progress: LaunchProgress, for app: BundleID) { onLaunchProgress?(app, progress) }
 }
 
-/// The frontmost app's window stack, by name: one fixed `WindowID` per name for the life of the test. A window's title is
-/// its name unless the name is marked untitled. Carries no policy: reads report full-screen and minimised windows as
-/// they are, uncut, and raises do what the system's raise does and nothing more.
+/// The one counter every app's windows draw numbers from, as the window server's numbers rise in creation order.
+@MainActor final class WindowNumbers {
+    private var last: UInt32 = 999
+    private var launches = 0
+
+    func nextWindow() -> WindowID {
+        last += 1
+        return WindowID(rawValue: last)
+    }
+
+    func nextLaunch() -> AppLaunch {
+        launches += 1
+        return AppLaunch("fake-launch-\(launches)")
+    }
+}
+
+/// One app's windows, by name: one fixed `WindowID` per name for the life of the test, given when the window is
+/// created. A window's title is its name unless the name is marked untitled. Carries no policy: reads report
+/// full-screen and minimised windows as they are, uncut, and raises do what the system's raise does and nothing more.
 @MainActor final class FakeWindows {
+    enum Answering {
+        /// Answers at once.
+        case now
+        /// Answers, but later than any deadline a read allows.
+        case held
+        /// Never answers.
+        case never
+    }
+
     /// Front to back.
     private(set) var onScreenTitles: [String] = []
     /// In the order the app lists them.
     private(set) var minimisedTitles: [String] = []
     private var fullScreenFront = false
     private var untitled: Set<String> = []
-    /// false: the app does not answer in time, so reads list nothing.
-    var answers = true
+    var answering = Answering.now
     /// true: raises are logged and change nothing, as with an app that ignores them.
     var dropsRaises = false
     /// How many times the windows were read.
     private(set) var reads = 0
     /// Every `raise(_:)` call, in order, empty ones included.
     private(set) var raised: [[WindowID]] = []
+    private let numbers: WindowNumbers
     private var ids: [String: WindowID] = [:]
     /// The names the latest read listed: the only windows a raise may touch.
     private var listed: Set<String> = []
+    /// The app's current launch, which its frontmost reads carry.
+    let launch: AppLaunch
+
+    init(numbers: WindowNumbers) {
+        self.numbers = numbers
+        launch = numbers.nextLaunch()
+    }
 
     /// `untitled`: names whose windows report an empty title.
-    func set(visible: [String], minimised: [String] = [], fullScreenFront: Bool = false, untitled: Set<String> = []) {
+    func set(
+        visible: [String], minimised: [String] = [], fullScreenFront: Bool = false, untitled: Set<String> = [],
+        answering: Answering = .now
+    ) {
         onScreenTitles = visible
         minimisedTitles = minimised
         self.fullScreenFront = fullScreenFront
         self.untitled = untitled
+        self.answering = answering
+        for title in visible + minimised { _ = id(title) }
     }
 
     /// A new visible window, in front.
-    func open(_ title: String) { onScreenTitles.insert(title, at: 0) }
+    func open(_ title: String) {
+        _ = id(title)
+        onScreenTitles.insert(title, at: 0)
+    }
 
     /// The user minimises a visible window; it goes last among the minimised ones.
     func minimise(_ title: String) {
@@ -433,29 +499,34 @@ import LauncherCore
 
     func id(_ title: String) -> WindowID {
         if let id = ids[title] { return id }
-        let id = WindowID(rawValue: UInt32(1000 + ids.count))
+        let id = numbers.nextWindow()
         ids[title] = id
         return id
     }
 
-    func read(frontmost: AppEntry?) -> FrontmostWindows {
+    /// A read that found no app to ask.
+    func noteRead() {
         reads += 1
         listed = []
-        guard let frontmost else { return .noApp }
-        guard answers else { return .app(frontmost, visible: [], minimised: []) }
+    }
+
+    func read(isOwnProcess: Bool) -> WindowRead {
+        noteRead()
+        if isOwnProcess { return .ownProcess }
+        guard answering == .now else { return .unanswered }
         listed = Set(onScreenTitles + minimisedTitles)
         let visible = onScreenTitles.enumerated().map { index, title in
             AppWindow(id: id(title), title: self.title(of: title), isFullScreen: index == 0 && fullScreenFront)
         }
         let minimised = minimisedTitles.map { AppWindow(id: id($0), title: title(of: $0)) }
-        return .app(frontmost, visible: visible, minimised: minimised)
+        return .windows(AppWindows(visible: visible, minimised: minimised))
     }
 
     /// The last first, each to the front of the visible stack; a minimised one is restored. Closed windows and windows
     /// the latest read did not list are skipped.
     func raise(_ frontToBack: [WindowID]) {
         raised.append(frontToBack)
-        guard answers, !dropsRaises else { return }
+        guard answering == .now, !dropsRaises else { return }
         for id in frontToBack.reversed() {
             guard let name = ids.first(where: { $0.value == id })?.key, listed.contains(name) else { continue }
             if let index = minimisedTitles.firstIndex(of: name) {

@@ -5,7 +5,7 @@ import LauncherCore
     private let overlay: LaunchOverlay
     private let bounces: BounceOverlay
     private let reader = RunningAppsReader()
-    private let windows = FrontmostAppWindows()
+    private let windows = AppWindowReader()
     private let promptsUser: Bool
     /// One per watched launch, from `bringToFrontWatching` to `endLaunch`.
     private var launches: [BundleID: Launch] = [:]
@@ -84,7 +84,9 @@ import LauncherCore
 
     public func runningApps() -> RunningApps { reader.read() }
 
-    public func frontmostWindows() -> FrontmostWindows { windows.read() }
+    public func frontmostWindows(within deadline: Duration) -> FrontmostWindows {
+        windows.readFrontmost(within: deadline)
+    }
 
     public func raiseWindows(_ frontToBack: [WindowID]) { windows.raise(frontToBack) }
 

@@ -288,6 +288,7 @@ extension World {
     /// it the active app while its Dock icon shows.
     func openSettings() {
         let own = trackpadLauncher
+        system.ownApp = own
         launcher.openedByHand()
         listFirst(own)
     }

@@ -7,7 +7,7 @@ import Observation
 /// take the frontmost app's icon from the running app (about 0.1 ms), so it needs none of the swipe setting's icon
 /// passes. Each window swipe that shows previews starts one capture, whose pictures go straight into the panel.
 final class WindowSwitcherPresenter {
-    private let launcher: Launcher
+    private let readsReduceMotion: () -> Bool
     private let look = WindowSwitcherLook.shipped
     private let panel: WindowSwitcherPanel
     private let icons = AppIcons(side: WindowColumnLayout.iconSide)
@@ -19,9 +19,14 @@ final class WindowSwitcherPresenter {
     private var layout = WindowColumnLayout(rowCount: 0, displayHeight: 0)
     private var lastStretch = 0.0
 
-    init(launcher: Launcher) {
-        self.launcher = launcher
+    /// `reduceMotion` is read at each render: the system's setting by default, injected by a bench. Builds the panel.
+    init(reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }) {
+        readsReduceMotion = reduceMotion
         panel = WindowSwitcherPanel(look: look)
+    }
+
+    /// Called once by the shell: observes `launcher.windowSwitcher` into `render`.
+    func observe(_ launcher: Launcher) {
         observation = Task { [weak self] in
             for await shown in Observations({ launcher.windowSwitcher }) { self?.render(shown) }
         }
@@ -32,10 +37,10 @@ final class WindowSwitcherPresenter {
         capture?.cancel()
     }
 
-    private var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    private var reduceMotion: Bool { readsReduceMotion() }
 
     /// nil hides with the overlay's fade. A new window swipe's switcher is laid out and shown first.
-    private func render(_ switcher: WindowSwitcher?) {
+    func render(_ switcher: WindowSwitcher?) {
         guard let switcher else {
             capture?.cancel()
             capture = nil

@@ -22,17 +22,6 @@ public struct AppWindow: Equatable, Sendable, Identifiable {
     }
 }
 
-/// One read of the frontmost app's windows.
-public enum FrontmostWindows: Equatable, Sendable {
-    /// There is no active app.
-    case noApp
-    /// `visible`: its windows on the current Space, front to back; panels, palettes, sheets and other helpers left
-    /// out. `minimised`: its minimised windows, in the order the app lists them. Both empty when it has none, when
-    /// Accessibility is missing, when the app did not answer in time, or when it is Trackpad Launcher, whose one window is
-    /// never listed.
-    case app(AppEntry, visible: [AppWindow], minimised: [AppWindow])
-}
-
 /// The window switcher during one window swipe. Its content is fixed when the window swipe begins: a window that opens
 /// later is not added, and one that closes stays listed. The selection follows the travel.
 public struct WindowSwitcher: Equatable, Sendable {
@@ -40,15 +29,7 @@ public struct WindowSwitcher: Equatable, Sendable {
     public struct Content: Equatable, Sendable {
         /// Whose windows these are; their rows show its icon.
         public let app: AppEntry
-        public let windows: WindowList
-    }
-
-    /// Two to `GestureRules.windowSwitcherMaxRows` windows in all.
-    public enum WindowList: Equatable, Sendable {
-        /// The front window, the other visible windows front to back, then the minimised ones in the app's order.
-        case front(AppWindow, others: [AppWindow], minimised: [AppWindow])
-        /// Every listed window is minimised: there is no front window.
-        case minimisedOnly(first: AppWindow, rest: [AppWindow])
+        let pick: WindowPick
     }
 
     public enum Row: Equatable, Sendable {
@@ -96,16 +77,8 @@ public struct WindowSwitcher: Equatable, Sendable {
     public var rows: [Row] { Self.rows(of: content) }
 
     private static func rows(of content: Content) -> [Row] {
-        let visible: [AppWindow]
-        let minimised: [AppWindow]
-        switch content.windows {
-        case .front(let front, let others, let rest):
-            visible = [front] + others
-            minimised = rest
-        case .minimisedOnly(let first, let rest):
-            visible = []
-            minimised = [first] + rest
-        }
+        let visible = (content.pick.front.map { [$0] } ?? []) + content.pick.others
+        let minimised = content.pick.minimised
         func title(_ window: AppWindow, at index: Int) -> String {
             window.title.isEmpty
                 ? Copy.untitledWindow(of: content.app.name, position: index + 1)
@@ -126,7 +99,7 @@ public struct WindowSwitcher: Equatable, Sendable {
 
     /// The app's window in front when the window swipe began. nil when every listed window is minimised.
     public var frontWindow: WindowID? {
-        if case .front(let front, _, _) = content.windows { front.id } else { nil }
+        content.pick.front?.id
     }
 
     /// The window that comes to the front while its row is selected. nil on a minimised row.
@@ -137,30 +110,12 @@ public struct WindowSwitcher: Equatable, Sendable {
 
 extension WindowSwitcher.Content {
     /// The one parse from what the system read to what the switcher lists, and so whether a slide up or down is a
-    /// window swipe at all:
-    /// - A full-screen front window is the single row; other full-screen windows are left out.
-    /// - Visible windows come before minimised ones, and the list is cut at `GestureRules.windowSwitcherMaxRows`.
-    /// - nil for `.noApp`, and for fewer than two rows after these rules: one window, an only window minimised, no
-    ///   windows, a full-screen front window, or an app that did not answer (its read lists nothing).
+    /// window swipe at all. nil for `.noApp`, an app that did not answer, Trackpad Launcher itself, and for fewer than
+    /// two windows in the pick: one window, an only window minimised, no windows, or a full-screen front window.
     package init?(_ read: FrontmostWindows) {
-        guard case .app(let app, let visible, let minimised) = read else { return nil }
-        let limit = GestureRules.windowSwitcherMaxRows
-        let windows: WindowSwitcher.WindowList
-        let count: Int
-        if let front = visible.first {
-            guard !front.isFullScreen else { return nil }
-            let others = Array(visible.dropFirst().filter { !$0.isFullScreen }.prefix(limit - 1))
-            let rest = Array(minimised.prefix(limit - 1 - others.count))
-            windows = .front(front, others: others, minimised: rest)
-            count = 1 + others.count + rest.count
-        } else if let first = minimised.first {
-            let rest = Array(minimised.dropFirst().prefix(limit - 1))
-            windows = .minimisedOnly(first: first, rest: rest)
-            count = 1 + rest.count
-        } else {
-            return nil
-        }
-        guard count >= 2 else { return nil }
-        self.init(app: app, windows: windows)
+        guard case .app(let app, _, .windows(let windows)) = read else { return nil }
+        let pick = WindowPick(windows)
+        guard pick.count >= 2 else { return nil }
+        self.init(app: app, pick: pick)
     }
 }

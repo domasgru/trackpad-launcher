@@ -80,6 +80,7 @@ import LauncherCore
 
     @Test func theListIsFixedWhenTheWindowSwipeBegins() {
         let world = World.windowWorld(visible: ["Docs", "Mail"])
+        let safari = world.system.windows
         let hand = world.windowSwipe(3.5, lift: false)
 
         world.system.windows.open("Draft")
@@ -89,7 +90,7 @@ import LauncherCore
 
         #expect(titles(world) == ["Docs", "Mail"])
         #expect(selected(world) == 1)
-        #expect(world.system.windows.reads == 1)
+        #expect(safari.reads == 1)
     }
 
     @Test func minimisedWindowsComeLastAsMinimisedRows() {
