@@ -11,6 +11,14 @@
 - Non-goals gained rollback and fast user switching.
 - Not taken: moving the Sparkle choice out of the Solution, because the user chose it and planning needs it.
 
+Revision 2, after the user's change of rules:
+- A window opened during a login update was undefined → a new requirement: no check, no card, and the new version opens with its window if one was open.
+- A login download failure had no rule → it waits for the next login or the card.
+- Every window opening starts blank, so the card appears only after that opening's check.
+- A late failure on the card path had no rule → a working copy runs within 10 seconds, with its window.
+- "No trackpad cost" is verified by review and a source check, because the user does not want it measured.
+- Not taken: moving Sparkle out of the Solution, and cutting the arrow, because the user asked for both.
+
 ## Plan
 - Both runners finished, no dropout. They converged on the core alone: automatic path, always held, a one-shot job, `--after-update`, `Updater` kept in Core, one home for Sparkle's private facts.
 - Base: candidate 1. Rubric and cross-judge agreed, 26 to 17, on every criterion.
@@ -37,6 +45,22 @@
 - Test planner: the job's budget ran 4 to 5 s, not 5 → `-le`, at least 5 and at most 6, and the proof uses 5 s, because a budget of 1 s cannot show C2's drift.
 - Test planner: "gestures within 10 seconds" has no signal outside the app → a person's tap, and the design says so. `provenOn`'s test sits in `LauncherPlatformTests`, which can see it.
 - `docs/architecture.md` and `docs/domain-model.md` rewritten with this plan, so S12 confirms them against what shipped rather than writing them.
+
+Revision 2:
+- Sparkle built from source with `SPARKLE_BUILD_UI_BITS=0` and the legacy parts off, in this session: the framework links neither WebKit nor AppKit (2.2 MB against 20 MB), so the human's stop-and-report condition did not arise. Its two signing tools build from the same clone.
+- Reviewer: on a standard account Sparkle's installer runs as root and extracts under root's caches, so a check at the hold point reads nothing there and every card update would be refused → the genuineness check moved to Sparkle's download-finished callback, on the engine's own expansion of the user-owned download, which also refuses an archive before any installer exists.
+- Reviewer: a *dismiss* at the ready-to-install hold refuses nothing (Sparkle's header: the update may still install at the application's end), and the old veto's job layer cannot reach the system domain → a refused archive is removed at the download, and a discard replies *skip*, which cancels the installer in either domain without skipping the version.
+- Reviewer: with the installer launcher service left out, the launcher runs the administrator prompt synchronously on the main queue, freezing gestures, Quit and a logout while it is up → the launcher service is kept and enabled, in its own process; the downloader service stays out. Reported to the human as a departure from "least memory", since the process exists only while the installer is launched.
+- Reviewer: a dropped probe followed by a returned connection could start a login cycle beside the still-running probe → the model keeps a `droppedProbe` phase until the probe answers, asks the engine for nothing meanwhile, and the in-memory engine counts overlapping cycles; `dropProbe` left the port.
+- Reviewer: a card update failing with the window closed reached the card phase, so the next opening would show a stale card and make no check → it rests instead when the window is closed.
+- Reviewer: a drop and return during a login retry that then failed was lost → the retry phase records the drop and re-arms a fresh retry; the retry's spent bit is carried through the window's check.
+- Reviewer: `showUpdateFound` for an update whose installer already runs would send Sparkle's own relaunch → the driver replies by stage, *skip* for that one.
+- Reviewer: R17 had both a test row and a by-hand check; R24's press of the old card needs a published release → T6 proves R3 only; R24's press is a post-publish step.
+- Reviewer: *Update now* reads the feed again, which R7 does not list → stated in the plan and the docs, counted by the E2E row, flagged for the human.
+- Reviewer: the design's path data was outside the repo → both subpaths are in the plan.
+- Reviewer: the quit-during-update sentence misstated when Sparkle's installer commits (it commits when it starts, before stage 1) → corrected, and the gap it implied is closed by the earlier check.
+- Reviewer: rows that could not fail or lacked a source (the trackpad sentence in T4, "the same version" in T13, T28's 2 s and 1 s), R13's grey-out and R21's real logout without rows, S3 naming rows whose phases arrive in S4, R9 and R10 unnamed in S3 → fixed, with T38 to T41 added and the slices' lists split.
+- Reviewer, not taken: measuring the extraction's time on main (the human asked for no measurements; it is a fraction of a second once per release and named in the architecture).
 
 ## Implement
 - Rebased onto `origin/main` (1.0.15) before S1. The settings redesign conflicted in `docs/architecture.md` and `docs/domain-model.md` → kept main's layout and the gear, without the update card.

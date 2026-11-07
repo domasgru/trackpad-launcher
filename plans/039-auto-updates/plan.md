@@ -1,56 +1,132 @@
-# Plan: Automatic updates
+# Plan: Updates at login, and a card for the rest
+
+Revision 2. The user replaced the first revision's rules: no background schedule, no wait for an idle trackpad, an update card instead of no interface. The design after the requirements is revision 2's, as changes on top of what the branch holds; revision 1's design text is in the git history.
 
 ## Problem statement
 
-A new version reaches a user only if they open the settings window and press *Update now*. Trackpad Launcher runs in the background, so most users rarely open that window. They stay on old versions with bugs that are already fixed. The update card also asks users to manage something they should never have to think about.
+A new version reaches a user only if they open the settings window and press *Update now*. Trackpad Launcher runs in the background, so most users rarely open that window. They stay on old versions with bugs that are already fixed.
+
+Revision 1 made updates fully automatic, but it paid for that in places this app must not pay. It watched every trackpad touch, ran a daily timer, and kept Sparkle and WebKit loaded all day.
 
 ## Solution
 
-Trackpad Launcher keeps itself up to date with no user action. It checks for a new version when it starts and every 24 hours after that. It downloads a new version in the background. It installs the version when the user is not using it, then restarts silently with no window, no Dock icon and no prompt. The update card goes away, and the settings window shows nothing about updates.
+Each login or restart, a copy of Trackpad Launcher that can write to its own bundle checks for a new version. If one exists, it downloads and installs it straight away and restarts silently. Gestures may stop for up to 10 seconds at login, and that is fine: updates are rare.
 
-Updating uses Sparkle 2, the standard updater for Mac apps outside the App Store. It replaces Trackpad Launcher's own download and install code.
+At any other time, nothing updates by itself. Opening the settings window makes one check. If a new version exists, an update card shows at the top of the window (design: [Figma, node 2200-2970](https://www.figma.com/design/EB5ptBWZnAot7J3vx3cYLw/TapLauncher?node-id=2200-2970)). *Update now* downloads and installs it straight away, and the new version opens with its settings window.
 
-The privacy rule becomes: Trackpad Launcher makes no network calls but one kind: a copy signed with a Developer ID in /Applications that can write to its own bundle checks a public update list on GitHub at each start and every 24 hours, and downloads a new version from GitHub releases; no logging. `docs/domain-model.md` drops *Update card* and redefines *Update check* and *Newer version*.
+Updates add nothing to trackpad use. The app holds as little of the updater in memory as it can.
+
+Updating uses Sparkle 2, built without its user interface, so WebKit is not loaded.
+
+The privacy rule becomes: Trackpad Launcher makes no network calls but one kind: a copy signed with a Developer ID in /Applications checks a public update list on GitHub at each login start, if it can write to its own bundle, and each time its settings window opens, and downloads a new version from GitHub releases at a login start or when the user presses *Update now*; no logging, except what Sparkle writes to the Mac's local system log, which never leaves the Mac.
+
+`docs/product-overview.md`, `docs/domain-model.md` and `docs/architecture.md` change to match.
 
 ## Requirements
 
-### R1. Trackpad Launcher checks for updates on its own
+### R1. Each login start checks for a newer version
 
-A copy signed with a Developer ID in /Applications that can write to its own bundle MUST check for a newer version when it starts, at login or by hand, and every 24 hours while it runs. The check MUST NOT depend on the settings window. A check that fails for lack of a network connection MUST run again once a connection is available, not at the next 24-hour mark. The 24 hours are clock time: a Mac that sleeps past the mark checks when it wakes.
+A copy signed with a Developer ID in /Applications that can write to its own bundle MUST check for a newer version once when macOS starts it at login, restart included. A check that fails for lack of a network connection MUST run again each time a connection returns, until a check completes.
 
-#### Scenario: Login start
+#### Scenario: Restart with a newer version out
 
-- **GIVEN** version 1.0.0 is installed and version 1.1.0 has been released
-- **WHEN** macOS starts Trackpad Launcher at login and the user never opens the settings window
-- **THEN** version 1.1.0 downloads, as a network monitor shows, and installs once R8's conditions hold
-
-#### Scenario: Running for days
-
-- **GIVEN** Trackpad Launcher has run for three days without a restart
-- **WHEN** version 1.1.0 is released
-- **THEN** version 1.1.0 downloads within 24 hours, given a network connection
+- **GIVEN** version 1.0.0 is installed, version 1.1.0 has been released, and macOS starts Trackpad Launcher at login
+- **WHEN** the start finishes
+- **THEN** a network monitor shows one update check and the download of version 1.1.0
 
 #### Scenario: Network arrives after login
 
-- **GIVEN** login completes before Wi-Fi connects and a newer version exists
+- **GIVEN** login completes before Wi-Fi connects, and a newer version exists
 - **WHEN** the connection comes up a few minutes later
-- **THEN** the check runs and the newer version downloads that day
+- **THEN** the check runs and the newer version installs
 
-#### Scenario: Sleeping past the mark
+### R2. A login start installs straight after the download
 
-- **GIVEN** the last check ran 30 hours ago and the Mac slept for most of them
-- **WHEN** the Mac wakes
-- **THEN** a check runs
+When a login start finds a newer version, Trackpad Launcher MUST download it and install it as soon as the download finishes. It MUST wait for nothing else: not for the trackpad, a gesture or the settings window. A login download that fails MUST NOT retry until the next login start or the card.
 
-### R2. Other builds and copies never update
+#### Scenario: User is already using the trackpad
 
-A development build, a copy outside /Applications and a copy showing the move dialog MUST make no network request for updates. A development build is a build not signed with a Developer ID. Once a move puts a copy in /Applications, the moved copy checks as in R1.
+- **GIVEN** a login start found version 1.1.0 and the user is swiping on the trackpad
+- **WHEN** the download finishes
+- **THEN** the install starts at once, and version 1.1.0 runs within 10 seconds of the download finishing
+
+#### Scenario: Connection lost during a login download
+
+- **GIVEN** a login download runs
+- **WHEN** the Wi-Fi drops
+- **THEN** nothing shows, version 1.0.0 keeps running, and the next login start checks again
+
+### R3. A login install restarts silently
+
+After a login install, unless R4's window was open, the new version MUST run with no settings window, no Dock icon, no dialog and no permission prompt. It MUST make no update check at that start. Gestures MUST work again within 10 seconds of the old version stopping.
+
+#### Scenario: Silent restart
+
+- **GIVEN** version 1.0.0 runs from a login start and version 1.1.0 is downloaded
+- **WHEN** the update installs
+- **THEN** version 1.1.0 runs from /Applications, no window or Dock icon appears, keyboard focus stays in the user's app, gestures work, and exactly one Trackpad Launcher runs
+
+### R4. The settings window during a login update
+
+While a login start downloads or installs an update, opening the settings window MUST make no check and MUST show no card. The update MUST carry on. When the window is open at the moment the old version stops, the new version MUST open with its settings window.
+
+#### Scenario: Opening the window during a login download
+
+- **GIVEN** a login download runs
+- **WHEN** the user opens the settings window and leaves it open
+- **THEN** the window shows no card, no second download starts, and version 1.1.0 opens with its settings window
+
+### R5. Each opening of the settings window checks
+
+When the settings window goes from closed to open, a copy signed with a Developer ID in /Applications MUST make one update check, unless an update is already under way (R4, R13). The window MUST open at once, without waiting for the check. Restoring a minimised or hidden window or bringing it to the front MUST NOT check. A check still running when the window closes MUST be dropped. Every opening starts with no card: the card appears only after that opening's check finds a newer version.
+
+#### Scenario: Reopening an open window
+
+- **GIVEN** the settings window is open behind another app's window
+- **WHEN** the user opens Trackpad Launcher from Spotlight
+- **THEN** the window comes to the front and no second check runs
+
+#### Scenario: Closing during a check
+
+- **GIVEN** a newer version exists and the user opens the settings window
+- **WHEN** the user closes the window within a second of opening it
+- **THEN** no card ever appears and Trackpad Launcher makes no later request
+
+#### Scenario: Reopened offline
+
+- **GIVEN** an earlier opening showed the card for 1.1.0 and the Mac is now offline
+- **WHEN** the user opens the window again
+- **THEN** no card and no error show
+
+### R6. A window check downloads nothing
+
+A check from the settings window MUST download nothing until the user presses *Update now*.
+
+#### Scenario: Opening with a newer version out
+
+- **GIVEN** version 1.0.0 has run for a week and version 1.1.0 has been released
+- **WHEN** the user opens Trackpad Launcher from Spotlight
+- **THEN** the window opens at once, the update card appears moments later, and no download starts
+
+### R7. No other network use
+
+Trackpad Launcher MUST make no update request outside R1, R5 and a download from R2 or *Update now*. It MUST run no update schedule or timer.
+
+#### Scenario: Running for a week
+
+- **GIVEN** Trackpad Launcher has run for a week since login, with its window closed and no newer version at login
+- **WHEN** version 1.1.0 is released and days pass
+- **THEN** it makes no network request
+
+### R8. Other builds and copies never update
+
+A development build, a copy outside /Applications and a copy showing the move dialog MUST make no update request and MUST show no update card. A development build is one not signed with a Developer ID.
 
 #### Scenario: Development build
 
-- **GIVEN** a development build runs and a newer version has been released
-- **WHEN** a day passes
-- **THEN** it makes no network request
+- **GIVEN** a development build and a newer version
+- **WHEN** the user opens its settings window
+- **THEN** it makes no network request and shows no card
 
 #### Scenario: Copy in ~/Applications
 
@@ -58,15 +134,9 @@ A development build, a copy outside /Applications and a copy showing the move di
 - **WHEN** a day passes
 - **THEN** it makes no network request and stays on its version
 
-#### Scenario: Moved to /Applications
+### R9. A request reveals nothing about the user
 
-- **GIVEN** a copy opened from ~/Downloads
-- **WHEN** the user chooses *Move to Applications*
-- **THEN** the installed copy makes an update check
-
-### R3. A check reveals nothing about the user
-
-Every request the updater makes, including the download, MUST carry nothing that identifies the user, the Mac, the app's version or the macOS version. Their headers MUST be the same on every Mac and every version. Trackpad Launcher MUST send no system profile, setting or usage data.
+Every request the updater makes, including the download, MUST carry nothing that identifies the user, the Mac, the app's version or the macOS version. Headers MUST be the same on every Mac and every version from this one on. Trackpad Launcher MUST send no system profile, setting or usage data.
 
 #### Scenario: What a check sends
 
@@ -74,7 +144,13 @@ Every request the updater makes, including the download, MUST carry nothing that
 - **WHEN** an update check runs
 - **THEN** the request has no query string, no cookie and no header that names the user, the Mac, the app's version or the macOS version
 
-### R4. Only a newer full release that runs on this Mac counts
+#### Scenario: What a download sends
+
+- **GIVEN** a network monitor watches Trackpad Launcher's traffic
+- **WHEN** a release download runs
+- **THEN** the request has no query string, no cookie and no header that names the user, the Mac, the app's version or the macOS version
+
+### R10. Only a newer full release this Mac's macOS can run counts
 
 A *newer version* MUST be a published full release, with a higher version than the running one, whose minimum macOS this Mac meets. When several count, Trackpad Launcher MUST take the highest. It MUST never install an older version.
 
@@ -82,45 +158,93 @@ A *newer version* MUST be a published full release, with a higher version than t
 
 - **GIVEN** version 1.0.0 runs and the only release above it is pre-release 1.1.0-beta
 - **WHEN** an update check runs
-- **THEN** nothing downloads
+- **THEN** nothing downloads and no card shows
 
 #### Scenario: Needs a newer macOS
 
 - **GIVEN** the Mac runs macOS 26, version 1.1.0 needs macOS 26 and version 1.2.0 needs macOS 27
 - **WHEN** an update check runs from version 1.0.0
-- **THEN** version 1.1.0 is the one that installs
+- **THEN** version 1.1.0 is the one offered or installed
 
 #### Scenario: Already the highest
 
-- **GIVEN** version 1.1.0 runs and it is the highest full release (a higher one was withdrawn or none exists)
+- **GIVEN** version 1.1.0 runs and it is the highest full release
 - **WHEN** an update check runs
-- **THEN** nothing downloads
+- **THEN** nothing downloads and no card shows
 
-### R5. A newer version downloads in the background
+### R11. The update card
 
-Trackpad Launcher MUST download a newer version with no user action. The download MUST show nothing to the user. Gestures MUST keep working during it. A download that fails or stops MUST be retried at a later check.
+When the current opening's check finds a newer version, the settings window MUST show the update card as its first group, as in the design: *Update available* above an *Update now* button, with a large tray-and-arrow picture clipped at the card's right side, and a thin border. Otherwise the card MUST NOT show. The card MUST NOT be dismissable.
 
-#### Scenario: Gestures during a download
+#### Scenario: Card layout
 
-- **GIVEN** a download is running
-- **WHEN** the user makes a 1-finger gesture
-- **THEN** its assigned app comes to the front as usual
+- **GIVEN** an update check found a newer version
+- **WHEN** the check finishes
+- **THEN** the card appears above the gesture rows, matching the design, and the rest of the window moves down to make room
+
+#### Scenario: Failed check
+
+- **GIVEN** the Mac is offline
+- **WHEN** the user opens the settings window
+- **THEN** no card and no error show, and the next opening checks again
+
+### R12. Only the arrow moves
+
+While the card shows, the picture's arrow MUST drift up and down by about 4 points, about every 3 seconds. The tray MUST stay still. The arrow MUST stay inside the card's clip. The motion MUST stop while the window is closed. When *Reduce motion* is on, the arrow MUST NOT move.
+
+#### Scenario: Card on screen
+
+- **GIVEN** the card shows
+- **WHEN** the user watches it for ten seconds
+- **THEN** the arrow drifts gently, and the tray, the text and the button do not move
+
+#### Scenario: Reduce Motion
+
+- **GIVEN** *Reduce motion* is on in System Settings
+- **WHEN** the card shows
+- **THEN** the arrow stays still
+
+### R13. Update now installs straight away
+
+Pressing *Update now* MUST grey the button out and change its label to *Updating…*. Closing and reopening the window during the update MUST show the card the same way, with no check. Trackpad Launcher MUST download the version and install it as soon as the download finishes, then open the new version with its settings window open and stop the old one. The new version MUST make no update check at that start. There MUST be no progress bar and no *Cancel*.
+
+#### Scenario: Update now
+
+- **GIVEN** version 1.0.0 shows the card for version 1.1.0
+- **WHEN** the user presses *Update now*
+- **THEN** the button reads *Updating…*, version 1.1.0 replaces version 1.0.0, version 1.1.0 opens with its settings window and no card, and exactly one Trackpad Launcher runs
+
+#### Scenario: Closing the window during an update
+
+- **GIVEN** the button reads *Updating…*
+- **WHEN** the user closes the settings window
+- **THEN** the update carries on, and the new version opens with its settings window
+
+### R14. A failed update from the card offers the button again
+
+When a download or install started by *Update now* fails, the card MUST return to *Update available* with *Update now*, and show no error. The running version MUST keep working. When the install fails after the old version stopped, a working copy MUST run within 10 seconds of that stop, with its settings window open.
 
 #### Scenario: Connection lost
 
-- **GIVEN** a download is running
+- **GIVEN** the button reads *Updating…*
 - **WHEN** the Mac loses its network connection
-- **THEN** the user sees nothing, version 1.0.0 keeps running, and a later check downloads the update again
+- **THEN** the card reads *Update available* with *Update now*, and version 1.0.0 keeps running
 
-### R6. Only a genuine update installs
+#### Scenario: Install fails after the old version stopped
 
-Trackpad Launcher MUST install a download only when it carries a signature made with the publisher's update key and is signed with the same Developer ID and bundle identifier as the running copy. Otherwise it MUST install nothing and show nothing, and a later check MUST try again.
+- **GIVEN** the user pressed *Update now* and version 1.0.0 has stopped
+- **WHEN** the install fails
+- **THEN** a working copy runs within 10 seconds of that stop, with its settings window open
+
+### R15. Only a genuine update installs
+
+Trackpad Launcher MUST install a download only when it carries a signature made with the publisher's update key and is signed with the same Developer ID and bundle identifier as the running copy. Otherwise it MUST install nothing. At login it MUST show nothing; from the card, R14 applies.
 
 #### Scenario: Tampered download
 
 - **GIVEN** the downloaded update fails its signature check
 - **WHEN** the download finishes
-- **THEN** nothing installs, version 1.0.0 keeps running, and the user sees nothing
+- **THEN** nothing installs and version 1.0.0 keeps running
 
 #### Scenario: Different Developer ID
 
@@ -128,1267 +252,534 @@ Trackpad Launcher MUST install a download only when it carries a signature made 
 - **WHEN** the download finishes
 - **THEN** nothing installs and version 1.0.0 keeps running
 
-### R7. Every release is notarised
+### R16. Every release is notarised
 
-The release process MUST notarise every update. It MUST NOT publish one that is not notarised.
+The release process MUST notarise every update and MUST NOT publish one that is not.
 
 #### Scenario: Notarisation fails
 
-- **GIVEN** a new version is being released
-- **WHEN** its build fails notarisation
+- **GIVEN** a build fails notarisation
+- **WHEN** the release runs
 - **THEN** nothing is published and no copy sees it
 
-### R8. The update installs only when the user is not using the app
-
-After a download finishes, Trackpad Launcher MUST wait until both of these hold: no finger has made contact of any kind with any trackpad for 1 minute, and the settings window is closed. It MUST install 1 minute after the later of the last touch and the window closing. Logging out, restarting or shutting down before that MUST NOT delay the system. The update MAY install then. Otherwise the next start keeps the update waiting, or a later check downloads it again, and it installs under the same conditions.
-
-#### Scenario: User is working on the trackpad
-
-- **GIVEN** a download finished and the user is touching the trackpad
-- **WHEN** the user keeps using it, with gaps under 1 minute
-- **THEN** nothing installs until the trackpad has been untouched for 1 minute
-
-#### Scenario: Settings window is open
-
-- **GIVEN** a download finished and the settings window is open
-- **WHEN** the trackpad stays untouched for 10 minutes
-- **THEN** nothing installs while the window stays open
-- **AND** the update installs 1 minute after the later of the last touch and the window closing
-
-#### Scenario: Mac with no trackpad in use
-
-- **GIVEN** a download finished, the settings window is closed and the trackpad is never touched
-- **WHEN** 1 minute passes
-- **THEN** the update installs
-
-#### Scenario: Shutting down with an update waiting
-
-- **GIVEN** a downloaded update is waiting and the user shuts down
-- **WHEN** macOS starts Trackpad Launcher at the next login
-- **THEN** either version 1.1.0 runs, or 1.0.0 runs and 1.1.0 installs once the conditions hold
-- **AND** either way no window, Dock icon or dialog appears and gestures work
-
-### R9. The new version restarts silently
-
-After installing, the new version MUST run with no settings window, no Dock icon, no dialog and no permission prompt. It MUST stop the old version. Gestures MUST work again within 10 seconds.
-
-#### Scenario: Update while the user works in another app
-
-- **GIVEN** version 1.0.0 runs with gestures assigned, the window closed, and the trackpad idle for 1 minute
-- **WHEN** the update installs
-- **THEN** version 1.1.0 runs from /Applications, no window or Dock icon appears, keyboard focus stays in the user's app, and gestures work
-
-#### Scenario: Opening by hand afterwards
-
-- **GIVEN** version 1.1.0 restarted silently
-- **WHEN** the user opens Trackpad Launcher from Spotlight
-- **THEN** the settings window opens as usual
-
-### R10. Settings and permissions carry over
+### R17. Settings and permissions carry over
 
 Every setting, starting at login and the Accessibility and Screen Recording permissions MUST carry over to the new version.
 
-#### Scenario: After an automatic update
+#### Scenario: After an update
 
 - **GIVEN** version 1.0.0 has gestures assigned, starting at login on, Accessibility and Screen Recording granted, a non-default thumb corner and *Hide background apps* on
-- **WHEN** version 1.1.0 installs automatically
-- **THEN** the same apps are assigned, starting at login is still on, Accessibility and Screen Recording are still granted, the thumb corner is the same and *Hide background apps* is still on
+- **WHEN** version 1.1.0 installs
+- **THEN** all of them are the same in version 1.1.0, and no permission prompt appears
 
-### R11. A failed install keeps the current version
+### R18. A failed login install keeps the current version
 
-At every moment /Applications MUST hold either the whole old version or the whole new one. A failed install MUST end with a working copy running again within 10 seconds. The user MUST see nothing, and a later check MUST try again.
+At every moment /Applications MUST hold either the whole old version or the whole new one. A failed install MUST end with a working copy running within 10 seconds, with nothing shown. Trackpad Launcher MUST NOT try again until the next login start or the card.
 
 #### Scenario: Install fails
 
-- **GIVEN** the update is installing
+- **GIVEN** a login start is installing an update
 - **WHEN** the install fails
-- **THEN** a whole working copy stays in /Applications, gestures work again within 10 seconds, and the next check tries again
+- **THEN** a whole working copy stays in /Applications, gestures work within 10 seconds, and no second attempt runs at that start
 
-### R12. A copy that cannot write to its own bundle stays on its version
+#### Scenario: Mac loses power during a login install
 
-A copy that cannot write to its own bundle MUST make no update check and no download, and MUST NOT ask for a password. It checks again at its next start whether it can write.
+- **GIVEN** a login start is installing an update
+- **WHEN** the Mac loses power
+- **THEN** at the next login a whole copy of one version starts and the check runs again
 
-#### Scenario: Standard account
+### R19. Accounts that cannot write to /Applications update from the card
 
-- **GIVEN** a standard account that cannot write to /Applications, and a newer version
-- **WHEN** Trackpad Launcher starts
-- **THEN** it makes no network request, no password prompt appears, and the current version keeps running
+A copy that cannot write to its own bundle MUST make no check, download or prompt at a login start. Its settings window MUST check and show the card as usual. *Update now* MUST ask for an administrator's name and password after the download. Cancelling that prompt MUST return the card to *Update available*, with nothing changed and no error.
 
-### R13. The app's own quit stays final
+#### Scenario: Login on a standard account
 
-*Quit Trackpad Launcher* MUST stop the app at once, in any update state, and an update MUST NOT start the app again afterwards. Every other way to quit MUST keep closing only the settings window.
+- **GIVEN** a standard account and a newer version
+- **WHEN** macOS starts Trackpad Launcher at login
+- **THEN** it makes no network request and no prompt appears
 
-#### Scenario: Quit with an update waiting
+#### Scenario: Standard account uses the card
 
-- **GIVEN** a downloaded update is waiting for the trackpad to go idle
+- **GIVEN** a standard account and the card
+- **WHEN** the user presses *Update now* and enters an administrator's password
+- **THEN** the new version installs and opens with its settings window
+
+#### Scenario: Prompt cancelled
+
+- **GIVEN** a standard account pressed *Update now*
+- **WHEN** the user cancels the administrator prompt
+- **THEN** the card reads *Update available* with *Update now*, and the current version keeps running
+
+### R20. The app's own quit stays final
+
+*Quit Trackpad Launcher* MUST stop the app at once, in any update state. An update MUST NOT start the app again afterwards.
+
+#### Scenario: Quit during an update
+
+- **GIVEN** the button reads *Updating…*
 - **WHEN** the user presses *Quit Trackpad Launcher*
 - **THEN** the app stops and stays stopped until the user opens it
 
-### R14. Updates never block quitting
+#### Scenario: Quit during a login install
 
-Logging out, restarting and shutting down MUST end the app without asking and with no delay from an update.
+- **GIVEN** a login start is installing an update
+- **WHEN** the user presses *Quit Trackpad Launcher*
+- **THEN** a whole copy remains and nothing restarts
 
-#### Scenario: Restart with an update pending
+### R21. Updates never block quitting
 
-- **GIVEN** an update is downloading or waiting
+Logging out, restarting and shutting down MUST end the app with no dialog and no delay from an update.
+
+#### Scenario: Restart during a login download
+
+- **GIVEN** an update is downloading
 - **WHEN** the user restarts the Mac
-- **THEN** the restart proceeds with no dialog
+- **THEN** the restart proceeds with no dialog, and the next login start checks again
 
-### R15. No update interface
+### R22. Updates add nothing to trackpad use
 
-The settings window MUST show no update card, no update setting and no update status. Nothing takes the card's place.
+The code that handles trackpad frames MUST contain no update logic in any update state. No update code MUST run for a trackpad frame. A review of the code and a source check confirm this; it is not measured.
 
-#### Scenario: Settings window with an update waiting
+#### Scenario: Touching the trackpad during an update
 
-- **GIVEN** a downloaded update is waiting
-- **WHEN** the user opens the settings window
-- **THEN** the window opens as it does with no update known, and shows nothing about updates
+- **GIVEN** any update state: none, checking, downloading or installing
+- **WHEN** the user uses the trackpad
+- **THEN** no update code runs on any frame
 
-### R16. Older copies can still update
+### R23. The updater holds the least memory it can
 
-Every new release MUST stay installable from the update card of versions before the first automatic-update version. This binds every future release's assets for as long as such copies may exist. Those copies MUST reach an automatic-update version with one press of *Update now*.
+Trackpad Launcher MUST NOT load WebKit, and MUST show no updater interface of its own. The updater MUST exist in memory only during a check or an update, and during R1's wait for a connection. While the card waits for its button, only the version it offers stays.
 
-#### Scenario: Last card
+#### Scenario: After a check that found nothing
 
-- **GIVEN** version 1.0.14 runs and the first automatic-update version has been released
+- **GIVEN** a login start's check found no newer version
+- **WHEN** the check ends
+- **THEN** no updater object runs, and WebKit is not among the app's loaded libraries
+
+### R24. Older copies can still update
+
+Every new release MUST stay installable from the update card of versions before this one. This binds every future release's assets for as long as such copies may exist.
+
+#### Scenario: Last old card
+
+- **GIVEN** version 1.0.14 runs and the first version with these rules has been released
 - **WHEN** the user opens the settings window and presses *Update now*
-- **THEN** the new version installs, and later versions arrive automatically
+- **THEN** the new version installs
 
 ## Non-goals
 
-- **An off switch for updates.** The user chose no update interface at all.
-- **A password prompt or notice for standard accounts.** A surprise password prompt looks suspicious, and most copies run on single-admin Macs. These Macs update when an administrator installs a new version by hand.
-- **Showing the version number or a *Check for Updates* button.** The user chose no update interface at all.
-- **Telling the user an update happened.** Updates stay invisible, including failures.
-- **Release notes in the app.** With no interface, nothing would show them.
-- **Mandatory or staged rollouts.** Every copy takes every full release.
+- **A daily check or any background schedule.** The card only shows in the window, so a check at opening is enough.
+- **Installing on wake from sleep.** Only a login start or the card installs.
+- **Installing at logout or shutdown.** It depends on the system giving the installer time.
+- **A smarter moment to install.** Updates are rare, and a few lost seconds are fine. It can come later if needed.
+- **A progress bar, *Cancel* or an error message.** The card stays minimal.
+- **A separate helper process for the updater.** It would save little more memory and add a process that can fail.
+- **Measuring memory or CPU.** The rules above hold by construction.
+- **An off switch for updates.**
 - **Rolling back a release.** A bad release is fixed by publishing a higher version.
-- **Fast user switching.** Two accounts running the app at once on one Mac get no special handling; the other session's copy picks up the new version at its next start.
+- **Fast user switching.** Two accounts running the app at once on one Mac get no special handling.
+- **Updating standard accounts at login.** It would need an administrator prompt at login.
+- **The version number or release notes on the card.** The design shows neither.
+- **A beta channel.** Pre-releases never count.
+- **A notice after a silent update.** Updates at login stay invisible.
 
-## Design
+## Implementation Decisions
 
-### Problem
+### What the branch holds today (revision 1), and what of it stays
 
-A new version reaches a user only through a card in a window most users never open. Sparkle 2 replaces the hand-written check, download and install, and the card goes. The shape is not obvious because Sparkle's silent path falls short of this app's rules in specific, probed ways. It installs at any end of the process and offers no cancel. Its immediate handler quits with an event `Lifecycle` reads as the Dock's Quit, relaunches as an opening by hand, stays armed after a refused quit, and recovers nothing from a failed swap. It enforces neither "same Developer ID" nor "same bundle identifier". It keeps cookies. Its scheduler misses "a check at every start" and "again when a connection arrives". The design also has to honour what is already here: `LauncherCore` imports Foundation and Observation only, every port has two adapters, the gate is an object's absence, `Opening` is matched exhaustively, the card's `.aar` contract outlives the card's code, releases are immutable, and idle stays at zero.
+Revision 1 is implemented on this branch and its design text lives in the git history (`324d3d0`, `d815a2c`). It built, on Sparkle 2.10.1 from the prebuilt package: an `Updater` in `LauncherCore` with phases *resting*, *awaiting connection*, *ready* and *handed over*; contact sensing on the frame thread and an idle-minute clock, so a held update installed a minute after the last touch; `SparkleEngine` on Sparkle's automatic path (a 24-hour schedule, a check at every start, the hold at `willInstallUpdateOnQuit`, our genuineness check and a two-layer veto inside that call); `LaunchdJob` and the hand-over script that reopens whichever copy /Applications holds with `--after-update`; `SystemConnection` for the retry; `CardContract` and the release's feed. Its E2E script has never been run by a person, and `SUPublicEDKey` is still empty.
 
-Evidence for every claim below is in `.temp/architect/grounding/index.md` (fact numbers such as A5 or C1) and `.temp/architect/checks/`.
+What stays unchanged: the gate's shape (an object's absence), the genuineness check and the veto, the hand-over job and its script's wall-time budget, the retry on a returned connection, the feed, `release.sh`, `CardContract`, the privacy configuration of the requests (user agent, headers, no cookies, no cache), `SourcePolicyTests`' structure, and the source-scan rule that `import Sparkle` lives in one file.
 
-### Usage (caller's view)
+What changes: Sparkle is built from its pinned source without its UI and vendored; the updater exists per cycle; nothing of updates touches the frame path; the login start installs the moment the update is prepared; the window's opening checks and shows the card; *Update now* installs at once; the hand-over can bring the window.
 
-There is no interface, so what a maintainer learns is small. The composition root builds an `Updater` only for a copy the gate lets through. `Lifecycle` starts it once the process is resident and ends the process when it asks. `Launcher` knows nothing about updates; it can be asked whether the app is in use.
+### 1. Sparkle from its pinned source, without its UI, vendored as a binary target
+
+One script builds Sparkle from a shallow clone of the pinned tag with `SPARKLE_BUILD_UI_BITS=0`, `SPARKLE_BUILD_LEGACY_SUUPDATER=0`, `SPARKLE_BUILD_LEGACY_DSA_SUPPORT=0`, `SPARKLE_BUILD_LEGACY_DELTA_SUPPORT=0` and `SPARKLE_EMBED_DOWNLOADER_XPC_SERVICE=0`, keeping `SPARKLE_EMBED_INSTALLER_LAUNCHER_XPC_SERVICE=1` (Sparkle's own `Sparkle` scheme, Release, ad hoc signed), packs the framework into an xcframework, builds `sign_update` and `generate_keys` from the same clone with Sparkle's default flags, writes a manifest (tag, commit, flags, Xcode version) beside them, and fails if `WebKit` or `AppKit` appears in the framework binary's load commands. The output is committed under the package as a local `.binaryTarget`, with the two tools in a `bin` folder beside it; the remote package dependency goes, `Package.resolved` loses its pin, and the keychain flags revision 1 added for the remote binary (`--disable-keychain`, `-packageAuthorizationProvider netrc`) go with it. `release.sh` takes the tools from the vendored folder.
+
+Proven in this planning session on 2.10.1: the build succeeds, the framework is 2.2 MB (the prebuilt package is 20 MB) and links Foundation, Security, ServiceManagement, SystemConfiguration and libcompression only: neither WebKit nor AppKit; `SPUUpdater` present and every UI class absent; the two tools run standalone. Three helpers stay nested, each a separate process that exists only during an update: `Autoupdate`, the installer; `Updater.app`, its termination agent, whose progress window shows only on a stage-2 request this app never sends; and the installer launcher XPC service (180 KB, AppKit-linked), which exists only while the installer is launched and is where Sparkle asks for an administrator. It is kept, and `SUEnableInstallerLauncherService` declared `true`, because the in-process launcher runs that prompt synchronously on the main queue, which would freeze gestures, Quit and a logout for as long as the prompt is up (R20, R21). The downloader service, which would be a process for every download, stays out. The embedded UI headers remain in the umbrella header and compile to nothing, since the app never names them.
+
+`SparkleInternals.provenOn` is compared with the manifest's tag, no longer with `Package.resolved`. The source-scan stays as it is for `import Sparkle`.
+
+### 2. One Sparkle path, used on demand
+
+`SparkleEngine` creates an `SPUUpdater` when a cycle starts and drops its reference inside `didFinishUpdateCycle`, so the object dies when Sparkle's own stack unwinds; between cycles the engine holds a delegate and a user driver and nothing else. Two kinds of cycle, each one Sparkle call on a fresh updater after `start()`:
+
+- **A probe** (`checkForUpdateInformation`): Sparkle's probing driver reads the feed, runs `shouldProceedWithUpdate` (the enclosure pin), reports `didFindValidUpdate` and aborts the moment it has an answer. Nothing downloads.
+- **An update** (`checkForUpdates`): Sparkle's user-initiated driver over this app's silent user driver. It reads the feed again (one more request than the probe, named under R7 below), records the offer at `didFindValidUpdate`, and `showUpdateFound` is answered by the state's stage: *install* for an update not yet downloaded or downloaded, *skip* for one whose installer is already running, which can only follow a crash and would otherwise send Sparkle's own relaunch. The download runs. Then, in the order Sparkle calls them:
+  1. **`didDownloadUpdate`**, after the download and before any installer exists: the engine finds the downloaded archive (Sparkle's persistent download, a private layout under the user's caches, owned by the user on every account), expands it into a scratch folder of its own, runs `isGenuine` on the one bundle inside against the offer, and removes the scratch folder. A genuine verdict is remembered. A refused one removes the downloaded archive, so Sparkle's own extraction fails and the cycle ends `.failed`; no installer was ever launched for it, so no quit, crash or termination can install it. All of it synchronous, on the main actor, once per release.
+  2. The installer is launched through the launcher service, with interaction allowed: a copy this user cannot replace gets the administrator prompt here, after the download and before extraction, in that service's process. Extraction and preparation follow.
+  3. **`showReady(toInstallAndRelaunch:)`** is the hold point. The reply closure is kept and `.held` is pushed; with no genuine verdict remembered the reply is *skip* instead, which cannot happen but costs one line. A held update never gets a reply: `Updater` arms the restart and ends the process in that same turn. `discardHeldUpdate()` replies *skip*, which cancels the installer in either launchd domain and is not a skipped version in Sparkle's sense; the cycle then ends `.failed`. A *dismiss* would refuse nothing: Sparkle's header says the update may still install at the application's end.
+
+Why this holds at the process's end: Autoupdate commits to the installation (`_willCompleteInstallation`) when it starts, listens for the host's termination through its agent, and installs on that termination with no UI and no relaunch, since the UI and relaunch flags travel only in a stage-2 message this app never sends. A connection that drops afterwards does not abort it. Read in the 2.10.1 sources; the E2E rows prove it on a notarised build.
+
+Why the check moves before the installer: on a standard account Sparkle's installer runs as root and extracts under root's caches, where the app cannot read, and once launched it installs at the host's end whether or not this app has judged the update. Expanding the user-owned download ourselves checks the same bytes on every account before Sparkle commits. The archive code is a copy of the frozen `CardContract` extraction, kept apart from it on purpose, as `isGenuine`'s copy is. What could still install an unchecked bundle is an EdDSA-valid archive swapped under the installer after our check, which needs the publisher's private key.
+
+Why one driver: the automatic driver cannot prompt (R19), and for a copy this user can replace, the user-initiated driver over a silent user driver shows nothing either. The automatic path, `willInstallUpdateOnQuit`, `checkForUpdatesInBackground`, the extraction-layout lookup, the installer-job veto and Sparkle's scheduler go. `SUEnableAutomaticChecks` is declared `false`, so Sparkle asks no permission and arms no timer; `SUAutomaticallyUpdate` leaves the Info.plist and joins the keys that must never be declared, with `SUScheduledCheckInterval`. The download runs in the foreground on both paths, so a login download is never deferred by the system. Every fresh updater gets the user agent, the headers and the cookie and cache policy revision 1 set; `start()` throwing (an empty key) is `.cycleEnded(.failed)`.
+
+A probe cannot be cancelled. The engine never suppresses an answer and never runs two cycles: `Updater`'s phases ask for a probe or an update only when no cycle runs, and a probe whose window has closed is remembered as running until it answers, with its answer ignored.
+
+### 3. The `UpdateEngine` port, revised
 
 ```swift
-// Composition root. The gate is a value only `UpdatableCopy.init?` can make, and `Updater` will not build without one.
-private func makeUpdater(placement: Placement, location: Location) -> Updater? {
-    let signer = CodeSignature.developerIDSigner()
-    guard
-        let copy = UpdatableCopy(
-            placement: placement, developerIDSigned: signer != nil,
-            canReplaceItself: SparkleEngine.canReplace(location.running)),
-        let signer
-    else { return nil }
-    return Updater(
-        copy, engine: SparkleEngine(bundle: location.running, signer: signer),
-        connection: SystemConnection(), clock: SystemIdleClock())
+public enum CycleOutcome: Equatable, Sendable {
+    /// A probe found a newer version. Never an update's outcome.
+    case found
+    case nothingNew
+    /// The feed's request failed: what a lost connection looks like, and what earns a login start's retry.
+    case requestFailed
+    /// Anything after the feed was read: a download that failed, a refused enclosure, a cancelled prompt, a bad
+    /// signature, a discarded update.
+    case failed
+}
+
+public enum UpdateEngineEvent: Equatable, Sendable {
+    /// A genuine update is extracted and prepared; it installs at this process's end. Pushed inside Sparkle's
+    /// callback, so nothing else runs on the main actor first.
+    case held
+    /// A cycle ended. For a probe, its one answer.
+    case cycleEnded(CycleOutcome)
+}
+
+@MainActor public protocol UpdateEngine: AnyObject {
+    var onEvent: (@MainActor (UpdateEngineEvent) -> Void)? { get set }
+    /// Reads the feed and downloads nothing. Answers once, `.cycleEnded(.found | .nothingNew | .requestFailed | .failed)`.
+    /// Never asked while a cycle runs.
+    func probe()
+    /// Reads the feed, downloads the newest version, refuses one that is not genuine before any installer exists, asks
+    /// for an administrator when this user cannot replace the bundle, prepares it and pushes `.held`; the update
+    /// installs at this process's end. `.cycleEnded` follows only when `.held` is never reached or the held update is
+    /// discarded. Never asked while a cycle runs.
+    func update()
+    /// Stops the held update: the installer is cancelled, then Sparkle's cycle ends `.failed`.
+    func discardHeldUpdate()
+    /// Arms the job that opens whichever copy /Applications holds once this process has ended: silently, or with its
+    /// settings window. The caller ends the process in the same turn. False: nothing is armed.
+    func armRestart(opensWindow: Bool) -> Bool
 }
 ```
 
-```swift
-// Lifecycle: the only place it starts, so a copy about to end, or asking to move, never reaches the network.
-private func othersExited() {
-    guard case .replacingOthers(let opening, let opensWindow, let eject) = stage else { return }
-    let launcher = makeResident()
-    launcher.start()
-    stage = .resident(launcher)
-    if opensWindow { launcher.openedByHand() }
-    if let eject { installer.eject(eject) }
-    updater?.start(watching: launcher, opening: opening)
-}
+`HeldUpdate` goes: a refused update never reaches the hold. The engine's outcome function takes the cycle's kind and two facts its delegate records, whether the feed was read (`didFinishLoadingAppcast`) and whether an update was found (`didFindValidUpdate`, which also records the offer the download is checked against):
 
-// Lifecycle.init: the update asks; `end()`, never `quit()`, so starting at login stays as it is.
-updater?.onHandOver = { [unowned self] in handedOver() }
-```
+| Kind | Sparkle's error | Outcome |
+|---|---|---|
+| probe | none, found | `.found` |
+| probe | none, not found; `SUNoUpdateError` (1001) | `.nothingNew` |
+| probe | `SUDownloadError` (2001) | `.requestFailed` |
+| probe | anything else | `.failed` |
+| update | `SUNoUpdateError` | `.nothingNew` |
+| update | `SUDownloadError`, feed not read | `.requestFailed` |
+| update | everything else: none (an abort after a skip), `SUDownloadError` after the feed, 3001 (the extraction of a removed archive), 4004, 4005, 4007, 4008, another domain | `.failed` |
 
-```swift
-// A scenario, at the one seam: real Lifecycle, Launcher and Updater over in-memory adapters.
-@Test func installsAMinuteAfterTheLaterOfTheLastTouchAndTheWindowClosing() {
-    let world = LifecycleWorld(record: [.one: "Arc"], loginItemOn: true)
-    let process = world.launch(.atLogin, running: .release)
-    process.engine.push(.held(.genuine))
-    process.touch(.finger)
-    #expect(process.idleClock.pending == nil)
-    process.lift()
-    process.lifecycle.launcher?.openedByHand()
-    #expect(process.idleClock.pending == nil)
-    process.lifecycle.launcher?.closeWindow()
-    #expect(process.idleClock.pending == .seconds(60))
-    process.idleClock.pass()
-    #expect(world.log.entries.suffix(2) == ["arm restart", "end"])
+### 4. `Updater`, rewritten
 
-    let next = world.finishHandOver()                      // what the job and Sparkle's installer do
-    #expect(next.lifecycle.launcher?.window == .closed)
-    #expect(world.loginItem.isOn)
-    #expect(next.engine.checks == 0)
-}
-```
-
-```text
-Releasing is unchanged:   Scripts/release.sh patch
-Once, by hand:            generate_keys, then generate_keys -x into offline storage
-After a failed feed push: Scripts/release.sh --feed-only <version>
-After upgrading Sparkle:  a test fails until Scripts/update-e2e.sh has run and SparkleInternals.provenOn is raised
-```
-
-### Shape
-
-#### Load-bearing decisions
-
-1. **The automatic path, always held.** `willInstallUpdateOnQuit` returns true and its immediate handler is dropped unused. So Sparkle's relaunch flag is never set, B1 to B3 are unreachable, and A5 is the only way an install runs.
-2. **We end ourselves.** A one-shot launchd job, armed in the same main-actor turn that ends the process, is the only thing that restarts the app (B4, C2).
-3. **`Updater` survives as the one owner of update decisions**, smaller and deeper, with no version in it. Sparkle sits behind one port. Sparkle's private behaviour sits in one type in one file.
-4. **`Launcher` learns "in use", not "update".** Contact sensing and the idle minute exist only while a verified update waits.
-5. **R6's second half is checked synchronously inside the delegate call**, so no main-actor turn exists in which an unchecked update is held. It costs 18 to 31 ms on a stapled app, once per release.
-6. **The feed is a committed file on `raw.githubusercontent.com`.** One hop, no query string, no cookie, correctable after publishing.
-7. **The card's rules move to a target that never ships**, and the release runs them on the real archive.
-
-#### What an update can be in
-
-Sparkle owns "checking" and "downloading", and nothing here reads them. `Updater` holds only what it must act on. Each lasting effect belongs to exactly one phase, and all of them start and stop in one transition function, so a running minute without a verified update, or a connection watch beside a held update, cannot be written (per `model-the-domain`).
+`Updater` is `@Observable` again, because the card renders it. It shows an initializer, `start(watching:opening:opensWindow:)`, `onHandOver`, `card` and `updateNow()`. Behind them: the login cycle and its retry, the window's check and its dropping, the card's two faces, the hand-over's order and its window. Each lasting effect belongs to a known set of phases and starts and stops in one transition function.
 
 ```swift
-private enum Phase {
-    /// Nothing to do. Sparkle's schedule, or a check, may be running.
+/// R1's debt, carried through the phases a login start's wait for a connection can pass through: none; owed with this
+/// reading's retry unmade; owed with it made, so only a drop and a return earn another.
+enum RetryDebt: Equatable { case none, owed(spent: Bool) }
+
+private enum Phase: Equatable {
     case resting
-    /// R1. The last cycle's request failed, and the connection watch runs. `retrySpent`: this reading's one retry has
-    /// been made, so only a drop and a return earn another. One bit; no timer, no backoff.
-    case awaitingConnection(retrySpent: Bool)
-    /// R8. A genuine update is held and installs at this process's end, however it ends. `Launcher`'s use is watched,
-    /// and the idle minute runs exactly while the app is not in use.
-    case ready
-    /// Terminal. The restart is armed and the process is ending in this same turn.
+    /// R1. The login check failed for the network; the path monitor runs.
+    case awaitingConnection(spent: Bool)
+    /// R2. The login cycle runs: the check, the download, the preparation. `retry`: a returned connection started it,
+    /// so the watch stays through it; `dropped`: the connection fell during that retry, so its network failure owes a
+    /// fresh retry rather than a spent one.
+    case updatingAtLogin(retry: Bool, dropped: Bool)
+    /// R5. The window's check runs. `debt`: what a login start's wait it interrupted still owes; any check that
+    /// completes settles it.
+    case probing(debt: RetryDebt)
+    /// The window closed during its check. The check still runs, its answer is ignored, and no second check starts
+    /// until it has come: one cycle at a time.
+    case droppedProbe(debt: RetryDebt)
+    /// R11. The card shows *Update available*. Nothing of Sparkle exists.
+    case offering
+    /// R13. *Update now*'s cycle runs; the card shows *Updating…*, window open or closed.
+    case updatingFromCard
+    /// Terminal: the restart is armed and the process ends in this turn.
     case handedOver
 }
 ```
 
 | Lasting effect | Exists only in |
 |---|---|
-| `Connection.watch` | `.awaitingConnection` |
-| `Launcher.watchUse`, contact pushes from the frame thread | `.ready` |
-| The 60 s wait | `.ready` and not in use |
-| The launchd job | `.handedOver`, and that phase lasts one turn |
+| The connection watch | `.awaitingConnection`, `.updatingAtLogin(retry: true, _)` |
+| An `SPUUpdater`, inside the engine | `.updatingAtLogin`, `.probing`, `.droppedProbe`, `.updatingFromCard` |
+| The card | `.offering` (*Update available*), `.updatingFromCard` (*Updating…*) |
+| The hand-over job | `.handedOver`, which lasts one turn |
 
-Persisted state: none of ours. An interrupted update resolves from what is on disk and in Sparkle's cache.
+No phase asks the engine for a cycle while one of the four above runs: that is the "one updater at a time" guarantee, and the in-memory engine counts any call that breaks it.
 
-#### Module map
+Inputs and what they do:
+
+- **`start(watching:opening:opensWindow:)`**, once, from `Lifecycle` after the resident exists and after the start's own `openedByHand()`, so that opening never arrives as an edge. Wires the engine, the connection and the window edges. `.atLogin` and the copy can replace itself → `.updatingAtLogin(retry: false, dropped: false)`, `update()`, whatever the window (R4). `.atLogin` and it cannot, or `.byHand`, with a window → `.probing(debt: .none)`, `probe()`. `.afterUpdate` → `.resting`, whatever the window: R3 and R13.
+- **The window opens** (closed to open): `.resting` → `.probing(.none)`, `probe()`; `.awaitingConnection(spent)` → `.probing(.owed(spent: spent))`, `probe()`, the watch stops; `.droppedProbe(debt)` → `.probing(debt)` with no engine call: the running check answers, and the card is nil until it does. In `.updatingAtLogin`, `.updatingFromCard` and `.handedOver` nothing happens: R4, R13.
+- **The window closes**: `.probing(debt)` → `.droppedProbe(debt)`; `.offering` → `.resting`. In `.updatingFromCard` nothing: the card persists.
+- **`updateNow()`**: only in `.offering` → `.updatingFromCard`, `update()`.
+- **`.held`**: in `.updatingAtLogin` → `armRestart(opensWindow: launcher.isWindowOpen)`; in `.updatingFromCard` → `armRestart(opensWindow: true)`. Armed → `.handedOver`, `onHandOver()`, in the same turn. Refused → `discardHeldUpdate()` and the phase stays, so the cycle ends `.failed` and the rule below decides; the process never ends without a restart armed.
+- **`.cycleEnded(outcome)`** in `.updatingAtLogin(retry, dropped)`: `.requestFailed` → `.awaitingConnection(spent: retry && !dropped)`; anything else → `.resting`. In `.probing(debt)`: `.found` → `.offering`; `.requestFailed` → `.awaitingConnection(spent)` if the debt is owed, else `.resting`; `.nothingNew` or `.failed` → `.resting`. In `.droppedProbe(debt)`: `.requestFailed` → `.awaitingConnection(spent)` if owed, else `.resting`; anything else → `.resting`, a found update included, since nobody is looking. In `.updatingFromCard`: `.nothingNew` → `.resting` (the release went away); anything else → `.offering` if the window is open, else `.resting`, so an opening never meets a stale card and always checks. Elsewhere ignored.
+- **A connection reading**: in `.awaitingConnection(spent)`, not connected clears `spent`; connected and not spent → `.updatingAtLogin(retry: true, dropped: false)`, `update()`. In `.updatingAtLogin(retry: true, _)`, not connected sets `dropped`; connected is ignored. Elsewhere ignored. Entering `.awaitingConnection` restarts the watch, which pushes the present reading: connected and spent means nothing until a real drop and return; not connected clears the debt; connected and not spent retries at once, which is the flap case, a drop and a return inside the retry that then fails.
+- **`card`**: `.available` in `.offering`, `.updating` in `.updatingFromCard`, nil elsewhere.
+
+The transition function: entering `.awaitingConnection` always (re)starts the watch; leaving it for anything but `.updatingAtLogin(retry: true, _)` stops it; leaving `.updatingAtLogin(retry: true, _)` for anything but `.awaitingConnection` stops it. No other effect lives in it.
+
+Quit, logout, restart and shutdown need no table: `Lifecycle` keeps its one `shouldEnd` switch with no update guard. A quit before the download has completed kills the download with the process and no installer exists; one after the genuineness check and before `.held` lets Sparkle's installer, already committed, install a genuine update at that end with nothing to restart the app, which R15 and R20 allow; one after `.held` cannot land, since the process ends in that same turn.
+
+### 5. The window's edges reach `Updater` through one closure on `Launcher`
+
+`Launcher` gains `onWindowEdge: (@MainActor (Bool) -> Void)?`: true when the window goes from closed to open, false from open to closed, never on a re-front; it replaces revision 1's `watchUse`. `Updater.start` sets it; `Launcher` knows nothing about updates. The view reads `card` from the `Updater` the composition root hands the shell, as the original card did.
+
+### 6. The gate splits in two
+
+`UpdatableCopy` keeps its initializer and fails only for a copy not signed with a Developer ID or not in /Applications; `canReplaceItself` becomes a stored fact. The updater exists for every such copy, so its window checks and shows the card (R19's second half); only a copy that can replace itself runs the login cycle (R19's first half). `SparkleEngine.canReplace` stays as the read-only mirror of Sparkle's rule.
+
+### 7. The hand-over can bring the window
+
+`Opening.afterUpdate` gains `withWindow: Bool`. `Route`: `(.afterUpdate(withWindow: false), .installed)` → `.runSilently`; `(.afterUpdate(withWindow: true), .installed)` → `.runWithWindow`; the `.elsewhere` and `.development` rows are unchanged for either. `ThisCopy` parses `--with-window` beside `--after-update`, and `--at-login`, which makes a start read as a login start for the hand tests (the E2E script cannot send the login item's event); the reopen still reads only the event. The hand-over script takes one more argument and opens with `-g` only without the window, so the shell's own activation gives the window the focus when there is one. `Lifecycle` passes `opensWindow` to `Updater.start`; `Stage.replacingOthers` already carries both.
+
+A failed install from the card reopens the old version with its window and no check (R14); the next opening of the window checks again and shows the card.
+
+### 8. Nothing of updates on the frame path
+
+Deleted: `TrackpadEvent.contactChanged`; `TrackpadHardware.isTouched` and `sensesContact`; the session's occupancy flag, its sensing closure and `isAnyTrackpadTouched`; the hardware adapter's sensing flag; `Launcher.isInUse`, `watchUse` and `reportUse`; the `IdleClock` port, `SystemIdleClock` and its in-memory twin; the in-memory trackpad's press, lift and held-edge handles. The frame callback is as it was before revision 1: no lock, no flag, no hop for contact.
+
+The scan gains a kept-out table: the frame-path files (the frame stream and its parsing, the multitouch adapter and its framework shim, the click tap, the gesture recognizer and its rules, the touch, tap-state, tap, click, scroll and Dock-swipe filters) contain none of `Updater`, `UpdateEngine`, `Sparkle`, `contactChanged`, `isTouched`, `sensesContact`, `isInUse`, `occupied`, `IdleClock`. The timer tokens (`Timer`, `makeTimerSource`, `DispatchSourceTimer`) return to the banned list, and the twin check that kept them in the confined list keeps only the path monitor's half.
+
+### 9. The card
+
+`UpdateCardView(card:updateNow:)` is a rounded group in the Accessibility hint card's style: the group fill, the 12 pt radius, the 1 pt `#DEDEDE` border. *Update available* in the window's label font (13 pt medium) above the *Update now* button in the solid accent style the hint uses; while the card is `.updating` the button is disabled and reads *Updating…*. The picture sits at the card's trailing edge, overflowing it and clipped by the card's shape, takes no clicks and is hidden from accessibility, as the gear is. It is the first part of the window's column, above the Accessibility hint; the shell's `Fit` gains the card so the window refits when it appears or goes; the Quit button is never disabled. Its exact insets and the picture's offset come from the Figma node at implementation, compared side by side; this session had no Figma access and the requirement names the parts, not the numbers. `Copy` gains `updateAvailable`, `updateNowButton` and `updatingButton`.
+
+### 10. The picture: the arrow and its hole move together
+
+Rendered, the design's symbol is a solid rounded tray whose arrow is a knockout where the two overlap, with the arrow's shaft filled above the tray (the compound path's two subpaths wind in opposite directions). So "only the arrow moves" means the filled shaft and the tray's arrow-shaped hole move as one.
+
+`UpdatePictureView`, an `NSView` with three layers, from two SVG assets split from the design's path on the same 71 × 89 canvas, fill `#DEDEDE`: `update-tray.svg` (the first subpath) and `update-arrow.svg` (the second). The design's path data, from node 2200:2983, so that the assets can be regenerated and checked without the Figma file:
+
+```text
+tray:  M16.72 85.7513H54.24C65 85.7513 71 79.7748 71 68.9858V38.1026C71 27.3537 65 21.3375 54.24 21.3375H16.72C5.96 21.3375 0 27.3537 0 38.1026V68.9858C0 79.7748 5.96 85.7513 16.72 85.7513Z
+arrow: M35.52 0C37.24 0 38.68 1.40378 38.68 3.08832V43.9183L38.44 49.8944L40.68 47.528L46.88 40.9102C47.44 40.2684 48.24 39.9476 49.04 39.9476C50.68 39.9476 51.96 41.1509 51.96 42.7552C51.96 43.6375 51.6 44.2792 51 44.8809C45.8451 49.8618 37.8 57.6352 37.8 57.6352C37 58.4374 36.32 58.7181 35.52 58.7181C34.68 58.7181 34 58.4374 33.2 57.6352L20 44.8809C19.4 44.2792 19.04 43.6375 19.04 42.7552C19.04 41.1509 20.24 39.9476 21.92 39.9476C22.72 39.9476 23.56 40.2684 24.12 40.9102L30.32 47.528L32.56 49.8944L32.32 43.9183V3.08832C32.32 1.40378 33.8 0 35.52 0Z
+``` The tray layer's mask is a layer whose contents is a solid rectangle with the arrow knocked out, drawn once at view creation from the arrow image with a destination-out blend, 4 pt taller than the canvas at the top and the bottom so the moving hole never uncovers an edge. The arrow layer sits above the tray. The mask layer and the arrow layer carry the same animation under one key: `position.y` by −4 pt, 1.5 s, ease-in-out, autoreversing, repeating for ever, not removed on completion. The tray layer never animates.
+
+The animation exists while the view is in a window whose occlusion state is visible and Reduce motion is off; it is removed when the view leaves the window, when the window's occlusion state loses visibility (`NSWindow.didChangeOcclusionStateNotification`, so a closed window stops it as R12 asks, while the card persists through a close during *Updating…*), or when Reduce motion turns on (the workspace's display-options notification, as the gear does); and added again on the reverse. Both readers are injected, as the gear's Reduce motion reader is, so a bench can drive them. The contents follow the backing scale, as the gear's do. Only the render server plays it; no code of ours runs per frame.
+
+### 11. Info.plist keys and the scan
+
+| Row | Change |
+|---|---|
+| `alwaysDeclared` | `SUEnableAutomaticChecks` must be declared with the value `false`, and `SUEnableInstallerLauncherService` with the value `true`; `SUAutomaticallyUpdate` leaves the list. `SUFeedURL`, `SUPublicEDKey`, `SUVerifyUpdateBeforeExtraction`, `TLUpdateDownloads` stay. |
+| `neverDeclared` | Adds `SUAutomaticallyUpdate` and `SUScheduledCheckInterval`; `SUEnableInstallerLauncherService` leaves it; `SUEnableDownloaderService` and `SUEnableSystemProfiling` stay. |
+| `banned` | `Timer`, `makeTimerSource`, `DispatchSourceTimer` return, rule "no timers: every input is a push". The bans-still-listed check covers them. |
+| `confined` | The clock's three rows go, and `sparkle-updater` with the veto. `import Network`, `NWPathMonitor`, `import Sparkle`, `HTTPCookieStorage`, `URLCache`, `org.sparkle-project` (now the download's path), `SMJob`, `/bin/sh` stay. The archive rows (`AppleArchive`, `ArchiveStream`, `ArchiveByteStream`) and the file rows they need (`removeItem(`, `itemReplacementDirectory` or whichever scratch-folder call the copy uses) gain the one Platform file that expands the download. |
+| Kept out, new | Decision 8's table. A planted token in a frame-path file fails the scan. |
+
+### 12. The E2E script and the docs
+
+`update-e2e.sh` keeps its build, signing, notarisation, local server, sampler and cleanup, and its rows are re-cut to revision 2 (the Test scenarios below). Its builds carry `SUEnableAutomaticChecks: false` like the shipped one, and start with `--at-login` where a login start is meant.
+
+`docs/architecture.md` and `docs/domain-model.md` are rewritten with this plan. `docs/product-overview.md`, `README.md` and `release.sh`'s header change in the last slice.
+
+On R7: *Update now* reads the update list once more before its download, because Sparkle has no way to download an item a probe found without a fresh read. The plan's Solution and the docs say so; R7's text lists "a download from *Update now*", and this is the request that download needs. The human should confirm that reading.
+
+### 13. Deletions and the module map
 
 | Module | Change |
 |---|---|
-| `LauncherCore` | `Updater` rewritten; `UpdatableCopy` replaces `InstalledRelease`; `Opening.afterUpdate`; ports `UpdateEngine`, `Connection`, `IdleClock`; `TrackpadEvent.contactChanged`; `Launcher.isInUse`, `watchUse`. `Lifecycle` loses every install guard. `Release`, `UpdateEvent`, `UpdateCard`, `Version`, `ReleaseList`, `UpdateInstaller` go. Core no longer holds a version number. |
-| `LauncherPlatform` | `SparkleEngine` (with `SparkleInternals`, `SilentUserDriver`, `isPinned`), `LaunchdJob` (with the hand-over script), `SystemConnection`, `SystemIdleClock`, contact in `DeviceSession` and `MultitouchTrackpads`. `GitHubReleases`, `ApplicationsUpdater` and `BundleInstall`'s unpacking go. `CodeSignature.isGenuine` stays, against `ExpectedUpdate`. |
-| `LauncherUI` | The card, its layout input and every `updater` reference go. |
-| `CardContract`, `card-contract` (new, never linked by the app) | Frozen copy of the card's rules: a library, a tool, their tests. |
-| App target | `makeUpdater` as above. No decision. |
-
-#### Types and signatures
-
-```swift
-// ─── LauncherCore ───────────────────────────────────────────────────────────────────────────────
-
-public enum Opening: Equatable, Sendable {
-    case atLogin
-    case byHand
-    /// The hand-over job started this process, `--after-update`: the new version, or the old one after a failed install.
-    case afterUpdate
-}
-
-public enum Route: Equatable, Sendable {
-    case runSilently, runWithWindow, askToMove, end
-    /// The new rows are compile-forced. The argument means something only where an update lands; anywhere else it reads
-    /// as an opening by hand, so "every other opening still reaches .byHand" holds by the table.
-    public init(_ opening: Opening, placement: Placement, olderCopyRuns: Bool) {
-        switch (opening, placement, olderCopyRuns) {
-        case (.atLogin, _, true): self = .end
-        case (.atLogin, _, false): self = .runSilently
-        case (.afterUpdate, .installed, _): self = .runSilently        // silent, and `replace` stops everyone: R9
-        case (.byHand, .elsewhere, _), (.afterUpdate, .elsewhere, _): self = .askToMove
-        case (.byHand, .installed, _), (.byHand, .development, _), (.afterUpdate, .development, _):
-            self = .runWithWindow
-        }
-    }
-}
-
-// Lifecycle.Stage: case replacingOthers(opening: Opening, opensWindow: Bool, eject: DiskImage?)
-
-/// R2 and R12, the gate, whole. Pure, called by the composition root and the tests. Read once, at start.
-public struct UpdatableCopy: Equatable, Sendable {
-    public init?(placement: Placement, developerIDSigned: Bool, canReplaceItself: Bool) {
-        guard developerIDSigned, placement == .installed, canReplaceItself else { return nil }
-    }
-}
-
-public enum CycleOutcome: Equatable, Sendable {
-    /// Up to date, or nothing that could be taken.
-    case nothingNew
-    /// A request failed, the feed's or the archive's. What a lost connection looks like, and what earns R1's retry.
-    case requestFailed
-    /// Anything else: a refused enclosure, a bad signature, a veto, a held update lost.
-    case failed
-}
-
-public enum HeldUpdate: Equatable, Sendable {
-    /// Our check passed: same Developer ID, identifier, notarised, sealed versions equal the offer.
-    case genuine
-    /// It failed, or could not be run. Fail closed.
-    case notGenuine
-}
-
-public enum UpdateEngineEvent: Equatable, Sendable {
-    /// Sparkle verified, extracted and prepared an update, and will install it at this process's end. Pushed inside the
-    /// delegate call, so nothing else runs on the main actor first.
-    case held(HeldUpdate)
-    /// A cycle ended: no update, a failure, or a held update lost (a helper died, C5).
-    case cycleEnded(CycleOutcome)
-}
-
-/// Sparkle, and the restart that follows it. No Sparkle type, feed value or version crosses this port.
-/// Real: SparkleEngine. Test: InMemoryUpdateEngine.
-@MainActor public protocol UpdateEngine: AnyObject {
-    var onEvent: (@MainActor (UpdateEngineEvent) -> Void)? { get set }
-    /// Makes no request before this call. Starts the 24-hour schedule.
-    func start()
-    /// One background check. Asked while a cycle runs or is ending, it runs once that cycle has finished, so a retry is
-    /// never lost. It never runs while an update is held.
-    func check()
-    /// Stops the held update installing. Best effort, two layers; if both fail it installs at this process's end.
-    func discardHeldUpdate()
-    /// Arms the start of whichever version /Applications holds once this process has ended. The caller ends the
-    /// process in the same turn. False: nothing is armed.
-    func armRestart() -> Bool
-}
-
-/// Whether a network path exists. Real: SystemConnection. Test: InMemoryConnection.
-@MainActor public protocol Connection: AnyObject {
-    var onChange: (@MainActor (Bool) -> Void)? { get set }
-    /// Pushes the present reading, then every change, until `stop`. Nothing runs before or after.
-    func watch()
-    func stop()
-}
-
-/// One pending wait that does not advance while the Mac sleeps. Real: SystemIdleClock. Test: InMemoryIdleClock.
-@MainActor public protocol IdleClock: AnyObject {
-    /// Replaces any pending wait.
-    func wait(_ duration: Duration, then passed: @escaping @MainActor () -> Void)
-    func cancel()
-}
-
-// TrackpadEvent gains, for the real adapter and the in-memory one alike:
-//   /// Some trackpad went empty or occupied, only while `sensesContact`. Carries no data: re-read `isTouched`.
-//   case contactChanged
-// TrackpadHardware gains:
-//   /// Contact of any kind on any running trackpad, read now: palms yes, hovers no. Reads no clock.
-//   var isTouched: Bool { get }
-//   /// While true, each flip pushes `.contactChanged`. Off costs one flag read per flip and no hop.
-//   var sensesContact: Bool { get set }
-
-extension Launcher {
-    /// A finger on any trackpad, or the settings window open, minimised or hidden included.
-    public var isInUse: Bool { fatalError("not implemented") }   // window != .closed || hardware.isTouched
-
-    /// While set: `onChange` now with the present reading, then at each change and after each `run`. nil stops it, and
-    /// contact sensing with it. `Launcher` does not know why it is asked.
-    public func watchUse(_ onChange: (@MainActor (Bool) -> Void)?) { fatalError("not implemented") }
-    // TODO: reportUse() runs on `.contactChanged`, in openedByHand on the edge from closed, in closeWindow, and after
-    // hardware.run in reconcile. The last is the reset rule (H3): `run` replaces sessions, so an in-flight lift can
-    // vanish, and re-reading the level cannot stick. A report of "not in use" after a `run` restarts the minute, which
-    // is what a wake wants: the user has a minute to touch the pad before an install. A resting finger comes back on
-    // its next frame.
-}
-
-/// Owns every update decision: R1's retry, R8's rule, R6's verdict, the order of the hand-over.
-@MainActor public final class Updater {
-    /// The process must end now, through `end()`. Set once by `Lifecycle`.
-    public var onHandOver: (@MainActor () -> Void)?
-
-    public init(_ copy: UpdatableCopy, engine: any UpdateEngine, connection: any Connection, clock: any IdleClock) {
-        fatalError("not implemented")
-    }
-
-    /// Once, from a resident only. Starts the engine and, unless this process is the hand-over's, checks in the same
-    /// turn (A8). A failed install must not check at once, or it would hand over once a minute for ever (`discardquit.out`).
-    public func start(watching launcher: Launcher, opening: Opening) { fatalError("not implemented") }
-
-    private func handle(_ event: UpdateEngineEvent) {
-        // .held(.genuine)             → enter(.ready)
-        // .held(.notGenuine)          → engine.discardHeldUpdate(); stay .resting. No restart is ever armed for it.
-        //                               .cycleEnded(.failed) follows from Sparkle once its helper has gone (D5).
-        // .cycleEnded(.requestFailed) → already awaiting: stay as it is, so a drop during the retry still earns the next
-        //                               one. Otherwise enter(.awaitingConnection(retrySpent: false)).
-        // .cycleEnded(other)          → enter(.resting)
-        fatalError("not implemented")
-    }
-
-    private func connectionChanged(_ connected: Bool) {
-        // Only while .awaitingConnection(let spent):
-        //   !connected           → spent = false
-        //   connected && !spent  → spent = true; engine.check()
-        // No hot loop: a check spends the reading before it runs, and a spent reading needs a real drop.
-        fatalError("not implemented")
-    }
-
-    private func useChanged(_ inUse: Bool) {
-        // Only while .ready: inUse ? clock.cancel() : clock.wait(.seconds(60)) { idleMinutePassed() }
-        fatalError("not implemented")
-    }
-
-    private func idleMinutePassed() {
-        // guard .ready, launcher.isInUse == false       // the level, read now: an edge may still be queued
-        // guard engine.armRestart() else { return }     // stays .ready; the next idle edge tries, so no loop
-        // enter(.handedOver); onHandOver?()             // same turn, nothing can interleave
-        fatalError("not implemented")
-    }
-
-    /// The one place a lasting effect starts or stops, so leaving a phase cannot leave one armed.
-    private func enter(_ next: Phase) {
-        // leaving .awaitingConnection for anything else → connection.stop()
-        // leaving .ready                                → clock.cancel(); launcher.watchUse(nil)
-        // phase = next
-        // entering .awaitingConnection from outside it  → connection.watch()
-        // entering .ready                               → launcher.watchUse { useChanged($0) }
-        fatalError("not implemented")
-    }
-}
-
-// ─── LauncherPlatform ───────────────────────────────────────────────────────────────────────────
-
-/// `internal import Sparkle` lives in this file and nowhere else. SPUUpdater, SPUUserDriver and SPUUpdaterDelegate are
-/// NS_SWIFT_UI_ACTOR, so main-actor classes conform with no escape hatch. The delegate below is a private object, held
-/// here because SPUUpdater keeps it weakly: a public conformance would put a Sparkle type on `LauncherPlatform`'s surface.
-@MainActor public final class SparkleEngine: UpdateEngine {
-    public var onEvent: (@MainActor (UpdateEngineEvent) -> Void)?
-
-    /// Reads CFBundleVersion and the downloads prefix now: after a swap, `Bundle.main` reads the new bundle (M36).
-    public init(bundle: URL, signer: Signer) { fatalError("not implemented") }
-
-    /// R12's predicate. Sparkle's private rule read-only: `SparkleInternals.canReplace`.
-    public nonisolated static func canReplace(_ bundle: URL) -> Bool { SparkleInternals.canReplace(bundle) }
-
-    public func start() {
-        // HTTPCookieStorage.shared.cookieAcceptPolicy = .never                     // before the first request (E3)
-        // URLCache.shared = URLCache(memoryCapacity: 0, diskCapacity: 0)           // no Cache.db (textplain.out)
-        // let updater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: driver, delegate: self)
-        // updater.userAgentString = "TrackpadLauncher"
-        // updater.httpHeaders = ["Accept-Language": "en", "Accept-Encoding": "gzip"]
-        // do { try updater.start() } catch { onEvent?(.cycleEnded(.failed)) }      // an empty key lands here, silently
-        fatalError("not implemented")
-    }
-
-    public func check() {
-        // sessionInProgress ? checkPending = true : updater.checkForUpdatesInBackground()
-        // Sparkle's session stays on for an async probe after didFinishUpdateCycle, and a connection reading lands in
-        // that window: the next main turn read true on the first try (pendingcheck.out). Nothing else would ask again.
-        fatalError("not implemented")
-    }
-    public func discardHeldUpdate() { fatalError("not implemented") }  // SparkleInternals.veto(job:, extracted: found)
-    public func armRestart() -> Bool { fatalError("not implemented") } // LaunchdJob.submit(hand-over script, ...)
-
-    /// nil and SUNoUpdateError are `.nothingNew`; SUDownloadError is `.requestFailed`; everything else `.failed`. Public
-    /// codes: every URLSession failure, feed or archive, reaches this level wrapped in SUDownloadError (noserver.out).
-    nonisolated static func outcome(of error: (any Error)?) -> CycleOutcome { fatalError("not implemented") }
-
-    private final class Delegate: NSObject, SPUUpdaterDelegate {
-        /// A12. Refuses, before any download, an enclosure outside this repository's tagged assets or not an `.aar`.
-        /// That keeps the disk-image key-rotation fallback (D3) unreachable, so R6's update-key half has no second door.
-        func updater(
-            _ updater: SPUUpdater, shouldProceedWithUpdate item: SUAppcastItem, updateCheck: SPUUpdateCheck
-        ) throws { fatalError("not implemented") }
-
-        /// Always true. The handler is dropped unused, so Sparkle's relaunch flag can never be set.
-        func updater(
-            _ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
-            immediateInstallationBlock immediateInstallHandler: @escaping () -> Void
-        ) -> Bool {
-            // checkPending = false      // a held update stalls the cycle; a veto must not re-download at once
-            // let found = SparkleInternals.extractedUpdate(identifier: signer.identifier, build: item.versionString, ...)
-            // let genuine = found.map { CodeSignature.isGenuine($0, as: ExpectedUpdate(item), signer: signer) } ?? false
-            // onEvent?(.held(genuine ? .genuine : .notGenuine))
-            // return true
-            fatalError("not implemented")
-        }
-
-        func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor check: SPUUpdateCheck, error: (any Error)?) {
-            fatalError("not implemented")  // onEvent?(.cycleEnded(outcome(of: error)))
-        }
-
-        /// The cycle has fully ended and the session is off: a check `check()` remembered runs here. It re-arms the
-        /// 24-hour timer through its own cycle (pendingcheck.out).
-        func updater(_ updater: SPUUpdater, willScheduleUpdateCheckAfterDelay delay: TimeInterval) {
-            fatalError("not implemented")
-        }
-    }
-}
-
-/// Every fact here is Sparkle's private business, proven on `provenOn`. Each names its proof. A test compares
-/// `provenOn` with LauncherKit/Package.resolved, so an upgrade cannot land without re-proving this type.
-enum SparkleInternals {
-    static let provenOn = "2.10.1"
-
-    /// A11, read-only: bundle writable, parent writable, bundle owned by this user, and its group one of this user's.
-    /// Sparkle's rule proves the last two by chowning a temporary file; this creates nothing. A stricter future Sparkle
-    /// costs a silent download at each check, never a prompt (A10).
-    nonisolated static func canReplace(_ bundle: URL) -> Bool { fatalError("not implemented") }
-
-    /// D4. `Installation/<random>/<random>/` under Sparkle's cache. nil unless the newest such folder holding `build`
-    /// holds exactly one bundle: a logout leaves stale folders, and two bundles cannot be told apart from what Sparkle
-    /// would choose (D2).
-    static func extractedUpdate(identifier: String, build: String, caches: URL) -> URL? { fatalError("not implemented") }
-
-    /// D5. Removing this job ends the installer; Sparkle then aborts with 4005.
-    static func installerJob(of identifier: String) -> String { "\(identifier)-sparkle-updater" }
-
-    /// Both layers, each whatever the other did: remove the job, then discard the extracted bundle. Takes what it acts
-    /// on, so a test can drive either layer alone. Inside the delegate call (vetonow.out).
-    static func veto(job: String, extracted: URL?) { fatalError("not implemented") }
-}
-
-/// Under `prefix`, ending in `.aar`, with no `..`. A missing prefix admits nothing. The prefix is the Info.plist key
-/// `TLUpdateDownloads`, so no address exists in Swift and a local server can stand in for GitHub; that the shipped key
-/// is `https` is the scan's rule, `alwaysDeclared`, not this function's.
-func isPinned(enclosure: URL?, under prefix: String?) -> Bool { fatalError("not implemented") }
-
-/// The offer, from the feed, that the extracted bundle's sealed Info.plist must equal.
-struct ExpectedUpdate: Sendable { let version, build, minimumMacOS: String }
-
-/// `SMJob` lives in this file and nowhere else. Deprecated since 10.10, and the only way to submit a non-permanent job:
-/// Sparkle's own comment says so, and it shares this API's fate.
-enum LaunchdJob {
-    static func remove(label: String) -> Bool { fatalError("not implemented") }
-    /// Removes any stale job of this label first.
-    static func submit(label: String, arguments: [String]) -> Bool { fatalError("not implemented") }
-    /// The hand-over job. `allowed` is 5 s in production; a test passes its own, and a stub for `open`.
-    static func handOverArguments(oldPID: Int32, bundle: URL, build: String, allowed: Int, open: String) -> [String] {
-        fatalError("not implemented")
-    }
-    static let handOverScript = "…"   // below, in "The hand-over"
-}
-
-/// One-shot `DispatchSource` timer on the main queue, 1 s leeway, on the clock that stops during sleep. Cancel and fire
-/// are both on main, so a cancelled wait cannot fire.
-@MainActor public final class SystemIdleClock: IdleClock { /* not implemented */ }
-
-/// NWPathMonitor on the main queue; a reading is `path.status == .satisfied`. Exists only between `watch` and `stop`.
-@MainActor public final class SystemConnection: Connection { /* not implemented */ }
-
-// DeviceSession gains:
-//   /// Writer: this device's frame callback. Reader: main, through `isTouched`.
-//   private let occupied = Mutex(false)
-//   var isOccupied: Bool { occupied.withLock { $0 } }
-//   // init takes `sensesContact: @Sendable () -> Bool`, as it takes `clock`, so a test owns its own flag.
-//   // First lines of `receive`, on frame.touches, so before the recognizer's palm filter (H2):
-//   let touched = !frame.touches.isEmpty
-//   let flipped = occupied.withLock { was in defer { was = touched }; return was != touched }
-//   if flipped, sensesContact() { deliver(.contactChanged, nil) }
-//
-// MultitouchTrackpads holds `private let contactSensed = Mutex(false)`, one writer (main), and passes a closure over
-// it: the flag outlives `run`, a session does not. `isTouched` copies sessions out and asks each, as `mergedTapState`
-// does: never two locks at once.
-```
-
-**Depth.** `Updater` shows three things: an initializer, `start`, `onHandOver`. Behind them sit R1's retry, R8's rule, R6's verdict and the hand-over's order. `UpdateEngine` has four methods and one push. Behind them sit Sparkle's configuration, the cookie and cache policy, headers, the enclosure pin, the silent driver, error parsing, the extraction lookup, the signature check, a two-layer veto and the launchd job. Callers keep only what they decide with: held or not, and how a cycle ended. The deletion test passes: remove either and R6, R8 and R1 reappear across `Lifecycle` and the app target.
-
-#### 1. The Sparkle path, and what crosses
-
-The path is the documented automatic one (A1): `SUAutomaticallyUpdate`, `SUEnableAutomaticChecks`, `SUVerifyUpdateBeforeExtraction`, `SUPublicEDKey`, `SUFeedURL` in `project.yml`'s Info.plist properties, beside our own `TLUpdateDownloads`, plus the driver the initializer requires, which shows nothing. No `SPUStandardUpdaterController`. Selection stays Sparkle's: it filters by minimum macOS and takes the highest build, which is R4, and its header asks integrators not to reimplement that. XPC services stay in the bundle unused (G6), so nothing has to strip a signed framework.
-
-| Coupling | Standing | Where it lives |
-|---|---|---|
-| Info.plist keys, `SPUUpdater`, `start`, `userAgentString`, `httpHeaders`, `shouldProceedWithUpdate`, `willInstallUpdateOnQuit` returning true, `didFinishUpdateCycle`, `willScheduleUpdateCheckAfterDelay`, `SUError` codes | Public | `SparkleEngine` |
-| "Sparkle will always attempt to install the update when the app terminates", no relaunch unless requested | Public, in the header | The basis of `armRestart` |
-| `checkForUpdatesInBackground` straight after `start` | Blessed by the docs | `Updater.start` |
-| The same call when a connection arrives | **Departure.** The docs warn it "could interfere with Sparkle's scheduler". It invalidates and re-arms the 24-hour timer, so the mark moves to the retry, which is what R1 means. No public call forces a check, because a failed check stamps `SULastCheckTime` (A8). | `SparkleEngine.check` |
-| Driver that shows nothing | Required by the initializer. The docs' warning is about using a driver *to* install silently; `SUAutomaticallyUpdate` does that here. Its only live use is `.dismiss` on the refused-install path (A10). | `SilentUserDriver` |
-| Extraction layout (D4), installer label (D5), writability rule (A11) | **Private** | `SparkleInternals`, one type |
-
-An upgrade is findable twice: `SourcePolicyTests` confines `import Sparkle`, `org.sparkle-project` and `sparkle-updater` to one file, and a test fails until `provenOn` equals `Package.resolved`'s Sparkle version (per `encode-lessons-in-structure`).
-
-#### 2. Ownership
-
-`Updater` survives. It stops being `@Observable`, because nothing renders it. `Launcher` loses its `updater` parameter and `SettingsShell` loses its stored one; `Updater` watches `Launcher` as a concrete Core type, so no one-adapter protocol appears. `Lifecycle` keeps its one exhaustive quit switch, loses `isInstalling` from `shouldEnd` and `quit`, and gains `handedOver()`, which is today's `replaced()` renamed. `Stage.replacingOthers` carries the opening, so `othersExited` can pass it on. No update decision lives in `Lifecycle`, `Launcher` or the app target.
-
-`Updater` stays built in `applicationWillFinishLaunching`, because that is where the gate reads the running copy. Building it does nothing: `SparkleEngine.start` creates the `SPUUpdater`.
-
-#### 3. R8's gate
-
-**Contact** is read at `DeviceSession.receive` on `frame.touches`: it sees palms and not hovers, and reads no clock (H2). Normal touches cost one uncontended lock per frame and, on a flip, one flag read, with no hop. So "no finger down means no work" holds as today, and a touch costs no main-actor hop unless an update waits.
-
-**Window edges** arrive through `Launcher`'s own model, which flips before AppKit's `orderOut` (H4). A minimised or hidden window stays `.open` and blocks.
-
-**One input.** Both reach `Updater` as one boolean, `inUse`. So "1 minute after the later of the last touch and the window closing" needs no timestamps: each report of "not in use" starts the minute, any report of "in use" cancels it, and at the fire `Updater` re-reads the level, so an edge still queued on main cannot lose a touch. The minute counts from the moment an update is held at the earliest, which is R8's "no trackpad in use" scenario.
-
-**The minute** is a one-shot `DispatchSource` timer in one file, and the no-timer rule changes on purpose:
-
-- The rule's motive is idle CPU. This timer exists for minutes per release and only while a verified update waits (H6).
-- `LaunchClock` is the wrong tool. It reports a system stop as *passed*, which is right for a cap and wrong here. Its 60 s behaviour with the display asleep is unmeasured, which is exactly when R8 fires (H5). Its rule says a deadline cannot outlive its effect, and this one has no effect on screen.
-- The clock stops during sleep, and the `run` at wake restarts the minute, so an install never lands the moment a lid opens.
-
-Rule text for `docs/architecture.md`: *"…Time passes only on Core Animation's clock, with these exceptions, each confined to one owner: a one-shot timer for an automatic update's idle minute, armed only while a verified update waits and nothing uses the app; Sparkle's own 24-hour one-shot; and the hand-over job's bounded wait, which runs after this process has ended."*
-
-A dead trackpad reads as idle, which R8's scenario wants. A stuck `occupied` delays the install until the next touch or `run`: it fails safe.
-
-#### 4. The hand-over (R9, R11)
-
-Order of effects. Steps 1 to 3 run in one main-actor turn, so nothing can interleave.
-
-| # | Effect | If the process or a helper dies right after it |
-|---|---|---|
-| 1 | Minute passes; level re-read | Held update installs at the end, no relaunch (A5). A later login or opening runs the new version: "never relaunches after a crash" stands. |
-| 2 | `armRestart`: remove a stale job, `SMJobSubmit` the one-shot with old pid, bundle, old build | Job carries on and finishes the hand-over: the crash came after the decision. `armRestart` false: stay `.ready`, keep running, try on the next idle edge. The update still installs at the next end. No loop. |
-| 3 | `.handedOver`, `Lifecycle.end()`: `.ending`, `NSApp.terminate` | As step 2. `shouldEnd` answers yes in `.ending`, so the old copy cannot refuse. |
-| 4 | `Updater.app` sees the exit; `Autoupdate` runs stage 3 | Installer killed before the swap: bundle untouched; job's budget runs out; old copy returns. |
-| 5 | `renamex_np(RENAME_SWAP)` | Atomic: one whole copy on disk (C4, D-4). `archive_and_check` requires `Autoupdate` to carry the release's Team ID, or Sparkle would fall back to two moves. |
-| 6 | Job sees the build change; `open -g -a <bundle> --args --after-update` | Job killed (only logout does): nothing runs until login, and the login item is intact. |
-| 7 | `.afterUpdate`, `.runSilently`, stop others, resident, no check at start | New version crashes: nothing runs until the next login or opening. This is plan 022's accepted cost; no older copy exists to return to (rollback is a non-goal). |
-
-**On failure** (C1), `Autoupdate` exits and nothing restarts the app. The job's budget runs out, at least 5 s and at most 6 s from the old pid's exit on **wall time** (C2's lesson; `date +%s` counts whole seconds), and it opens whatever is there with the same `--after-update`: the old copy, silent. So a swap gets a full 5 s before the job gives up on it. That start does not check (`discardquit.out` shows the loop if it did: check, download, a minute, fail, for ever). Sparkle's schedule retries within 24 hours of the stamped check, which is R11's "a later check", and an overdue stamp checks once at start and then is fresh, so no tight loop exists either way. Worst case to gestures: about 6 s, plus `open` and the app's own start (about a second of CPU), inside 10 s. The app logs nothing and nothing outside it shows gestures running, so `update-e2e.sh` times this with a person's tap, and the process's start with its sampler.
-
-One argument serves both ends because a process needs to know only that it should start silently. The cost is that a successful update does not check at start, and the next check comes at the 24-hour mark. R1's "when it starts, at login or by hand" does not cover this start.
-
-**Why a job at all.** D-1 is settled by R11: Sparkle cannot recover from a failed swap (C1), and only something outside the old process, created before it ends, can (C3). `why.md` Avoid 4 and 5 came from plans where the old process was alive at hand-over, or from another failure, and did not weigh R11. The glossary's "never relaunches itself after a crash or a force quit" still holds: the job is only ever created in the same turn as a deliberate end.
-
-```sh
-# launchd: /bin/sh -c "$script" handover <pid> <bundle> <build> <allowed> <open>
-# LaunchOnlyOnce, RunAtLoad, EnableTransactions false, ProcessType Interactive. kSMDomainUserLaunchd. Parent: launchd.
-old=$1; bundle=$2; build=$3; allowed=$4; open=$5
-# Never open while the old process lives: it would only show its window. It ends in this same turn; if it hangs, the
-# wait holds until it goes, so a late end still installs and still comes back.
-while /bin/kill -0 "$old" 2>/dev/null; do /bin/sleep 0.05; done
-gone=$(/bin/date +%s)
-while [ $(( $(/bin/date +%s) - gone )) -le "$allowed" ]; do
-  now=$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$bundle/Contents/Info.plist" 2>/dev/null)
-  if [ -n "$now" ] && [ "$now" != "$build" ]; then break; fi
-  /bin/sleep 0.1
-done
-exec "$open" -g -a "$bundle" --args --after-update
-```
-
-`ThisCopy.launch` turns `--after-update` into `Opening.afterUpdate`, beside `--eject-disk-image`, and a reopen still reads only the event. `open -g` leaves focus alone (B4, H8), the argument is a positive signal with nothing persisted (B6), and a copy that once had a window hands over cleanly (B11). The version comparison couples to nothing of Sparkle's. An opening by hand during the 200 ms gap either receives a re-front or, on a different build, is stopped by the silent copy; the user reopens, one window lost in a race that needs an opening in that exact gap.
-
-**R10 carries over because an update changes nothing but the bundle at the same path.** The identifier and team stay, so the designated requirement macOS keeps with each permission still matches, and the installed copy's path and name stay (B9, B10). The defaults domain is the same, and `Updater` writes nothing to it. The hand-over goes through `end()`, never `quit()`, so it makes no login-item call (B8). The `.afterUpdate` route never runs `openedByHand`, so no first run, no `resume` and no ask. Whether macOS really keeps the grants and the login item across this swap has never been measured, so it is a by-hand check on a notarised build (L2).
-
-#### 5. R13 and R14
-
-| Way of quitting | Nothing, or a check or download running | Verified update waiting |
-|---|---|---|
-| *Quit Trackpad Launcher* | `suspend`, `end`, at once. The download dies with the process. | Same. Sparkle installs at exit with no relaunch (`plainquit.out`); the app stays stopped until opened. |
-| ⌘Q, close, Escape, Dock's Quit, window open | Window closes only | Window closes only; the idle minute may start |
-| `.other`, window closed (script, Activity Monitor) | Ends | Ends; installs at exit; no restart |
-| `.system` | Ends at once | Ends at once; Sparkle may install; no job exists, no restart |
-| Crash, force quit, another copy's stop | Ends | Installs at exit; no restart |
-
-Nothing is left armed, because only two things could restart the app and neither can be pending after a quit. Sparkle's relaunch flag is set only by the immediate handler, which is never called (B3 unreachable). The job is submitted only in the turn that ends the process, so a Quit lands either before it, when no job exists, or after the process has gone. The `isInstalling` guards go. `shouldEnd`'s table is otherwise unchanged, and `.system` always wins. R14's dependence on a real logout reading as `.system` is the shipped risk D-3. A minute that passes between `willPowerOff` and the quit event hands over as usual: the old copy ends, which is what logout wants, and the job's `open` meets a session already ending.
-
-#### 6. R6
-
-**The update-key half.** `SUVerifyUpdateBeforeExtraction` makes Sparkle check EdDSA before extracting. The only way past a failed EdDSA check is a same-team Developer ID disk image (D3). `isPinned`, in the public `shouldProceedWithUpdate` (A12), refuses every enclosure but a tagged `.aar` of this repository, silently and before any download. An `.aar` cannot carry a code signature, so that door does not exist. `SURequireSignedFeed` is not adopted: R6 is about the download, and it would add a failure mode that silently stops every copy.
-
-**The Developer ID and identifier half.** Sparkle checks only validity (D1, D2), so at A3's moment `SparkleEngine` runs `CodeSignature.isGenuine` on the extracted bundle: Developer ID, this team, this identifier, `notarized`, strict and nested validation, offline, sealed versions equal to the offer (D7). Notarisation at install stays: it is free, and older copies already enforce it. The check runs synchronously on main, 18 to 31 ms on the stapled 6 MB app (`genuine.out`), once per release, so there is no phase in which `Quit` could install an unchecked update. It is a named exception to "work that would delay a click runs off main".
-
-**Fail closed.** No bundle found, two bundles, a stale layout or an unreadable signature all read `.notGenuine`.
-
-**The veto.** `discardHeldUpdate` has two independent layers. Each is proven alone, and both together inside the delegate call, which is where `.held(.notGenuine)` runs it: the cycle ended with 4005 a millisecond later, and ending the process three seconds on installed nothing (`vetonow.out`).
-
-1. `LaunchdJob.remove(installerJob)`: abort 4005, cycle ends, nothing installs, a later check runs normally (`veto.out`).
-2. Whatever the first did, `BundleInstall.discard` on the extracted bundle, so stage 3 has nothing to install. Run alone with the job left alive: stage 3 failed, the old app stayed whole, nothing installed (`discardquit.out`).
-
-**When a veto fails.** Both layers failed, which needs Sparkle's label and its layout to have changed together, and `provenOn` blocks that. The result: `.resting`, no restart is ever armed, Sparkle's cycle stays stalled, and the update installs at the next end of the process. It still carries the publisher's EdDSA signature. **Residual gaps, named:** this one; and a process end in the moments between Autoupdate finishing stage 1 and the delegate call, which installs an EdDSA-valid update unchecked (A5). Neither is reachable without the private key.
-
-#### 7. R1
-
-| Trigger | Mechanism |
-|---|---|
-| Every start | `checkForUpdatesInBackground` straight after `start()` (A8). Not at an after-update start. |
-| Every 24 hours | Sparkle's one-shot walltime source (A9). `SUScheduledCheckInterval` stays at its default. |
-| Wake past the mark | The same source: its wall clock counts sleep, so it fires on wake (A9). |
-| Connection after a failure | `.awaitingConnection`, `Connection.watch`, `engine.check()` |
-
-No hot loop: `retrySpent` is set as the retry is made, so a check needs a fresh reading. The first failure earns one retry on the first "connected" reading, and `NWPathMonitor` pushes that reading at once (`path.out`, 2.5 ms), which closes the race where the path came up before the watch armed. That reading lands while Sparkle's session is still on for its end-of-cycle probe, so `check()` remembers it and fires from `willScheduleUpdateCheckAfterDelay`, the moment the session is off; the retry that ran there re-armed the 24-hour timer (`pendingcheck.out`). A retry that fails on a steady path needs a real drop and return; a drop during the retry earns the next one, so a link that falls mid-retry still comes back. A persistent failure on a steady path (DNS, a captive portal, a 404) therefore makes one extra request, then waits for the 24-hour mark. There is no floor, backoff or timer. A cycle that ends some other way (a bad signature, a veto) waits for the next check, which is R5's and R6's "later check". A download lost mid-way is `.requestFailed` too, so it retries when the connection returns (R5).
-
-`NWPathMonitor` is the push. `SCNetworkReachability` is deprecated since macOS 14.4, and its header names `NWPathMonitor` as the replacement. The ban on `import Network` becomes a confinement, on purpose: a path monitor makes no request, and `NWConnection` stays banned.
-
-#### 8. R2 and R12
-
-The gate is decided in `UpdatableCopy.init?`, read once in `applicationWillFinishLaunching`, and enforced by absence: `Updater?` is nil, so `SparkleEngine` is never built. `developerIDSigner()` takes no arguments, so `--as-release-build` cannot fake it. `Updater.start` runs only from `othersExited`, so a `.end` or `.askToMove` route never reaches it, and a move's new process runs the gate itself.
-
-`canReplace` runs before any request. It mirrors A11 read-only (`stat` and group membership), so a standard account, or an admin looking at another admin's copy, stays silent, including the group-writable case Sparkle's third test exists for. If it ever says yes wrongly, A10 still guarantees no prompt, at the cost of a silent download at each check.
-
-#### 9. R3
-
-| Property | How it holds | Evidence |
-|---|---|---|
-| User-Agent | `userAgentString = "TrackpadLauncher"` | E1 |
-| Language, encoding | `httpHeaders` sets `Accept-Language: en`, `Accept-Encoding: gzip`; applies to feed and download, survives a 302 | E1 |
-| Cookies | `cookieAcceptPolicy = .never` before the first request; no URL the app forms sets one anyway | E2, E3, E4 |
-| Query string, profile | Profiling off by default; `neverDeclared` keeps it off; the feed and enclosure addresses have none | E6 |
-| Validators | The feed is `reloadIgnoringLocalCacheData`; none sent with `ETag` and `max-age` on offer; `URLCache` at zero stores nothing | `textplain.out` |
-| Redirects | The feed has none. The download's same headers go on every hop | E1, E5 |
-
-**Feed address:** `https://raw.githubusercontent.com/domasgru/trackpad-launcher/main/appcast.xml`, in `project.yml` as `SUFeedURL`. It is a permanent contract with every automatic copy, like the `.aar` name. **A check is one request with no query string and no cookie, as R3's scenario says.**
-
-**A limit to name.** The last hop of a *download* follows GitHub's redirect to `release-assets.githubusercontent.com`, whose URL carries GitHub's own signed, expiring query string. GitHub forms it and it names nothing of the user's, the Mac's or the versions, so R3's purpose holds, but a network monitor will show a `?` on that one request. CFNetwork's own transport fields sit outside what this design sets, as plan 022 recorded.
-
-#### 10. The feed and the release
-
-**Where.** `appcast.xml` is a committed file at the repository root on `main`, starting as an empty channel with `</channel>` on its own line. Each release adds one single-line item and keeps every older one, so R4's "needs a newer macOS" finds them (F2). The file is rendered by the script, not by `generate_appcast` (F5), and only the script writes it, so a pre-release can never appear (R4). `gh release create` still publishes the app and its assets as one step (immutable releases, F3); the feed names the asset only after it exists. Withdrawing a release is one commit removing its item, and a bad feed can be corrected the same way, which a feed inside an immutable release could not.
-
-`why.md` Preserve 13 says a feed's failure must stop the release. R3's scenario overrides it in one narrow place: all the feed's content is rendered, signed and validated before anything is pushed, so only the final `git push` can fail after publishing. That leaves the release visible to cards and not yet to Sparkle copies, and `--feed-only` finishes it.
-
-**Key.** `generate_keys` keeps it in the login keychain; `SUPublicEDKey` is in `project.yml`; the private half is never in the repo; preflight proves the two match before anything changes. Backup with `generate_keys -x` is a human step, because a lost key cannot rotate (F6), and the pin closes the disk-image door on purpose. Until the key exists, `start()` fails silently and preflight refuses, so nothing half-configured can ship.
-
-**Build numbers.** Sparkle compares `CFBundleVersion` (F1), so a hand-raised marketing version with an old build number would be invisible. The script refuses a build number not above every item in the feed and the previous tag's.
-
-```bash
-FEED="$ROOT/appcast.xml"
-SPARKLE_BIN="$ROOT/LauncherKit/.build/artifacts/sparkle/Sparkle/bin"
-
-# In preflight_checkout: every credential is checked before anything changes.
-(cd "$ROOT/LauncherKit" && swift package --disable-keychain resolve) || fail "cannot resolve the package."
-[ -x "$SPARKLE_BIN/sign_update" ] || fail "Sparkle's tools are missing from the resolved package."
-[ "$("$SPARKLE_BIN/generate_keys" -p)" = "$(sed -n 's/^ *SUPublicEDKey: *//p' "$ROOT/project.yml")" ] ||
-  fail "the keychain's update key is not the one project.yml ships; import the backup with generate_keys -f."
-xmllint --noout "$FEED" || fail "appcast.xml is not well-formed."
-
-# Before preflight_version. A failed publish can leave a draft nothing sees, and it would block this retry.
-[ "$(gh release view "v$(read_setting MARKETING_VERSION)" --repo "$REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null)" != true ] ||
-  gh release delete "v$(read_setting MARKETING_VERSION)" --repo "$REPOSITORY" --yes
-
-# In preflight_version: the feed's highest and the previous tag's, so an empty feed cannot bypass the check.
-preflight_build_number() {
-  local build highest tag tagged
-  build="$(read_setting CURRENT_PROJECT_VERSION)"
-  highest="$(sed -n 's:.*<sparkle\:version>\([0-9]*\)</sparkle\:version>.*:\1:p' "$FEED" | sort -n | tail -1)"
-  [ "$build" -gt "${highest:-0}" ] || fail "build $build is not above the feed's $highest; Sparkle would never offer it."
-  tag="$(git -C "$ROOT" tag --list 'v*' | sort -V | tail -1)"
-  tagged="$(git -C "$ROOT" show "$tag:Config/Version.xcconfig" | sed -n 's/^CURRENT_PROJECT_VERSION *= *//p')"
-  [ "$build" -gt "${tagged:-0}" ] || fail "build $build is not above $tag's $tagged."
-}
-
-# In archive_and_check, strict mode: Sparkle's atomic swap needs Autoupdate and the update on one team (C4).
-codesign -dv "$copy/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" 2>&1 |
-  grep -qx "TeamIdentifier=$TEAM_ID" || fail "Sparkle's installer is not signed by team $TEAM_ID."
-
-# After archive_and_check strict: the stapled archive, against every shipped card's own rules (R16).
-swift run --package-path "$ROOT/LauncherKit" --disable-keychain card-contract \
-  "$AAR" --team "$TEAM_ID" --identifier "$BUNDLE_ID" || fail "an older copy's card would refuse this release."
-
-# After the disk image is notarised: renders into $OUT, so a failure leaves the tree clean.
-write_feed() {
-  local attributes signature item plist="$APP/Contents/Info.plist" name
-  name="$(basename "$AAR")"
-  attributes="$("$SPARKLE_BIN/sign_update" "$AAR")" || fail "cannot sign the update with the update key."
-  signature="$(sed -n 's/.*edSignature="\([^"]*\)".*/\1/p' <<<"$attributes")"
-  "$SPARKLE_BIN/sign_update" --verify "$AAR" "$signature" || fail "the update's signature does not verify."
-  item="<item><title>$EXPECTED_VERSION</title>"
-  item+="<pubDate>$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')</pubDate>"
-  item+="<sparkle:version>$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")</sparkle:version>"
-  item+="<sparkle:shortVersionString>$EXPECTED_VERSION</sparkle:shortVersionString>"
-  item+="<sparkle:minimumSystemVersion>$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$plist")</sparkle:minimumSystemVersion>"
-  item+="<enclosure url=\"https://github.com/$REPOSITORY/releases/download/v$EXPECTED_VERSION/$name\" $attributes type=\"application/octet-stream\"/></item>"
-  # A version already in the feed is replaced, so --feed-only can run twice.
-  awk -v item="$item" -v version="<title>$EXPECTED_VERSION</title>" \
-    'index($0, version) { next } /<\/channel>/ { print item } { print }' "$FEED" > "$OUT/appcast.xml"
-  xmllint --noout "$OUT/appcast.xml" || fail "the feed is not well-formed."
-}
-
-# Publishing: the asset exists before the feed names it.
-gh release create "v$EXPECTED_VERSION" "$DMG" "$AAR" --repo "$REPOSITORY" --latest ...
-publish_feed() {
-  cp "$OUT/appcast.xml" "$FEED"
-  git -C "$ROOT" add "$FEED" && git -C "$ROOT" commit --quiet -m "Feed $EXPECTED_VERSION" -- "$FEED" &&
-    git -C "$ROOT" push --quiet origin HEAD:main ||
-    fail "v$EXPECTED_VERSION is published but the feed is not; run release.sh --feed-only $EXPECTED_VERSION."
-}
-# --feed-only <version>: downloads the published .aar, unpacks it so $APP names the sealed plist, write_feed, publish_feed.
-```
-
-| Step, in order | Failure leaves |
-|---|---|
-| Preflight, now with the update key, Sparkle's tools and the feed | Nothing changed |
-| Tests, bump, `preflight_version` with the build-number check | Version commit undone |
-| Archive, export, notarise, staple, `stapler validate` (R7) | Undone. No `.aar` exists yet, so no feed item can exist. |
-| `archive_and_check strict`, with `Autoupdate`'s team | Undone |
-| `card-contract` on the stapled `.aar` (R16) | Undone |
-| Image, sign, notarise, staple, Gatekeeper | Undone |
-| `write_feed`, into `$OUT` | Undone; the tree is clean |
-| Push the version commit | Nothing published; undone |
-| `gh release create` | Main holds the version, nothing visible; run with no argument. A leftover draft is removed first. |
-| `publish_feed` | Release public, feed not: cards see it, Sparkle copies do not yet. `--feed-only` finishes it. |
-
-Publishing a broken or unnotarised update takes defeating `set -e`: the feed is built only from a stapled, card-checked archive, and it names only an asset that already exists.
-
-#### 11. R16
-
-The `.aar` stays the one archive, read by both the card and Sparkle (A6). Asset name, inner `TrackpadLauncher.app`, stapled ticket, identity and tag path are unchanged. The first automatic version carries `SUVerifyUpdateBeforeExtraction`, so one file serves both, and the first version arrives through the old card as an opening by hand with a window, because old code passes no argument.
-
-The rules outlive the card through `CardContract`. Its code is the shipped code moved, not rewritten: `admits`, `extract`, `MemoryStream`, the asset-name parse, `Version`, and a copy of `isGenuine` with the card's own requirement. It is frozen, with its tests moved beside it, and imports neither `LauncherCore` nor `LauncherPlatform`, so a change to the running app cannot weaken it. It sits under `LauncherKit/Sources`, so the scan binds it too: the tool reports through standard error and its exit code, never `print(`. `release.sh` runs it on every release, before anything is pushed. On `--archive-only`, which runs lenient on an unnotarised app, it reports its verdict and does not fail, as the stapler check does there. It also closes F8's gap: the Developer ID, identifier and `notarized` requirement over nested Sparkle code runs on the real stapled archive before the first automatic release is public.
-
-#### 12. Build
-
-- `.package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1")`, a dependency of `LauncherPlatform` (G1). `project.yml` gains only Info.plist keys; the app embeds it automatically. `CardContract`, `card-contract` and `CardContractTests` join `Package.swift`; `project.yml` does not link them.
-- `LauncherKit/Package.resolved` is committed (G4), so `release.sh`'s clean-tree check holds.
-- `xcodebuild -exportArchive` re-signs every nested helper with the Developer ID and the hardened runtime (G2). No `--deep`, no entitlements. Debug and perf builds keep ad hoc helpers and never start the updater.
-- **The keychain stall (G3).** `Scripts/test.sh` runs `swift test --disable-keychain`; every `xcodebuild` (`Makefile`, `release.sh`, `Scripts/perf/build.sh`) passes `-packageAuthorizationProvider netrc`. Implementation proves the cold path once with a scratch `--cache-path`. If that still blocks, the fallback is a vendored `.binaryTarget(path:)` plus the tools; the interface above does not change.
-- Sparkle links at load with WebKit in every build (G5). No weak-linking: `docs/performance.md` gets a re-measured baseline.
-
-#### 13. Deletions and the rules
-
-**Goes.** `GitHubReleases`, `ApplicationsUpdater`, `UpdateCardView`, `Release`, `UpdateEvent`, `UpdateCard`, `InstalledRelease`, `ThisCopy.version` and `macOS`, `Copy.update*`, `Fit.card`, `SettingsShell.updater`, `SettingsView`'s card and Quit disable, `BundleInstall`'s unpacking (moved). Tests: `UpdateCheckTests`, `UpdateInstallTests`, `ApplicationsUpdaterTests`, `GitHubReleasesTests`, `InstalledReleaseTests`, `LocalReleaseServer`; `VersionTests`, `BundleInstallTests` and `CraftedArchive` move to `CardContract`.
-
-**The move keeps** the `Installer` port, `ApplicationsInstaller`, `PrivilegedInstall`, `Administrator`, `BundleInstall`'s `quarantine`, `newFolder`, `stage`, `swap`, `discard`, `removeOriginal`, `clearQuarantine`, `Placement`, `MoveDialog`, `Copy.cannotWriteToApplications`. `UpdateFixtures` and `make-update-fixtures.sh` stay for `isGenuine`'s tests.
-
-| Standing rule | Where | Change, on purpose | Reason |
-|---|---|---|---|
-| "Three `@Observable` models"; `Updater` owns the card; `Launcher` reports the window to it; new version arrives by hand | `architecture.md:11`, `domain-model` | Rewritten to this shape | R1, R9, R15 |
-| Module list: URL Loading and AppleArchive in `LauncherPlatform` | `architecture.md:12` | Sparkle, Network's path monitor and ServiceManagement's job submission arrive; URL Loading and AppleArchive leave; `CardContract` named as never shipping | Design |
-| Off-main rule for work that would delay a click | `architecture.md:19` | Adds the one exception: the update's signature check, 18 to 31 ms, once per release | R6 |
-| Sudden-termination rule | `architecture.md:11`, `SourcePolicyTests` | Kept; reworded to name the move, since no update opens a child now | The old copy's own declaration still matters for the first update (B5, B11) |
-| "No timers, no polling" | `architecture.md:20` | Amended, text in section 3 | R1, R8 |
-| "No network code except…" | `architecture.md:27` | One kind, Sparkle's, in the plan's wording | Plan's privacy rule |
-| "No files written other than" | `architecture.md:27-30` | Adds Sparkle's caches, the empty `HTTPStorages` jar and defaults keys (A13); drops the staged update | R8 keeps an update on disk |
-| "No logging" | `architecture.md:27` | Binds our Swift. Sparkle's `SULog` writes to the local unified log with no off switch (D-5); the docs say so plainly. | D-5 |
-| Distribution: assets and contract | `architecture.md:35-36` | Adds the feed, the update key, the build-number rule, nested helpers | R4, R6, R7 |
-| "Nothing relaunches the app" | `SourcePolicyTests` | Tokens stay; rule reads "after a crash or a force quit; the hand-over job opens it once after an update". The glossary keeps its sentence and gains that clause. | D-1, C1 |
-| Update check, Newer version, Update card, Quit's *Installing…* text, "by an update opening the new version" | `domain-model.md` | Per the plan; adds *Automatic update*, *Hand-over* | R13, R15 |
-| "The user decides when", "never in the background" | `README.md:17-18, 34, 69-72`, `product-overview.md:8`, `release.sh` header | Recorded as reversed | R1, R8 |
-
-| `SourcePolicyTests` row | Change |
-|---|---|
-| `Timer`, `makeTimerSource` | Banned → confined to `SystemIdleClock.swift` (`DispatchSourceTimer` holds the token). `asyncAfter`, `Task.sleep`, display links stay banned. |
-| `import Network` | Banned → confined to `SystemConnection.swift`, with new `NWPathMonitor`. `NWConnection` stays banned. |
-| `theNetworkBansAreAllStillListed` | `Timer` and `import Network` leave `required`; a twin check requires them in `confined`, so neither can drop out of the scan. |
-| `URLSession` | Confined to a deleted file → banned: our Swift makes no request |
-| `http` | Confined to `SparkleEngine.swift`, for `httpHeaders`; no address in Swift |
-| `downloadTask`, `.download(` | Stay banned, rule reworded: our Swift downloads nothing |
-| `AppleArchive`, `ArchiveStream`, `ArchiveByteStream` | Confined to `CardContract.swift` |
-| `SecCode`, `SecStaticCode`, `SecRequirement`, `Data(contentsOf:`, `removeItem(`, `itemReplacementDirectory` | Add `CardContract.swift`: the tool reads the archive it is given and unpacks it to a scratch folder |
-| `createsNewApplicationInstance` | Removed; the code is gone |
-| New confinements | `import Sparkle`, `HTTPCookieStorage`, `URLCache`, `org.sparkle-project`, `sparkle-updater` to `SparkleEngine.swift`; `SMJob` to `LaunchdJob.swift`; `/bin/sh` to `LaunchdJob.swift`, `PrivilegedInstall.swift` |
-| `neverDeclared` | Adds `SUEnableSystemProfiling`, `SUEnableInstallerLauncherService`, `SUEnableDownloaderService` |
-| New `alwaysDeclared` over `project.yml` | `SUFeedURL`, `SUPublicEDKey`, `SUEnableAutomaticChecks`, `SUAutomaticallyUpdate`, `SUVerifyUpdateBeforeExtraction`, `TLUpdateDownloads`: the automatic path's keys cannot be lost silently. `SUFeedURL` and `TLUpdateDownloads` must start `https://`, and `TLUpdateDownloads` must end `/`, so a sibling such as `…/download-x/` is not under it. |
-| New test, in `LauncherPlatformTests`, which can see `SparkleInternals` | `provenOn` equals `Package.resolved`'s Sparkle version |
-
-`Process()`, `posix_spawn` and the rest of "no child processes" are untouched: the job is launchd's, not a child. Under `why.md`'s Hypothesis B the rule's spirit does bend, so the `/bin/sh` row says so.
-
-**`why.md` bindings.** Preserve 1 to 14 hold, with two narrowings: 13 by R3's scenario (section 10), 14 by D-5. Avoid 2 is narrowed: one argument, `--after-update`, passes between versions and binds every future version, which is named under Tradeoffs. Avoid 3 holds through the new `Route` row. Avoid 4 and 5 are overridden for the hand-over only, on C1 to C3 and R11. Avoid 6 holds: nothing ends before the verdict. Avoid 1 and 11 hold through `update-e2e.sh`, which proves Sparkle's behaviour on the wire and on screen rather than from the scan or its options. Avoid 7 is moot, since the opener starts after the old process has gone. Avoid 9 and 10 hold: the gate is no `#if DEBUG`, and the feed is no second `.aar`.
-
-#### 14. Testing seam
-
-**The seam** is `LifecycleWorld`: real `Lifecycle`, `Launcher` and `Updater`, with every scenario in plain Swift Testing and no waiting.
-
-| Cannot be waited for or provoked | Handle |
-|---|---|
-| The clock | `InMemoryIdleClock`: `pending`, `pass()` |
-| Contact | `InMemoryTrackpads` touches; `isTouched`, `sensesContact` |
-| Window | `Launcher` intents |
-| Connectivity | `InMemoryConnection.set(_:)`, `isWatching` |
-| Sparkle's callbacks | `InMemoryUpdateEngine.push(.held(.notGenuine))`, `.cycleEnded(.requestFailed)`, `starts`, `checks`, `discards` |
-| A job that fails | `armWorks` flag |
-| The process ending, and what follows | `copies.hasEnded`, `EffectLog` order, `world.finishHandOver()` starting the next process |
-| Death at any effect | `snapshots` around "arm restart", as "kill at any effect" works today |
-
-| Level | What runs there |
-|---|---|
-| `swift test`, world | R1 retry, spent reading, no hot loop; R2 and R12 gate; a `.end` or `.askToMove` route never starts the engine; R8's scenarios; R9 silent route, login item untouched; R11's no check at an after-update start; R13 and R14 tables; R15 |
-| `swift test`, Platform | `DeviceSession.receive` by direct call (palm, hover, `run` reset, sensing off makes no hop); `SparkleInternals` on temp folders (stale folder, two bundles, none); `outcome(of:)`; `isPinned`; `isGenuine` against the real fixture, whose other identity is R6's mismatch; the hand-over script run for real under `/bin/sh` with a stub `open`, a held pid and `allowed` of 5 s, asserting the wall-time bound, which catches C2's bug (a budget of 1 s would not: a loop that counts rounds also lands inside its window); `CardContract`'s moved tests |
-| `Scripts/update-e2e.sh`, built app | Two real builds from a patched spec (bundle identifier `.e2e`, local `SUFeedURL` and `TLUpdateDownloads`, `NSAllowsLocalNetworking`), Developer ID signed and notarised, because the gate cannot be faked. In /Applications, nested one folder deep for the failure case. The local server mirrors GitHub's paths, redirects, cookies and validators. R1 login start, R3 on the wire, R5, R6 (tampered signature; signed by another identity), R7's client side, R9 with focus and timing, R11 by a read-only parent, R13, A10. It is the spike's scenarios ported to the real app. |
-| By hand | Real logout, restart, shutdown (D-3); TCC and login item (L2); offline start; sleep past the mark, with `defaults write SULastCheckTime`; a real 1.0.15 pressing *Update now* (R16) |
-
-Fakes hid plans 035's and 038's bugs, so the world tests prove decisions and the E2E proves the hand-over. Neither stands in for the other.
-
-### Synthesis decision
-
-**Base: candidate 1** (Opus). I scored it first on every rubric criterion, and the cross-judge agreed, 26 to 17, on the same criteria and for the same reasons: its model is smaller (`Updater` shows three things, Core holds no version, `Launcher` learns only "in use"), it stays on Sparkle's documented selection, its private coupling is enforced by a test, and its failure table is complete. Candidate 2 reached the same core on its own (automatic path, held, one-shot job, `--after-update`, `Updater` in Core, one file for private facts). That convergence is a strong signal for those decisions.
-
-**Grafted from candidate 2, by hand:**
-
-- **The feed as a committed file on `raw.githubusercontent.com`,** with `--feed-only`. *Here I overruled the cross-judge,* which kept the release asset for Preserve 13 and R4's withdrawal. R3's scenario says a check has "no query string", and the task says a Preserve yields to a requirement. The release asset's last hop carries one, and its first offers cookies. A feed in an immutable release also cannot be corrected, and a raw feed needs one request instead of three. Sparkle parsed a `text/plain` feed with `ETag` and `max-age` on offer and sent no validators (`textplain.out`). Withdrawal stays one commit.
-- **One argument, `--after-update`, and no check at that start.** Candidate 1 split success from failure with a second argument, to check after a success. One argument means one branch less in the job and one case less in `Opening`; the 24-hour mark covers the rest.
-- **`alwaysDeclared` and the wider `neverDeclared`,** which the judge called candidate 2's best idea.
-- **`URLCache.shared` at zero.** *The judge said not to port it,* because the feed already ignores the cache. That is right about validators and misses that it removes `Cache.db` from disk (`textplain.out`), one persistent file fewer in a rule that lists every file.
-- **The previous-tag build check,** so an empty feed cannot bypass the rule, and **candidate 2's wider doc list.**
-- **Waiting on the old pid without a bound.** Candidate 1 abandoned the job after 10 s, so an old process that ended late installed and nothing reopened it (from the judge's list).
-
-**Changed from both:**
-
-- Failure classification rests on the public `SUDownloadError`, not on walking nested errors or marking an offer. Every URLSession failure reaches that level wrapped (`SPUDownloadDriver.m`, `noserver.out`), which closes L3 and retires a private coupling.
-- `isPinned` reads a new Info.plist key, so no address exists in Swift and a local server can stand in for GitHub.
-- `discardHeldUpdate` returns nothing, because `Updater` could not act on the answer.
-
-**Kept from candidate 1 against candidate 2:** the synchronous check, now measured at 18 to 31 ms (`genuine.out`) and sparing an interleaving window; `NWPathMonitor`, which reports the present reading at once (`path.out`) and is not deprecated (the SDK header confirms `SCNetworkReachability` is); `canReplace` mirroring all of A11; Sparkle's own selection; `CardContract` over shell approximations of the card's rules.
-
-**Rejected from candidate 2:** `FeedPolicy` and `bestValidUpdate`, which reimplement what Sparkle's header asks integrators not to; always-on contact edges, a main-actor hop on every touch for minutes of use per release; `.untilQuit`, since staying `.ready` retries on the next idle edge; its `Timer` and `http` scan rows, which would fail on arrival.
-
-**From the test planner's review of this design:** `retrySpent` is set as the retry is made, because a drop during a retry used to lose the return; `check()` remembers a check refused in Sparkle's end-of-cycle window, which `pendingcheck.out` hit on the first try; `isPinned` no longer demands `https`, which the scan now holds, so a local server can stand in; `DeviceSession` takes its sensing flag as it takes its clock, and `veto(job:extracted:)` takes what it acts on, so tests can drive them; the job's budget is at least its stated 5 s; `card-contract` reports without failing on `--archive-only`; and the in-call veto was probed (`vetonow.out`).
-
-**Red-flag screen.** No shallow modules survive: `Launcher.watchUse` is the thinnest surface, and it hides the sensing switch, the reset rule and the merge across pads. No information leakage: Sparkle's private facts have one home, and `ExpectedUpdate` stays in Platform. No temporal decomposition: `Updater` owns check, hold and hand-over as one body of knowledge. No pass-through: `UpdateEngine.check` adds the `sessionInProgress` guard, and `armRestart` hides the job.
-
-### Tradeoffs accepted
-
-- We accept a shell script polling for at most a few seconds, once per update, in exchange for R11, which nothing else can meet (C1), and for a helper that needs no signing and survives the swap.
-- We accept `SMJobSubmit`, deprecated since 10.10, in exchange for the only non-permanent job API. Sparkle shares its fate, so its removal is one problem, not two.
-- We accept private coupling to a cache layout and a job label in exchange for staying on the automatic path, the only path with A10's no-prompt guarantee, with an upgrade that fails a test until re-proven.
-- We accept a synchronous signature check on main, 18 to 31 ms once per release, in exchange for no phase in which an unchecked update waits. It looks like a slip against the concurrency rule and is not one.
-- We accept a moment where a process end installs an EdDSA-valid update without our check, because Sparkle offers no earlier hook. Exploiting it takes the private key.
-- We accept that the idle minute starts no earlier than the moment an update is held, even if the pad was idle before, in exchange for no contact work in normal use.
-- We accept that a persistent install failure retries once per 24 hours, not sooner, and that a successful update does not check again until the 24-hour mark.
-- We accept that `--after-update` binds every future version, as the `.aar` name does, in exchange for a signal with nothing persisted. A future version that dropped it would open a window once, harmlessly.
-- We accept a second publish effect after `gh release create`, with its own retry, in exchange for a check that is one request with no query string and a feed that can be corrected.
-- We accept that a path reading "connected" while nothing answers spends its one retry, leaving the 24-hour mark, in exchange for no timer and no backoff.
-- We accept that a new version which crashes at start leaves nothing running until the next login or opening; no older copy exists, and rollback is a non-goal.
-- We accept a feed that grows about half a kilobyte per release, in exchange for not pruning XML in shell.
-- We accept Sparkle and WebKit loading in every build, measured, not avoided (G5).
-- We accept a frozen duplicate of `isGenuine` in `CardContract`. It looks like a DRY violation and is the point: the card's rules must not move when the app's do.
-
-### Alternatives considered
-
-- **Sparkle's immediate handler, with a marker for the relaunch.** The documented "take control" path, and it hides the most from us. It exposes the window race (a quit refused after the handler leaves relaunch armed), needs a stale-prone persisted marker because the relaunch carries no argument, and still recovers nothing from a failed swap, so it adds a watcher to a second restart path. It lost on R13 and R11.
-- **The UI-based driver with `.skip` as a public veto.** Removes the private label. It leaves the documented silent path, allows a password prompt to be reached, and `.install` can show a progress window after 0.7 s. It lost on R9, R12 and R15.
-- **Delete `Updater`; a thin wrapper in the app target, with decisions in `Lifecycle` and `Launcher`.** Fewest types. It scatters R8, R1 and R6 across two models and an untested target, and exposes all of that to callers.
-- **The feed as a release asset, published by `gh release create`.** Hides the second publish step, atomically. It exposes every check to GitHub's redirect chain, with a signed query string on the last hop and cookies offered on the first, against R3's scenario, and a bad feed cannot be corrected under immutable releases.
-- **R8's minute on `LaunchClock`, keeping the rule's text.** No rule change. It reports a system stop as passed, which can install early, and runs unmeasured in the exact state R8 fires in.
-- **Contact as an always-on `TrackpadEvent`, with a model that tracks occupied pads.** A simpler port. It costs a main-actor hop on every touch for a feature active minutes per release, a set that can stick across `run`, and a `Launcher` that keeps its `updater` reference.
-- **A watcher helper embedded in the bundle instead of `/bin/sh`.** A compiled tool could wait on a kernel exit source instead of polling. It is nested code the swap replaces under itself, with its own signing and notarisation, to save a few seconds of polling once per update.
-
-### Open questions and risks
-
-Only the human or a real Mac can settle these.
-
-- **Does a real logout read as `.system` with the window open (D-3)?** If not, the shipped app cancels logouts today, and R14 fails with it. Can this be run before the first automatic release?
-- **Do Accessibility, Screen Recording and the login item survive a Developer ID, notarised swap (L2)?** Same path, identifier and team say yes; no one has measured it, and a loss would be invisible under R15.
-- **Who creates the update key, and where does the exported private half live?** `generate_keys` writes to the human's login keychain, so the first run is theirs. It needs a place outside this Mac before the first automatic release. Losing it means every copy needs one manual install.
-- **Does the Developer ID, notarised form of the hand-over match the Apple Development form (L7), for well past B11's 126 s?** `update-e2e.sh` answers on this Mac, but it needs a live login session.
-- **Does a Mac asleep past the mark fire on wake (A9), and does App Nap delay the idle minute on a windowless process (L5)?** A late minute is harmless; a timer that never fires is not, and it would leave the update for the next end of the process.
-- **Do `Updater.app` and `Autoupdate`, idle while an update waits, delay a logout or cost idle CPU?** Sparkle's long use says no; it counts under R14 and the idle promise.
-- **Is Sparkle's local `os_log` acceptable under "no logging" (D-5)?** The design says yes and states it in the docs. It names the update address and paths, on this Mac only.
-- **What is the memory cost of loading Sparkle and WebKit (G5)?** If it breaks `product-overview.md`'s promise, is the cost accepted?
-- **First automatic release:** R16's one press needs a real 1.0.15 copy after publishing, and no release can be recalled. `card-contract` covers the rules; only the real press covers the rest.
-
-This branch is two commits behind `origin/main`, whose settings redesign (#45) moves the card's lines. Rebase before touching `LauncherUI`.
-
-### Next implementation step
-
-Rebase onto `origin/main`, add Sparkle to `Package.swift` with `Package.resolved`, put `--disable-keychain` and `-packageAuthorizationProvider netrc` on every build path in that same change, and prove the cold build once.
+| `LauncherCore` | `Updater` rewritten (decision 4); `UpdatableCopy` keeps its fact (6); `Opening.afterUpdate(withWindow:)` and its `Route` rows (7); `UpdateEngine`, `CycleOutcome`, `UpdateEngineEvent` revised (3); `UpdateCard` with its button's title and enabled state as values, and `Copy`'s three strings (9); `Launcher.onWindowEdge` (5). Goes: `IdleClock`, `HeldUpdate`, `TrackpadEvent.contactChanged`, `TrackpadHardware.isTouched`/`sensesContact`, `Launcher.isInUse`/`watchUse`. |
+| `LauncherPlatform` | `SparkleEngine` rewritten on one driver family, one updater per cycle, the check at the download (2, 3); one new file that expands an `.aar` into a scratch folder and names the one bundle inside, a copy of `CardContract`'s extraction (2); `SparkleInternals` keeps `canReplace`, gains the persistent download's lookup, loses the extraction lookup, the installer job's label and the veto; `LaunchdJob` with the window argument (7), its `remove` kept for stale labels; `ThisCopy` with `--with-window` and `--at-login` (7). Goes: `SystemIdleClock`, the contact code in the session and the adapter. `CodeSignature.isGenuine`, `SystemConnection` unchanged. |
+| `LauncherUI` | `UpdateCardView`, `UpdatePictureView` and its representable (9, 10); `SettingsView` and `SettingsShell` take the updater; two SVG assets. |
+| App target | Keeps the `Updater` it builds and hands it to the shell; no decision. |
+| Package | The vendored Sparkle (1); the remote package and the keychain flags go. |
+| Tests | The world's `InMemoryUpdateEngine` learns the new port and counts overlapping cycles; the idle clock and contact handles go; `UpdateWaitsTests` goes, `UpdaterStartTests`, `UpdateRetryTests` and `HandOverTests` are rewritten; `DeviceSessionContactTests`, `SystemIdleClockTests` and `SparkleVetoTests` go, the last replaced by the download lookup's and the extraction's rows; new UI bench and asset tests. |
 
 ## Testing Decisions
 
 ### Strategy
 
-**The one seam for every decision is `LifecycleWorld`:** real `Lifecycle`, `Launcher`, `Updater` and `UpdatableCopy` over in-memory ports, with no waiting. It sees what each process did, `EffectLog`'s order and a process's whole history. It cannot see Sparkle, launchd, the frame thread or AppKit's terminate. The models are `LauncherKit/Tests/LauncherCoreTests/UpdateInstallTests.swift`, `LifecycleTests.swift` and `StartAtLoginTests.swift`.
+The one seam for every decision is `LifecycleWorld`: real `Lifecycle`, `Launcher`, `Updater` and `UpdatableCopy` over in-memory ports, with no waiting. It sees each process's effects in order, its window and card after every intent, and a Mac's whole history across processes and hand-overs. It cannot see Sparkle, launchd, the frame thread, AppKit or the screen. The new rows resemble `LauncherKit/Tests/LauncherCoreTests/UpdaterStartTests.swift`, `UpdateRetryTests.swift` and `HandOverTests.swift`, whose world and in-memory engine they extend: the engine gains `probes`, `updates`, `discards`, `arms` (each `armRestart`'s window flag, in order) and `overlaps`, a count of every `probe()` or `update()` asked while a cycle it started has not yet been answered by a `push(.cycleEnded)` (a `.held` keeps it running), and keeps `armWorks` and `push(_:)`; every world row ends by expecting `overlaps == 0`. The process's published history gains the card, and `finishHandOver` reads the last arm's window flag.
 
-Three more seams cover what the world fakes, each as high as a real run allows (grounding K):
+Three seams cover what the world fakes, each as high as a real run allows:
 
-- **Platform adapters by direct call, in `swift test`.** `DeviceSession.receive`, `SparkleInternals`, `outcome(of:)`, `isPinned`, `isGenuine`, `ThisCopy`, and the real `SystemIdleClock`, `SystemConnection`, launchd and `/bin/sh`. They miss Sparkle running in a signed bundle. The models are `LauncherKit/Tests/LauncherPlatformTests/DeviceSessionAnswerTests.swift`, `CodeSignatureTests.swift`, `PrivilegedInstallTests.swift` (a real script, unprivileged) and `SystemRunningCopiesStopTests.swift` (real processes under a test's own identifier).
-- **A release harness, new, in `swift test`.** The real `Scripts/release.sh` in a throwaway clone with a local bare `origin`. `gh`, `xcrun`, `xcodebuild`, `xcodegen`, `codesign`, `spctl`, `security`, `hdiutil`, `osascript` and `swift` are stubs on `PATH` that log to one ordered file and fail on request. `git`, `awk`, `sed`, `xmllint`, `aa`, `ditto` and `PlistBuddy` are real, and so is `sign_update`, behind a wrapper that passes a throwaway `--ed-key-file`. It exists because `write_feed`, `preflight_build_number`, `--feed-only` and the failure table hold logic no other seam reaches. It misses what Apple and GitHub really answer.
-- **`Scripts/update-e2e.sh`, on two real builds, run by a person** with the Developer ID, the notary profile and `sudo`, as design section 14 lays out. Its feed is rendered by `release.sh --feed-only` in the harness's clone with only the address replaced, so Sparkle reads what a release publishes. Its key is a throwaway, so it does not wait for the human's `generate_keys`. A sampler records, every 100 ms, every process's on-screen windows, the frontmost app, the app's activation type, and /Applications' `CFBundleVersion` and executable. This Mac's frontmost app flips between other apps on its own, as `hold.out` shows with nothing happening, so a row asserts only that the app and Sparkle's helpers never become frontmost. The app logs nothing, so the server's request log, that sampler, `launchctl` and the disk are the record. A person's finger stands in for what nothing can synthesise: the script prompts, the person taps the 1-finger gesture, and the script times the assigned app reaching the front.
+- **Platform adapters by direct call, in `swift test`**: the outcome table, the user driver's reply by stage, `ThisCopy`, the hand-over script run for real under `/bin/sh` with a stub `open` (as `LaunchdJobTests.swift` does), the download lookup over temp folders in Sparkle's layout (as `SparkleVetoTests.swift` did), the extraction and the check over the fixture archive and bundles in `LauncherPlatformTests/UpdateFixtures` (as `CodeSignatureTests.swift` does), and `SparkleEngine` over a real `SPUUpdater` on a temporary host bundle whose feed points at a local port nothing listens on (a connection refused before any network use), observed through a weak reference after a main-queue hop, plus the process's loaded images. They miss Sparkle in a signed bundle.
+- **`LauncherUITests` benches**: `UpdatePictureView` in a borderless window that is never ordered in, with injected Reduce motion and on-screen readers, as `GearBench.swift` and `GearViewTests.swift` do; the two SVG assets rasterised, as `GearAssetTests` does. They miss SwiftUI's layout of the card, which the slice checks by eye against the Figma node.
+- **`Scripts/update-e2e.sh` on two notarised builds, run by a person**, with revision 1's server, sampler and cleanup. It proves Sparkle's behaviour on the wire, on disk and on screen, and the hand-over's timing. Its login rows start the build with `--at-login`.
 
-`SourcePolicyTests.swift` and `CardContract`'s moved tests stay as the existing scan and contract seams.
+`SourcePolicyTests` and the release harness (`LauncherKit/Tests/ReleaseTests`) stay as the existing scan and release seams; the harness's rows are unchanged and prove R16 by staying green.
 
-**What is faked:** Sparkle (`InMemoryUpdateEngine`), the idle clock (`InMemoryIdleClock`), connectivity (`InMemoryConnection`), the trackpads and the frame thread's hop (`InMemoryTrackpads`), the tools above, GitHub (the local server, which mirrors its paths, redirects, cookies and validators) and `open` (a stub that records its arguments and the time). Everything we own runs for real.
-
-**Handles the rows use beyond section 14's table, in test adapters only:**
-
-- `InMemoryIdleClock.advance(by:)` and `waits`, so a row proves 59 s and 60 s rather than only `pass()`.
-- `InMemoryTrackpads.press()`, `lift()`, `holdContactEdges()`, `releaseContactEdges()` and `onSensesContactSet`. `run` clears contact and drops held edges, as the generation guard does.
-- `InMemoryConnection.reading`, `watches`.
-- `RunningBuild.release(canWrite:)` and `world.finishHandOver(installed:)`.
-- `EffectLog` entries "engine start", "check", "discard" and "arm restart".
-
-**Sparkle's 24-hour timer cannot be owned.** `update-e2e.sh` shifts `SULastCheckTime` and starts with `--after-update`, which makes no check of its own, so only Sparkle's timer can produce the request.
+**What is faked**: Sparkle (`InMemoryUpdateEngine`), connectivity (`InMemoryConnection`), the trackpads (`InMemoryTrackpads`), the window's occlusion and Reduce motion (closures), GitHub (the E2E's local server) and `open` (a stub). Everything we own runs for real.
 
 ### Test scenarios
 
 | ID | Requirements | Seam | Given / When / Then | Source of truth for the expected value |
 |----|--------------|------|---------------------|----------------------------------------|
-| T1 | R2, R12 | `LifecycleWorld` | Given every combination of `Placement`, Developer ID signed and can write, each at login and by hand. When the process starts. Then only installed, signed and writable builds an `Updater`, with `engine.starts == 1`. Every other has `process.updater == nil`, and its whole history holds no engine call, no connection watch and no clock wait. | R2's and R12's rules, written out as a literal table |
-| T2 | R1 | `LifecycleWorld` | Given a gated copy. When it starts at login, and on another Mac by hand. Then `EffectLog` holds "engine start", "check" inside the launch turn. At login `windows == [.closed]`. Opening and closing the window three times adds no check. | R1: "when it starts, at login or by hand"; "MUST NOT depend on the settings window" |
-| T3 | R2 | `LifecycleWorld` | Given a release copy at login with an older copy running. Then it ends with `engine.starts == 0`. Given one opened by hand while another copy is stopping. Then `starts == 0` until `letExit`, then 1. | Design section 8: a `.end` route never reaches `start`, and a copy still replacing others has no resident |
-| T4 | R1, R2 | `LifecycleWorld` | Given a release copy `.elsewhere`, opened by hand. Then `updater == nil` with the dialog up. When `.move` and `.installed` arrive. Then that process made no engine call and the installed copy it opens has `checks == 1`. | R2 scenario "Moved to /Applications" |
-| T5 | R12 | `LifecycleWorld` | Given a Mac whose copy cannot write. When it starts. Then no engine, `permissions.asks` and `installer.installCalls` are empty, and `tap(1)` brings Arc to the front. When the next start can write. Then `checks == 1`. | R12: no prompt; "checks again at its next start" |
-| T6 | R6 | `LifecycleWorld` | Given a resident. When `push(.held(.notGenuine))`. Then `discards == 1` before any other effect, `sensesContact` stays false, no wait is pending, the window is unchanged and `advance(1 h)` arms nothing. `.cycleEnded(.failed)` then changes nothing. A later `.held(.genuine)` starts the minute. A `quit()` right after the verdict logs "discard" before "end", and no "arm restart". | R6 scenarios: nothing installs, nothing shows, a later check tries again |
-| T7 | R8 | `LifecycleWorld` | Given `.held(.genuine)`. When a finger touches and lifts three times, 59 s apart. Then nothing is armed at any step. After the last lift, `advance(59 s)` does nothing and `advance(1 s)` leaves `["arm restart", "end"]`, each once in the log's whole history. | R8 scenario "User is working on the trackpad"; 1 minute literal |
-| T8 | R8 | `LifecycleWorld` | Given a held update and the window open. When `advance(10 min)`. Then `pending == nil` and nothing is armed. In turn: the window closes last; a finger lifts 30 s after the window closed; the window reopens during the minute and closes again. Each time 59 s after the later event does nothing and 60 s hands over. A re-front of an open window restarts nothing. | R8 scenario "Settings window is open": "the later of the last touch and the window closing" |
-| T9 | R8 | `LifecycleWorld` | Given no update held and `advance(1 h)`. Then `waits` is empty. When `.held(.genuine)` arrives on a Mac with `attached: []`, and on one with an untouched pad. Then `pending == .seconds(60)`, and 60 s later it hands over. | R8 scenario "Mac with no trackpad in use"; Tradeoffs: the minute starts at the hold |
-| T10 | R8 | `LifecycleWorld` | Given 100 taps, window openings and failed cycles with no update held. Then over the whole history `sensesContact` is false and `waits` is empty. Then `sensesContact` is true exactly from `.held(.genuine)` until the phase ends. | Design's "Exists only in" table |
-| T11 | R8 | `LifecycleWorld` | Given a finger down and `onSensesContactSet` lifting it the moment sensing turns on. When `.held(.genuine)` arrives. Then `pending == .seconds(60)`: the lift is neither lost nor stuck. | `watchUse`: "`onChange` now with the present reading, then at each change" |
-| T12 | R8 | `LifecycleWorld` | Given a held update, the minute running and `holdContactEdges()`. When a finger lands, so `isTouched` is true with its edge still queued, and `advance(60 s)` fires the wait. Then nothing is armed. `releaseContactEdges()` leaves `pending == nil`. A lift and 60 s hand over. | Design section 3: at the fire `Updater` re-reads the level, so a queued edge cannot lose a touch |
-| T13 | R8 | `LifecycleWorld` | Given a finger down and its lift edge held. When `wake()` replaces the sessions. Then `pending == .seconds(60)`, and the resting finger's next frame cancels it. Given the minute 30 s in. When `wake()`, or a preference or permission push that changes the run, arrives. Then 59 s later nothing happens and 60 s later it hands over. | H3's reset rule; design section 3: "the `run` at wake restarts the minute" |
-| T14 | R8 | `LifecycleWorld` | Given the minute running. When `.cycleEnded(.failed)` arrives (a helper died). Then `pending == nil`, `sensesContact` is false and `advance(1 h)` arms nothing. A later `.held(.genuine)` starts the minute again. | C5; design phase table |
-| T15 | R8 | `LifecycleWorld` | Given `armWorks = false`. When the minute passes. Then the process runs on, nothing is pending, `advance(1 h)` calls `armRestart` once and `tap(1)` works. A touch and lift, `armWorks = true` and 60 s hand over. | Hand-over table, step 2: "stay `.ready` ... try on the next idle edge ... No loop." |
-| T16 | R8, R14 | `LifecycleWorld` | Given a held update and `shouldEnd(.system)`. When the next login runs the new version; and separately runs the old one, which holds the update again. Then the first has no update pending. The second hands over at 60 s. In both, `windows == [.closed]`, no asks, and `tap(1)` works. | R8 scenario "Shutting down with an update waiting" |
-| T17 | R9, R10 | `LifecycleWorld` | Given Arc assigned, the login item on, a non-default thumb corner and *Hide background apps* on. When the minute passes. Then straight after `advance` returns, the log ends `["arm restart", "end"]`, `loginItem.calls` is empty and the suite is unchanged. `finishHandOver()` gives a copy with `windows == [.closed]`, no asks, `starts == 1`, `checks == 0`, the seeded settings, and `tap(1)` bringing Arc to the front. | R9, R10 literals; the seed |
-| T18 | R9 | `LifecycleWorld` | Given the copy after a hand-over. When `openAgain(.byHand)`. Then `window == .open(request: 1)`. `Route` over every `.afterUpdate` × placement × older copy gives design's rows, and the `.atLogin` and `.byHand` rows are unchanged. | R9 scenario "Opening by hand afterwards"; design's `Route` table |
-| T19 | R9 | `LifecycleWorld` | Given `launch(.afterUpdate, others: [.earlier])`. Then it does not end as a login start would: `stopped == [.earlier]` and no engine call until the exit. When `openAgain(.byHand)` lands during the stop. Then the window opens once resident and `checks == 0`. | R9 "MUST stop the old version"; design section 4's opening in the gap |
-| T20 | R11 | `LifecycleWorld` | Given a hand-over. When `finishHandOver(installed: false)`. Then the same version runs with `windows == [.closed]`, `checks == 0` and nothing pending, and `advance(1 h)` logs nothing. A later `.held(.genuine)` gives exactly a second "arm restart". | `discardquit.out`: a check here loops once a minute for ever; R11 "a later check" |
-| T21 | R8, R10, R11 | `LifecycleWorld` | Given snapshots before and after "arm restart". When each is restored and started at login and by hand. Then assignments, login item and permissions equal the seed, a login start stays silent, and a start by hand opens one window. | The seed; design: "Persisted state: none of ours" |
-| T22 | R13 | `LifecycleWorld` | Given each of: a cycle running, a held update in use, the minute running. When `quit()`. Then the process has ended and the login item is off, and the log's whole history holds no "arm restart". `world.login() == nil`. A later `launch(.byHand)` opens the window and turns the login item back on. | R13 scenario; design section 5 table |
-| T23 | R13, R14 | `LifecycleWorld` | Given each phase above. `shouldEnd(.other)` with the window open answers false and closes it, and with a held update the minute starts. With the window closed it answers true. `shouldEnd(.system)` answers true with the window open or closed and nothing armed. After a hand-over ended the process, both answer true. | Design section 5 table; R14 |
-| T24 | R1 | `LifecycleWorld` | Given reading false and `.cycleEnded(.requestFailed)`. Then `isWatching`, `checks == 1`, and `set(false)` adds none. When `set(true)`. Then `checks == 2`. `.cycleEnded(.nothingNew)` leaves `isWatching` false. | R1 scenario "Network arrives after login" |
-| T25 | R1 | `LifecycleWorld` | Given reading already true when the failure arrives, and no change ever pushed. Then the reading `watch` pushes gives `checks == 2`. | Design section 7: the race where the path came up before the watch armed |
-| T26 | R1 | `LifecycleWorld` | Given `checks == 2` and the retry failed. When `set(true)` 1000 times, and Sparkle's own check fails at the mark. Then `checks == 2`. When `set(false)`, `set(true)`. Then `checks == 3`. | Design section 7: "A retry that fails again needs a real drop and return" |
-| T27 | R1, R5 | `LifecycleWorld` | Given a retry in flight, `checks == 2`. When `set(false)`, then `.cycleEnded(.requestFailed)`, then `set(true)`. Then `checks == 3`. Separately, a drop and a return while that retry still runs give `checks == 3`, and its failure then earns no fourth. | R1: "once a connection is available, not at the next 24-hour mark"; design section 7: "a drop during the retry earns the next one" |
-| T28 | R1, R5, R13 | `LifecycleWorld` | `.cycleEnded(.failed)` and `.nothingNew` start no watch. A retry that finds an update leaves `isWatching` false and R8's rules on. A download lost mid-way, which arrives as `.requestFailed`, watches like a failed check. While watching, `quit()` ends at once and `shouldEnd(.system)` is true. | Design section 7; R5 scenario "Connection lost" |
-| T29 | R1, R5 | Platform, direct | `outcome(of:)`: nil and `SUSparkleErrorDomain` 1001 give `.nothingNew`; 2001 gives `.requestFailed`; 1000, 1002, 2000, 3001, 4005, 4007, 4008 and code 2001 in another domain give `.failed`. | `SUErrors.h` literals; `noserver.out` (2001), `veto.out` (4005) |
-| T30 | R6 | Platform, direct | `isPinned` admits `https://github.com/domasgru/trackpad-launcher/releases/download/v1.2.3/TrackpadLauncher-1.2.3-macOS-26.0.aar` under that repository's prefix, and `http://127.0.0.1:8765/v2/TrackpadLauncher-2-macOS-26.0.aar` under a local `http` prefix. It refuses nil URL, nil prefix, another host, another repository, a lookalike sibling of the prefix, `.dmg`, `http` under an `https` prefix, `.dmg?.aar`, and `..` plain or percent-encoded. | The enclosure line of `write_feed`; `isPinned`'s contract; D3 |
-| T31 | R12 | Platform, direct | `canReplace` on a temp bundle: true. Bundle mode 555, parent mode 555, and `/System/Applications/Calculator.app`: false. The parent's listing is the same before and after every call. | A11; design: "this creates nothing" |
-| T32 | R6 | Platform, direct | `extractedUpdate` on temp caches in Sparkle's layout. No folder: nil. One bundle of that build: it. A stale older folder of the same build: the newest. Two bundles in the newest: nil. Another build: nil. | D2, D4; the layout printed in `selfquit.out` |
-| T33 | R6, R7 | Platform, direct | `isGenuine` against `ExpectedUpdate`. The Developer ID fixture with its recorded values: true. Another team, identifier, version, build or minimum macOS: false. The Apple Development copy and an unsigned bundle: false. | `fixture.json`; build `1` in `make-update-fixtures.sh` |
-| T34 | R6 | Platform, real launchd | `SparkleInternals.veto(job:extracted:)` with a dummy job under `installerJob(of:)`'s label and a bundle in temp caches removes both. With the job absent, the bundle still goes. With `extracted: nil`, the job still goes. | Design section 6: two independent layers, "Whatever the first did" |
-| T35 | R8 | Platform, direct | With the session's own `sensesContact` answering true, `DeviceSession.receive` over empty, finger, two fingers, one lift, empty, palm-only, empty: `.contactChanged` on exactly the four flips, in frame order, and `isOccupied` matches at each step. A contact the recognizer ignores counts. Frames parsed from states 2 and 5 only are no contact. | H2; driver states in `TouchFrameParsingTests.swift` |
-| T36 | R8 | Platform, direct | With `sensesContact` answering false, the same frames deliver no `.contactChanged`, `isOccupied` still tracks, and the injected clock is read as often as in a session with no contact code. Turned on with a finger down, it delivers nothing until the next flip. | H2; `docs/architecture.md`: no per-frame clock read |
-| T37 | R8 | Platform, direct | With two sessions, `isTouched` is true when either is occupied and false when neither is. A replaced session's contact reads false. | Design: "Contact of any kind on any running trackpad"; H3 |
-| T38 | R8 | Platform, real timer | `SystemIdleClock`: a wait fires once within its duration plus the 1 s leeway. A second `wait` replaces the first, which never fires. `cancel` stops it. With main held past the deadline, a `cancel` in that same turn still means it never fires. | Design: "a cancelled wait cannot fire"; "Replaces any pending wait" |
-| T39 | R9, R11 | Platform, real launchd | Given a held `sleep` as the old pid and a temp bundle at build 1. When the real `handOverArguments` run through `LaunchdJob.submit`. Then the stub `open` is not called while the pid lives, even past `allowed`. With the pid gone and the plist rewritten to build 2 after 0.5 s, it is called once with `-g -a <bundle> --args --after-update`, within 1 s of the rewrite. No job stays listed. | B4's exact call; design's script |
-| T40 | R11 | Platform, real launchd | `allowed: 5` with the build never changing: `open` runs once, 5 to 6.5 s after the pid's death. `allowed: 1` with `Info.plist` removed at the pid's death and back at build 2 after 0.5 s: `open` runs once, after the plist returns and within 1 s of it. | Section 4: "at least 5 s and at most 6 s", plus one poll; C2 took 7.4 s for an intended 5, a drift only a budget this long shows |
-| T41 | R9 | Platform, real launchd | `submit` of a stale label replaces the job. `remove` of a live job ends it. `remove` of an absent one answers false. | Design's `LaunchdJob` contract |
-| T42 | R9 | Platform, direct | `ThisCopy.launch` with `--after-update` gives `.afterUpdate`, also beside `--eject-disk-image`. With no argument or an unrelated one it gives the existing openings. `opening(of:)` of a reopen ignores arguments. | B6; existing `ThisCopyTests.swift` |
-| T43 | R6, R12 | Platform, direct | `SparkleInternals.provenOn` equals the Sparkle version in `LauncherKit/Package.resolved`. | `Package.resolved` |
-| T44 | R1, R3 | `SourcePolicyTests` | `import Sparkle`, `HTTPCookieStorage`, `URLCache`, `org.sparkle-project` and `sparkle-updater` are confined to `SparkleEngine.swift`, `http` too, `URLSession` is banned, the `neverDeclared` profiling and service keys are absent, and `alwaysDeclared` finds the six keys. `SUFeedURL` and `TLUpdateDownloads` start `https://`, and `TLUpdateDownloads` ends `/`. A planted hit, a planted missing key and a planted `http://` value each fail. | Design's `SourcePolicyTests` table; T30's lookalike refusal needs the final `/` |
-| T45 | R8 | `SourcePolicyTests` | `DispatchSourceTimer` and `makeTimerSource` are confined to `SystemIdleClock.swift`; `Timer` moves from `required` to the twin check. `asyncAfter`, `Task.sleep` and display links stay banned. | Design's `SourcePolicyTests` table |
-| T46 | R9, R11 | `SourcePolicyTests` | `SMJob` is confined to `LaunchdJob.swift`, `/bin/sh` to `LaunchdJob.swift` and `PrivilegedInstall.swift`. The "nothing relaunches" tokens stay. | Design's `SourcePolicyTests` table |
-| T47 | R1 | `SourcePolicyTests` | `import Network` is confined to `SystemConnection.swift` with `NWPathMonitor`, and `NWConnection` stays banned. | Design's `SourcePolicyTests` table |
-| T48 | R16 | `CardContract` tests | `VersionTests`, `BundleInstallTests` and `CraftedArchive` pass beside `CardContract` with their expected values unchanged. | The shipped tests, moved unedited |
-| T49 | R16 | `CardContract` tool | `card-contract` on the fixture archive under a contract name, with the recorded team and identifier: exit 0. Another team, a refused entry, or a name off the contract: non-zero. Standard output stays empty. | `fixture.json`; the card's `admits` |
-| T50 | R16 | `SourcePolicyTests` | `CardContract` imports neither `LauncherCore` nor `LauncherPlatform`, and the app target does not link it. | Design section 11: frozen |
-| T51 | R7, R16 | Release harness | When the stubs fail in turn at `notarytool` on the app, `stapler validate`, the strict archive check, `card-contract`, `notarytool` on the image, `sign_update` and the version push. Then each time the exit is non-zero, `gh release create` is absent from the log, the bare origin has no new ref, `appcast.xml` is unchanged, the tree is clean and the version commit is undone. With `--archive-only`, a failing `card-contract` prints its verdict and the exit is 0. | Design's "Failure leaves" table; section 11 |
-| T52 | R4 | Release harness | A build equal to the feed's highest is refused, and highest + 1 passes. With an empty feed, a build equal to the previous tag's is refused, and + 1 passes. | F1; design's `preflight_build_number` |
-| T53 | R4, R16 | Release harness | Two releases from an empty channel leave `appcast.xml` equal to a hand-written expected file, apart from the signature and length: single-line items, the older one kept, build, short version, minimum macOS, tag path. `sign_update --verify` accepts the signature. `MARKETING_VERSION = 1.1.0-beta` is refused with the feed unchanged. `gh release create` carries the `.dmg` and exactly one `.aar` under the contract name. | The expected file; F2, F7 |
-| T54 | R7 | Release harness | `gh release create` comes before the feed's push. A failed push exits naming `--feed-only`, with the release public and the feed old. `--feed-only <version>` run twice leaves one item for that version and a clean tree. A leftover draft is deleted before a retry. | Design's step table; F3 |
-| T55 | R6, R11 | Release harness | Preflight refuses, with nothing changed, a keychain key that differs from `SUPublicEDKey`, an empty `SUPublicEDKey`, missing Sparkle tools and a malformed feed. The strict check refuses an `Autoupdate` signed by another team. | Design section 10; C4 |
-| T56 | R16 | `update-e2e.sh` | `card-contract` on the real stapled `.e2e` archive, nested Sparkle code included, exits 0 with that build's identifier. | F8's gap |
-| T57 | R1, R5 | `update-e2e.sh` | Given v1 by hand, its window closed by a quit event, v2 in the feed. Then the feed request and the `.aar` GET arrive with no input, and over the sampler's whole history no window appears beyond the one closed, the activation type stays `UIElement`, and neither the app nor a Sparkle helper is ever frontmost. | R1 "Login start", R5 |
-| T58 | R3 | `update-e2e.sh` | With the server offering `Set-Cookie`, `ETag`, `max-age` and a 302 on the asset, over two checks of v1 and one of v2, under a changed `AppleLanguages`: every feed request has no query, no `Cookie` and no validator. `User-Agent` is `TrackpadLauncher`, `Accept-Language` is `en`, `Accept-Encoding` is `gzip`, and the header sets of the two versions are equal. | R3 scenario; E1 to E3 |
-| T59 | R4 | `update-e2e.sh` | Feed items of 1.1 and 1.2: the highest downloads. 1.1 and a higher one needing macOS 99.0: 1.1 downloads. Only the running build, or a lower one: no asset request. | R4 scenarios |
-| T60 | R2, R12 | `update-e2e.sh` | With an overdue `SULastCheckTime`, so any started engine would check: an Apple Development copy in /Applications; a Developer ID copy in ~/Applications with the dialog up; `root:wheel` mode 755; `root:admin` group-writable; a group not this user's. Each makes zero requests in 30 s, and no `SecurityAgent` window appears. After *Move to Applications*, the installed copy makes one. | R2, R12 scenarios; A11's third test |
-| T61 | R1 | `update-e2e.sh` | `--after-update` with `SULastCheckTime` at now minus 86,380 s: no request for 20 s, then one by 36 s, with no restart. At now minus 30 h: one at once. | R1's 24 h and 30 h; A9's 15 s leeway |
-| T62 | R13 | `update-e2e.sh` | Given an update waiting. When the person presses *Quit Trackpad Launcher*. Then the process is gone at once, the bundle reads v2 within 5 s, nothing runs for 120 s and no job is listed. Pressed during a stalled download instead, the bundle stays v1. | R13 scenario; `plainquit.out` |
-| T63 | R8, R9 | `update-e2e.sh` | Given v2 held and no touch. Then the old pid ends 60 to 63 s after the later of the hold and the window closing, and v2 runs from /Applications with `--after-update` within 1 s of that. Over the sampler's whole history: no new window from any process, type `UIElement`, and neither the app nor a Sparkle helper is ever frontmost. No job stays listed, no feed request comes from v2 for 180 s, and its pid is unchanged at 180 s. The person's gesture reaches the front under 10 s after the exit. Spotlight then opens the window. | R9 scenarios, 10 s literal; B4, B11 |
-| T64 | R8 | `update-e2e.sh` | With an update held, a finger resting 90 s and then a palm resting 90 s each keep the old pid alive past the mark. It ends 60 to 63 s after the lift. | R8; L4 on real hardware |
-| T65 | R5 | `update-e2e.sh` | The server holds the `.aar` mid-body, and the person's gesture reaches the front. The server then resets the connection: nothing shows, v1 keeps running, and a second GET completes the download. | R5 scenarios |
-| T66 | R1, R5 | `update-e2e.sh` | On a steady path, a feed that answers 503 once gives exactly 2 feed requests within 2 s, in all 20 of 20 rounds. The reading lands in Sparkle's end-of-cycle window, so this proves the real `check()` remembers the retry and runs it from `willScheduleUpdateCheckAfterDelay`: only here does a real `SPUUpdater` refuse a check. A feed that always answers 503: exactly 2 in 60 s, so the remembered check does not loop. | R1 retry; `pendingcheck.out`; design section 7, no hot loop |
-| T67 | R6, R7 | `update-e2e.sh` | A tampered EdDSA signature; a valid EdDSA signature on v2 signed by Apple Development; one signed by the Developer ID but not notarised; one with another bundle identifier under the host's file name. Each: no install, no hand-over past the minute, v1 running, nothing shown, and a later check tries again. An enclosure of `.dmg` or another host: no asset request at all. | R6 scenarios; D1 to D3 |
-| T68 | R11 | `update-e2e.sh` | Given a read-only parent set while an update waits, in a folder one level inside /Applications. Then stage 3 fails, v1 is opened with `--after-update` 5 to 7 s after the exit, and `codesign --verify --strict` passes. The gesture reaches the front under 10 s. No feed request comes for 120 s, so no hand-over loop. With the parent writable and the stamp overdue, the next start installs v2. | R11 scenario; C1, C2, `discardquit.out` |
-| T69 | R8, R11, R13 | `update-e2e.sh` | 20 rounds of `kill -9` on the app at a random moment from check to hand-over, and 10 of `kill -9` on `Autoupdate` in the second after the exit. After each: every sampled read was a whole v1 or v2, `codesign --verify --strict` passes, nothing restarted unless the job had been armed, no job is left, and a relaunch runs with one process. | Design's hand-over table; R11 "at every moment" |
-| T70 | R12 | `update-e2e.sh` | `--after-update`, the parent made read-only after the gate read it, and a stamp that fires 20 s later. Then the update does not install, no `SecurityAgent` window appears, and the cycle ends silently. | A10 |
-| T71 | R6, R8 | `update-e2e.sh` | With an update waiting, remove `<id>-sparkle-updater`. Then no hand-over at the mark, v1 runs, and a later check downloads again. | C5 |
-| T72 | R1 | `update-e2e.sh` | A build with an empty `SUPublicEDKey`: zero requests, nothing shown, gestures work. | Design: "an empty key lands here, silently" |
-| T73 | R1 | Platform, real monitor | `SystemConnection`: `watch` pushes one reading with no change on the path. After `stop`, nothing more arrives. A second `watch` pushes again. | `Connection`'s contract; `path.out` |
+| T1 | R1, R5, R13 | `LifecycleWorld` | Given a gated copy that can write. When it starts at login. Then `updates == 1` and `probes == 0` inside the launch turn and `windows == [.closed]`. Started by hand: `probes == 1`, `updates == 0`, the window open. Started `.afterUpdate(withWindow: false)` and `.afterUpdate(withWindow: true)`: no engine call at all, the window closed and open respectively. | R1 "once when macOS starts it at login"; R5 "each opening"; R13 "no update check at that start" |
+| T2 | R1, R7 | `LifecycleWorld` | Given reading false and `.cycleEnded(.requestFailed)` at login. Then `isWatching` and `updates == 1`; `set(false)` adds none; `set(true)` gives `updates == 2`. Its failure leaves `isWatching` and `set(true)` 100 times adds none. `set(false)` then `set(true)` gives 3. `.cycleEnded(.nothingNew)` on any of them leaves `isWatching` false. | R1 scenario "Network arrives after login"; R7: no schedule, so no second request without a drop and a return |
+| T3 | R1 | `LifecycleWorld` | Given reading already true when the login check fails. Then the reading `watch` pushes gives `updates == 2` with no `set` ever called. | Decision 4: entering the wait restarts the watch, which pushes the present reading |
+| T4 | R2, R3, R4 | `LifecycleWorld` | Given a login cycle running, two fingers resting on the trackpad through a touch script with no lift, and the window open from a reopen. When `.held`. Then the log ends `["arm restart with window", "end"]` in that same turn with nothing between, and `arms == [true]`. With the window closed and the fingers still down: `arms == [false]`, the same two entries. | R2 "wait for nothing else"; R4 "open at the moment the old version stops"; R3 |
+| T5 | R2 | `LifecycleWorld` | Given a login cycle. When `.cycleEnded(.failed)` (the download failed after the feed). Then `isWatching` is false, `set(true)` adds nothing and `updates == 1`. The next login on that Mac gives a new process with `updates == 1`. | R2 "MUST NOT retry until the next login start" |
+| T6 | R3 | `LifecycleWorld` | Given Arc assigned, the login item on, a non-default thumb corner and *Hide background apps* on, and a hand-over armed silently. When `finishHandOver()`. Then the new process has `windows == [.closed]`, no asks, `probes == 0`, `updates == 0`, the seeded settings, `loginItem.calls` empty, and `tap(1)` brings Arc to the front. | R3 literals; the seed |
+| T7 | R4, R13 | `LifecycleWorld` | Given a login cycle running. When `openAgain(.byHand)`. Then the window is open, `probes == 0` and `card == nil`; `closeWindow()` and `openAgain` again add no probe. When `.held`. Then `arms == [true]`, and `finishHandOver(withWindow: true)` gives a process whose last window is `.open(request: 1)` with `probes == 0` and `card == nil`. | R4 scenario; R13 "no update check at that start" |
+| T8 | R5, R11 | `LifecycleWorld` | Given a by-hand resident whose start's probe ended `.nothingNew`. When the window closes and opens. Then `probes == 2` and `card == nil` before any answer. `openAgain` while open adds none. When the window closes during a probe and `.cycleEnded(.found)` arrives. Then `card == nil`, and the next opening gives `probes == 3`. When the window closes during a probe and opens again before the answer. Then `probes` is unchanged, `card == nil`, and `.cycleEnded(.found)` then gives `card == .available`. When a probe ends `.requestFailed` on this copy. Then `card == nil` and `isWatching` is false. | R5 scenarios "Reopening", "Closing during a check", "Reopened offline"; R11 "Failed check"; decision 4's dropped probe |
+| T9 | R6, R11 | `LifecycleWorld` | Given a probe running. Then `updates == 0`. When `.cycleEnded(.found)`. Then `card == .available` and `updates == 0` still. When the window closes. Then `card == nil`. | R6 "downloads nothing"; R11 "the card appears only after that opening's check" |
+| T10 | R1, R5 | `LifecycleWorld` | Given a login check failed for the network with reading false. When the window opens. Then `isWatching` is false and `probes == 1`. The probe ends `.requestFailed`: `isWatching` again and `card == nil`; `set(true)` then gives `updates == 2`. Separately, the window closes during the probe and `set(true)` arrives before its answer: `updates` stays 1 and `overlaps == 0`; the answer `.requestFailed` then makes `isWatching` true and the present reading gives `updates == 2`. Separately, the retry had already been spent on a steady reading of true before the window opened: the probe's `.requestFailed` makes `isWatching` true and `updates` stays 2 until a `set(false)` and `set(true)`. Separately, the probe ends `.nothingNew`: `isWatching` stays false for ever. | R1 "until a check completes"; R5 "Reopened offline"; decision 4: one cycle at a time, the debt carries its spent bit |
+| T11 | R8, R19 | `LifecycleWorld` | Given every combination of `Placement`, Developer ID signed and can write, at login and by hand. Then only a signed copy in /Applications has an `Updater`; of those, at login only one that can write has `updates == 1`, the other has no engine call; by hand every one of them has `probes == 1`. A release copy `.elsewhere` by hand shows the dialog with no engine call, and the installed copy it opens probes. | R8's and R19's rules written out as a literal table; R8 scenario "Copy in ~/Applications" |
+| T12 | R13 | `LifecycleWorld` | Given `card == .available`. When `updateNow()`. Then `updates == 1` and `card == .updating`. When the window closes and opens. Then `probes` is unchanged and `card == .updating`. When `.held` with the window closed. Then `arms == [true]` and the log ends `["arm restart with window", "end"]`. `finishHandOver(withWindow: true)` gives a process with the window open, `probes == 0` and `card == nil`. | R13 scenarios |
+| T13 | R14, R18, R19 | `LifecycleWorld` | Given `card == .updating` with the window open. `.cycleEnded(.requestFailed)` gives `card == .available`, `isWatching` false; `.cycleEnded(.failed)` the same; `.cycleEnded(.nothingNew)` gives `card == nil`. `updateNow()` after a failure gives `updates == 2`. With `armWorks = false`, `.held` gives `discards == 1`, no "arm restart", the process running, `tap(1)` working, and `.cycleEnded(.failed)` returns the card. Given `card == .updating` with the window closed: `.cycleEnded(.failed)` gives `card == nil`, and the next opening gives `probes + 1` and `card == nil` until its answer. `finishHandOver(installed: false, withWindow: true)` gives a process with the window open, `probes == 0`, and the world's `installedAt` still nil. | R14 scenarios; R19 "Prompt cancelled"; R18 "a working copy"; decision 4: never end without a restart armed, never a stale card |
+| T14 | R15, R18 | `LifecycleWorld` | Given a login cycle and `armWorks = false`. When `.held`. Then `discards == 1`, nothing armed, the process runs on, and `.cycleEnded(.failed)` leaves `isWatching` false, `card == nil` and no "arm restart" in the whole history. A login cycle that ends `.failed` with no `.held` (a refused download) does the same with `discards == 0`. | R18 "MUST NOT try again until the next login start"; R15 "At login it MUST show nothing" |
+| T15 | R20 | `LifecycleWorld` | Given each phase: awaiting a connection, a login cycle, a probe, the card, *Updating…*. When `quit()`. Then the process has ended, the login item is off, and the whole history holds no "arm restart". `world.login()` is nil. | R20 scenarios |
+| T16 | R21 | `LifecycleWorld` | Given each phase of T15. `shouldEnd(.system)` answers true with the window open and closed, and nothing is armed. `shouldEnd(.other)` with the window open answers false and closes it, and in *Updating…* the card stays `.updating`; with it closed it answers true. | R21; `Lifecycle.shouldEnd`'s table, unchanged |
+| T17 | R3, R13, R14 | `LifecycleWorld`, `Route` | `Route` over `.afterUpdate(withWindow: false)` and `(withWindow: true)` × placement × older copy gives: installed → `.runSilently` and `.runWithWindow`; elsewhere → `.askToMove`; development → `.runWithWindow`; every `.atLogin` and `.byHand` row is unchanged. A process started `.afterUpdate(withWindow: true)` with an older copy running stops it rather than ending. | Decision 7's rows; revision 1's `HandOverTests` route table |
+| T18 | R1, R14 | Platform, direct | The outcome function over decision 3's table, every row, both kinds, with the feed-read and found flags as the row says. | Decision 3's table; `SUErrors.h` literals |
+| T19 | R3, R13 | Platform, direct | `ThisCopy.launch` with `--after-update` gives `.afterUpdate(withWindow: false)`; with `--after-update --with-window`, in either order and beside `--eject-disk-image`, `.afterUpdate(withWindow: true)`; `--with-window` alone is ignored; `--at-login` gives `.atLogin` with no event; the reopen ignores every argument. | Decision 7; existing `ThisCopyTests.swift` |
+| T20 | R3, R13, R14, R18 | Platform, real launchd | The real hand-over arguments through `LaunchdJob.submit` with a held `sleep` as the old pid and a temp bundle: without the window, the stub `open` is called once with `-g -a <bundle> --args --after-update`; with it, once with `-a <bundle> --args --after-update --with-window` and no `-g`. The wall-time budget rows of `LaunchdJobTests` stay as they are. | Decision 7; the existing `LaunchdJobTests` call shape |
+| T21 | R7, R23 | Platform, real `SPUUpdater` | Given `SparkleEngine` over a temporary host bundle whose Info.plist declares the feed at a closed local port, `SUEnableAutomaticChecks` false, the launcher service key and a key. When `probe()`. Then a weak reference the engine exposes for tests is non-nil, `.cycleEnded(.requestFailed)` arrives, and after one hop through the main queue the reference is nil. A second `probe()` builds a second updater and answers again. `update()` behaves the same. With an empty `SUPublicEDKey`, `update()` answers `.cycleEnded(.failed)` and the reference is nil after the hop. | R23 "exist in memory only during a check"; decision 2 |
+| T22 | R23 | Platform, direct | After a Sparkle symbol has been touched, the process's loaded images hold no path containing `WebKit.framework`. `SparkleInternals.provenOn` equals the vendored manifest's tag, and the manifest's flags hold `SPARKLE_BUILD_UI_BITS=0`. | R23 "MUST NOT load WebKit"; decision 1 |
+| T23 | R12 | UI bench | Given the view in a window reading on-screen with Reduce motion off. Then the arrow layer and the mask layer each carry exactly one animation, under the same key, on `position.y`, by −4, duration 1.5, autoreversing, repeating for ever, ease-in-out, not removed on completion; the tray layer and the view's own layer carry none. | R12 literals: about 4 points, about every 3 seconds; decision 10 |
+| T24 | R12 | UI bench | Reduce motion on from the start: no animation. Turned on live, with the notification: none; off again: as T23. Leaving the window: none; returning: as T23. The on-screen reader answering false, with the occlusion notification: none; true again: as T23. A repeated notification leaves the same animation object in place. | R12 "stop while the window is closed", "Reduce motion" |
+| T25 | R11, R12 | UI asset | Both SVGs are 71 × 89. Rasterised, the tray's drawn pixels lie within y 21.3 to 85.8 and x 0 to 71; the arrow's within y 0 to 58.8 and x 19.0 to 52.0; neither is empty. The derived mask is 71 × 97, opaque at a point beside the shaft and transparent on it. | The design path's own coordinates (node 2200:2983) |
+| T26 | R22 | `SourcePolicyTests` | The kept-out table finds none of its tokens in any frame-path file; a planted `isTouched` in a copy of the frame stream fails the scan. `Timer`, `makeTimerSource` and `DispatchSourceTimer` are banned and listed in the bans-still-listed check. | Decision 8 |
+| T27 | R7 | `SourcePolicyTests` | `SUEnableAutomaticChecks` is declared `false` and `SUEnableInstallerLauncherService` `true`; a planted `true` or `false` respectively fails. `SUAutomaticallyUpdate`, `SUScheduledCheckInterval` and `SUEnableDownloaderService` are absent; a planted one fails. | Decision 11 |
+| T28 | R1, R2, R3, R22 | `update-e2e.sh` | Given v1 started with `--at-login`, v2 in the feed, the person resting two fingers on the trackpad. Then the feed request and the `.aar` GET arrive with no input; v2 runs from /Applications with `--after-update` within 10 s of the download completing, and the person's gesture reaches the front under 10 s after the old pid's exit. Over the sampler's whole history: no window from any process, activation type `UIElement`, neither the app nor a Sparkle helper frontmost. No request comes from v2 for 180 s. | R2 scenario's 10 s; R3 scenario's 10 s; R22 |
+| T29 | R4 | `update-e2e.sh` | Given a login start whose download the server holds mid-body. When the person opens the window and leaves it open. Then no card shows and no second feed request comes; when the server releases the body, v2 opens with its settings window, one process, no feed request at that start. | R4 scenario |
+| T30 | R5, R6, R7, R11, R12, R13 | `update-e2e.sh` | Given v1 by hand with its window closed and v2 released. When the person opens the window. Then one feed request and no asset request; the card appears above the gesture rows; the person confirms the arrow drifts and the tray, text and button stay still for ten seconds. Closing and reopening adds one feed request. Pressing *Update now*: the button reads *Updating…*, exactly one more feed request precedes the asset GET, v2 opens with its window and no card, exactly one process runs, and no request comes at that start. | R5, R6, R11, R12, R13 scenarios; decision 12's reading of R7 |
+| T31 | R9 | `update-e2e.sh` | With the server offering `Set-Cookie`, `ETag`, `max-age` and a 302 on the asset, over a probe and an update of v1 and a probe of v2 under a changed `AppleLanguages`: every request has no query, no `Cookie` and no validator; `User-Agent` is `TrackpadLauncher`, `Accept-Language` `en`, `Accept-Encoding` `gzip`, the header sets of both versions equal. | R9 scenarios |
+| T32 | R10 | `update-e2e.sh` | Feed items of 1.1 and 1.2: the card's update downloads 1.2 and a login start downloads 1.2. 1.1 and a higher one needing macOS 99.0: 1.1. Only the running build, or a lower one, or a pre-release above it: no card and no asset request. | R10 scenarios |
+| T33 | R7, R1 | `update-e2e.sh` | A resident by hand with its window closed for 10 minutes after a probe: no request. A feed that answers 503 once to a login start: exactly 2 feed requests within 5 s; one that always answers 503: exactly 2 in 60 s. | R7 scenario; decision 4: no hot loop |
+| T34 | R14, R18 | `update-e2e.sh` | A read-only parent set after *Update now*'s download: v1 reopens with its window 5 to 7 s after the exit, `codesign --verify --strict` passes, no request comes at that start, the next opening shows the card. The same from a login start: v1 reopens silently. The server resets the connection during an *Update now* download: the card reads *Update available*, v1 runs. 20 rounds of `kill -9` on the app and 10 on `Autoupdate` at random moments: every sampled read is a whole v1 or v2, no job is left, a relaunch runs with one process. | R14, R18 scenarios |
+| T35 | R15 | `update-e2e.sh` | A tampered EdDSA signature; a valid signature on a v2 signed by Apple Development; one not notarised; one with another bundle identifier. From the card: nothing installs, no `Autoupdate` process ever appears in the sampler for the three the update key accepts, the card returns to *Update available*, v1 runs. From a login start: nothing installs, nothing shows. On a standard account, from the card: the same, and no prompt appears. An enclosure of `.dmg` or another host: no asset request. After each, no Sparkle helper process remains and the persistent download is gone. | R15 scenarios; decision 2: refused before any installer exists |
+| T36 | R19, R20, R21 | `update-e2e.sh` | On a standard account on this Mac: a login start makes no request and no prompt appears for 60 s. The card's *Update now* shows the administrator prompt only after the asset GET completes; while the prompt is up the person's gesture reaches the front under a second, the window's Quit button ends the app at once and the prompt goes with it, and on another run a logout proceeds at once; the password installs v2, which opens with its window; cancelling returns the card to *Update available* with v1 whole and no error. | R19 scenarios; R20, R21 during the prompt, decision 1 |
+| T37 | R20, R23 | `update-e2e.sh` | *Quit Trackpad Launcher* pressed while the button reads *Updating…* with the download held mid-body: the process is gone at once, the bundle stays v1, nothing runs for 120 s, no job is listed. After a probe that found nothing: no `Autoupdate`, `Updater.app` or launcher service process runs, `heap` of the app shows no `SPUUpdater`, and `vmmap` shows no WebKit. | R20 scenario; R23 scenario |
+| T38 | R13 | `LauncherCoreTests`, direct | `UpdateCard.available` has the button title *Update now* and is enabled; `.updating` has *Updating…* and is disabled; the title text is *Update available* for both. | R13 literals; the design's words |
+| T39 | R15 | Platform, direct | The persistent download lookup over temp folders in Sparkle's layout: no folder is nil; one archive under one random folder with the item's file name is it; two folders, the newest wins; another file name is nil. The extraction over the fixture archive yields exactly one bundle in a scratch folder that is gone after the check; `isGenuine` on it against the fixture's recorded offer is true, and against another team, identifier, version, build or minimum macOS false; the Apple Development bundle false. A refused archive is removed from the temp layout and a genuine one is left. | `fixture.json`; `make-update-fixtures.sh`; decision 2 |
+| T40 | R15 | Platform, direct | The user driver's reply at `showUpdateFound` is *install* for the not-downloaded and downloaded stages and *skip* for the installing stage, through its pure rule over an internal mirror of the stage. | Decision 2; Sparkle's `SPUUserUpdateStage` |
+| T41 | R21 | `update-e2e.sh`, by hand | A real logout, a restart and a shutdown, each while a login download is held mid-body and once with the window open: each proceeds at once with no dialog, and the next login start checks again and installs. | R21 scenario |
 
 ### Verified without a test
 
-- **R1, a real login start.** Log out and in with an installed copy that has a newer release to find. Expected: no window, and the update installs a minute after the session settles.
-- **R1, offline (L3).** Turn Wi-Fi off. Open an installed release copy with a newer release to find, and close its window. Read `defaults read <id> SULastCheckTime`. Wait a minute, then turn Wi-Fi on. Expected: within 10 s the stamp is newer and Sparkle's cache holds the download.
-- **R1, sleeping past the mark (A9).** Quit. Run `defaults write <id> SULastCheckTime -date "<now minus 23 h 58 min>"`, then `open -g -a <app> --args --after-update`, then `pmset sleepnow`. Wake after 5 minutes. Expected: the stamp changes within 30 s of waking.
-- **R2.** The existing `theAdHocSignedTestRunnerHasNoDeveloperIDSignerEvenWhenItIsToldItIsARelease` row stays green.
-- **R3, the real hosts.** `curl -sIL` the feed address: one 200, no redirect, no `Set-Cookie`. The asset URL: one redirect, no cookie (E4).
-- **R7, the first real release.** Its output shows `notarytool` Accepted and `stapler validate` passing before `gh release create`.
-- **R8 and R14, a real logout, restart and shutdown (D-3).** With an update waiting, the window open, then closed, then during a stalled download. Expected: each proceeds at once with no dialog. At the next login either v2 runs, or v1 runs and v2 installs under R8's conditions, with no window, Dock icon or dialog.
-- **R8, a sleeping display and App Nap (L5).** Hold an update and run `pmset displaysleepnow`. Expected: the hand-over still comes within a few seconds of the mark.
-- **R10, permissions and the login item (L2).** On a notarised copy with Accessibility and Screen Recording granted, the login item on, a non-default thumb corner and *Hide background apps* on, let a real update install. Expected: System Settings shows all of it unchanged, click blocking and window previews work, and the next login starts the app.
-- **R15.** `grep -rniE 'update|sparkle' LauncherKit/Sources/LauncherUI` finds nothing, and `Copy` holds no update string. Open the window with an update waiting: it matches a window with none.
-- **R16, the last card (F8).** Install the published 1.0.15 in /Applications, open the window and press *Update now* on the first automatic version. Expected: it installs, opens with the window, and the next release arrives on its own.
+- **R16.** The release harness's rows (`ReleaseTests`) and `CardContract`'s tests stay green with `release.sh` unchanged but for the tools' path; the harness's stub for `sign_update` points at the vendored binary.
+- **R17.** By hand on a notarised copy with Accessibility and Screen Recording granted, the login item on, a non-default thumb corner and *Hide background apps* on: let a login update and a card update install. Expected: System Settings shows all of it unchanged, click blocking and window previews work, the next login starts the app, no prompt appeared. A test cannot grant TCC or log in.
+- **R24.** Before publishing: `card-contract` and its tests are untouched by this revision (a diff shows no change under `CardContract`), and the release runs it on the archive. After the first revision-2 release is published, by hand: install the published 1.0.15, open its window, press *Update now*. Expected: it installs and opens with its window. The old card reads the published list, so this step can only follow publishing; its result goes in the development log then.
+
+## Further Notes
+
+- **Residual gaps, named.** An EdDSA-valid archive swapped in the user's cache between our check and Sparkle's extraction would install unchecked; it needs the publisher's private key. The login path's no-prompt rule rests on `canReplace` agreeing with Sparkle's own test of the bundle; where a temporary failure makes them disagree, the launcher service shows the system's prompt once at login, in its own process, and a cancel ends the cycle `.failed`. The engine's comment that claims "never a prompt" is corrected.
+- **The probe cannot be cancelled.** A window closed within a second of opening still lets the in-flight feed request complete; its answer is ignored, and no later request follows. R5's scenario holds as written.
+- **Sparkle's persistent download layout** (`PersistentDownloads/<random>/<file>` under the app's Sparkle cache) is the one private fact this revision adds to `SparkleInternals`; T39 proves the lookup over the layout, T35 proves it on the real cache. The extraction layout and the installer job's label leave that type.
+- **The design's measurements.** This session could not open the Figma file; the card's insets and the picture's offset are read from node 2200-2970 at implementation and checked by eye. The symbol's path data is in decision 10.
+- **Revision 1's E2E never ran.** Its infrastructure is kept on trust and proven only when a person runs the re-cut script (S5). The human's `generate_keys` is still needed before any release.
+- **`heap` and `vmmap` in T37** are observations of what exists, not measurements of how much: the non-goal stands.
 
 ## Slices
 
-The rows of `update-e2e.sh` and the by-hand checks need a person with credentials, so they sit in their own slices. The behaviour slices finish on `swift test`. Nothing here ships before the last slice, so a slice may leave the app with no update path.
+Each slice lands green on `swift test` and is a change on top of the current branch. The E2E and by-hand rows need a person with credentials, so they sit in their own slice. Nothing here ships before the last slice, so a slice may leave the app with a partial update path.
 
-### S1: Sparkle in the build
+### S1: Sparkle from its pinned source, without its UI
 
-**What to build:** the branch sits on `origin/main`, `LauncherPlatform` links Sparkle 2.10.1, and every way of building resolves it without the keychain stall. Nothing calls Sparkle yet.
+**What to build:** the app links a Sparkle built by one script from the pinned tag with the UI and legacy parts off, vendored as a local binary target with its two signing tools and a manifest; the framework loads neither WebKit nor AppKit; `release.sh` signs with the vendored tool.
 
 **Blocked by:** None (can start immediately).
 
-**Requirements:** None. Every later slice needs it.
+**Requirements:** R23 (WebKit and the interface half).
 
-**Test scenarios:** None.
+**Test scenarios:** T22.
 
 **Skills:** `axiom-macos`
 
-- [ ] The branch is rebased onto `origin/main` first.
-- [ ] `Scripts/test.sh` passes `--disable-keychain` in the same change that adds the dependency, and every `xcodebuild` passes `-packageAuthorizationProvider netrc` in that change too.
-- [ ] The cold path is proven once with a scratch `--cache-path`. If it blocks, the vendored `.binaryTarget(path:)` fallback is taken and the development log says so.
-- [ ] `Package.resolved` is committed, and the tree stays clean after a test run and a build.
-- [ ] The app builds with Sparkle embedded and the existing suite stays green.
+- [ ] The build script fails on a `WebKit` or `AppKit` load command in the framework binary, and its manifest records the tag, commit, flags and Xcode version.
+- [ ] The remote package, `Package.resolved`'s pin, `--disable-keychain` and `-packageAuthorizationProvider netrc` are gone; `swift test`, `make run` and `release.sh --archive-only` build with the vendored framework.
+- [ ] The framework embeds the installer launcher service and no downloader service; `project.yml` declares `SUEnableInstallerLauncherService: true`.
+- [ ] The exported archive still re-signs `Autoupdate`, `Updater.app` and the launcher service with the Developer ID, and the strict check on `Autoupdate`'s team passes.
+- [ ] The preflight finds `sign_update` and `generate_keys` in the vendored folder.
 
-### S2: The card's rules outlive the card
+### S2: Install the moment the update is prepared, and the trackpad knows nothing
 
-**What to build:** `CardContract` and `card-contract` hold a frozen copy of what every shipped card demands of a release, with its tests, and `release.sh` runs it on the stapled archive. The shipped code stays in place until S3.
+**What to build:** a held genuine update arms the restart and ends the process in the same turn; nothing waits for the trackpad or the window; every trace of contact sensing and the idle clock is gone from the frame path, the model, the ports and the tests, and the scan keeps it out.
 
-**Blocked by:** S1.
+**Blocked by:** None (can start immediately).
 
-**Requirements:** R16, in part.
+**Requirements:** R2 (install at once), R22.
 
-**Test scenarios:** T48, T49, T50.
+**Test scenarios:** T4 (the arm's flag lands in S3; here the arm is unflagged), T26.
 
-**Skills:** `swift-testing-pro`, `axiom-macos`
+**Skills:** `swift-concurrency`, `swift-testing-pro`
 
-- [ ] A diff shows the moved code's bodies unchanged.
-- [ ] The tool reports through standard error and its exit code, and passes the scan.
-- [ ] `project.yml` does not link the new targets.
-- [ ] A failing verdict stops a release. On `--archive-only` it is reported and the script goes on, as the stapler check does there.
+- [ ] The frame callback has no lock, flag or hop that revision 1 added; a diff against `38af524` shows the frame-path files equal but for unrelated lines.
+- [ ] The review, recorded in the development log, reads every frame-path file and finds no update code (R22's review half).
+- [ ] `UpdateWaitsTests`, `DeviceSessionContactTests` and `SystemIdleClockTests` are gone, and the rest of the suite is green.
 
-### S3: The card and the hand-written updater go
+### S3: The engine on demand, and the login path with its window
 
-**What to build:** the settings window shows nothing about updates, the app makes no network request, and *Quit Trackpad Launcher* and every quit answer with no update guard. `Updater`, the `InstalledRelease` gate and everything in design section 13's deletion list go, and what the move shares stays.
+**What to build:** a login start of a copy that can replace itself reads the feed, downloads, refuses an archive that is not genuine before any installer exists, prepares and hands over at once, silently or with its settings window when one is open; a start by hand or after an update makes no check at start (the window's check arrives in S4); the engine builds one `SPUUpdater` per cycle on the user-initiated driver with the same headers and policies on each and drops it at the cycle's end; no schedule exists; a failed login check retries when a connection returns; a failed install reopens the old copy the same way. `Updater`'s card property exists from here, always nil until S4 makes its phases reachable.
 
-**Blocked by:** S2.
+**Blocked by:** S1, S2.
 
-**Requirements:** R15; R13 and R14, the removal of the install guards.
+**Requirements:** R1, R2, R3, R4, R7, R8 (the login half), R9, R10, R15, R18, R19 (the login half), R20, R21 (the login phases), R23 (the on-demand half).
 
-**Test scenarios:** None. The existing lifecycle, move and start-at-login rows stay green with the update rows removed.
+**Test scenarios:** T1 (the login and after-update rows), T2, T3, T4, T5, T6, T7, T11 (the login rows), T14, T15 (the login phases: awaiting a connection, a login cycle), T16 (the same phases), T17, T18, T19, T20, T21, T27, T39, T40.
 
-**Skills:** `axiom-swiftui`
+**Skills:** `swift-concurrency`, `swift-testing-pro`, `axiom-macos`
 
-- [ ] R15's grep finds nothing.
-- [ ] The move's `Installer` path and its tests are untouched.
-- [ ] `LauncherCore` holds no version number.
-- [ ] The scan's rows for deleted code go, with the bans the design keeps still listed.
+- [ ] `checkForUpdatesInBackground`, `willInstallUpdateOnQuit`, `sessionInProgress`, the pending-check flag, the extraction-layout lookup and the job veto are gone from the engine; `import Sparkle` and `AppleArchive` are each in one Platform file.
+- [ ] The genuineness check runs inside `didDownloadUpdate` on the engine's own extraction, a refused archive is removed there, and `showReady` holds a genuine update and replies *skip* on discard.
+- [ ] Every fresh updater gets `userAgentString`, `httpHeaders`, the cookie policy and the empty cache, as revision 1 set them; the enclosure pin and Sparkle's selection are untouched (R9, R10).
+- [ ] `project.yml` declares `SUEnableAutomaticChecks: false`, `SUEnableInstallerLauncherService: true` and no `SUAutomaticallyUpdate`.
+- [ ] `Lifecycle` calls `openedByHand()` before `updater.start`, and `start` takes `opensWindow`.
 
-### S4: A gated copy checks on its own and holds the update
+### S4: The card
 
-**What to build:** the tracer through every layer. A copy that passes `UpdatableCopy` starts `SparkleEngine` once resident and checks in that turn. It reveals nothing, downloads silently, and the held update installs at the process's end with no relaunch. The world gains `InMemoryUpdateEngine` and the release form of `RunningBuild`.
+**What to build:** each opening of the settings window checks; a newer version shows the card as the window's first group, its arrow drifting and its tray still; *Update now* downloads, installs at once and opens the new version with its window; a failure returns the card; closing the window drops a check or the card, and keeps the card through an update.
 
 **Blocked by:** S3.
 
-**Requirements:** R1 (start and schedule), R2, R3, R4 (Sparkle's selection), R5 (silent download), R12.
+**Requirements:** R5, R6, R8 (the card half), R11, R12, R13, R14, R19 (the card half), R20 and R21 (the card phases).
 
-**Test scenarios:** T1, T2, T3, T4, T5, T29, T30, T31, T43, T44.
+**Test scenarios:** T1 (the by-hand row), T8, T9, T10, T11 (the by-hand rows), T12, T13, T15 (the card phases: a probe, the card, *Updating…*), T16 (the same phases), T23, T24, T25, T38.
 
-**Skills:** `swift-concurrency`, `swift-testing-pro`, `axiom-macos`
+**Skills:** `axiom-swiftui`, `axiom-macos`, `swift-testing-pro`
 
-- [ ] `Updater` shows an initializer, `start` and `onHandOver`, with no version in it.
-- [ ] `Stage.replacingOthers` carries the opening.
-- [ ] `import Sparkle` is in one file and no Sparkle type crosses the port.
-- [ ] The Info.plist keys are in `project.yml`, with `SUPublicEDKey` empty until S12, which `start` reads as a silent failure.
+- [ ] The card's insets, fonts and the picture's offset match Figma node 2200-2970 side by side, in light and dark appearance; the picture is clipped at the card's trailing edge, and at the arrow's highest and lowest positions nothing of it shows outside the card.
+- [ ] The card has no dismiss control and no version text; the Quit button stays enabled during *Updating…*.
+- [ ] The window refits when the card appears and when it goes.
+- [ ] `Launcher` holds no reference to `Updater`; the window's edges reach it through `onWindowEdge` only.
 
-### S5: Every release publishes a feed, or nothing
+### S5: Real builds prove it
 
-**What to build:** `appcast.xml`, `write_feed`, `publish_feed`, `--feed-only`, the build-number check, the key preflight and `card-contract` in the release order, proven in the new harness. The harness itself is part of this slice.
+**What to build:** `update-e2e.sh` re-cut to revision 2's rows, its builds starting with `--at-login` where a login start is meant, run by a person with the Developer ID, the notary profile, `sudo` and a standard account on this Mac; the real logout, restart and shutdown during a login download, by hand.
 
-**Blocked by:** S2, S4.
+**Blocked by:** S4.
 
-**Requirements:** R4 (the feed), R7, R16 (the release step).
+**Requirements:** The proof of R1, R2, R3, R4, R5, R6, R7, R9, R10, R11, R12, R13, R14, R15, R18, R19, R20, R21, R22, R23 on notarised builds.
 
-**Test scenarios:** T51, T52, T53, T54, T55.
+**Test scenarios:** T28, T29, T30, T31, T32, T33, T34, T35, T36, T37, T41.
 
-**Skills:** `swift-testing-pro`
+**Skills:** `axiom-macos`
 
-- [ ] `appcast.xml` starts as an empty channel with `</channel>` on its own line.
-- [ ] Nothing in the harness touches the real `origin`, keychain or GitHub.
+- [ ] A person runs the script and its report, T41's hand-run rows included, is attached to the PR.
+- [ ] Cleanup leaves no `.e2e` copy, job, defaults domain, login item or standard-account leftover.
 
-### S6: Real builds prove the path
+### S6: The docs match what shipped, and the first release is cleared
 
-**What to build:** `Scripts/update-e2e.sh`: two patched builds, signing, notarising, the local server, the sampler and cleanup, with the rows that need no hand-over. Its build step and report hold up without credentials, and a person runs the rows.
+**What to build:** `docs/architecture.md` and `docs/domain-model.md` confirmed against the shipped code; `docs/product-overview.md`, `README.md` and `release.sh`'s header rewritten to revision 2; the by-hand checks run; the update key created and backed up.
 
 **Blocked by:** S5.
 
-**Requirements:** R16's archive check, and the proof of R1, R2, R3, R4, R5, R12 and R13 on real builds.
-
-**Test scenarios:** T56, T57, T58, T59, T60, T61, T62.
-
-**Skills:** `axiom-macos`
-
-- [ ] A person runs the script and its report is attached to the PR.
-- [ ] The feed comes from `release.sh --feed-only`, not from a template of its own.
-- [ ] Cleanup leaves no `.e2e` copy, job, defaults domain or login item.
-
-### S7: The update waits for an idle minute
-
-**What to build:** contact in `DeviceSession` and `MultitouchTrackpads`, `Launcher.isInUse` and `watchUse`, `IdleClock` and `SystemIdleClock`, and `.ready`. `Updater` calls `armRestart` when the minute passes. The real `armRestart` answers false until S9, so the app still installs at its next end.
-
-**Blocked by:** S4.
-
-**Requirements:** R8.
-
-**Test scenarios:** T7, T8, T9, T10, T11, T12, T13, T14, T35, T36, T37, T38, T45.
-
-**Skills:** `swift-concurrency`, `swift-testing-pro`
-
-- [ ] No new main-actor hop exists while `sensesContact` is off.
-- [ ] Each lasting effect starts and stops in `enter`.
-
-### S8: Only a genuine update installs
-
-**What to build:** at `willInstallUpdateOnQuit`, `SparkleEngine` runs `isGenuine` on the extracted bundle against `ExpectedUpdate`, inside the delegate call. A `.notGenuine` verdict discards the update through both layers of `SparkleInternals.veto(job:extracted:)`, inside that same call.
-
-**Blocked by:** S7.
-
-**Requirements:** R6; R7, the client's half.
-
-**Test scenarios:** T6, T32, T33, T34.
-
-**Skills:** `swift-concurrency`, `swift-testing-pro`
-
-- [ ] `extractedUpdate` and `installerJob` live in `SparkleInternals`, each naming its proof.
-- [ ] Every failure to find or read a bundle reads `.notGenuine`.
-
-### S9: The silent hand-over
-
-**What to build:** `LaunchdJob`, the hand-over script, `armRestart`, `.handedOver`, `Lifecycle.handedOver`, `Opening.afterUpdate`, its `Route` rows and `ThisCopy`'s argument. The old copy ends itself, the new one comes up silent, and a failed install brings the old one back. *Quit* and logout answer as design section 5 says in every phase.
-
-**Blocked by:** S8.
-
-**Requirements:** R8 (the install), R9, R10, R11, R13, R14.
-
-**Test scenarios:** T15, T16, T17, T18, T19, T20, T21, T22, T23, T39, T40, T41, T42, T46.
-
-**Skills:** `swift-concurrency`, `swift-testing-pro`, `axiom-macos`
-
-- [ ] `handedOver` uses `end()`, never `quit()`.
-- [ ] Arming and ending happen in one main-actor turn.
-- [ ] An after-update start makes no check of its own.
-
-### S10: A failed request retries when the connection returns
-
-**What to build:** `Connection`, `SystemConnection` and `.awaitingConnection`. A request that failed runs again once a connection is there, with no timer and no hot loop. `SparkleEngine.check` remembers a check refused in Sparkle's end-of-cycle window and runs it from `willScheduleUpdateCheckAfterDelay`; only T66, in S11, can prove that part on a real `SPUUpdater`.
-
-**Blocked by:** S4.
-
-**Requirements:** R1 (the retry), R5 (the later try).
-
-**Test scenarios:** T24, T25, T26, T27, T28, T47, T73.
-
-**Skills:** `swift-concurrency`, `swift-testing-pro`
-
-- [ ] A path monitor exists only while `.awaitingConnection` lasts.
-
-### S11: Real builds prove the hand-over
-
-**What to build:** the remaining rows in `update-e2e.sh`: the full silent update, real contact, lost and failing requests, refused updates, failed installs, random kills and a dead helper.
-
-**Blocked by:** S6, S9, S10.
-
-**Requirements:** The proof of R1, R5, R6, R7, R8, R9, R11, R12 and R13 on notarised builds.
-
-**Test scenarios:** T63, T64, T65, T66, T67, T68, T69, T70, T71, T72.
-
-**Skills:** `axiom-macos`
-
-- [ ] A person runs the script and its report is attached to the PR.
-- [ ] T63 and T68 hold their 10 s bounds, and T63's copy survives its 180 s.
-
-### S12: The docs match what shipped, and the first automatic release is cleared
-
-**What to build:** `docs/architecture.md` and `docs/domain-model.md` are already rewritten, so this slice confirms they match what shipped and corrects any drift. It writes the rest of design section 13's table: `docs/product-overview.md`, `README.md` and `release.sh`'s header. It also re-measures the performance baseline, creates the update key and runs the by-hand checks.
-
-**Blocked by:** S11.
-
-**Requirements:** R1, R3, R7, R8, R10, R14, R15 and R16, the checks under Verified without a test.
+**Requirements:** R16, R17, R24, the checks under Verified without a test.
 
 **Test scenarios:** None.
 
 **Skills:** None.
 
-- [ ] `docs/architecture.md` and `docs/domain-model.md` are read against the shipped code, and any drift is corrected.
-- [ ] `docs/product-overview.md`, `README.md` and `release.sh`'s header are written, as design section 13's table says.
-- [ ] `docs/performance.md` holds a re-measured baseline with Sparkle and WebKit loaded, and with an update waiting, as `Scripts/perf` measures them (G5).
-- [ ] The human runs `generate_keys`, stores `generate_keys -x` outside this Mac and puts the public key in `project.yml`, and `release.sh` preflight passes.
-- [ ] Every check under Verified without a test is run, and its result is in the development log.
-- [ ] D-3 and L2 are answered before the first automatic release is published.
+- [ ] The product overview's privacy sentence and the README's update paragraphs say what the plan's Solution says, *Update now*'s second read of the list included.
+- [ ] The human runs `generate_keys` from the vendored tools, stores `generate_keys -x` outside this Mac, puts the public key in `project.yml`, and the preflight passes.
+- [ ] Every check under Verified without a test is run and its result is in the development log, except R24's press of the old card, which follows the first published release and is logged then.
+
+
+## Card measurements from Figma (node 2200:2979, read in the session)
+
+- Group: its own rounded group, corner radius 12, fill `rgba(0,0,0,0.03)` like the other groups, plus a 1 pt border `#DEDEDE` that the other groups lack. Horizontal padding 10. Clips its content.
+- Row: a vertical stack, spacing 8, vertical padding 8, at least 42 pt tall; leading-aligned.
+  - *Update available*: SF Pro Regular 11 pt, line height 14, primary label colour.
+  - *Update now*: the same button as *Close* (24 pt tall, horizontal padding 16, radius 6, fill `rgba(0,0,0,0.08)`, SF Pro Medium 13 pt).
+- Picture (node 2200:2983, `square.and.arrow.down.fill` drawn as `plans/039-auto-updates/assets/update-card-symbol.svg`): 71 × 89 pt, fill `#DEDEDE`, placed at x = 203 and y = −8 within the group's padded content (the group is 274 pt wide inside its padding in the design), so it is clipped at the top and the bottom. The design shows it beside the text and button, on the right half of the card.
+- The window's other groups follow 10 pt below, as in the current layout.
