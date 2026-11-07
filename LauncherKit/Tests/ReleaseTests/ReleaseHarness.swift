@@ -240,12 +240,16 @@ final class ReleaseHarness: Sendable {
         try git("config", "tag.gpgsign", "false")
         for path in [
             "Scripts/release.sh", "Scripts/test.sh", "Scripts/release/dmg-background.png",
-            "Config/Version.xcconfig", "project.yml", "appcast.xml", ".gitignore",
+            "project.yml", ".gitignore",
         ] {
             let destination = clone.appending(path: path)
             try files.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             try files.copyItem(at: Self.repository.appending(path: path), to: destination)
         }
+        // The version and the feed the tests start from, fixed: the repository's own move on with every release.
+        try files.createDirectory(at: clone.appending(path: "Config"), withIntermediateDirectories: true)
+        try Self.startingVersion.write(to: clone.appending(path: "Config/Version.xcconfig"), atomically: true, encoding: .utf8)
+        try Self.startingFeed.write(to: feed, atomically: true, encoding: .utf8)
         try files.createDirectory(at: sparkleBin, withIntermediateDirectories: true)
         try installSparkleTools()
         // The stubs stand in for the vendored tools, which the clone must not track: a missing one is the test.
@@ -258,6 +262,24 @@ final class ReleaseHarness: Sendable {
         try git("fetch", "--quiet", "origin")
         try git("branch", "--set-upstream-to=origin/main", "main")
     }
+
+    private static let startingVersion = """
+        // The version users see (CFBundleShortVersionString) and the build number (CFBundleVersion).
+        // Raise both for every release; the build number only ever goes up.
+        MARKETING_VERSION = 1.0.15
+        CURRENT_PROJECT_VERSION = 16
+
+        """
+
+    private static let startingFeed = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+        <channel>
+        <title>Trackpad Launcher</title>
+        </channel>
+        </rss>
+
+        """
 
     private func setShippedKeyBeforeFirstCommit() throws {
         try edit("project.yml") { line in
