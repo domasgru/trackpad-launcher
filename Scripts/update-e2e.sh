@@ -115,10 +115,14 @@ elif ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 
   SKIP_REASON="notarytool cannot use the keychain profile '$NOTARY_PROFILE'"
 fi
 
+# The cache key: what the builds are made from, not the commit, so a commit that changes none of it (docs, tests, plans)
+# keeps the notarised builds.
 commit_key() {
-  local paths="TrackpadLauncher LauncherKit/Sources LauncherKit/Package.swift LauncherKit/Vendor Config project.yml assets"
+  local paths="TrackpadLauncher LauncherKit/Sources LauncherKit/Package.swift LauncherKit/Vendor Config project.yml assets
+    Scripts/update-e2e.sh Scripts/update-e2e"
   local head tag=""
-  head="$(git -C "$ROOT" rev-parse --short=12 HEAD)"
+  # shellcheck disable=SC2086
+  head="$(git -C "$ROOT" ls-tree -r HEAD -- $paths | shasum | cut -c1-12)"
   # shellcheck disable=SC2086
   if [ -n "$(git -C "$ROOT" status --porcelain -- $paths)" ]; then
     # shellcheck disable=SC2086
@@ -724,7 +728,7 @@ ensure_build() {
   if [ "$MODE" = check ]; then
     signing=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=-" DEVELOPMENT_TEAM= OTHER_CODE_SIGN_FLAGS=)
   elif [ "$kind" = appledev ]; then
-    signing=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=Apple Development" DEVELOPMENT_TEAM= OTHER_CODE_SIGN_FLAGS=)
+    signing=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=Apple Development" DEVELOPMENT_TEAM="$TEAM_ID" OTHER_CODE_SIGN_FLAGS=)
   else
     signing=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=Developer ID Application" DEVELOPMENT_TEAM="$TEAM_ID")
   fi
@@ -1526,7 +1530,7 @@ write_report() {
     echo "# Update end-to-end report"
     echo
     echo "- Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-    echo "- Commit: $COMMIT"
+    echo "- Commit: $(git -C "$ROOT" rev-parse --short=12 HEAD), build inputs $COMMIT"
     echo "- macOS: $(sw_vers -productVersion) ($(sw_vers -buildVersion))"
     echo "- Xcode: $(xcodebuild -version 2>/dev/null | tr '\n' ' ')"
     echo "- Mode: $MODE${SKIP_REASON:+ ($SKIP_REASON)}"
