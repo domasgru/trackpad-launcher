@@ -10,7 +10,7 @@ import Observation
 /// All of it runs only while the swipe setting is on; off, the observers are removed and the cache is empty.
 final class SwitcherPresenter {
     private let readsReduceMotion: () -> Bool
-    private let panel = SwitcherPanel()
+    private let panel: SwitcherPanel
     private let icons = AppIcons(side: SwitcherRowLayout.fullIconSide)
     private var observations: [Task<Void, Never>] = []
     private var workspaceObservers: [NSObjectProtocol] = []
@@ -21,9 +21,14 @@ final class SwitcherPresenter {
     private var stackLayout = WindowStackLayout(row: SwitcherRowLayout(iconCount: 0, displayWidth: 0))
     private var lastStretch = 0.0
 
-    /// `reduceMotion` is read at each render: the system's setting by default, injected by a bench. Builds the panel.
-    init(reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }) {
+    /// `reduceMotion` is read at each render: the system's setting by default, injected by a bench. Builds the panel,
+    /// unless a bench passes its own.
+    init(
+        reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion },
+        panel: SwitcherPanel? = nil
+    ) {
         readsReduceMotion = reduceMotion
+        self.panel = panel ?? SwitcherPanel()
     }
 
     /// Called once by the shell: observes `launcher.switcher` into `render`, and `launcher.isSwipeOn` into the icon
@@ -130,7 +135,7 @@ final class SwitcherPresenter {
         if switcher.serial != laidOutSerial { open(switcher) }
         for (slot, stack) in switcher.stacks.enumerated() where shownStacks[slot] == .pending {
             guard case .stack(let windows) = stack else { continue }
-            panel.addStack(at: slot, copies: stackLayout.copies(of: windows))
+            panel.addStack(at: slot, copies: stackLayout.copies(of: windows), rises: !reduceMotion)
         }
         shownStacks = switcher.stacks
         let selection = switcher.selection

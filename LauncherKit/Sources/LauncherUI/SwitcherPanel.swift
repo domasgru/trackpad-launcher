@@ -4,7 +4,7 @@ import QuartzCore
 
 /// The app switcher's window: an overlay panel holding one container layer per app, its icon last and any window stack's
 /// copies behind it, and the glass highlight under them; `SwitcherPresenter` decides everything shown.
-final class SwitcherPanel: OverlayPanel {
+class SwitcherPanel: OverlayPanel {
     private static let cornerRadius: CGFloat = 34
 
     private let content: NSView
@@ -82,16 +82,30 @@ final class SwitcherPanel: OverlayPanel {
         CATransaction.commit()
     }
 
-    /// Inserts `copies` behind the slot's icon, sharing its image, at rest: nearest copy just behind the icon.
-    func addStack(at slot: Int, copies: [WindowStackLayout.Copy]) {
+    /// Inserts `copies` behind the slot's icon, sharing its image, at rest: nearest copy just behind the icon. With
+    /// `rises`, each copy's height animates from the icon's centre, started `delay` after the stack appears and held
+    /// there until then; without it (Reduce motion) the copies are in place at once.
+    func addStack(at slot: Int, copies: [WindowStackLayout.Copy], rises: Bool) {
         guard slotLayers.indices.contains(slot), let icon = slotLayers[slot].sublayers?.last else { return }
         let container = slotLayers[slot]
+        let now = CACurrentMediaTime()
+        let curve = WindowStackLayout.riseCurve
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for (index, copy) in copies.enumerated().reversed() {
             let layer = Self.imageLayer(side: copy.side, centredAt: copy.rise, in: layout.iconSide, scale: scale)
             layer.contents = icon.contents
             container.insertSublayer(layer, at: UInt32(copies.count - 1 - index))
+            guard rises else { continue }
+            let rise = CABasicAnimation(keyPath: "position.y")
+            rise.fromValue = layout.iconSide / 2
+            rise.toValue = layer.position.y
+            rise.duration = WindowStackLayout.riseDuration
+            rise.timingFunction = CAMediaTimingFunction(
+                controlPoints: Float(curve.0), Float(curve.1), Float(curve.2), Float(curve.3))
+            rise.beginTime = layer.convertTime(now, from: nil) + copy.delay
+            rise.fillMode = .backwards
+            layer.add(rise, forKey: "rise")
         }
         CATransaction.commit()
     }

@@ -106,4 +106,20 @@ import LauncherCore
         #expect(layout.copies(of: WindowStack(windows: 2)!).count == 1)
         #expect(close(layout.copies(of: WindowStack(windows: 3)!).map(\.side), [73.6, 67.2]))
     }
+
+    @Test func eachCopyStartsRisingFortyMillisecondsAfterTheOneInFrontAndAllAreAtRestWithinHalfASecond() {
+        let layout = WindowStackLayout(row: SwitcherRowLayout(iconCount: 5, displayWidth: 1512))
+        let delays = layout.copies(of: WindowStack(windows: 4)!).map(\.delay)
+
+        #expect(close(delays, [0, 0.04, 0.08]))
+        #expect(WindowStackLayout.riseDuration == 0.3)
+        #expect(close([delays.last! + WindowStackLayout.riseDuration], [0.38]))
+        #expect(delays.last! + WindowStackLayout.riseDuration < 0.5)
+    }
+
+    @Test func theRiseIsASoftEaseOut() {
+        let curve = WindowStackLayout.riseCurve
+        #expect(curve.1 > curve.0)
+        #expect(curve.3 == 1)
+    }
 }

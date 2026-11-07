@@ -57,6 +57,10 @@ public struct WindowStackLayout: Equatable, Sendable {
     public static let copyScales = [0.92, 0.84, 0.76]
     /// How far each copy's top edge peeks above the top edge of the one in front of it, at full size.
     public static let fullPeek = 6.0
+    /// The rise: seconds, the delay between neighbouring copies, and a soft ease-out as cubic Bézier control points.
+    public static let riseDuration = 0.3
+    public static let riseStagger = 0.04
+    public static let riseCurve: (Double, Double, Double, Double) = (0.25, 1.0, 0.5, 1.0)
 
     public let row: SwitcherRowLayout
 
@@ -67,13 +71,17 @@ public struct WindowStackLayout: Equatable, Sendable {
         public let side: Double
         /// Centre at rest above the icon's centre: `fullPeek × (k + 1) × row.scale + (row.iconSide − side) / 2`.
         public let rise: Double
+        /// Seconds after the stack appears that this copy starts rising: `riseStagger × k`, the nearest first.
+        public let delay: Double
     }
 
     /// Nearest first: one per copy of `stack`.
     public func copies(of stack: WindowStack) -> [Copy] {
         Self.copyScales.prefix(stack.copies).enumerated().map { index, share in
             let side = row.iconSide * share
-            return Copy(side: side, rise: Self.fullPeek * Double(index + 1) * row.scale + (row.iconSide - side) / 2)
+            return Copy(
+                side: side, rise: Self.fullPeek * Double(index + 1) * row.scale + (row.iconSide - side) / 2,
+                delay: Self.riseStagger * Double(index))
         }
     }
 }
