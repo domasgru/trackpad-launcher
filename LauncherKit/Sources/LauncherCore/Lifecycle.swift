@@ -7,6 +7,8 @@ public enum Opening: Equatable, Sendable {
     case atLogin
     /// Finder, Spotlight, Launchpad, the Dock, Xcode: every opening that is not at login.
     case byHand
+    /// The hand-over job started this process, `--after-update`: the new version, or the old one after a failed install.
+    case afterUpdate
 }
 
 /// What one opening of this process leads to: the whole table, pure.
@@ -14,13 +16,16 @@ public enum Route: Equatable, Sendable {
     case runSilently, runWithWindow, askToMove, end
 
     /// `olderCopyRuns` matters only at login: two login starts converge on the older copy. By hand, a copy outside
-    /// /Applications that is a release build asks to be moved; every other copy runs where it is.
+    /// /Applications that is a release build asks to be moved; every other copy runs where it is. After an update the
+    /// placement means something only where an update lands: anywhere else it reads as an opening by hand.
     public init(_ opening: Opening, placement: Placement, olderCopyRuns: Bool) {
         switch (opening, placement, olderCopyRuns) {
         case (.atLogin, _, true): self = .end
         case (.atLogin, _, false): self = .runSilently
-        case (.byHand, .elsewhere, _): self = .askToMove
-        case (.byHand, .installed, _), (.byHand, .development, _): self = .runWithWindow
+        case (.afterUpdate, .installed, _): self = .runSilently
+        case (.byHand, .elsewhere, _), (.afterUpdate, .elsewhere, _): self = .askToMove
+        case (.byHand, .installed, _), (.byHand, .development, _), (.afterUpdate, .development, _):
+            self = .runWithWindow
         }
     }
 }

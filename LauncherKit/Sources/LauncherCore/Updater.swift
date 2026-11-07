@@ -57,13 +57,13 @@ public enum UpdateEngineEvent: Equatable, Sendable {
         self.clock = clock
     }
 
-    /// Once, from a resident only. Starts the engine and checks in the same turn: the one moment Sparkle's docs bless,
-    /// and the only way to check at every start, because Sparkle's scheduler checks at start only past 24 hours.
+    /// Once, from a resident only. Starts the engine and, unless this process is the hand-over's, checks in the same
+    /// turn. A failed install must not check at once, or it would hand over once a minute for ever.
     public func start(watching launcher: Launcher, opening: Opening) {
         self.launcher = launcher
         engine.onEvent = { [unowned self] event in handle(event) }
         engine.start()
-        engine.check()
+        if opening != .afterUpdate { engine.check() }
     }
 
     private func handle(_ event: UpdateEngineEvent) {

@@ -18,12 +18,13 @@ import LauncherCore
     /// `record` is what an earlier run saved: these apps on these gestures. nil is a Mac that holds no settings.
     init(
         apps: [String] = ["Arc", "Notes"], accessGranted: Bool = true, record: [Gesture: String]? = nil,
-        corner: ThumbCorner = .topLeft, loginItemOn: Bool = false
+        corner: ThumbCorner = .topLeft, hidesBackgroundApps: Bool = false, loginItemOn: Bool = false
     ) {
         mac = World(apps: apps, accessGranted: accessGranted)
         if let record {
             var settings = Settings()
             settings.thumbCorner = corner
+            settings.isHideBackgroundAppsOn = hidesBackgroundApps
             for (gesture, name) in record { settings.assignments[gesture] = AssignedApp(mac.app(name)) }
             mac.freshStore().save(settings)
         }
@@ -73,12 +74,22 @@ import LauncherCore
     ) -> OneProcess {
         let process = OneProcess(mac: mac, placement: placement, running: running, attached: attached, log: log)
         process.installer.onEffect = { [unowned self] in snapshots.append(snapshot()) }
+        process.engine.onEffect = { [unowned self] in snapshots.append(snapshot()) }
         process.installer.onInstalled = { [unowned self] in installedAt = snapshots.count }
         process.copies.listed = others
         process.copies.alreadyExited = Set(alreadyExited.map(\.id))
         processes.append(process)
         process.launch(opening, diskImageToEject: diskImageToEject)
         return process
+    }
+
+    /// What the hand-over job and Sparkle's installer do once the old process has ended: the next process starts with
+    /// `--after-update`, as a release copy, on this same Mac. `installed: false` is a swap that failed, so the old
+    /// version comes back.
+    @discardableResult
+    func finishHandOver(installed: Bool = true) -> OneProcess {
+        if installed { installedAt = snapshots.count }
+        return launch(.afterUpdate, placement: .installed, running: .release)
     }
 
     /// macOS at login: it starts a process, silently, only while the login item is on.

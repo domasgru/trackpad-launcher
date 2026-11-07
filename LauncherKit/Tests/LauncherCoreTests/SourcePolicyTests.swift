@@ -84,10 +84,10 @@ import Testing
         Entry(token: "tiffRepresentation", rule: "a preview is never encoded or written"),
         Entry(token: "NSStatusBar", rule: "no menu bar icon"),
         Entry(token: "NSStatusItem", rule: "no menu bar icon"),
-        Entry(token: "SMAppService.agent", rule: "nothing relaunches the app"),
-        Entry(token: "SMAppService.daemon", rule: "nothing relaunches the app"),
-        Entry(token: "SMAppService.loginItem", rule: "nothing relaunches the app"),
-        Entry(token: "SMLoginItemSetEnabled", rule: "nothing relaunches the app"),
+        Entry(token: "SMAppService.agent", rule: "nothing relaunches the app after a crash or a force quit; the hand-over job opens it once after an update"),
+        Entry(token: "SMAppService.daemon", rule: "nothing relaunches the app after a crash or a force quit; the hand-over job opens it once after an update"),
+        Entry(token: "SMAppService.loginItem", rule: "nothing relaunches the app after a crash or a force quit; the hand-over job opens it once after an update"),
+        Entry(token: "SMLoginItemSetEnabled", rule: "nothing relaunches the app after a crash or a force quit; the hand-over job opens it once after an update"),
         Entry(token: "/bin/rm", rule: "the administrator's swap removes nothing"),
     ]
 
@@ -182,6 +182,9 @@ import Testing
         Confined(
             token: ".activate()", onlyIn: ["AnimationTuner.swift"],
             rule: "the plain call is refused when an opening by hand starts the process; it lives only in the Debug tuner, whose click-time call is user intent"),
+        Confined(
+            token: "/bin/sh", onlyIn: ["LaunchdJob.swift", "PrivilegedInstall.swift"],
+            rule: "the hand-over job and the administrator's move are the two scripts"),
         Confined(token: "/bin/mv", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's move has one script"),
         Confined(token: "osascript", onlyIn: ["PrivilegedInstall.swift"], rule: "the administrator's exchange has one script"),
         Confined(token: "SMJob", onlyIn: ["LaunchdJob.swift"], rule: "the one non-permanent job API has one file"),

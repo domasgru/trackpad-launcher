@@ -662,8 +662,13 @@ final class EffectLog {
         log?.entries.append("discard")
     }
 
+    /// Runs before and after each arm restart, as the world's snapshot hook.
+    var onEffect: (() -> Void)?
+
     func armRestart() -> Bool {
+        onEffect?()
         log?.entries.append("arm restart")
+        onEffect?()
         return armWorks
     }
 

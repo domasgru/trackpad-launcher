@@ -5,10 +5,12 @@ import LauncherCore
 public enum ThisCopy {
     /// The `oapp` of a start (read in didFinishLaunching: the event is nil in willFinishLaunching). `.atLogin` when it
     /// carries the login-item marker; otherwise, and for nil, `.byHand`. `--eject-disk-image <volume>` names the disk
-    /// image the mover ran from; any other argument is ignored.
+    /// image the mover ran from. `--after-update` is the hand-over job's start and wins over the event; any other argument is
+    /// ignored.
     public static func launch(event: NSAppleEventDescriptor?, arguments: [String]) -> Launch {
         let volume = arguments.firstIndex(of: "--eject-disk-image").flatMap { arguments[safe: $0 + 1] }
-        return Launch(opening: opening(of: event), diskImageToEject: volume.map { DiskImage(volume: URL(filePath: $0)) })
+        let opening = arguments.contains("--after-update") ? Opening.afterUpdate : opening(of: event)
+        return Launch(opening: opening, diskImageToEject: volume.map { DiskImage(volume: URL(filePath: $0)) })
     }
 
     /// A reopen (`aevt/rapp`): `.atLogin` only when it carries the login marker; otherwise, and for nil, `.byHand`.

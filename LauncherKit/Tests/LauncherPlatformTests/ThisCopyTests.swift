@@ -45,6 +45,22 @@ import Testing
         #expect(ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "--eject-disk-image"]).diskImageToEject == nil)
     }
 
+    @Test func theAfterUpdateFlagIsTheHandOversStartWhateverTheEventSays() {
+        let atLogin = Self.event(AEEventID(kAEOpenApplication), loginMarker: true)
+        #expect(ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "--after-update"]) == Launch(opening: .afterUpdate))
+        #expect(ThisCopy.launch(event: atLogin, arguments: ["TrackpadLauncher", "--after-update"]).opening == .afterUpdate)
+    }
+
+    @Test func theAfterUpdateFlagSitsBesideTheEjectFlag() {
+        let launch = ThisCopy.launch(
+            event: nil, arguments: ["TrackpadLauncher", "--after-update", "--eject-disk-image", "/Volumes/Trackpad Launcher"])
+        #expect(launch == Launch(opening: .afterUpdate, diskImageToEject: DiskImage(volume: URL(filePath: "/Volumes/Trackpad Launcher"))))
+    }
+
+    @Test func aReopenIgnoresArguments() {
+        #expect(ThisCopy.opening(of: Self.event(AEEventID(kAEReopenApplication), loginMarker: false)) == .byHand)
+    }
+
     @Test func unrelatedArgumentsAreIgnored() {
         let launch = ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "-NSDocumentRevisionsDebugMode", "YES"])
         #expect(launch == Launch(opening: .byHand))

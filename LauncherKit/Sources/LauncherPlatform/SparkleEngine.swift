@@ -14,10 +14,17 @@ internal import Sparkle
     /// Kept only once `start()` succeeded, so a `check()` after a failed start does nothing.
     private var updater: SPUUpdater?
 
-    /// Reads the downloads prefix now: after a swap, `Bundle.main` reads the new bundle.
+    private let bundle: URL
+    /// This process's own build, read at start: after a swap, `Bundle.main` reads the new bundle.
+    private let build: String?
+
+    /// Reads the downloads prefix and the build now: after a swap, `Bundle.main` reads the new bundle.
     public init(bundle: URL, signer: Signer) {
         self.signer = signer
-        let prefix = Bundle(url: bundle)?.object(forInfoDictionaryKey: "TLUpdateDownloads") as? String
+        self.bundle = bundle
+        let info = Bundle(url: bundle)
+        build = info?.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        let prefix = info?.object(forInfoDictionaryKey: "TLUpdateDownloads") as? String
         delegate = UpdaterDelegate(prefix: prefix, signer: signer)
         delegate.emit = { [weak self] event in self?.onEvent?(event) }
     }
@@ -47,7 +54,14 @@ internal import Sparkle
         delegate.found = nil
     }
 
-    public func armRestart() -> Bool { false }
+    /// Called in the turn that ends this process: the job outlives it and opens whichever copy /Applications holds.
+    public func armRestart() -> Bool {
+        guard let build else { return false }
+        return LaunchdJob.submit(
+            label: "\(signer.identifier).hand-over",
+            arguments: LaunchdJob.handOverArguments(
+                oldPID: getpid(), bundle: bundle, build: build, allowed: 5, open: "/usr/bin/open"))
+    }
 
     /// nil and SUNoUpdateError are `.nothingNew`; SUDownloadError is `.requestFailed`; everything else `.failed`. Public
     /// codes: every failure of a request, feed or archive, reaches this level wrapped in SUDownloadError.
