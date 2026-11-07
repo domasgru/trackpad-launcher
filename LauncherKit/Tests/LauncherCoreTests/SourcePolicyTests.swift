@@ -97,6 +97,8 @@ import Testing
         Entry(token: "NSSupportsSuddenTermination", rule: suddenTerminationRule),
         Entry(token: "SUEnableSystemProfiling", rule: "no system profile is ever sent"),
         Entry(token: "SUEnableDownloaderService", rule: "the downloader XPC service stays unused"),
+        Entry(token: "SUAutomaticallyUpdate", rule: "nothing downloads by itself"),
+        Entry(token: "SUScheduledCheckInterval", rule: "no schedule exists"),
     ]
 
     /// Keys the manifest must carry, and what their value must look like.
@@ -110,8 +112,7 @@ import Testing
     static let alwaysDeclared: [Declared] = [
         Declared(key: "SUFeedURL", valuePrefix: "https://", valueSuffix: nil),
         Declared(key: "SUPublicEDKey", valuePrefix: nil, valueSuffix: nil),
-        Declared(key: "SUEnableAutomaticChecks", valuePrefix: nil, valueSuffix: nil),
-        Declared(key: "SUAutomaticallyUpdate", valuePrefix: nil, valueSuffix: nil),
+        Declared(key: "SUEnableAutomaticChecks", valuePrefix: "false", valueSuffix: "false"),
         Declared(key: "SUVerifyUpdateBeforeExtraction", valuePrefix: nil, valueSuffix: nil),
         Declared(key: "TLUpdateDownloads", valuePrefix: "https://", valueSuffix: "/"),
         Declared(key: "SUEnableInstallerLauncherService", valuePrefix: "true", valueSuffix: "true"),
@@ -139,7 +140,6 @@ import Testing
         Confined(token: "HTTPCookieStorage", onlyIn: ["SparkleEngine.swift"], rule: "cookies are refused where the engine starts"),
         Confined(token: "URLCache", onlyIn: ["SparkleEngine.swift"], rule: "nothing is cached where the engine starts"),
         Confined(token: "org.sparkle-project", onlyIn: ["SparkleEngine.swift"], rule: "Sparkle's private paths have one reader"),
-        Confined(token: "sparkle-updater", onlyIn: ["SparkleEngine.swift"], rule: "Sparkle's private job has one reader"),
         Confined(token: "Data(contentsOf:", onlyIn: ["Apps.swift", "CardContract.swift"], rule: "the one local-file reader; a URL read is a request"),
         Confined(token: "AXIsProcessTrusted", onlyIn: ["SystemPermissions.swift"], rule: "R9 one permission, one adapter"),
         Confined(token: "notify_register", onlyIn: ["SystemPermissions.swift"], rule: "R7 the trust push"),
@@ -204,20 +204,20 @@ import Testing
             token: "forceTerminate", onlyIn: ["SystemRunningCopies.swift"], rule: "other copies are stopped in one place"),
         Confined(token: ".terminate(", onlyIn: ["SystemRunningCopies.swift"], rule: "processes are ended in one place"),
         Confined(token: "copyItem(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
-        Confined(token: "moveItem(", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the move's file operations are in one file"),
+        Confined(token: "moveItem(", onlyIn: ["BundleInstall.swift", "CardContract.swift", "UpdateArchive.swift"], rule: "the move's file operations are in one file"),
         Confined(token: "replaceItemAt(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
         Confined(token: "renamex_np(", onlyIn: ["BundleInstall.swift"], rule: "the move's file operations are in one file"),
-        Confined(token: "removeItem(", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the move's file operations are in one file"),
+        Confined(token: "removeItem(", onlyIn: ["BundleInstall.swift", "CardContract.swift", "UpdateArchive.swift"], rule: "the move's file operations are in one file"),
         Confined(
-            token: "AppleArchive", onlyIn: ["CardContract.swift"], rule: "the card's rules unpack an archive, frozen"),
+            token: "AppleArchive", onlyIn: ["CardContract.swift", "UpdateArchive.swift"], rule: "the card's rules unpack an archive, frozen"),
         Confined(
-            token: "ArchiveStream", onlyIn: ["CardContract.swift"], rule: "the card's rules unpack an archive, frozen"),
+            token: "ArchiveStream", onlyIn: ["CardContract.swift", "UpdateArchive.swift"], rule: "the card's rules unpack an archive, frozen"),
         Confined(
-            token: "ArchiveByteStream", onlyIn: ["CardContract.swift"], rule: "the card's rules unpack an archive, frozen"),
+            token: "ArchiveByteStream", onlyIn: ["CardContract.swift", "UpdateArchive.swift"], rule: "the card's rules unpack an archive, frozen"),
         Confined(
             token: "removexattr", onlyIn: ["BundleInstall.swift", "CardContract.swift"], rule: "the quarantine is cleared in one file"),
         Confined(
-            token: "itemReplacementDirectory", onlyIn: ["BundleInstall.swift", "CardContract.swift"],
+            token: "itemReplacementDirectory", onlyIn: ["BundleInstall.swift", "CardContract.swift", "UpdateArchive.swift"],
             rule: "the staging folder is made in one file"),
         Confined(
             token: "AuthorizationExecuteWithPrivileges", onlyIn: ["PrivilegedInstall.swift"],
@@ -346,6 +346,26 @@ import Testing
         #expect(missing == ["not declared"])
         #expect(plain == ["value does not start with https://"])
         #expect(unterminated == ["value does not end with /"])
+    }
+
+    @Test func theAutomaticChecksKeyIsDeclaredFalseAndAPlantedTrueFails() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-declared-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let entry = try #require(Self.alwaysDeclared.first { $0.key == "SUEnableAutomaticChecks" })
+        try Data("info:\n  properties:\n        SUEnableAutomaticChecks: true\n".utf8).write(to: dir.appending(path: "project.yml"))
+
+        #expect(try Self.declarationProblems(in: dir, for: entry) == ["value does not start with false", "value does not end with false"])
+    }
+
+    @Test func theInstallerLauncherServiceKeyIsDeclaredTrueAndAPlantedFalseFails() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-declared-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let entry = try #require(Self.alwaysDeclared.first { $0.key == "SUEnableInstallerLauncherService" })
+        try Data("info:\n  properties:\n        SUEnableInstallerLauncherService: false\n".utf8).write(to: dir.appending(path: "project.yml"))
+
+        #expect(try Self.declarationProblems(in: dir, for: entry) == ["value does not start with true", "value does not end with true"])
     }
 
     @Test func manifestScanFindsAPlantedKey() throws {

@@ -3,9 +3,9 @@ import LauncherCore
 import Testing
 
 @MainActor @Suite struct UpdateRetryTests {
-    private func resident(_ opening: Opening = .atLogin) -> (world: LifecycleWorld, process: OneProcess) {
+    private func resident() -> (world: LifecycleWorld, process: OneProcess) {
         let world = LifecycleWorld(record: [.one: "Arc"], loginItemOn: true)
-        let process = world.launch(opening, running: .release)
+        let process = world.launch(.atLogin, running: .release)
         return (world, process)
     }
 
@@ -16,92 +16,125 @@ import Testing
         process.engine.push(.cycleEnded(.requestFailed))
 
         #expect(process.connection.isWatching)
-        #expect(process.engine.checks == 1)
+        #expect(process.engine.updates == 1)
         process.connection.set(false)
-        #expect(process.engine.checks == 1)
+        #expect(process.engine.updates == 1)
         process.connection.set(true)
-        #expect(process.engine.checks == 2)
-    }
-
-    @Test func aCycleThatEndsWithNothingNewWatchesNothing() {
-        let (_, process) = resident()
-
-        process.engine.push(.cycleEnded(.nothingNew))
-
-        #expect(!process.connection.isWatching)
-        #expect(process.connection.watches == 0)
-    }
-
-    @Test func aConnectionThatCameUpBeforeTheWatchArmedStillRetriesFromTheReadingItPushes() {
-        let (_, process) = resident()
-        process.connection.reading = true
-
-        process.engine.push(.cycleEnded(.requestFailed))
-
-        #expect(process.engine.checks == 2)
+        #expect(process.engine.updates == 2)
+        #expect(process.engine.probes == 0)
+        #expect(process.engine.overlaps == 0)
     }
 
     @Test func aRetryThatFailsOnASteadyPathIsNotRepeatedUntilTheConnectionDropsAndReturns() {
         let (_, process) = resident()
-        process.connection.reading = true
         process.engine.push(.cycleEnded(.requestFailed))
-        #expect(process.engine.checks == 2)
+        process.connection.set(true)
+        #expect(process.engine.updates == 2)
+
         process.engine.push(.cycleEnded(.requestFailed))
 
-        for _ in 0..<1000 { process.connection.set(true) }
-        process.engine.push(.cycleEnded(.requestFailed))
-
-        #expect(process.engine.checks == 2)
+        #expect(process.connection.isWatching)
+        for _ in 0..<100 { process.connection.set(true) }
+        #expect(process.engine.updates == 2)
         process.connection.set(false)
         process.connection.set(true)
-        #expect(process.engine.checks == 3)
+        #expect(process.engine.updates == 3)
+        #expect(process.engine.overlaps == 0)
+    }
+
+    @Test func aCycleThatEndsWithNothingNewOrNotWatchingLeavesTheWatchOff() {
+        let (_, process) = resident()
+        process.engine.push(.cycleEnded(.nothingNew))
+        #expect(!process.connection.isWatching)
+        #expect(process.connection.watches == 0)
+
+        let (_, retrying) = resident()
+        retrying.engine.push(.cycleEnded(.requestFailed))
+        retrying.connection.set(true)
+        #expect(retrying.connection.isWatching)
+
+        retrying.engine.push(.cycleEnded(.nothingNew))
+
+        #expect(!retrying.connection.isWatching)
+        retrying.connection.set(false)
+        retrying.connection.set(true)
+        #expect(retrying.engine.updates == 2)
+    }
+
+    @Test func aConnectionThatCameUpBeforeTheWatchArmedRetriesFromTheReadingItPushes() {
+        let (_, process) = resident()
+        process.connection.reading = true
+
+        process.engine.push(.cycleEnded(.requestFailed))
+
+        #expect(process.engine.updates == 2)
+        #expect(process.connection.isWatching)
+        #expect(process.engine.overlaps == 0)
     }
 
     @Test func aDropDuringTheRetryEarnsTheNextOneEvenWhenTheRetryThenFails() {
         let (_, process) = resident()
         process.connection.reading = true
         process.engine.push(.cycleEnded(.requestFailed))
-        #expect(process.engine.checks == 2)
+        #expect(process.engine.updates == 2)
 
         process.connection.set(false)
         process.engine.push(.cycleEnded(.requestFailed))
         process.connection.set(true)
 
-        #expect(process.engine.checks == 3)
+        #expect(process.engine.updates == 3)
+        #expect(process.engine.overlaps == 0)
     }
 
-    @Test func aDropAndReturnWhileTheRetryStillRunsEarnsOneMoreAndItsFailureNoFourth() {
+    @Test func aDropAndReturnInsideTheRetryThatThenFailsRetriesAtOnceAndItsFailureNoFourth() {
         let (_, process) = resident()
         process.connection.reading = true
         process.engine.push(.cycleEnded(.requestFailed))
-        #expect(process.engine.checks == 2)
+        #expect(process.engine.updates == 2)
 
         process.connection.set(false)
         process.connection.set(true)
-        #expect(process.engine.checks == 3)
+        #expect(process.engine.updates == 2)
+        process.engine.push(.cycleEnded(.requestFailed))
+        #expect(process.engine.updates == 3)
         process.engine.push(.cycleEnded(.requestFailed))
 
-        #expect(process.engine.checks == 3)
+        #expect(process.engine.updates == 3)
+        #expect(process.engine.overlaps == 0)
     }
 
-    @Test func aCycleThatEndsAnotherWayStopsTheWatch() {
+    @Test func aFailedDownloadWatchesNothingAndAConnectionEarnsNoRetry() {
         let (_, process) = resident()
-        process.engine.push(.cycleEnded(.requestFailed))
-        #expect(process.connection.isWatching)
 
         process.engine.push(.cycleEnded(.failed))
 
         #expect(!process.connection.isWatching)
+        #expect(process.connection.watches == 0)
         process.connection.set(true)
-        #expect(process.engine.checks == 1)
+        #expect(process.engine.updates == 1)
     }
 
-    @Test func aFailedCycleAloneStartsNoWatch() {
+    @Test func aFailureAfterARetryEndsTheWatchToo() {
         let (_, process) = resident()
+        process.engine.push(.cycleEnded(.requestFailed))
+        process.connection.set(true)
 
         process.engine.push(.cycleEnded(.failed))
 
-        #expect(process.connection.watches == 0)
+        #expect(!process.connection.isWatching)
+        process.connection.set(false)
+        process.connection.set(true)
+        #expect(process.engine.updates == 2)
+    }
+
+    @Test func aNextLoginStartIsANewProcessWithItsOwnOneCycle() {
+        let (world, process) = resident()
+        process.engine.push(.cycleEnded(.failed))
+
+        let next = world.login(running: .release)
+
+        #expect(next?.engine.updates == 1)
+        #expect(process.engine.updates == 1)
     }
 
     @Test func aRetryThatFindsAnUpdateEndsTheWatchAndHandsOverLikeAnyOther() {
@@ -109,41 +142,10 @@ import Testing
         process.engine.push(.cycleEnded(.requestFailed))
         process.connection.set(true)
 
-        process.engine.push(.held(.genuine))
+        process.engine.push(.held)
 
         #expect(!process.connection.isWatching)
         #expect(world.log.entries.suffix(2) == ["arm restart", "end"])
-    }
-
-    @Test func aRefusedHandOverFollowedByAFailedRequestWatchesLikeAFailedCheck() {
-        let (world, process) = resident()
-        process.engine.armWorks = false
-        process.engine.push(.held(.genuine))
-
-        process.engine.push(.cycleEnded(.requestFailed))
-
-        #expect(process.connection.isWatching)
-        #expect(!world.log.entries.contains("end"))
-    }
-
-    @Test func aDownloadLostMidWayWatchesLikeAFailedCheckAndRunsAgainWithAConnection() {
-        let (_, process) = resident()
-
-        process.engine.push(.cycleEnded(.requestFailed))
-
-        #expect(process.connection.isWatching)
-        let checks = process.engine.checks
-        process.connection.set(true)
-        #expect(process.engine.checks == checks + 1)
-    }
-
-    @Test func whileWatchingAQuitEndsAtOnceAndASystemEndIsAllowed() {
-        let (world, process) = resident()
-        process.engine.push(.cycleEnded(.requestFailed))
-
-        #expect(process.shouldEnd(.system))
-        process.quit()
-
-        #expect(world.log.entries.contains("end"))
+        #expect(process.engine.overlaps == 0)
     }
 }

@@ -213,14 +213,17 @@ public enum Permission: Hashable, Sendable {
 /// Real: SparkleEngine. Test: InMemoryUpdateEngine.
 @MainActor public protocol UpdateEngine: AnyObject {
     var onEvent: (@MainActor (UpdateEngineEvent) -> Void)? { get set }
-    /// Makes no request before this call. Starts the 24-hour schedule.
-    func start()
-    /// One background check. Asked while a cycle runs or is ending, it runs once that cycle has finished, so a retry is
-    /// never lost. It never runs while an update is held.
-    func check()
-    /// Stops the held update installing. Best effort, two layers; if both fail it installs at this process's end.
+    /// Reads the feed and downloads nothing. Answers once, `.cycleEnded(.found | .nothingNew | .requestFailed | .failed)`.
+    /// Never asked while a cycle runs.
+    func probe()
+    /// Reads the feed, downloads the newest version, refuses one that is not genuine before any installer exists, asks
+    /// for an administrator when this user cannot replace the bundle, prepares it and pushes `.held`; the update
+    /// installs at this process's end. `.cycleEnded` follows only when `.held` is never reached or the held update is
+    /// discarded. Never asked while a cycle runs.
+    func update()
+    /// Stops the held update: the installer is cancelled, then Sparkle's cycle ends `.failed`.
     func discardHeldUpdate()
-    /// Arms the start of whichever version /Applications holds once this process has ended. The caller ends the
-    /// process in the same turn. False: nothing is armed.
-    func armRestart() -> Bool
+    /// Arms the job that opens whichever copy /Applications holds once this process has ended: silently, or with its
+    /// settings window. The caller ends the process in the same turn. False: nothing is armed.
+    func armRestart(opensWindow: Bool) -> Bool
 }

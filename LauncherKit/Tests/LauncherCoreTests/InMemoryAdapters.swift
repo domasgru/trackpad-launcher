@@ -572,19 +572,32 @@ final class EffectLog {
 @MainActor final class InMemoryUpdateEngine: UpdateEngine {
     var log: EffectLog?
     var onEvent: (@MainActor (UpdateEngineEvent) -> Void)?
-    private(set) var starts = 0
-    private(set) var checks = 0
+    private(set) var probes = 0
+    private(set) var updates = 0
     private(set) var discards = 0
+    /// The window flag of each `armRestart`, in order.
+    private(set) var arms: [Bool] = []
+    /// Every `probe()` or `update()` asked while a cycle it started has not yet been answered by a `.cycleEnded`; a
+    /// `.held` keeps the cycle running.
+    private(set) var overlaps = 0
+    private var cycleRuns = false
     var armWorks = true
 
-    func start() {
-        starts += 1
-        log?.entries.append("engine start")
+    func probe() {
+        probes += 1
+        log?.entries.append("probe")
+        startCycle()
     }
 
-    func check() {
-        checks += 1
-        log?.entries.append("check")
+    func update() {
+        updates += 1
+        log?.entries.append("update")
+        startCycle()
+    }
+
+    private func startCycle() {
+        if cycleRuns { overlaps += 1 }
+        cycleRuns = true
     }
 
     func discardHeldUpdate() {
@@ -595,14 +608,19 @@ final class EffectLog {
     /// Runs before and after each arm restart, as the world's snapshot hook.
     var onEffect: (() -> Void)?
 
-    func armRestart() -> Bool {
+    func armRestart(opensWindow: Bool) -> Bool {
         onEffect?()
-        log?.entries.append("arm restart")
+        arms.append(opensWindow)
+        log?.entries.append(opensWindow ? "arm restart with window" : "arm restart")
         onEffect?()
         return armWorks
     }
 
-    func push(_ event: UpdateEngineEvent) { onEvent?(event) }
+    /// A cycle's end is recorded before the event is delivered: the answer may start the next cycle.
+    func push(_ event: UpdateEngineEvent) {
+        if case .cycleEnded = event { cycleRuns = false }
+        onEvent?(event)
+    }
 }
 
 /// A network path the test moves. `watch` pushes the present reading inside the call; `set` pushes every time while

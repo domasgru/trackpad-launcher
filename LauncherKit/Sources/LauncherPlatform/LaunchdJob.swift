@@ -40,17 +40,23 @@ enum LaunchdJob {
         return submitted
     }
 
-    /// The hand-over job. `allowed` is 5 s in production; a test passes its own, and a stub for `open`.
-    static func handOverArguments(oldPID: Int32, bundle: URL, build: String, allowed: Int, open: String) -> [String] {
-        ["/bin/sh", "-c", handOverScript, "handover", String(oldPID), bundle.path, build, String(allowed), open]
+    /// The hand-over job. `allowed` is 5 s in production; a test passes its own, and a stub for `open`. `withWindow`: the
+    /// copy that opens shows its settings window.
+    static func handOverArguments(
+        oldPID: Int32, bundle: URL, build: String, allowed: Int, open: String, withWindow: Bool
+    ) -> [String] {
+        [
+            "/bin/sh", "-c", handOverScript, "handover", String(oldPID), bundle.path, build, String(allowed), open,
+            withWindow ? "window" : "silent",
+        ]
     }
 
     /// Runs in launchd after the old process has ended. The wait is bounded on wall time, not on rounds: a loop that
     /// counted its sleeps took 7.4 s for an intended 5. The version is compared as text, so nothing here couples to
     /// Sparkle.
     static let handOverScript = """
-        # launchd: /bin/sh -c "$script" handover <pid> <bundle> <build> <allowed> <open>
-        old=$1; bundle=$2; build=$3; allowed=$4; open=$5
+        # launchd: /bin/sh -c "$script" handover <pid> <bundle> <build> <allowed> <open> <window|silent>
+        old=$1; bundle=$2; build=$3; allowed=$4; open=$5; mode=$6
         # Never open while the old process lives: it would only show its window. It ends in this same turn; if it hangs, the
         # wait holds until it goes, so a late end still installs and still comes back.
         while /bin/kill -0 "$old" 2>/dev/null; do /bin/sleep 0.05; done
@@ -60,6 +66,8 @@ enum LaunchdJob {
           if [ -n "$now" ] && [ "$now" != "$build" ]; then break; fi
           /bin/sleep 0.1
         done
+        # Silent: -g keeps the launch in the background. With the window, the shell's own activation gives it the focus.
+        if [ "$mode" = window ]; then exec "$open" -a "$bundle" --args --after-update --with-window; fi
         exec "$open" -g -a "$bundle" --args --after-update
         """
 

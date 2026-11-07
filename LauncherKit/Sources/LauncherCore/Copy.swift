@@ -20,6 +20,11 @@ public enum Copy {
     public static let applicationsFolderNotChanged = "The Applications folder could not be changed."
     public static let moveFailedTitle = "Trackpad Launcher couldn't be moved to the Applications folder"
 
+    /// The update card's text and its button's two titles.
+    public static let updateAvailable = "Update available"
+    public static let updateNowButton = "Update now"
+    public static let updatingButton = "Updating…"
+
     /// The settings window's thumb corner row and its pop-up's choices.
     public static let thumbCornerRow = "Thumb corner"
     public static func thumbCornerTitle(_ corner: ThumbCorner) -> String {

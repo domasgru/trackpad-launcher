@@ -59,11 +59,12 @@ import Testing
             try (info as NSDictionary).write(to: plist)
         }
 
-        func submit(allowed: Int) -> Bool {
+        func submit(allowed: Int, withWindow: Bool = false) -> Bool {
             LaunchdJob.submit(
                 label: label,
                 arguments: LaunchdJob.handOverArguments(
-                    oldPID: old.processIdentifier, bundle: bundle, build: "1", allowed: allowed, open: stub.path))
+                    oldPID: old.processIdentifier, bundle: bundle, build: "1", allowed: allowed, open: stub.path,
+                    withWindow: withWindow))
         }
 
         func killOld() {
@@ -106,6 +107,24 @@ import Testing
         try await Task.sleep(for: .milliseconds(500))
         #expect(rig.openCalls == ["-g -a \(rig.bundle.path) --args --after-update"])
         #expect(!Self.isLoaded(rig.label))
+    }
+
+    @Test(arguments: [false, true])
+    func theStubIsOpenedOnceWithOrWithoutBackgroundAndTheWindowFlagAsTheJobWasArmed(withWindow: Bool) async throws {
+        let rig = try Rig()
+        try #require(rig.submit(allowed: 1, withWindow: withWindow))
+
+        rig.killOld()
+        try rig.writeBuild("2")
+        let died = ContinuousClock.now
+
+        _ = try #require(await rig.opened(since: died, within: .seconds(5)))
+        try await Task.sleep(for: .milliseconds(500))
+        let expected =
+            withWindow
+            ? "-a \(rig.bundle.path) --args --after-update --with-window"
+            : "-g -a \(rig.bundle.path) --args --after-update"
+        #expect(rig.openCalls == [expected])
     }
 
     @Test func aBuildThatNeverChangesOpensWhateverIsThereFiveToSixSecondsAfterTheDeath() async throws {

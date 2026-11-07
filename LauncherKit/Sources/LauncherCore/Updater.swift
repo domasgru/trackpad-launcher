@@ -1,113 +1,149 @@
 import Foundation
+import Observation
 
-/// The gate, whole: a copy that is signed with a Developer ID, lies in /Applications and can replace its own bundle.
-/// Pure, called by the composition root and the tests. Read once, at start.
+/// The gate: a copy that is signed with a Developer ID and lies in /Applications. Pure, called by the composition root and
+/// the tests, read once at start. Only a copy that can also replace its own bundle runs the login cycle.
 public struct UpdatableCopy: Equatable, Sendable {
+    public let canReplaceItself: Bool
+
     public init?(placement: Placement, developerIDSigned: Bool, canReplaceItself: Bool) {
-        guard developerIDSigned, placement == .installed, canReplaceItself else { return nil }
+        guard developerIDSigned, placement == .installed else { return nil }
+        self.canReplaceItself = canReplaceItself
     }
 }
 
+/// The update card the settings window shows, as values.
+public enum UpdateCard: Equatable, Sendable {
+    case available
+    case updating
+
+    public var text: String { Copy.updateAvailable }
+
+    public var buttonTitle: String {
+        switch self {
+        case .available: Copy.updateNowButton
+        case .updating: Copy.updatingButton
+        }
+    }
+
+    public var isButtonEnabled: Bool { self == .available }
+}
+
 public enum CycleOutcome: Equatable, Sendable {
-    /// Up to date, or nothing that could be taken.
+    /// A probe found a newer version. Never an update's outcome.
+    case found
     case nothingNew
-    /// A request failed, the feed's or the archive's. What a lost connection looks like, and what earns a retry.
+    /// The feed's request failed: what a lost connection looks like, and what earns a login start's retry.
     case requestFailed
-    /// Anything else: a refused enclosure, a bad signature, a veto, a held update lost.
+    /// Anything after the feed was read: a download that failed, a refused enclosure, a cancelled prompt, a bad
+    /// signature, a discarded update.
     case failed
 }
 
-public enum HeldUpdate: Equatable, Sendable {
-    /// Our check passed: same Developer ID, identifier, notarised, sealed versions equal the offer.
-    case genuine
-    /// It failed, or could not be run. Fail closed.
-    case notGenuine
-}
-
 public enum UpdateEngineEvent: Equatable, Sendable {
-    /// Sparkle verified, extracted and prepared an update, and will install it at this process's end. Pushed inside the
-    /// delegate call, so nothing else runs on the main actor first.
-    case held(HeldUpdate)
-    /// A cycle ended: no update, a failure, or a held update lost (a helper died).
+    /// A genuine update is extracted and prepared; it installs at this process's end. Pushed inside Sparkle's
+    /// callback, so nothing else runs on the main actor first.
+    case held
+    /// A cycle ended. For a probe, its one answer.
     case cycleEnded(CycleOutcome)
 }
 
 /// Owns every update decision. Exists only for a copy the gate lets through.
-@MainActor public final class Updater {
+@MainActor @Observable
+public final class Updater {
     /// The process must end now, through `end()`. Set once by `Lifecycle`.
-    public var onHandOver: (@MainActor () -> Void)?
-    private let engine: any UpdateEngine
-    private let connection: any Connection
+    @ObservationIgnored public var onHandOver: (@MainActor () -> Void)?
+    /// What the settings window shows beside its rows; nil in every phase that exists so far.
+    public private(set) var card: UpdateCard?
+
+    @ObservationIgnored private let engine: any UpdateEngine
+    @ObservationIgnored private let connection: any Connection
+    @ObservationIgnored private let canReplaceItself: Bool
+    @ObservationIgnored private weak var launcher: Launcher?
 
     private enum Phase: Equatable {
-        /// Nothing to do. Sparkle's schedule, or a check, may be running.
         case resting
-        /// The last cycle's request failed, and the connection watch runs. `retrySpent`: this reading's one retry has
-        /// been made, so only a drop and a return earn another. One bit; no timer, no backoff.
-        case awaitingConnection(retrySpent: Bool)
+        /// The login check failed for the network; the path monitor runs. `spent`: this reading's one retry has been
+        /// made, so only a drop and a return earn another. One bit; no timer, no backoff.
+        case awaitingConnection(spent: Bool)
+        /// The login cycle runs: the check, the download, the preparation. `retry`: a returned connection started it, so
+        /// the watch stays through it; `dropped`: the connection fell during that retry, so its network failure owes a
+        /// fresh retry rather than a spent one.
+        case updatingAtLogin(retry: Bool, dropped: Bool)
         /// Terminal. The restart is armed and the process is ending in this same turn.
         case handedOver
     }
 
-    private var phase = Phase.resting
+    @ObservationIgnored private var phase = Phase.resting
 
     public init(_ copy: UpdatableCopy, engine: any UpdateEngine, connection: any Connection) {
         self.engine = engine
         self.connection = connection
+        canReplaceItself = copy.canReplaceItself
     }
 
-    /// Once, from a resident only. Starts the engine and, unless this process is the hand-over's, checks in the same
-    /// turn. A failed install must not check at once, or it would hand over once a minute for ever.
-    public func start(watching launcher: Launcher, opening: Opening) {
+    /// Once, from a resident only. A login start of a copy that can replace itself runs the update cycle whatever the
+    /// window is doing; every other start makes no request.
+    public func start(watching launcher: Launcher, opening: Opening, opensWindow: Bool) {
+        self.launcher = launcher
         engine.onEvent = { [unowned self] event in handle(event) }
         connection.onChange = { [unowned self] connected in connectionChanged(connected) }
-        engine.start()
-        if opening != .afterUpdate { engine.check() }
+        guard opening == .atLogin, canReplaceItself else { return }
+        enter(.updatingAtLogin(retry: false, dropped: false))
+        engine.update()
     }
 
     private func handle(_ event: UpdateEngineEvent) {
-        guard phase != .handedOver else { return }
+        guard case .updatingAtLogin(let retry, let dropped) = phase else { return }
         switch event {
-        case .held(.genuine):
-            // Refused: the process never ends without a restart armed, so the held update goes and the cycle ends.
-            guard engine.armRestart() else {
+        case .held:
+            guard engine.armRestart(opensWindow: launcher?.isWindowOpen ?? false) else {
+                // Refused: the process never ends without a restart armed, so the held update goes; the cycle then ends
+                // `.failed`.
                 engine.discardHeldUpdate()
                 return
             }
             enter(.handedOver)
             onHandOver?()
-        case .held(.notGenuine):
-            // No restart is ever armed for it; Sparkle ends the cycle itself once its helper has gone.
-            engine.discardHeldUpdate()
         case .cycleEnded(.requestFailed):
-            // Already awaiting: stay as it is, so a drop during the retry still earns the next one.
-            if case .awaitingConnection = phase { return }
-            enter(.awaitingConnection(retrySpent: false))
-        case .cycleEnded: enter(.resting)
+            enter(.awaitingConnection(spent: retry && !dropped))
+        case .cycleEnded:
+            enter(.resting)
         }
     }
 
     private func connectionChanged(_ connected: Bool) {
-        guard case .awaitingConnection(let spent) = phase else { return }
-        if !connected {
-            phase = .awaitingConnection(retrySpent: false)
-        } else if !spent {
-            // Written before the check: the engine may answer inside the call.
-            phase = .awaitingConnection(retrySpent: true)
-            engine.check()
+        switch phase {
+        case .awaitingConnection(let spent):
+            if !connected {
+                phase = .awaitingConnection(spent: false)
+            } else if !spent {
+                // Written before the cycle: the engine may answer inside the call.
+                enter(.updatingAtLogin(retry: true, dropped: false))
+                engine.update()
+            }
+        case .updatingAtLogin(true, _):
+            if !connected { phase = .updatingAtLogin(retry: true, dropped: true) }
+        default: break
+        }
+    }
+
+    private func watches(_ phase: Phase) -> Bool {
+        switch phase {
+        case .awaitingConnection, .updatingAtLogin(retry: true, _): true
+        default: false
         }
     }
 
     /// The one place a lasting effect starts or stops, so leaving a phase cannot leave one armed.
     private func enter(_ next: Phase) {
-        guard next != phase else { return }
-        let wasAwaiting: Bool
-        if case .awaitingConnection = phase { wasAwaiting = true } else { wasAwaiting = false }
-        let willAwait: Bool
-        if case .awaitingConnection = next { willAwait = true } else { willAwait = false }
-        if wasAwaiting && !willAwait { connection.stop() }
+        let previous = phase
         phase = next
-        // After the assignment: the watch may push inside the call.
-        if willAwait && !wasAwaiting { connection.watch() }
+        // After the assignment: the watch pushes the present reading inside the call.
+        if case .awaitingConnection = next {
+            connection.watch()
+        } else if watches(previous), !watches(next) {
+            connection.stop()
+        }
     }
 }

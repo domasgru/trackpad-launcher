@@ -8,7 +8,8 @@ public enum Opening: Equatable, Sendable {
     /// Finder, Spotlight, Launchpad, the Dock, Xcode: every opening that is not at login.
     case byHand
     /// The hand-over job started this process, `--after-update`: the new version, or the old one after a failed install.
-    case afterUpdate
+    /// `withWindow`: the update was taken while the settings window was open, or from the card.
+    case afterUpdate(withWindow: Bool)
 }
 
 /// What one opening of this process leads to: the whole table, pure.
@@ -22,7 +23,8 @@ public enum Route: Equatable, Sendable {
         switch (opening, placement, olderCopyRuns) {
         case (.atLogin, _, true): self = .end
         case (.atLogin, _, false): self = .runSilently
-        case (.afterUpdate, .installed, _): self = .runSilently
+        case (.afterUpdate(withWindow: false), .installed, _): self = .runSilently
+        case (.afterUpdate(withWindow: true), .installed, _): self = .runWithWindow
         case (.byHand, .elsewhere, _), (.afterUpdate, .elsewhere, _): self = .askToMove
         case (.byHand, .installed, _), (.byHand, .development, _), (.afterUpdate, .development, _):
             self = .runWithWindow
@@ -265,7 +267,7 @@ public final class Lifecycle {
         if opensWindow { launcher.openedByHand() }
         // The mover has exited, so its volume is free.
         if let eject { installer.eject(eject) }
-        updater?.start(watching: launcher, opening: opening)
+        updater?.start(watching: launcher, opening: opening, opensWindow: opensWindow)
     }
 
     /// `end()`, never `quit()`: starting at login stays as it is.

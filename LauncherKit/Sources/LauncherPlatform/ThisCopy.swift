@@ -5,11 +5,19 @@ import LauncherCore
 public enum ThisCopy {
     /// The `oapp` of a start (read in didFinishLaunching: the event is nil in willFinishLaunching). `.atLogin` when it
     /// carries the login-item marker; otherwise, and for nil, `.byHand`. `--eject-disk-image <volume>` names the disk
-    /// image the mover ran from. `--after-update` is the hand-over job's start and wins over the event; any other argument is
-    /// ignored.
+    /// image the mover ran from. `--after-update` is the hand-over job's start and wins over the event, and `--with-window`
+    /// beside it brings the settings window; alone it is ignored. `--at-login` reads as a login start with no event, for
+    /// the hand tests. Any other argument is ignored.
     public static func launch(event: NSAppleEventDescriptor?, arguments: [String]) -> Launch {
         let volume = arguments.firstIndex(of: "--eject-disk-image").flatMap { arguments[safe: $0 + 1] }
-        let opening = arguments.contains("--after-update") ? Opening.afterUpdate : opening(of: event)
+        let opening: Opening
+        if arguments.contains("--after-update") {
+            opening = .afterUpdate(withWindow: arguments.contains("--with-window"))
+        } else if arguments.contains("--at-login") {
+            opening = .atLogin
+        } else {
+            opening = Self.opening(of: event)
+        }
         return Launch(opening: opening, diskImageToEject: volume.map { DiskImage(volume: URL(filePath: $0)) })
     }
 

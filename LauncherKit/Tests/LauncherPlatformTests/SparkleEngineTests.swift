@@ -5,26 +5,47 @@ import Testing
 @testable import LauncherPlatform
 
 @Suite struct SparkleEngineTests {
-    @Test(arguments: [
-        (domain: "SUSparkleErrorDomain", code: 1001, outcome: CycleOutcome.nothingNew),
-        (domain: "SUSparkleErrorDomain", code: 2001, outcome: .requestFailed),
-        (domain: "SUSparkleErrorDomain", code: 1000, outcome: .failed),
-        (domain: "SUSparkleErrorDomain", code: 1002, outcome: .failed),
-        (domain: "SUSparkleErrorDomain", code: 2000, outcome: .failed),
-        (domain: "SUSparkleErrorDomain", code: 3001, outcome: .failed),
-        (domain: "SUSparkleErrorDomain", code: 4005, outcome: .failed),
-        (domain: "SUSparkleErrorDomain", code: 4007, outcome: .failed),
-        (domain: "SUSparkleErrorDomain", code: 4008, outcome: .failed),
-        (domain: "NSURLErrorDomain", code: 2001, outcome: .failed),
-    ])
-    func aCycleEndsAsItsSparkleErrorSays(row: (domain: String, code: Int, outcome: CycleOutcome)) {
-        let error = NSError(domain: row.domain, code: row.code)
-
-        #expect(SparkleEngine.outcome(of: error) == row.outcome)
+    struct OutcomeRow: Sendable, CustomTestStringConvertible {
+        let kind: CycleKind
+        let domain: String?
+        let code: Int
+        let feedRead: Bool
+        let found: Bool
+        let outcome: CycleOutcome
+        var testDescription: String {
+            "\(kind) \(domain ?? "no error") \(code) feedRead=\(feedRead) found=\(found)"
+        }
     }
 
-    @Test func noErrorIsNothingNew() {
-        #expect(SparkleEngine.outcome(of: nil) == .nothingNew)
+    private static let sparkle = "SUSparkleErrorDomain"
+
+    nonisolated static let outcomes: [OutcomeRow] = [
+        OutcomeRow(kind: .probe, domain: nil, code: 0, feedRead: true, found: true, outcome: .found),
+        OutcomeRow(kind: .probe, domain: nil, code: 0, feedRead: true, found: false, outcome: .nothingNew),
+        OutcomeRow(kind: .probe, domain: sparkle, code: 1001, feedRead: true, found: false, outcome: .nothingNew),
+        OutcomeRow(kind: .probe, domain: sparkle, code: 2001, feedRead: false, found: false, outcome: .requestFailed),
+        OutcomeRow(kind: .probe, domain: sparkle, code: 2001, feedRead: true, found: false, outcome: .requestFailed),
+        OutcomeRow(kind: .probe, domain: sparkle, code: 1000, feedRead: false, found: false, outcome: .failed),
+        OutcomeRow(kind: .probe, domain: sparkle, code: 4005, feedRead: true, found: true, outcome: .failed),
+        OutcomeRow(kind: .probe, domain: "NSURLErrorDomain", code: 2001, feedRead: false, found: false, outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 1001, feedRead: true, found: false, outcome: .nothingNew),
+        OutcomeRow(kind: .update, domain: sparkle, code: 2001, feedRead: false, found: false, outcome: .requestFailed),
+        OutcomeRow(kind: .update, domain: nil, code: 0, feedRead: true, found: true, outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 2001, feedRead: true, found: true, outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 3001, feedRead: true, found: true, outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 4004, feedRead: true, found: true, outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 4005, feedRead: true, found: true, outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 4007, feedRead: true, found: true, outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 4008, feedRead: true, found: true, outcome: .failed),
+        OutcomeRow(kind: .update, domain: "NSURLErrorDomain", code: 2001, feedRead: false, found: false, outcome: .failed),
+    ]
+
+    @Test(arguments: outcomes)
+    func aCycleEndsAsItsKindAndSparkleErrorSay(row: OutcomeRow) {
+        let error = row.domain.map { NSError(domain: $0, code: row.code) }
+
+        #expect(
+            SparkleEngine.outcome(of: error, kind: row.kind, feedRead: row.feedRead, found: row.found) == row.outcome)
     }
 
     private static let github = "https://github.com/domasgru/trackpad-launcher/releases/download/"

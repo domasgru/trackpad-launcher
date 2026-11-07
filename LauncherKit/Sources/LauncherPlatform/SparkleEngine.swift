@@ -2,97 +2,170 @@ import Foundation
 import LauncherCore
 
 /// `internal import Sparkle` lives in this file and nowhere else. SPUUpdater, SPUUserDriver and SPUUpdaterDelegate are
-/// NS_SWIFT_UI_ACTOR, so main-actor classes conform with no escape hatch. The delegate is a private object, held here
-/// because SPUUpdater keeps it weakly: a public conformance would put a Sparkle type on LauncherPlatform's surface.
+/// NS_SWIFT_UI_ACTOR, so main-actor classes conform with no escape hatch. The delegate and the user driver are private
+/// objects, held here because SPUUpdater keeps its delegate weakly: a public conformance would put a Sparkle type on
+/// LauncherPlatform's surface.
 internal import Sparkle
 
+/// One `SPUUpdater` per cycle, dropped inside `didFinishUpdateCycle` so it dies when Sparkle's own stack unwinds. Between
+/// cycles the engine holds a delegate and a user driver and nothing else, and no schedule exists.
 @MainActor public final class SparkleEngine: UpdateEngine {
     public var onEvent: (@MainActor (UpdateEngineEvent) -> Void)?
     private let signer: Signer
-    private let driver = SilentUserDriver()
+    private let driver = UpdateUserDriver()
     private let delegate: UpdaterDelegate
-    /// Kept only once `start()` succeeded, so a `check()` after a failed start does nothing.
     private var updater: SPUUpdater?
+    private var kind = CycleKind.probe
+    /// Sparkle's reply to `showReady`, kept while a genuine update is held. Never called when the process ends.
+    private var held: ((SPUUserUpdateChoice) -> Void)?
 
     private let bundle: URL
+    private let host: Bundle?
     /// This process's own build, read at start: after a swap, `Bundle.main` reads the new bundle.
     private let build: String?
 
-    /// Reads the downloads prefix and the build now: after a swap, `Bundle.main` reads the new bundle.
+    /// Reads the downloads prefix and the build now: after a swap, `Bundle.main` reads the new bundle. `bundle` is the
+    /// host every updater is built for.
     public init(bundle: URL, signer: Signer) {
         self.signer = signer
         self.bundle = bundle
-        let info = Bundle(url: bundle)
-        build = info?.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-        let prefix = info?.object(forInfoDictionaryKey: "TLUpdateDownloads") as? String
-        delegate = UpdaterDelegate(prefix: prefix, signer: signer)
-        delegate.emit = { [weak self] event in self?.onEvent?(event) }
+        host = Bundle(url: bundle)
+        build = host?.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        let prefix = host?.object(forInfoDictionaryKey: "TLUpdateDownloads") as? String
+        delegate = UpdaterDelegate(
+            prefix: prefix, signer: signer, identifier: host?.bundleIdentifier ?? signer.identifier)
+        delegate.finished = { [weak self] updater, error in self?.cycleFinished(updater, error) }
+        driver.ready = { [weak self] reply in self?.ready(reply) }
     }
 
-    /// R12's predicate.
+    /// The read-only mirror of Sparkle's rule that a user can replace the bundle. Where a temporary failure makes the
+    /// two disagree, the launcher service shows the system's prompt once, in its own process, and a cancel ends the
+    /// cycle `.failed`.
     public nonisolated static func canReplace(_ bundle: URL) -> Bool { SparkleInternals.canReplace(bundle) }
 
-    public func start() {
-        HTTPCookieStorage.shared.cookieAcceptPolicy = .never
-        URLCache.shared = URLCache(memoryCapacity: 0, diskCapacity: 0)
-        let candidate = SPUUpdater(
-            hostBundle: .main, applicationBundle: .main, userDriver: driver, delegate: delegate)
-        candidate.userAgentString = "TrackpadLauncher"
-        candidate.httpHeaders = ["Accept-Language": "en", "Accept-Encoding": "gzip"]
-        do {
-            try candidate.start()
-            updater = candidate
-        } catch {
-            onEvent?(.cycleEnded(.failed))
-        }
-    }
+    /// For tests only: the updater of the cycle that runs, nil between cycles.
+    var currentUpdater: AnyObject? { updater }
 
-    /// Sparkle's session stays on for an async probe after a cycle's end, and a connection reading lands in that
-    /// window; nothing else would ask again, so the check is remembered and runs once the session is off.
-    public func check() {
-        guard let updater else { return }
-        if updater.sessionInProgress {
-            delegate.checkPending = true
-        } else {
-            updater.checkForUpdatesInBackground()
-        }
-    }
+    public func probe() { begin(.probe) }
 
+    public func update() { begin(.update) }
+
+    /// Replies *skip*, which cancels the installer in either launchd domain; Sparkle's cycle then ends. A *dismiss*
+    /// would refuse nothing: the update may still install at the application's end.
     public func discardHeldUpdate() {
-        SparkleInternals.veto(job: SparkleInternals.installerJob(of: signer.identifier), extracted: delegate.found)
-        delegate.found = nil
+        guard let reply = held else { return }
+        held = nil
+        reply(.skip)
     }
 
     /// Called in the turn that ends this process: the job outlives it and opens whichever copy /Applications holds.
-    public func armRestart() -> Bool {
+    public func armRestart(opensWindow: Bool) -> Bool {
         guard let build else { return false }
         return LaunchdJob.submit(
             label: "\(signer.identifier).hand-over",
             arguments: LaunchdJob.handOverArguments(
-                oldPID: getpid(), bundle: bundle, build: build, allowed: 5, open: "/usr/bin/open"))
+                oldPID: getpid(), bundle: bundle, build: build, allowed: 5, open: "/usr/bin/open",
+                withWindow: opensWindow))
     }
 
-    /// nil and SUNoUpdateError are `.nothingNew`; SUDownloadError is `.requestFailed`; everything else `.failed`. Public
-    /// codes: every failure of a request, feed or archive, reaches this level wrapped in SUDownloadError.
-    nonisolated static func outcome(of error: (any Error)?) -> CycleOutcome {
-        guard let error = error as NSError? else { return .nothingNew }
-        guard error.domain == SUSparkleErrorDomain else { return .failed }
-        switch error.code {
-        case Int(SUError.noUpdateError.rawValue): return .nothingNew
-        case Int(SUError.downloadError.rawValue): return .requestFailed
-        default: return .failed
+    private func begin(_ cycle: CycleKind) {
+        guard updater == nil else { return }
+        HTTPCookieStorage.shared.cookieAcceptPolicy = .never
+        URLCache.shared = URLCache(memoryCapacity: 0, diskCapacity: 0)
+        guard let host else {
+            onEvent?(.cycleEnded(.failed))
+            return
+        }
+        kind = cycle
+        delegate.beginCycle()
+        let candidate = SPUUpdater(hostBundle: host, applicationBundle: host, userDriver: driver, delegate: delegate)
+        candidate.userAgentString = "TrackpadLauncher"
+        candidate.httpHeaders = ["Accept-Language": "en", "Accept-Encoding": "gzip"]
+        do {
+            try candidate.start()
+        } catch {
+            onEvent?(.cycleEnded(.failed))
+            return
+        }
+        updater = candidate
+        switch cycle {
+        case .probe: candidate.checkForUpdateInformation()
+        case .update: candidate.checkForUpdates()
+        }
+    }
+
+    /// The reference goes before the event, so the answer may start the next cycle.
+    private func cycleFinished(_ finished: SPUUpdater, _ error: (any Error)?) {
+        guard finished === updater else { return }
+        let outcome = Self.outcome(of: error, kind: kind, feedRead: delegate.feedRead, found: delegate.found)
+        updater = nil
+        held = nil
+        onEvent?(.cycleEnded(outcome))
+    }
+
+    private func ready(_ reply: @escaping (SPUUserUpdateChoice) -> Void) {
+        guard delegate.genuine else {
+            reply(.skip)
+            return
+        }
+        held = reply
+        onEvent?(.held)
+    }
+
+    /// Public codes of Sparkle's error domain: every failure of a request, feed or archive, reaches this level wrapped in
+    /// SUDownloadError, so `feedRead` tells the feed's from the archive's.
+    nonisolated static func outcome(of error: (any Error)?, kind: CycleKind, feedRead: Bool, found: Bool) -> CycleOutcome {
+        let code = (error as NSError?).flatMap { $0.domain == SUSparkleErrorDomain ? $0.code : nil }
+        switch kind {
+        case .probe:
+            if error == nil { return found ? .found : .nothingNew }
+            switch code {
+            case Int(SUError.noUpdateError.rawValue): return .nothingNew
+            case Int(SUError.downloadError.rawValue): return .requestFailed
+            default: return .failed
+            }
+        case .update:
+            switch code {
+            case Int(SUError.noUpdateError.rawValue): return .nothingNew
+            case Int(SUError.downloadError.rawValue) where !feedRead: return .requestFailed
+            default: return .failed
+            }
+        }
+    }
+}
+
+enum CycleKind: Equatable { case probe, update }
+
+/// What the offer's stage says to answer, as a value a test can call: Sparkle's own `SPUUserUpdateStage` mirrored.
+enum UpdateOffer {
+    enum Stage { case notDownloaded, downloaded, installing }
+    enum Answer { case install, skip }
+
+    /// An installer already running can only follow a crash, and an *install* would send Sparkle's own relaunch.
+    static func answer(for stage: Stage) -> Answer {
+        switch stage {
+        case .notDownloaded, .downloaded: .install
+        case .installing: .skip
+        }
+    }
+
+    fileprivate static func stage(of stage: SPUUserUpdateStage) -> Stage {
+        switch stage {
+        case .notDownloaded: .notDownloaded
+        case .downloaded: .downloaded
+        case .installing: .installing
+        @unknown default: .installing
         }
     }
 }
 
 /// Every fact here is Sparkle's private business, proven on `provenOn`. Each names its proof. A test compares
-/// `provenOn` with LauncherKit/Package.resolved, so an upgrade cannot land without re-proving this type.
+/// `provenOn` with the vendored manifest, so an upgrade cannot land without re-proving this type.
 enum SparkleInternals {
     static let provenOn = "2.10.1"
 
     /// Read-only: bundle writable, parent writable, bundle owned by this user, and its group one of this user's.
-    /// Sparkle's rule proves the last two by chowning a temporary file; this creates nothing. A stricter future Sparkle
-    /// costs a silent download at each check, never a prompt.
+    /// Sparkle's rule proves the last two by chowning a temporary file; this creates nothing.
     nonisolated static func canReplace(_ bundle: URL) -> Bool {
         let path = bundle.path
         let parent = bundle.deletingLastPathComponent().path
@@ -102,39 +175,27 @@ enum SparkleInternals {
         return userGroups().contains(info.st_gid)
     }
 
-    /// `Installation/<random>/<random>/` under Sparkle's cache. nil unless the newest such folder holding `build` holds
-    /// exactly one bundle: a logout leaves stale folders, and two bundles cannot be told apart from what Sparkle would
-    /// choose. Proof: `selfquit.out` prints the layout.
-    nonisolated static func extractedUpdate(identifier: String, build: String, caches: URL) -> URL? {
+    /// `PersistentDownloads/<random>/<host name> <build>/<file>` under Sparkle's cache for the host. The newest random
+    /// folder holding a folder named for `build` holds the downloaded archive; nil unless that folder holds exactly one
+    /// file. Proof: `SPUDownloader.m` (`rootPersistentDownloadCachePath`, `downloaderDidFinishWithTemporaryDownloadData`)
+    /// and `SPUDownloadDriver.m` (`desiredFilename`).
+    nonisolated static func persistentDownload(identifier: String, build: String, caches: URL) -> URL? {
         let files = FileManager.default
-        let root = caches.appending(path: "\(identifier)/org.sparkle-project.Sparkle/Installation")
+        let root = caches.appending(path: "\(identifier)/org.sparkle-project.Sparkle/PersistentDownloads")
         func children(_ folder: URL) -> [URL] {
-            (try? files.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+            (try? files.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
         }
-        func bundles(in folder: URL) -> [URL] { children(folder).filter { $0.pathExtension == "app" } }
-        func holdsBuild(_ folder: URL) -> Bool {
-            bundles(in: folder).contains {
-                Bundle(url: $0)?.object(forInfoDictionaryKey: "CFBundleVersion") as? String == build
-            }
-        }
-        let inner = children(root).flatMap { children($0) }.filter(holdsBuild)
         func modified(_ folder: URL) -> Date {
             (try? folder.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
                 ?? .distantPast
         }
-        guard let newest = inner.max(by: { modified($0) < modified($1) }) else { return nil }
-        let found = bundles(in: newest)
-        return found.count == 1 ? found[0] : nil
-    }
-
-    /// Removing this job ends the installer; Sparkle then aborts with 4005. Proof: `vetonow.out`, `veto.out`.
-    nonisolated static func installerJob(of identifier: String) -> String { "\(identifier)-sparkle-updater" }
-
-    /// Both layers, each whatever the other did: remove the job, then discard the extracted bundle. Takes what it acts
-    /// on, so a test can drive either layer alone. Inside the delegate call. Proof: `vetonow.out`, `discardquit.out`.
-    nonisolated static func veto(job: String, extracted: URL?) {
-        LaunchdJob.remove(label: job)
-        if let extracted { BundleInstall.discard(extracted) }
+        func archive(in random: URL) -> URL? {
+            let named = children(random).filter { $0.lastPathComponent.hasSuffix(" \(build)") }
+            guard named.count == 1 else { return nil }
+            let inside = children(named[0])
+            return inside.count == 1 ? inside[0] : nil
+        }
+        return children(root).sorted { modified($0) > modified($1) }.lazy.compactMap(archive).first
     }
 
     private nonisolated static func userGroups() -> Set<gid_t> {
@@ -162,15 +223,25 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
 @MainActor private final class UpdaterDelegate: NSObject, SPUUpdaterDelegate {
     private let prefix: String?
     private let signer: Signer
-    var emit: (@MainActor (UpdateEngineEvent) -> Void)?
-    /// The extracted bundle of the held update, until the engine discards it.
-    var found: URL?
-    /// A check refused while Sparkle's session was on.
-    var checkPending = false
+    private let identifier: String
+    var finished: ((SPUUpdater, (any Error)?) -> Void)?
+    /// The facts of the cycle that runs.
+    private(set) var feedRead = false
+    private(set) var found = false
+    private(set) var genuine = false
+    private var offer: ExpectedUpdate?
 
-    init(prefix: String?, signer: Signer) {
+    init(prefix: String?, signer: Signer, identifier: String) {
         self.prefix = prefix
         self.signer = signer
+        self.identifier = identifier
+    }
+
+    func beginCycle() {
+        feedRead = false
+        found = false
+        genuine = false
+        offer = nil
     }
 
     /// Runs before any download. Refusing keeps the disk-image key-rotation fallback unreachable, so the update key has
@@ -183,50 +254,51 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
         }
     }
 
-    /// Always true. The handler is dropped unused, so Sparkle's relaunch flag can never be set and the only way an
-    /// install runs is at the process's end. The check runs here, synchronously on main (18 to 31 ms, once per
-    /// release), so no turn exists in which an unchecked update is held. Anything not found or not read is not genuine.
-    func updater(
-        _ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
-        immediateInstallationBlock immediateInstallHandler: @escaping () -> Void
-    ) -> Bool {
-        checkPending = false
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-        found = caches.flatMap {
-            SparkleInternals.extractedUpdate(identifier: signer.identifier, build: item.versionString, caches: $0)
-        }
-        let offer = ExpectedUpdate(
+    func updater(_ updater: SPUUpdater, didFinishLoading appcast: SUAppcast) { feedRead = true }
+
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        found = true
+        offer = ExpectedUpdate(
             version: item.displayVersionString, build: item.versionString,
             minimumMacOS: item.minimumSystemVersion ?? "")
-        let genuine = found.map { CodeSignature.isGenuine($0, as: offer, signer: signer) } ?? false
-        emit?(.held(genuine ? .genuine : .notGenuine))
-        return true
     }
 
-    /// The cycle has fully ended and the session is off: a check `check()` remembered runs here. It re-arms the
-    /// 24-hour timer through its own cycle.
-    func updater(_ updater: SPUUpdater, willScheduleUpdateCheckAfterDelay delay: TimeInterval) {
-        guard checkPending else { return }
-        checkPending = false
-        updater.checkForUpdatesInBackground()
+    /// After the download and before any installer exists. The check runs here, synchronously on main (18 to 31 ms, once
+    /// per release), so no turn exists in which an unchecked update is held: a refused archive is removed, which makes
+    /// Sparkle's own extraction fail. Anything not found or not read is not genuine.
+    func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem) {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        let archive = caches.flatMap {
+            SparkleInternals.persistentDownload(identifier: identifier, build: item.versionString, caches: $0)
+        }
+        genuine = false
+        guard let archive, let offer else { return }
+        genuine = UpdateArchive.admit(archive, as: offer, signer: signer)
     }
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
-        emit?(.cycleEnded(SparkleEngine.outcome(of: error)))
+        finished?(updater, error)
     }
 }
 
-/// Required by the initializer; shows nothing.
-@MainActor private final class SilentUserDriver: NSObject, SPUUserDriver {
+/// Shows nothing and answers every question the same way each time. Sparkle's UI is not built into the vendored copy.
+@MainActor private final class UpdateUserDriver: NSObject, SPUUserDriver {
+    var ready: ((@escaping (SPUUserUpdateChoice) -> Void) -> Void)?
+
     func show(_ request: SPUUpdatePermissionRequest, reply: @escaping (SUUpdatePermissionResponse) -> Void) {
         reply(
             SUUpdatePermissionResponse(
-                automaticUpdateChecks: true, automaticUpdateDownloading: true, sendSystemProfile: false))
+                automaticUpdateChecks: false, automaticUpdateDownloading: false, sendSystemProfile: false))
     }
     func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {}
     func showUpdateFound(
         with appcastItem: SUAppcastItem, state: SPUUserUpdateState, reply: @escaping (SPUUserUpdateChoice) -> Void
-    ) { reply(.dismiss) }
+    ) {
+        switch UpdateOffer.answer(for: UpdateOffer.stage(of: state.stage)) {
+        case .install: reply(.install)
+        case .skip: reply(.skip)
+        }
+    }
     func showUpdateReleaseNotes(with downloadData: SPUDownloadData) {}
     func showUpdateReleaseNotesFailedToDownloadWithError(_ error: any Error) {}
     func showUpdateNotFoundWithError(_ error: any Error, acknowledgement: @escaping () -> Void) { acknowledgement() }
@@ -236,7 +308,7 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
     func showDownloadDidReceiveData(ofLength length: UInt64) {}
     func showDownloadDidStartExtractingUpdate() {}
     func showExtractionReceivedProgress(_ progress: Double) {}
-    func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) { reply(.dismiss) }
+    func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) { ready?(reply) }
     func showInstallingUpdate(
         withApplicationTerminated applicationTerminated: Bool, retryTerminatingApplication: @escaping () -> Void
     ) {}

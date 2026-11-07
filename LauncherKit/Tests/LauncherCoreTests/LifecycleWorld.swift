@@ -87,9 +87,11 @@ import LauncherCore
     /// `--after-update`, as a release copy, on this same Mac. `installed: false` is a swap that failed, so the old
     /// version comes back.
     @discardableResult
-    func finishHandOver(installed: Bool = true) -> OneProcess {
+    func finishHandOver(installed: Bool = true, withWindow: Bool? = nil) -> OneProcess {
         if installed { installedAt = snapshots.count }
-        return launch(.afterUpdate, placement: .installed, running: .release)
+        let armedWithWindow = processes.compactMap { $0.engine.arms.last }.last ?? false
+        return launch(
+            .afterUpdate(withWindow: withWindow ?? armedWithWindow), placement: .installed, running: .release)
     }
 
     /// macOS at login: it starts a process, silently, only while the login item is on.
@@ -122,11 +124,14 @@ struct RunningBuild {
     /// What the settings window shows after an intent.
     struct Published: Equatable {
         let window: Launcher.Window
+        let card: UpdateCard?
     }
 
-    /// The window after each intent, in order.
+    /// The window and the update card after each intent, in order.
     private(set) var history: [Published] = []
     var windows: [Launcher.Window] { history.map(\.window) }
+    var cards: [UpdateCard?] { history.map(\.card) }
+    var card: UpdateCard? { updater?.card }
     /// Kept apart from `lifecycle.launcher`, which is nil once the process is ending.
     private var resident: Launcher?
 
@@ -163,7 +168,7 @@ struct RunningBuild {
         return launcher
     }
 
-    private func record() { history.append(Published(window: window)) }
+    private func record() { history.append(Published(window: window, card: card)) }
 
     var launcher: Launcher { resident! }
     var window: Launcher.Window { resident?.window ?? .closed }
