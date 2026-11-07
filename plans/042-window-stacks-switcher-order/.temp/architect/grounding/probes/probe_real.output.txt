@@ -1,0 +1,35 @@
+regular apps: 14; frontmost: Todo
+
+== 1. serial on main: per app, first read (cold) and median of 5 warm reads; AX read only, CG list excluded
+  Ghostty cold 26.34 ms  warm 0.37 ms  error=0  listed=1 (visible 1, minimised 0)
+  Claude cold 16.26 ms  warm 0.40 ms  error=0  listed=1 (visible 1, minimised 0)
+  Finder cold 18.13 ms  warm 0.94 ms  error=0  listed=1 (visible 1, minimised 0)
+  Spotify cold 18.08 ms  warm 0.44 ms  error=0  listed=1 (visible 1, minimised 0)
+  ChatGPT cold 15.71 ms  warm 0.45 ms  error=0  listed=1 (visible 1, minimised 0)
+  Figma cold 18.60 ms  warm 0.34 ms  error=0  listed=1 (visible 1, minimised 0)
+  Google Chrome cold 16.82 ms  warm 0.41 ms  error=0  listed=1 (visible 1, minimised 0)
+  Passwords cold 126.98 ms  warm 0.35 ms  error=0  listed=1 (visible 1, minimised 0)
+  Things cold 65.05 ms  warm 0.20 ms  error=0  listed=0 (visible 0, minimised 0)
+  Preview cold 0.08 ms  warm 0.05 ms  error=-25204  listed=0 (visible 0, minimised 0)
+  Xcode cold 203.66 ms  warm 0.24 ms  error=0  listed=1 (visible 1, minimised 0)
+  Files App cold 151.31 ms  warm 0.41 ms  error=0  listed=1 (visible 1, minimised 0)
+  System Settings cold 19.72 ms  warm 0.35 ms  error=0  listed=1 (visible 1, minimised 0)
+  Todo cold 17.50 ms  warm 0.27 ms  error=0  listed=0 (visible 0, minimised 0)
+  sum over apps: cold 714.23 ms, warm 5.19 ms
+  one CG on-screen copy (warm): 0.20 ms
+
+== 2. concurrent, one GCD block per app, main thread reading every app at the same time; 10 rounds
+  mismatches against the serial baseline: 0 (main-thread and GCD reads, 280 reads)
+  last app answered at: min 1.74 ms, max 2.03 ms
+
+== 3. concurrent, a task group (cooperative pool), 10 rounds
+  mismatches: 0; last app answered at: min 1.64 ms, max 2.59 ms
+
+== 4. windows AX lists that today's sort drops (not on screen and not minimised), and hidden apps
+  Finder hidden=false:
+    dropped AX #nil AXScrollArea/- min=false fs=false '' inCGAll=false
+    CG-only off-screen layer-0 windows AX does not list: 5
+
+subroles seen across all apps (visible, not minimised):
+  AXScrollArea/-: 1
+  AXWindow/AXStandardWindow: 11

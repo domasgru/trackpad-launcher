@@ -1,0 +1,10 @@
+fixture: ready pid=14564 W1=65909 W2=65910 W3=65911 Utility=65912 PlainPanel=65913
+== costs, warm, averaged over 50 calls
+  (a) CGWindowListCopyWindowInfo(optionAll) descriptions: 2.56 ms per call, 153 entries
+  (c) CGWindowListCreateDescriptionFromArray for 3 numbers: 0.19 ms per call, 3 entries
+
+== does (c) follow closes and minimised windows? W3 starts minimised
+  alive before closing W2: [65909, 65910, 65911]  (W1=65909 W2=65910 W3=65911)
+  close W2 -> closed W2
+  alive after closing W2:  [65909, 65911]
+fixture: bye
