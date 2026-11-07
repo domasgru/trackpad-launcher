@@ -374,8 +374,8 @@ public final class Launcher {
     private func windowSwipe(_ event: SwipeEvent) {
         switch event.phase {
         case .began:
-            // A slide up or down is a window swipe only when the one read lists two or more rows. Unconfirmed, the
-            // recognizer makes it the slide the setting off would have made, before its next frame.
+            // A slide up or down is a window swipe whenever the one read knows the frontmost app's window count: rows
+            // for two or more, the card below that. Unconfirmed, the recognizer makes it the slide the setting off would have made, before its next frame.
             guard activity.isActive,
                 let content = windowOrders.list(
                     system.frontmostWindows(within: GestureRules.windowReadDeadline),
@@ -400,6 +400,8 @@ public final class Launcher {
         case .ended:
             guard case .windows(let open)? = shown, open.trackpad == event.trackpad else { return }
             shown = nil
+            // Lifting on the card changes nothing: no second read, no raise, no haptic, no hide.
+            guard !open.isCard else { return }
             // The second read: the lift follows the windows as they are now, whatever the raises while sliding did.
             let lift = open.lift(now: system.frontmostWindows(within: GestureRules.windowReadDeadline))
             if lift.playsHaptic {

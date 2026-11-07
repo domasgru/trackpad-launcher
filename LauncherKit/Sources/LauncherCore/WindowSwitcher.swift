@@ -25,11 +25,19 @@ public struct AppWindow: Equatable, Sendable, Identifiable {
 /// The window switcher during one window swipe. Its content is fixed when the window swipe begins: a window that opens
 /// later is not added, and one that closes stays listed. The selection follows the travel.
 public struct WindowSwitcher: Equatable, Sendable {
-    /// What a window swipe lists: the frontmost app and two to ten of its windows. One exists only for a window swipe.
+    /// What a window swipe lists: the frontmost app and either two to ten of its windows or the no-windows card.
+    /// One exists only for a window swipe.
     public struct Content: Equatable, Sendable {
-        /// Whose windows these are; their rows show its icon.
+        /// Whose windows these are; their rows and the card show its icon.
         public let app: AppEntry
-        public let rows: Rows
+        public let list: List
+    }
+
+    public enum List: Equatable, Sendable {
+        /// Two to ten windows, in the app's window order.
+        case rows(Rows)
+        /// Zero or one window: the no-windows card in place of the rows.
+        case card(NoWindowsCard)
     }
 
     public struct Rows: Equatable, Sendable {
@@ -92,32 +100,75 @@ public struct WindowSwitcher: Equatable, Sendable {
     /// Screen Recording was granted when the window swipe began, so visible rows show previews.
     public let showsPreviews: Bool
 
-    /// The selection counts the rows (two to ten) and starts on the front window's row.
+    /// Rows: the selection counts them (two to ten) and starts on the front window's row. The card: one item, so it
+    /// rubber-bands both ways and crosses nothing: no light tick, no raise.
     package init(_ content: Content, showsPreviews: Bool, serial: Int, trackpad: TrackpadID) {
         self.content = content
         self.showsPreviews = showsPreviews
         self.serial = serial
         self.trackpad = trackpad
-        selection = SwitcherSelection(count: content.rows.rows.count, startingAt: content.rows.startRow)
+        selection = switch content.list {
+        case .rows(let rows): SwitcherSelection(count: rows.rows.count, startingAt: rows.startRow)
+        case .card: SwitcherSelection(count: 1)
+        }
     }
 
-    /// Whose windows these are and whose icon the rows show.
+    /// Whose windows these are and whose icon the rows or the card show.
     public var app: AppEntry { content.app }
 
-    /// Top to bottom, two to ten, in the app's window order.
-    public var rows: [Row] { content.rows.rows }
+    public var isCard: Bool { if case .card = content.list { true } else { false } }
 
-    /// The windows to capture: the visible rows while `showsPreviews`, else none.
+    /// Top to bottom, two to ten, in the app's window order; [] for the card.
+    public var rows: [Row] { if case .rows(let rows) = content.list { rows.rows } else { [] } }
+
+    /// The windows to capture: the visible rows while `showsPreviews`, else none; none for the card.
     public var previewWindows: [WindowID] {
         guard showsPreviews else { return [] }
         return rows.compactMap { if case .visible(let id, _) = $0 { id } else { nil } }
     }
 
-    /// The app's window in front when the window swipe began. nil when every listed window is minimised.
-    public var frontWindow: WindowID? { content.rows.frontWindow }
+    /// The app's window in front when the window swipe began. nil when every listed window is minimised, and for the
+    /// card.
+    public var frontWindow: WindowID? { if case .rows(let rows) = content.list { rows.frontWindow } else { nil } }
 
-    /// The window that comes to the front while its row is selected. nil on a minimised row.
+    /// The window that comes to the front while its row is selected. nil on a minimised row and on the card.
     public var selectedVisibleWindow: WindowID? {
-        if case .visible(let id, _) = rows[selection.selected] { id } else { nil }
+        if case .rows(let list) = content.list, case .visible(let id, _) = list.rows[selection.selected] { id } else { nil }
+    }
+
+    /// The card's offset from rest, in points, positive down; nil for rows.
+    public var cardOffset: Double? { isCard ? NoWindowsCard.offset(stretch: selection.stretch) : nil }
+}
+
+/// The window switcher's single card for an app with zero or one window: the app's icon on the left, a bold first line
+/// and a regular second line.
+public struct NoWindowsCard: Equatable, Sendable {
+    public enum Kind: Equatable, Sendable { case noWindows, oneWindow }
+    public let kind: Kind
+    /// "No open windows" / "No other windows".
+    public let title: String
+    /// "‹App› has no windows on this desktop." / "‹App› has no other windows on this desktop."
+    public let message: String
+
+    package init(_ kind: Kind, of app: AppEntry) {
+        self.kind = kind
+        switch kind {
+        case .noWindows:
+            title = Copy.noOpenWindowsTitle
+            message = Copy.noOpenWindowsMessage(of: app.name)
+        case .oneWindow:
+            title = Copy.noOtherWindowsTitle
+            message = Copy.noOtherWindowsMessage(of: app.name)
+        }
+    }
+
+    /// The most the card moves from rest, either way.
+    public static let maxOffset = 6.0
+
+    /// `maxOffset × stretch / SwitcherSelection.fullStretch`, within ±`maxOffset`. A one-item selection keeps its travel
+    /// within a quarter step of rest and restarts it from a turn, so the offset follows the movement since the last
+    /// change of direction, damped by the rubber band's curve, never past 6 pt, and turns at once. Pure.
+    public static func offset(stretch: Double) -> Double {
+        min(max(maxOffset * stretch / SwitcherSelection.fullStretch, -maxOffset), maxOffset)
     }
 }

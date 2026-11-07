@@ -54,8 +54,12 @@ public struct SwitcherSelection: Equatable, Sendable {
 
     /// The rubber band past an end, in items, signed, bounded below `switcherMaxStretch`:
     /// sign(excess) × max × (1 − 1 / (1 + |excess| / max)), where excess = unclamped position − position. 0 inside the list.
-    public var stretch: Double {
-        let excess = unclampedPosition - position
+    public var stretch: Double { Self.stretch(excess: unclampedPosition - position) }
+
+    /// `stretch` at the full overshoot of a quarter step: about 0.111 items.
+    public static var fullStretch: Double { stretch(excess: GestureRules.switcherMaxOvershoot) }
+
+    private static func stretch(excess: Double) -> Double {
         let max = GestureRules.switcherMaxStretch
         return excess.sign == .minus ? -max * (1 - 1 / (1 + -excess / max)) : max * (1 - 1 / (1 + excess / max))
     }

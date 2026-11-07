@@ -14,19 +14,30 @@ struct WindowSwitcherLook: Sendable {
     var titleWeight = NSFont.Weight.medium
     var appearDuration = 0.1, appearScale = 0.96
     var springStiffness = 420.0, springDamping = 22.0
+    /// The no-windows card: the message's type size, the gap between its two lines and how long each trackpad frame's
+    /// movement takes to play.
+    var cardMessageSize = 12.0, cardLineGap = 2.0, cardMoveDuration = 0.1
 
     static let shipped = WindowSwitcherLook()
 }
 
 /// The window switcher: one `.regular` glass panel, ten pre-created rows, one `.clear` glass highlight inside the panel
-/// glass's content. `WindowSwitcherPresenter` decides what shows.
-final class WindowSwitcherPanel: OverlayPanel {
+/// glass's content, and the no-windows card that takes the rows' place. `WindowSwitcherPresenter` decides what shows.
+class WindowSwitcherPanel: OverlayPanel {
+    private static let cardKey = "card"
+
     private let look: WindowSwitcherLook
     private let content = NSView()
     private let highlight = NSGlassEffectView()
     private let rowViews: [WindowRowView]
+    /// The card: the icon, the bold title and the message, inside one view that moves with the highlight, its plate.
+    let cardContent = NSView()
+    let cardIcon = NSImageView()
+    let cardTitle = NSTextField(labelWithString: "")
+    let cardMessage = NSTextField(wrappingLabelWithString: "")
     private var layout = WindowColumnLayout(rowCount: 0, displayHeight: 0)
     private var shownRows = 0
+    private var showsCard = false
 
     init(look: WindowSwitcherLook = .shipped) {
         self.look = look
@@ -38,23 +49,139 @@ final class WindowSwitcherPanel: OverlayPanel {
         highlight.wantsLayer = true
         content.addSubview(highlight)
         rowViews.forEach(content.addSubview)
+        cardContent.wantsLayer = true
+        cardContent.isHidden = true
+        cardIcon.imageScaling = .scaleProportionallyUpOrDown
+        cardTitle.lineBreakMode = .byTruncatingTail
+        cardTitle.maximumNumberOfLines = 1
+        cardTitle.textColor = .labelColor
+        cardMessage.lineBreakMode = .byWordWrapping
+        cardMessage.cell?.truncatesLastVisibleLine = true
+        cardMessage.maximumNumberOfLines = 2
+        cardMessage.isSelectable = false
+        cardMessage.textColor = .secondaryLabelColor
+        content.addSubview(cardContent)
+        [cardIcon, cardTitle, cardMessage].forEach(cardContent.addSubview)
     }
 
     private var titleFont: NSFont { .systemFont(ofSize: WindowColumnLayout.titleSize, weight: look.titleWeight) }
 
-    /// Sizes the panel to `layout` with its top-left corner at `topLeft` and fills one row per entry of `rows`, each
-    /// showing `icon` in its preview slot.
-    func lay(out rows: [WindowSwitcher.Row], icon: NSImage, layout: WindowColumnLayout, topLeft: NSPoint) {
+    /// The highlight's layer: the card's plate.
+    var highlightLayer: CALayer? { highlight.layer }
+
+    /// How many rows are showing.
+    var visibleRowCount: Int { rowViews.filter { !$0.isHidden }.count }
+
+    /// Sizes the panel to `layout` with its top-left corner at `topLeft`.
+    private func size(to layout: WindowColumnLayout, topLeft: NSPoint) -> CGSize {
         self.layout = layout
-        shownRows = min(rows.count, rowViews.count)
         let size = CGSize(width: layout.panelSize.width, height: layout.panelSize.height)
         setFrame(NSRect(x: topLeft.x, y: topLeft.y - size.height, width: size.width, height: size.height), display: false)
+        return size
+    }
+
+    /// The card in `layout`'s one row frame: the icon in the preview slot, the bold title and the message in the title
+    /// column (the message on two lines at most, then cut short at its end), the highlight as its plate. Every row
+    /// view is hidden.
+    func lay(card: NoWindowsCard, icon: NSImage, layout: WindowColumnLayout, topLeft: NSPoint) {
+        let size = size(to: layout, topLeft: topLeft)
+        shownRows = 0
+        showsCard = true
+        resetCardMotion()
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         content.frame = NSRect(origin: .zero, size: size)
         highlight.cornerRadius = look.highlightRadius * layout.scale
         highlight.frame = rowFrame(at: 0)
+        for view in rowViews {
+            view.dropPreview()
+            view.isHidden = true
+        }
+        cardContent.isHidden = false
+        cardContent.frame = rowFrame(at: 0)
+        let bounds = cardContent.bounds
+        cardIcon.image = icon
+        cardIcon.frame = NSRect(
+            x: layout.inset + (layout.slot.width - layout.icon) / 2, y: (bounds.height - layout.icon) / 2,
+            width: layout.icon, height: layout.icon)
+
+        cardTitle.font = .systemFont(ofSize: layout.fontSize, weight: .bold)
+        cardTitle.stringValue = card.title
+        cardMessage.font = .systemFont(ofSize: look.cardMessageSize * layout.scale, weight: .regular)
+        cardMessage.stringValue = card.message
+        let width = layout.titleWidth
+        let titleHeight = Self.lineHeight(cardTitle.font)
+        let messageLine = Self.lineHeight(cardMessage.font)
+        let wanted = cardMessage.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: 10_000)).height ?? 0
+        let messageLines = min(cardMessage.maximumNumberOfLines, max(1, Int((wanted / messageLine).rounded())))
+        let messageHeight = messageLine * Double(messageLines)
+        let gap = look.cardLineGap * layout.scale
+        let bottom = (bounds.height - (titleHeight + gap + messageHeight)) / 2
+        cardMessage.frame = NSRect(x: layout.titleLeading, y: bottom, width: width, height: messageHeight)
+        cardTitle.frame = NSRect(
+            x: layout.titleLeading, y: bottom + messageHeight + gap, width: width, height: titleHeight)
+        CATransaction.commit()
+        invalidateShadow()
+    }
+
+    private static func lineHeight(_ font: NSFont?) -> Double {
+        (font.map { $0.ascender - $0.descender + $0.leading } ?? 0).rounded(.up)
+    }
+
+    /// The plate and the content `offset` points below their resting place (above when negative), inside the panel's
+    /// padding; a short implicit-style action when `animated`, else at once. A no-op unless the card is laid out.
+    func moveCard(by offset: Double, animated: Bool) {
+        guard showsCard else { return }
+        translateCard(toOffset: offset, duration: animated ? look.cardMoveDuration : 0)
+    }
+
+    /// Back to rest over the dismiss fade's 150 ms, or at once. A no-op unless the card is laid out.
+    func settleCard(animated: Bool) {
+        guard showsCard else { return }
+        translateCard(toOffset: 0, duration: animated ? Self.fadeDuration : 0)
+    }
+
+    private func resetCardMotion() {
+        translateCard(toOffset: 0, duration: 0)
+    }
+
+    /// Explicit animations, since a view's backing layer takes no implicit ones: the model value is set at once and an
+    /// animation from where the layer is shown plays over `duration`, replacing the one before.
+    private func translateCard(toOffset offset: Double, duration: CFTimeInterval) {
+        let key = "transform.translation.y"
+        let target = -offset
+        for layer in [highlight.layer, cardContent.layer].compactMap({ $0 }) {
+            let from = (layer.presentation()?.value(forKeyPath: key) ?? layer.value(forKeyPath: key)) as? Double ?? 0
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.removeAnimation(forKey: Self.cardKey)
+            layer.transform = CATransform3DMakeTranslation(0, target, 0)
+            CATransaction.commit()
+            guard duration > 0, from != target else { continue }
+            let move = CABasicAnimation(keyPath: key)
+            move.fromValue = from
+            move.toValue = target
+            move.duration = duration
+            move.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(move, forKey: Self.cardKey)
+        }
+    }
+
+    /// Sizes the panel to `layout` with its top-left corner at `topLeft` and fills one row per entry of `rows`, each
+    /// showing `icon` in its preview slot. The card, if laid out, is hidden.
+    func lay(out rows: [WindowSwitcher.Row], icon: NSImage, layout: WindowColumnLayout, topLeft: NSPoint) {
+        let size = size(to: layout, topLeft: topLeft)
+        shownRows = min(rows.count, rowViews.count)
+        resetCardMotion()
+        showsCard = false
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        content.frame = NSRect(origin: .zero, size: size)
+        highlight.cornerRadius = look.highlightRadius * layout.scale
+        highlight.frame = rowFrame(at: 0)
+        cardContent.isHidden = true
         for (index, view) in rowViews.enumerated() {
             // Every slot back to the icon, so nothing taken for one window swipe shows in the next.
             view.dropPreview()

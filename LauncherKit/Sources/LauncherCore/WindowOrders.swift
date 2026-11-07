@@ -14,8 +14,9 @@ package struct WindowOrders: Equatable, Sendable {
     package init() {}
 
     /// What a slide up or down shows, from the read at its start, after bringing the app's order up to date with an
-    /// answered read. nil (no window swipe) for no frontmost app, for an app that did not answer, and for a count
-    /// below two. Otherwise the rows: the pick in the app's order, the front window's row noted. `stillOpen` answers
+    /// answered read. nil (no window swipe) for no frontmost app and for an app that did not answer. For a count below
+    /// two (our own process counts one) the no-windows card; otherwise the rows: the pick in the app's order, the front
+    /// window's row noted. `stillOpen` answers
     /// which of the given windows the window server still holds; it is asked only when the order remembers a window
     /// the read did not list. Idempotent: the same read twice leaves the same order and gives the same content.
     package mutating func list(
@@ -28,9 +29,11 @@ package struct WindowOrders: Equatable, Sendable {
                 launch: launch, windows: Self.updated(remembered, with: windows, stillOpen: stillOpen))
         }
         guard count >= 2, case .windows(let windows) = windowRead, let order = orders[app.url]?.windows else {
-            return nil
+            return WindowSwitcher.Content(
+                app: app, list: .card(NoWindowsCard(count == 0 ? .noWindows : .oneWindow, of: app)))
         }
-        return WindowSwitcher.Content(app: app, rows: WindowSwitcher.Rows(app: app, pick: WindowPick(windows), order: order))
+        return WindowSwitcher.Content(
+            app: app, list: .rows(WindowSwitcher.Rows(app: app, pick: WindowPick(windows), order: order)))
     }
 
     /// The app's order now, for this launch; [] before its first window swipe.

@@ -41,6 +41,7 @@ public struct WindowLift: Equatable, Sendable {
 
 extension WindowSwitcher {
     /// The lift, from the rows fixed at begin and a second read of the frontmost app's windows. Pure.
+    /// - The card: no raises, silent.
     /// - `now` is no app or another app: no raises, silent.
     /// - The selected window has closed: no raises, so no reordering; the haptic plays iff a window is in front now
     ///   and it is not `frontWindow`. Every listed window closed is therefore silent.
@@ -49,7 +50,9 @@ extension WindowSwitcher {
     ///   which covers restoring a minimised one and every row when every window is minimised. Lifting on the front
     ///   window therefore restores the begin order, silently.
     public func lift(now: FrontmostWindows) -> WindowLift {
-        guard case .app(let nowApp, _, .windows(let windows)) = now, nowApp.url == app.url else { return .nothing }
+        guard case .rows(let listed) = content.list, case .app(let nowApp, _, .windows(let windows)) = now,
+            nowApp.url == app.url
+        else { return .nothing }
         let visible = windows.visible
         let minimised = windows.minimised
         let selected = rows[selection.selected].window
@@ -58,7 +61,7 @@ extension WindowSwitcher {
         guard open.contains(selected) else {
             return WindowLift(raises: [], playsHaptic: onScreen.first.map { $0 != frontWindow } ?? false)
         }
-        let target = [selected] + content.rows.zOrder.filter { $0 != selected && open.contains($0) }
+        let target = [selected] + listed.zOrder.filter { $0 != selected && open.contains($0) }
         return WindowLift(
             raises: RaiseOrder.raises(current: onScreen, target: target), playsHaptic: selected != frontWindow)
     }

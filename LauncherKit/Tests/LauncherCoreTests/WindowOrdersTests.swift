@@ -21,6 +21,14 @@ import LauncherCore
 
     private func none(_ ids: Set<WindowID>) -> Set<WindowID> { [] }
 
+    private func rows(_ content: WindowSwitcher.Content) -> WindowSwitcher.Rows? {
+        if case .rows(let rows) = content.list { rows } else { nil }
+    }
+
+    private func card(_ content: WindowSwitcher.Content?) -> NoWindowsCard? {
+        if case .card(let card)? = content?.list { card } else { nil }
+    }
+
     // MARK: updated
 
     @Test func withoutAnOrderTheListIsVisibleFrontToBackThenMinimised() {
@@ -80,15 +88,27 @@ import LauncherCore
         let listing = orders.list(read(visible: [3, 1, 2]), stillOpen: none)
         let content = try #require(listing)
 
-        #expect(content.rows.rows.map(\.window) == [1, 2, 3].map(id))
-        #expect(content.rows.frontWindow == id(3))
+        #expect(rows(content)?.rows.map(\.window) == [1, 2, 3].map(id))
+        #expect(rows(content)?.frontWindow == id(3))
     }
 
-    @Test func aCountBelowTwoIsNoWindowSwipeYetStillSetsTheOrder() {
+    @Test func aCountBelowTwoListsTheCardAndStillSetsTheOrder() {
         var orders = WindowOrders()
 
-        #expect(orders.list(read(visible: [4]), stillOpen: none) == nil)
+        let one = orders.list(read(visible: [4]), stillOpen: none)
+        #expect(card(one)?.kind == .oneWindow)
         #expect(orders.order(of: safari) == [id(4)])
+
+        let none = orders.list(read(visible: []), stillOpen: self.none)
+        #expect(card(none)?.kind == .noWindows)
+    }
+
+    @Test func aLoneMinimisedWindowIsTheOneWindowCard() {
+        var orders = WindowOrders()
+
+        let content = orders.list(read(visible: [], minimised: [4]), stillOpen: none)
+
+        #expect(card(content)?.kind == .oneWindow)
     }
 
     @Test func anotherLaunchStartsAnOrderOfItsOwn() {
@@ -100,12 +120,12 @@ import LauncherCore
         #expect(orders.order(of: safari) == [12, 10, 11].map(id))
     }
 
-    @Test func aReadThatDidNotAnswerOrIsOurOwnTouchesNothing() {
+    @Test func aReadThatDidNotAnswerTouchesNothingAndOurOwnIsTheOneWindowCard() {
         var orders = WindowOrders()
         _ = orders.list(read(visible: [1, 2]), stillOpen: none)
 
         #expect(orders.list(.app(safari, launch, .unanswered), stillOpen: none) == nil)
-        #expect(orders.list(.app(safari, launch, .ownProcess), stillOpen: none) == nil)
+        #expect(card(orders.list(.app(safari, launch, .ownProcess), stillOpen: none))?.kind == .oneWindow)
         #expect(orders.list(.noApp, stillOpen: none) == nil)
         #expect(orders.order(of: safari) == [1, 2].map(id))
     }
@@ -117,8 +137,8 @@ import LauncherCore
         let listing = orders.list(read(visible: [3, 1], minimised: [2]), stillOpen: none)
         let content = try #require(listing)
 
-        #expect(content.rows.rows.map(\.window) == [1, 2, 3].map(id))
-        #expect(content.rows.rows[1] == .minimised(id(2), title: "W2"))
+        #expect(rows(content)?.rows.map(\.window) == [1, 2, 3].map(id))
+        #expect(rows(content)?.rows[1] == .minimised(id(2), title: "W2"))
     }
 
     @Test func aWindowWithoutATitleReadsAsItsRow() throws {
@@ -129,7 +149,7 @@ import LauncherCore
         let listing = orders.list(.app(safari, launch, .windows(untitled)), stillOpen: none)
         let content = try #require(listing)
 
-        #expect(content.rows.rows.map(\.title) == ["Safari — Window 1", "W1"])
+        #expect(rows(content)?.rows.map(\.title) == ["Safari — Window 1", "W1"])
     }
 
     // MARK: SwitcherSelection
