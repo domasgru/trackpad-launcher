@@ -1,0 +1,68 @@
+fixture: ready pid=3799 W1=64803 W2=64804 W3=64805 Utility=64806 PlainPanel=64807
+
+== normal: AX error=0 in 61.65 ms
+  AX  #64806 AXWindow/AXFloatingWindow min=false fs=false 'Utility'
+  AX  #64807 AXWindow/AXDialog min=false fs=false 'PlainPanel'
+  AX  #64804 AXWindow/AXStandardWindow min=false fs=false 'W2'
+  AX  #64803 AXWindow/AXStandardWindow min=false fs=false 'W1'
+  AX  #64805 AXWindow/AXDialog min=true fs=false 'W3'
+  CG on-screen: [64807, 64804, 64803]
+  CG all:       64807* 64805 64804* 64803* (* = on screen)
+  today's sort lists visible=[64804, 64803] minimised=[64805] -> count 3
+
+hide -> hidden=false
+
+== hidden: AX error=0 in 0.61 ms
+  AX  #64806 AXWindow/AXFloatingWindow min=false fs=false 'Utility'
+  AX  #64807 AXWindow/AXDialog min=false fs=false 'PlainPanel'
+  AX  #64804 AXWindow/AXDialog min=false fs=false 'W2'
+  AX  #64803 AXWindow/AXDialog min=false fs=false 'W1'
+  AX  #64805 AXWindow/AXDialog min=true fs=false 'W3'
+  CG on-screen: []
+  CG all:       64807 64805 64804 64803 (* = on screen)
+  today's sort lists visible=[] minimised=[64805] -> count 1
+
+unhide -> hidden=true
+
+== unhidden: AX error=0 in 1.75 ms
+  AX  #64806 AXWindow/AXFloatingWindow min=false fs=false 'Utility'
+  AX  #64807 AXWindow/AXDialog min=false fs=false 'PlainPanel'
+  AX  #64804 AXWindow/AXStandardWindow min=false fs=false 'W2'
+  AX  #64803 AXWindow/AXStandardWindow min=false fs=false 'W1'
+  AX  #64805 AXWindow/AXDialog min=true fs=false 'W3'
+  CG on-screen: [64807, 64804, 64803]
+  CG all:       64807* 64805 64804* 64803* (* = on screen)
+  today's sort lists visible=[64804, 64803] minimised=[64805] -> count 3
+
+close W2 -> closed W2
+open -> opened W4=64808
+
+== after closing W2 and opening a new window: AX error=0 in 7.02 ms
+  AX  #64806 AXWindow/AXFloatingWindow min=false fs=false 'Utility'
+  AX  #64808 AXWindow/AXStandardWindow min=false fs=false 'W4'
+  AX  #64807 AXWindow/AXDialog min=false fs=false 'PlainPanel'
+  AX  #64803 AXWindow/AXStandardWindow min=false fs=false 'W1'
+  AX  #64805 AXWindow/AXDialog min=true fs=false 'W3'
+  CG on-screen: [64808, 64807, 64803]
+  CG all:       64808* 64807* 64805 64803* (* = on screen)
+  today's sort lists visible=[64808, 64803] minimised=[64805] -> count 3
+
+churn of 40 windows: first=64809 last=64848 strictly increasing=true distinct=40
+
+windows before stop: 5
+== stopped: whole read 205.18 ms, error=-25204
+  windows: 205.08 ms error=-25204
+  _AXUIElementGetWindow on a window element of the stopped app: 205.08 ms error=-25204 number=0
+  CopyMultipleAttributeValues on that element: 205.16 ms return=-25204 slots=[]
+  CG on-screen list while stopped: 3.25 ms -> [64848, 64847, 64846, 64845, 64844, 64843, 64842, 64841, 64840, 64839, 64838, 64837, 64808, 64807, 64803]
+== concurrent reads, the stopped fixture first, then 6 other apps, one GCD block each:
+  pid 642 finished at +36.68 ms (own 36.50 ms), error=0, windows=1
+  pid 671 finished at +43.06 ms (own 42.81 ms), error=0, windows=2
+  pid 22941 finished at +43.80 ms (own 43.49 ms), error=0, windows=1
+  pid 11995 finished at +45.70 ms (own 45.38 ms), error=0, windows=1
+  pid 645 finished at +48.22 ms (own 48.00 ms), error=0, windows=1
+  pid 874 finished at +50.57 ms (own 50.28 ms), error=0, windows=1
+  pid 3799 finished at +205.19 ms (own 205.06 ms), error=-25204, windows=0
+
+after SIGCONT -> bye
+fixture exited, status 0

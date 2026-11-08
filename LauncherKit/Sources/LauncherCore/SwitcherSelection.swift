@@ -2,7 +2,7 @@ import Foundation
 
 /// Where the fingers have taken a switcher's selection along its fixed list: the nearest item; hard stops at both
 /// ends; a rubber band of at most a quarter step, forgotten the moment the fingers turn back (no dead zone).
-/// The selection starts on the first item.
+/// The selection starts on the first item, or the one it is given.
 public struct SwitcherSelection: Equatable, Sendable {
     /// At least 1: a one-item switcher rubber-bands at both ends.
     public let count: Int
@@ -14,6 +14,13 @@ public struct SwitcherSelection: Equatable, Sendable {
 
     package init(count: Int) {
         self.count = max(count, 1)
+    }
+
+    /// Starts on item `start`, clamped to 0..<count: travel `start × switcherStepMM`, nothing reported yet, so the next
+    /// `follow` moves by the frame's own travel.
+    package init(count: Int, startingAt start: Int) {
+        self.count = max(count, 1)
+        travelMM = Double(min(max(start, 0), self.count - 1)) * GestureRules.switcherStepMM
     }
 
     /// Takes the slide's absolute travel and moves by what the frame moved, keeping at most `switcherMaxOvershoot`
@@ -47,8 +54,12 @@ public struct SwitcherSelection: Equatable, Sendable {
 
     /// The rubber band past an end, in items, signed, bounded below `switcherMaxStretch`:
     /// sign(excess) × max × (1 − 1 / (1 + |excess| / max)), where excess = unclamped position − position. 0 inside the list.
-    public var stretch: Double {
-        let excess = unclampedPosition - position
+    public var stretch: Double { Self.stretch(excess: unclampedPosition - position) }
+
+    /// `stretch` at the full overshoot of a quarter step: about 0.111 items.
+    public static var fullStretch: Double { stretch(excess: GestureRules.switcherMaxOvershoot) }
+
+    private static func stretch(excess: Double) -> Double {
         let max = GestureRules.switcherMaxStretch
         return excess.sign == .minus ? -max * (1 - 1 / (1 + -excess / max)) : max * (1 - 1 / (1 + excess / max))
     }

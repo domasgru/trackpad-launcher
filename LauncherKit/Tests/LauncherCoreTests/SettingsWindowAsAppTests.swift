@@ -3,7 +3,6 @@ import LauncherCore
 
 @MainActor @Suite struct SettingsWindowAsAppTests {
     private let trackpad = Trackpad.macBook14
-    private let thumb = TouchScript(.macBook14).thumb(atMM: (10, 10))
 
     private func names(_ switcher: Switcher?) -> [String]? { switcher?.row.map(\.name) }
 
@@ -88,18 +87,5 @@ import LauncherCore
 
         world.swipe(3.5, lift: false)
         #expect(names(world.launcher.switcher) == ["Trackpad Launcher", "Finder"])
-    }
-
-    @Test func slidingDownOverTheSettingsWindowIsNoWindowSwipe() {
-        let world = World.windowWorld(visible: ["Settings"])
-        world.openSettings()
-
-        let script = thumb.wait(.seconds(5)).land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 3.5))
-            .slide(byMM: (0, 20)).lift()
-        let history = world.playFrameByFrame(script) { (world.launcher.windowSwitcher, world.hardware.pulses) }
-
-        #expect(history.allSatisfy { $0.0 == nil && $0.1.isEmpty })
-        #expect(world.hardware.windowSwipeAnswers == [false])
-        #expect(world.system.windows.raised.isEmpty)
     }
 }

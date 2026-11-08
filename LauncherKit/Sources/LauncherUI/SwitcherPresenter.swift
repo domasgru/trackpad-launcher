@@ -9,18 +9,31 @@ import Observation
 /// reports launched and for every running app on an appearance change, and dropped when it reports an app terminated.
 /// All of it runs only while the swipe setting is on; off, the observers are removed and the cache is empty.
 final class SwitcherPresenter {
-    private let launcher: Launcher
-    private let panel = SwitcherPanel()
+    private let readsReduceMotion: () -> Bool
+    private let panel: SwitcherPanel
     private let icons = AppIcons(side: SwitcherRowLayout.fullIconSide)
     private var observations: [Task<Void, Never>] = []
     private var workspaceObservers: [NSObjectProtocol] = []
     private var appearanceObservation: NSKeyValueObservation?
-    private var laidOutRow: [AppEntry] = []
+    private var laidOutSerial: Int?
+    private var shownStacks: [SlotStack] = []
     private var layout = SwitcherRowLayout(iconCount: 0, displayWidth: 0)
+    private var stackLayout = WindowStackLayout(row: SwitcherRowLayout(iconCount: 0, displayWidth: 0))
     private var lastStretch = 0.0
 
-    init(launcher: Launcher) {
-        self.launcher = launcher
+    /// `reduceMotion` is read at each render: the system's setting by default, injected by a bench. Builds the panel,
+    /// unless a bench passes its own.
+    init(
+        reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion },
+        panel: SwitcherPanel? = nil
+    ) {
+        readsReduceMotion = reduceMotion
+        self.panel = panel ?? SwitcherPanel()
+    }
+
+    /// Called once by the shell: observes `launcher.switcher` into `render`, and `launcher.isSwipeOn` into the icon
+    /// passes, the first of them synchronous when the swipe setting is on.
+    func observe(_ launcher: Launcher) {
         if launcher.isSwipeOn { startIconPasses(waiting: true) }
         observations.append(
             Task { [weak self] in
@@ -110,14 +123,21 @@ final class SwitcherPresenter {
     }
 
     /// nil hides: opacity to 0 over 150 ms, then out, unless a switcher opened meanwhile (Reduce motion: at once).
-    /// A switcher that is not on screen yet, or whose row differs from the laid-out one, is laid out and shown first.
-    private func render(_ switcher: Switcher?) {
+    /// A switcher of a swipe not laid out yet is laid out and shown first, whatever its row. A slot's stack is drawn
+    /// once, when its count arrives.
+    func render(_ switcher: Switcher?) {
         guard let switcher else {
+            laidOutSerial = nil
             panel.dismiss()
             return
         }
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        if !panel.isPresented || switcher.row != laidOutRow { open(switcher.row) }
+        let reduceMotion = readsReduceMotion()
+        if switcher.serial != laidOutSerial { open(switcher) }
+        for (slot, stack) in switcher.stacks.enumerated() where shownStacks[slot] == .pending {
+            guard case .stack(let windows) = stack else { continue }
+            panel.addStack(at: slot, copies: stackLayout.copies(of: windows), rises: !reduceMotion)
+        }
+        shownStacks = switcher.stacks
         let selection = switcher.selection
         panel.show(position: CGFloat(selection.position), selected: selection.selected, animatesSize: !reduceMotion)
         if selection.stretch != lastStretch, selection.stretch != 0, !reduceMotion {
@@ -126,13 +146,15 @@ final class SwitcherPresenter {
         lastStretch = selection.stretch
     }
 
-    private func open(_ row: [AppEntry]) {
+    private func open(_ switcher: Switcher) {
         let screen = Displays.screen(under: NSEvent.mouseLocation)
-        layout = SwitcherRowLayout(iconCount: row.count, displayWidth: Double(screen?.frame.width ?? 0))
+        layout = SwitcherRowLayout(iconCount: switcher.row.count, displayWidth: Double(screen?.frame.width ?? 0))
+        stackLayout = WindowStackLayout(row: layout)
         panel.layoutRow(
-            row.map { icons.icon(forSwitcher: $0) }, layout: layout, on: screen?.frame ?? .zero,
+            switcher.row.map { icons.icon(forSwitcher: $0) }, layout: layout, on: screen?.frame ?? .zero,
             scale: screen?.backingScaleFactor ?? 2)
-        laidOutRow = row
+        laidOutSerial = switcher.serial
+        shownStacks = Array(repeating: .pending, count: switcher.row.count)
         lastStretch = 0
         panel.present(appear: nil)
     }

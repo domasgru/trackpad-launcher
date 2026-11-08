@@ -7,9 +7,9 @@ import Observation
 /// take the frontmost app's icon from the running app (about 0.1 ms), so it needs none of the swipe setting's icon
 /// passes. Each window swipe that shows previews starts one capture, whose pictures go straight into the panel.
 final class WindowSwitcherPresenter {
-    private let launcher: Launcher
+    private let readsReduceMotion: () -> Bool
     private let look = WindowSwitcherLook.shipped
-    private let panel: WindowSwitcherPanel
+    let panel: WindowSwitcherPanel
     private let icons = AppIcons(side: WindowColumnLayout.iconSide)
     private var observation: Task<Void, Never>?
     /// The shown window swipe's previews being taken.
@@ -19,9 +19,18 @@ final class WindowSwitcherPresenter {
     private var layout = WindowColumnLayout(rowCount: 0, displayHeight: 0)
     private var lastStretch = 0.0
 
-    init(launcher: Launcher) {
-        self.launcher = launcher
-        panel = WindowSwitcherPanel(look: look)
+    /// `reduceMotion` is read at each render: the system's setting by default, injected by a bench. Builds the panel,
+    /// unless a bench gives it one.
+    init(
+        reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion },
+        panel: WindowSwitcherPanel? = nil
+    ) {
+        readsReduceMotion = reduceMotion
+        self.panel = panel ?? WindowSwitcherPanel(look: look)
+    }
+
+    /// Called once by the shell: observes `launcher.windowSwitcher` into `render`.
+    func observe(_ launcher: Launcher) {
         observation = Task { [weak self] in
             for await shown in Observations({ launcher.windowSwitcher }) { self?.render(shown) }
         }
@@ -32,25 +41,31 @@ final class WindowSwitcherPresenter {
         capture?.cancel()
     }
 
-    private var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    private var reduceMotion: Bool { readsReduceMotion() }
 
     /// nil hides with the overlay's fade. A new window swipe's switcher is laid out and shown first.
-    private func render(_ switcher: WindowSwitcher?) {
+    func render(_ switcher: WindowSwitcher?) {
         guard let switcher else {
             capture?.cancel()
             capture = nil
             shownSerial = nil
-            // Fades, then the panel drops every picture.
+            // The card settles back as the panel fades; then the panel drops every picture.
+            panel.settleCard(animated: !reduceMotion)
             panel.dismiss()
             return
         }
         if switcher.serial != shownSerial { open(switcher) }
         let selection = switcher.selection
-        panel.show(position: selection.position, selected: selection.selected)
-        if selection.stretch != lastStretch, selection.stretch != 0, !reduceMotion {
-            panel.springHighlight(fromY: selection.stretch * layout.pitch)
+        switch switcher.content.list {
+        case .rows:
+            panel.show(position: selection.position, selected: selection.selected)
+            if selection.stretch != lastStretch, selection.stretch != 0, !reduceMotion {
+                panel.springHighlight(fromY: selection.stretch * layout.pitch)
+            }
+            lastStretch = selection.stretch
+        case .card:
+            panel.moveCard(by: reduceMotion ? 0 : switcher.cardOffset ?? 0, animated: !reduceMotion)
         }
-        lastStretch = selection.stretch
     }
 
     /// The column sits in the top-left corner of the pointer's display, a margin inside its visible frame: below the
@@ -60,13 +75,17 @@ final class WindowSwitcherPresenter {
         let screen = Displays.screen(under: NSEvent.mouseLocation)
         let visible = screen?.visibleFrame ?? .zero
         let rows = switcher.rows
-        layout = WindowColumnLayout(rowCount: rows.count, displayHeight: Double(visible.height))
+        layout = WindowColumnLayout(rowCount: max(rows.count, 1), displayHeight: Double(visible.height))
         shownSerial = switcher.serial
         lastStretch = 0
         capture(switcher, rows: rows, scale: Double(screen?.backingScaleFactor ?? 2))
-        panel.lay(
-            out: rows, icon: icons.icon(forSwitcher: switcher.app), layout: layout,
-            topLeft: NSPoint(x: visible.minX + WindowColumnLayout.margin, y: visible.maxY - WindowColumnLayout.margin))
+        let icon = icons.icon(forSwitcher: switcher.app)
+        let topLeft = NSPoint(x: visible.minX + WindowColumnLayout.margin, y: visible.maxY - WindowColumnLayout.margin)
+        if case .card(let card) = switcher.content.list {
+            panel.lay(card: card, icon: icon, layout: layout, topLeft: topLeft)
+        } else {
+            panel.lay(out: rows, icon: icon, layout: layout, topLeft: topLeft)
+        }
         let previewWindows = Set(switcher.previewWindows)
         panel.awaitPreviews(rows: rows.indices.filter { previewWindows.contains(rows[$0].window) })
         panel.present(

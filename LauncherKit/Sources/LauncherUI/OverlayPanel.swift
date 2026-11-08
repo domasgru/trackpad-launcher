@@ -17,7 +17,7 @@ struct OverlayAppear {
 class OverlayPanel: NSPanel {
     private static let fadeKey = "fade"
     private static let appearScaleKey = "appearScale"
-    private static let fadeDuration: CFTimeInterval = 0.15
+    static let fadeDuration: CFTimeInterval = 0.15
 
     /// On screen, or about to be: true from `present` until `dismiss`, even while the fade still runs.
     private(set) var isPresented = false

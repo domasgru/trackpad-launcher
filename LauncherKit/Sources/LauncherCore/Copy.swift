@@ -36,6 +36,12 @@ public enum Copy {
         }
     }
 
+    /// The window switcher's card for an app with one window, or none.
+    public static let noOtherWindowsTitle = "No other windows"
+    public static func noOtherWindowsMessage(of app: String) -> String { "\(app) has no other windows on this desktop." }
+    public static let noOpenWindowsTitle = "No open windows"
+    public static func noOpenWindowsMessage(of app: String) -> String { "\(app) has no windows on this desktop." }
+
     /// The app menu's item in Quit's place.
     public static let closeSettings = "Close Settings"
 

@@ -67,7 +67,10 @@ public final class Launcher {
     private enum ShownSwitcher: Equatable { case apps(Switcher), windows(WindowSwitcher) }
 
     private var shown: ShownSwitcher?
-    @ObservationIgnored private var windowSwipesBegun = 0
+    /// Both kinds of switcher take their serial from it, so an app switcher and a window switcher never share one.
+    @ObservationIgnored private var switchersBegun = 0
+    /// Each app's window order. Written only by `windowSwipe(.began)`; survives reconciles; never saved.
+    @ObservationIgnored private var windowOrders = WindowOrders()
     /// The launches being watched, one record per launched bundle. Written only by `fire` and `progress(_:of:)`: the one
     /// record of which launches are live; the adapter's watches and bounces follow its commands.
     @ObservationIgnored private var launches: [BundleID: WatchedLaunch] = [:]
@@ -342,10 +345,19 @@ public final class Launcher {
             guard shown == nil, activity.isActive else { return }
             // With nothing to show the swipe still runs its course: the fingers stay blocked until they lift.
             let running = system.runningApps()
-            shown = Switcher(
-                frontmost: running.frontmost, running: running.apps,
-                leavingOut: settings.assignedBundleIDs, trackpad: event.trackpad
-            ).map(ShownSwitcher.apps)
+            guard let switcher = Switcher(
+                frontmost: running.frontmost, running: running.apps, leavingOut: settings.assignedBundleIDs,
+                serial: switchersBegun + 1, trackpad: event.trackpad)
+            else { return }
+            switchersBegun += 1
+            // The row is up before any read starts. Without Accessibility no window can be read, and the window swipe
+            // setting plays no part.
+            shown = .apps(switcher)
+            guard isAccessibilityGranted else { return }
+            let serial = switcher.serial
+            system.readWindows(of: switcher.row, within: GestureRules.windowReadDeadline) { [unowned self] slot, read in
+                counted(read, at: slot, swipe: serial)
+            }
         case .moved(let travel):
             guard case .apps(var open)? = shown, open.trackpad == event.trackpad else { return }
             let crossed = open.selection.follow(travel)
@@ -368,21 +380,32 @@ public final class Launcher {
         }
     }
 
+    /// A count lands only in the switcher it was read for, once per slot: an ended, cancelled, reconciled or later
+    /// swipe's switcher drops it.
+    private func counted(_ read: WindowRead, at slot: Int, swipe serial: Int) {
+        guard case .apps(var open)? = shown, open.serial == serial, open.take(read, at: slot) else { return }
+        shown = .apps(open)
+    }
+
     /// The one place a window swipe becomes effects. Never the launch animation.
     private func windowSwipe(_ event: SwipeEvent) {
         switch event.phase {
         case .began:
-            // A slide up or down is a window swipe only when the one read lists two or more rows. Unconfirmed, the
-            // recognizer makes it the slide the setting off would have made, before its next frame.
-            guard activity.isActive, let content = WindowSwitcher.Content(system.frontmostWindows()) else { return }
+            // A slide up or down is a window swipe whenever the one read knows the frontmost app's window count: rows
+            // for two or more, the card below that. Unconfirmed, the recognizer makes it the slide the setting off would have made, before its next frame.
+            guard activity.isActive,
+                let content = windowOrders.list(
+                    system.frontmostWindows(within: GestureRules.windowReadDeadline),
+                    stillOpen: { system.openWindows(among: $0) })
+            else { return }
             hardware.confirmWindowSwipe(on: event.trackpad)
             // One switcher at a time: a second trackpad's window swipe runs its course with none, as its swipe would.
             guard shown == nil else { return }
-            windowSwipesBegun += 1
+            switchersBegun += 1
             // The grant as the last TCC push left it: a fresh preflight would cost about 4 ms here.
             shown = .windows(
                 WindowSwitcher(
-                    content, showsPreviews: isScreenRecordingGranted, serial: windowSwipesBegun,
+                    content, showsPreviews: isScreenRecordingGranted, serial: switchersBegun,
                     trackpad: event.trackpad))
         case .moved(let travel):
             guard case .windows(var open)? = shown, open.trackpad == event.trackpad else { return }
@@ -394,8 +417,10 @@ public final class Launcher {
         case .ended:
             guard case .windows(let open)? = shown, open.trackpad == event.trackpad else { return }
             shown = nil
+            // Lifting on the card changes nothing: no second read, no raise, no haptic, no hide.
+            guard !open.isCard else { return }
             // The second read: the lift follows the windows as they are now, whatever the raises while sliding did.
-            let lift = open.lift(now: system.frontmostWindows())
+            let lift = open.lift(now: system.frontmostWindows(within: GestureRules.windowReadDeadline))
             if lift.playsHaptic {
                 hardware.playFeedback(.gesture, on: event.trackpad)
             }

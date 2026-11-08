@@ -2,15 +2,18 @@ import AppKit
 import LauncherCore
 import QuartzCore
 
-/// The app switcher's window: an overlay panel holding the icon layers and the glass highlight under them;
-/// `SwitcherPresenter` decides everything shown.
-final class SwitcherPanel: OverlayPanel {
+/// The app switcher's window: an overlay panel holding one container layer per app, its icon last and any window stack's
+/// copies behind it, and the glass highlight under them; `SwitcherPresenter` decides everything shown.
+class SwitcherPanel: OverlayPanel {
     private static let cornerRadius: CGFloat = 34
 
     private let content: NSView
     private let highlight = NSGlassEffectView()
     private let iconsHost = NSView()
-    private var iconLayers: [CALayer] = []
+    /// One per slot, never clipping. A sublayer draws above its parent's contents, so each container holds the copies
+    /// first, farthest first, and the icon last.
+    private(set) var slotLayers: [CALayer] = []
+    private var scale: CGFloat = 2
     private var layout = SwitcherRowLayout(iconCount: 0, displayWidth: 0)
 
     init() {
@@ -27,10 +30,11 @@ final class SwitcherPanel: OverlayPanel {
         content.addSubview(iconsHost)
     }
 
-    /// Replaces the icon layers with one layer per image, left to right, sized and spaced by `layout`, and centres
-    /// the panel on `screen`.
+    /// Replaces the slot containers with one per image, left to right, centred by `layout`, and centres the panel on
+    /// `screen`. Each holds only its icon, sized by `layout`.
     func layoutRow(_ images: [NSImage], layout: SwitcherRowLayout, on screen: NSRect, scale: CGFloat) {
         self.layout = layout
+        self.scale = scale
         let panelSize = layout.panelSize
         let size = CGSize(width: panelSize.width, height: panelSize.height)
         setFrame(
@@ -43,18 +47,18 @@ final class SwitcherPanel: OverlayPanel {
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        iconLayers.forEach { $0.removeFromSuperlayer() }
-        iconLayers = images.enumerated().map { index, image in
-            let layer = CALayer()
-            layer.bounds = CGRect(x: 0, y: 0, width: layout.iconSide, height: layout.iconSide)
-            layer.position = CGPoint(x: layout.centreX(at: Double(index)), y: layout.centreY)
+        slotLayers.forEach { $0.removeFromSuperlayer() }
+        slotLayers = images.enumerated().map { index, image in
+            let container = CALayer()
+            container.bounds = CGRect(x: 0, y: 0, width: layout.iconSide, height: layout.iconSide)
+            container.position = CGPoint(x: layout.centreX(at: Double(index)), y: layout.centreY)
             let bitmapSide = SwitcherRowLayout.fullIconSide * scale
             var proposed = CGRect(x: 0, y: 0, width: bitmapSide, height: bitmapSide)
-            layer.contents = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil)
-            layer.contentsScale = scale
-            layer.minificationFilter = .trilinear
-            iconsHost.layer?.addSublayer(layer)
-            return layer
+            let icon = Self.imageLayer(side: layout.iconSide, centredAt: 0, in: layout.iconSide, scale: scale)
+            icon.contents = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil)
+            container.addSublayer(icon)
+            iconsHost.layer?.addSublayer(container)
+            return container
         }
         CATransaction.commit()
         invalidateShadow()
@@ -71,11 +75,49 @@ final class SwitcherPanel: OverlayPanel {
         CATransaction.begin()
         CATransaction.setDisableActions(!animatesSize)
         CATransaction.setAnimationDuration(0.12)
-        for (index, layer) in iconLayers.enumerated() {
+        for (index, layer) in slotLayers.enumerated() {
             let scale = index == selected ? CGFloat(SwitcherRowLayout.selectedIconScale) : 1
             layer.transform = CATransform3DMakeScale(scale, scale, 1)
         }
         CATransaction.commit()
+    }
+
+    /// Inserts `copies` behind the slot's icon, sharing its image, at rest: nearest copy just behind the icon. With
+    /// `rises`, each copy's height animates from the icon's centre, started `delay` after the stack appears and held
+    /// there until then; without it (Reduce motion) the copies are in place at once.
+    func addStack(at slot: Int, copies: [WindowStackLayout.Copy], rises: Bool) {
+        guard slotLayers.indices.contains(slot), let icon = slotLayers[slot].sublayers?.last else { return }
+        let container = slotLayers[slot]
+        let now = CACurrentMediaTime()
+        let curve = WindowStackLayout.riseCurve
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (index, copy) in copies.enumerated().reversed() {
+            let layer = Self.imageLayer(side: copy.side, centredAt: copy.rise, in: layout.iconSide, scale: scale)
+            layer.contents = icon.contents
+            container.insertSublayer(layer, at: UInt32(copies.count - 1 - index))
+            guard rises else { continue }
+            let rise = CABasicAnimation(keyPath: "position.y")
+            rise.fromValue = layout.iconSide / 2
+            rise.toValue = layer.position.y
+            rise.duration = WindowStackLayout.riseDuration
+            rise.timingFunction = CAMediaTimingFunction(
+                controlPoints: Float(curve.0), Float(curve.1), Float(curve.2), Float(curve.3))
+            rise.beginTime = layer.convertTime(now, from: nil) + copy.delay
+            rise.fillMode = .backwards
+            layer.add(rise, forKey: "rise")
+        }
+        CATransaction.commit()
+    }
+
+    /// A layer `side` points square, centred `rise` above the middle of a container `container` points square.
+    private static func imageLayer(side: Double, centredAt rise: Double, in container: Double, scale: CGFloat) -> CALayer {
+        let layer = CALayer()
+        layer.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+        layer.position = CGPoint(x: container / 2, y: container / 2 + rise)
+        layer.contentsScale = scale
+        layer.minificationFilter = .trilinear
+        return layer
     }
 
     /// An additive spring from `offset` points past the highlight's resting place back to it; keyed, so each one

@@ -126,16 +126,27 @@ public enum Haptic: Sendable { case gesture, lightTick }
 
     /// The active app and the ⌘-Tab apps, read now from their one source of truth.
     func runningApps() -> RunningApps
-    /// The frontmost app's windows, read now, beside `runningApps()`: about a millisecond, at most one messaging timeout
-    /// (0.2 s) when the app does not answer. Reads only. The windows it lists are the only ones a later `raiseWindows`
-    /// may name, until the next read.
-    func frontmostWindows() -> FrontmostWindows
+    /// The frontmost app's windows, read now on the main actor and held to `deadline` in all: each call into the app
+    /// waits at most what is left, and a read that ends past it is `.unanswered`. Never reads Trackpad Launcher
+    /// (`.ownProcess`). The windows it lists are the only ones a later `raiseWindows` may name, until the next read.
+    func frontmostWindows(within deadline: Duration) -> FrontmostWindows
+    /// Reads each app's windows away from the main actor, each on its own, all held to `deadline` from this call, and
+    /// returns. `answer` runs on the main actor exactly once per slot of `apps`, inside this call or later, in no set
+    /// order: `.unanswered` for an app that did not answer in time, stopped answering partway or no longer runs;
+    /// `.ownProcess` for Trackpad Launcher. A slow or hung app delays no other. Nothing these reads list is ever raised.
+    /// The caller checks Accessibility.
+    func readWindows(
+        of apps: [AppEntry], within deadline: Duration,
+        answer: @escaping @Sendable @MainActor (_ slot: Int, _ read: WindowRead) -> Void)
     /// Raises these windows of the latest `frontmostWindows()` read, the last first, so the first ends in front of its
     /// app with the keyboard focus and the rest behind it in this order; beside `bringToFront`, which is app-level. A
     /// raised minimised window is restored. A window that has closed is skipped; an id the latest read did not list is
     /// skipped, so nothing on another Space is ever raised. About 2 ms per raise; once the app has timed out, no
     /// further calls go to it for that read. [] does nothing.
     func raiseWindows(_ frontToBack: [WindowID])
+    /// Which of `windows` the window server still holds, on any Space, minimised or not: about 0.2 ms. Window numbers
+    /// are never reused, so one missing here has closed (or its app quit).
+    func openWindows(among windows: Set<WindowID>) -> Set<WindowID>
 }
 
 /// A permission macOS grants the app.
