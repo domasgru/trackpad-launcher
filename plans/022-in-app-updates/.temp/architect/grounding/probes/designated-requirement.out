@@ -1,8 +1,0 @@
-== /Applications/Shottr.app
-designated => anchor apple generic and identifier "cc.ffitch.shottr" and (certificate leaf[field.1.2.840.113635.100.6.1.9] /* exists */ or certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = "2Y683PRQWN")
-Identifier=cc.ffitch.shottr
-TeamIdentifier=2Y683PRQWN
-== /Applications/Ghostty.app
-designated => identifier "com.mitchellh.ghostty" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = "24VZTF6M5V"
-Identifier=com.mitchellh.ghostty
-TeamIdentifier=24VZTF6M5V
