@@ -5,13 +5,16 @@ DEV_APP := build/dev/Build/Products/Debug/Trackpad Launcher.app
 export DEVELOPER_DIR := /Applications/Xcode.app/Contents/Developer
 
 .DEFAULT_GOAL := help
-.PHONY: help test project run release release-patch release-minor release-major
+.PHONY: help test gate project run release release-patch release-minor release-major
 
 help: ## List the commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-15s %s\n", $$1, $$2}'
 
 test: ## Run every test
 	Scripts/test.sh
+
+gate: ## Run every test and build the app, without opening it
+	Scripts/gate.sh
 
 project: ## Regenerate TrackpadLauncher.xcodeproj from project.yml
 	xcodegen generate
