@@ -1,5 +1,0 @@
-before swap: marker=v1 only-in-v1=true
-after swap: marker=v2 only-in-v1=true infoVersion=v1
-alive 3 s after the swap: pid=76732 marker=v2
-running now: 1 process(es)
-cleaned up

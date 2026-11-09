@@ -1,7 +1,0 @@
-fixture: ready pid=17559 W1=64867 W2=64868 W3=64869 Utility=64870 PlainPanel=64871
-== stopped fixture
-  kAXWindows on the app element with its own 0.05 s timeout: 55.03 ms error=-25204
-  CopyMultipleAttributeValues on a window element with 0.03 s: 35.07 ms error=-25204
-  _AXUIElementGetWindow on that window element with 0.03 s: 35.09 ms error=-25204
-  kAXWindows on a fresh app element for the same pid (process-wide 0.2 s): 204.10 ms error=-25204
-fixture ended
