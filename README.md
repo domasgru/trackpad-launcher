@@ -23,6 +23,7 @@ Run `make` to list them. Each one calls a script in `Scripts/`. `Scripts/build-s
 | Command | What it does |
 |---|---|
 | `make test` | Runs every test. |
+| `make gate` | Runs every test and builds the app, without opening it. |
 | `make run` | Builds the development app and opens it, replacing a development copy that is already running. |
 | `make project` | Regenerates `TrackpadLauncher.xcodeproj` from `project.yml` (it is not committed). |
 | `make release-patch` | Releases a fix: 1.2.3 → 1.2.4. |
