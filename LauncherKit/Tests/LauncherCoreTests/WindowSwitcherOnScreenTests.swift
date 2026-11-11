@@ -126,17 +126,17 @@ import LauncherCore
         #expect(selected(world) == 0)
         #expect(world.hardware.lightTicks.isEmpty)
 
-        let past = hand.slide(byMM: (0, 0.2))
+        let past = hand.slide(byMM: (0, 0.2)).settle()
         world.play(past)
         #expect(selected(world) == 1)
         #expect(world.hardware.lightTicks.count == 1)
 
-        let further = past.slide(byMM: (0, 12))
+        let further = past.slide(byMM: (0, 12)).settle()
         world.play(further)
         #expect(selected(world) == 2)
         #expect(world.hardware.lightTicks.count == 2)
 
-        world.play(further.slide(byMM: (0, -12)))
+        world.play(further.slide(byMM: (0, -12)).settle())
         #expect(selected(world) == 1)
         #expect(world.hardware.lightTicks == [trackpad.id, trackpad.id, trackpad.id])
         #expect(world.hardware.feedback.isEmpty)
@@ -146,11 +146,10 @@ import LauncherCore
 
     @Test func oneFrameCrossingTwoRowsTicksTwice() {
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
-        let hand = world.windowSwipe(3.5, lift: false)
+        world.windowSwipe(3.5, lift: false)
 
-        let history = world.playFrameByFrame(hand.slide(byMM: (0, 24), over: .milliseconds(10)))
+        world.hardware.inject(.windowSwipe(SwipeEvent(phase: .moved(travelMM: 24.35), trackpad: trackpad.id)))
 
-        #expect(history.count == 1)
         #expect(selected(world) == 2)
         #expect(world.hardware.lightTicks.count == 2)
     }
@@ -162,11 +161,11 @@ import LauncherCore
         #expect((world.launcher.windowSwitcher?.selection.stretch ?? 0) > 0)
         #expect(world.hardware.lightTicks.count == 1)
 
-        let turned = pushed.slide(byMM: (0, -5.9))
+        let turned = pushed.slide(byMM: (0, -5.9)).settle()
         world.play(turned)
         #expect(selected(world) == 1)
 
-        world.play(turned.slide(byMM: (0, -0.2)))
+        world.play(turned.slide(byMM: (0, -0.2)).settle())
         #expect(selected(world) == 0)
         #expect(world.hardware.lightTicks.count == 2)
     }
@@ -177,7 +176,7 @@ import LauncherCore
         #expect(selected(world) == 0)
         #expect((world.launcher.windowSwitcher?.selection.stretch ?? 0) < 0)
 
-        world.play(pushed.slide(byMM: (0, 6.1)))
+        world.play(pushed.slide(byMM: (0, 6.1)).settle())
         #expect(selected(world) == 1)
     }
 

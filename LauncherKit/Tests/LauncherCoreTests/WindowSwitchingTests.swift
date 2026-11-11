@@ -115,12 +115,11 @@ import LauncherCore
         let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
         world.launcher.openedByHand()
         let hand = world.windowSwipe(3.5, lift: false)
-        let down = hand.slide(byMM: (0, 24), over: .milliseconds(10))
-        world.play(down)
-        world.play(down.slide(byMM: (0, -24), over: .milliseconds(10)))
+        world.hardware.inject(.windowSwipe(SwipeEvent(phase: .moved(travelMM: 24.35), trackpad: Trackpad.macBook14.id)))
+        world.hardware.inject(.windowSwipe(SwipeEvent(phase: .moved(travelMM: 0.35), trackpad: Trackpad.macBook14.id)))
         #expect(stack(world) == ["Docs", "News", "Mail"])
 
-        world.play(down.slide(byMM: (0, -24), over: .milliseconds(10)).lift())
+        world.play(hand.lift())
 
         #expect(stack(world) == ["Docs", "Mail", "News"])
         #expect(world.hardware.feedback.isEmpty)
@@ -133,14 +132,12 @@ import LauncherCore
         let hand = world.windowSwipe(3.5, lift: false)
 
         world.system.windows.minimise("B")
-        let down = hand.slide(byMM: (0, 36), over: .milliseconds(10))
-        world.play(down)
+        world.hardware.inject(.windowSwipe(SwipeEvent(phase: .moved(travelMM: 36.35), trackpad: Trackpad.macBook14.id)))
         #expect(stack(world) == ["D", "A", "C"])
-        let back = down.slide(byMM: (0, -36), over: .milliseconds(10))
-        world.play(back)
+        world.hardware.inject(.windowSwipe(SwipeEvent(phase: .moved(travelMM: 0.35), trackpad: Trackpad.macBook14.id)))
         #expect(stack(world) == ["A", "D", "C"])
 
-        world.play(back.lift())
+        world.play(hand.lift())
 
         #expect(world.system.windows.minimisedTitles == ["B"])
         #expect(stack(world) == ["A", "C", "D"])

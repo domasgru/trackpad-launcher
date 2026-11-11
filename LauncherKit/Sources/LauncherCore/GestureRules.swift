@@ -28,6 +28,23 @@ package enum GestureRules {
     /// 169 ms acted, every touch held 297 ms or more did not). Strictly less qualifies. Deliberately not
     /// `maxTapDuration`, though the number is the same: that says what fires a gesture, this says what macOS clicks.
     static let tapActionHoldLimit = Duration.milliseconds(400)
+    /// A slide's travel on each frame comes from the fingers' movement averaged over this many frames, the frame's own
+    /// and those before it. The driver splits a steady slide unevenly from frame to frame and sends one catch-up
+    /// frame of 3 to 5 times its neighbours just before the fingers stop, and the pointer acceleration turns that
+    /// into a leap: over the 18 recorded swipes, averaging over 4 frames cut single-frame leaps from 99 to 2.
+    static let travelAveragingFrames = 4
+    /// While only one swipe finger is down, its movement on a frame is a snap, not movement, when it is longer than
+    /// this many millimetres, longer than `snapRatio` times its last counted movement plus `snapSlackMM`. In the
+    /// recordings, when one of the two fingers lost contact, the other was reported about 7 mm away (6.9) on a frame
+    /// while it was moving 0.2 mm a frame, and back again soon after.
+    static let snapMinMM = 2.0
+    static let snapRatio = 3.0
+    static let snapSlackMM = 1.0
+    /// A discarded snap is remembered for this many frames after its own: the recorded one came back two frames later.
+    static let snapMemoryFrames = 4
+    /// A movement undoes a remembered snap when the two sum to at most this share of the snap's length: in the
+    /// recording the back summed with the away to 1.0 mm against the snap's 6.9.
+    static let snapUndoShare = 0.5
     /// The most icons a switcher row holds: the frontmost app and the most recently used others.
     static let switcherMaxApps = 10
     /// The most rows a window switcher holds: the front window, the other visible ones, then the minimised ones.
