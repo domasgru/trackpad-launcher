@@ -347,9 +347,13 @@ struct TunerView: View {
         Section {
             knob("Distance", \.arrow.distance, 0...12, step: 0.5, unit: "pt", hint: "how far the arrow drops")
             knob("Speed", \.arrow.moveTime, 0.3...4, step: 0.05, unit: "s",
-                 hint: "time to drop and come back up; lower is faster")
+                 hint: "time to drop and come back up to the top of the bounce; lower is faster")
             knob("Drop vs lift", \.arrow.dropPercent, 10...70, step: 1, unit: "%",
                  hint: "share of that time spent dropping; 33% = a quick drop and a lift twice as long")
+            knob("Bounce", \.arrow.bounce, 0...6, step: 0.25, unit: "pt",
+                 hint: "how far the arrow springs past its place on the way back; 0 = no bounce")
+            knob("Bounce time", \.arrow.bounceTime, 0...1.5, step: 0.05, unit: "s",
+                 hint: "from the top of the bounce back into place")
             knob("Pause", \.arrow.restTime, 0...3, step: 0.05, unit: "s", hint: "still at the top between drops")
         } header: {
             Text("Update card arrow")

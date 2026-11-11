@@ -177,17 +177,20 @@ final class UpdatePictureView: NSView {
     }
 
     /// One cycle of `drift`, repeating: offsets from the resting place, added to it. The view is not flipped, so down
-    /// is negative.
+    /// is negative and the bounce above the place positive. Both ends stay within the mask's margin.
     static func animation(_ drift: ArrowDrift) -> CAKeyframeAnimation {
         let distance = min(drift.distance, Double(maxDrift))
+        let bounce = min(max(drift.bounce, 0), Double(maxDrift))
         let animation = CAKeyframeAnimation(keyPath: "position.y")
         animation.isAdditive = true
-        animation.values = [0, -distance, 0, 0]
-        animation.keyTimes = [0, drift.dropTime, drift.dropTime + drift.liftTime, drift.period].map {
+        animation.values = [0, -distance, bounce, 0, 0]
+        let lifted = drift.dropTime + drift.liftTime
+        animation.keyTimes = [0, drift.dropTime, lifted, lifted + drift.bounceTime, drift.period].map {
             NSNumber(value: $0 / drift.period)
         }
         animation.timingFunctions = [
-            timingFunction(drift.dropCurve), timingFunction(drift.liftCurve), CAMediaTimingFunction(name: .linear),
+            timingFunction(drift.dropCurve), timingFunction(drift.liftCurve),
+            timingFunction(ArrowDrift.settleCurve), CAMediaTimingFunction(name: .linear),
         ]
         animation.duration = drift.period
         animation.repeatCount = .infinity
