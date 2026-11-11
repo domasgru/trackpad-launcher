@@ -193,20 +193,50 @@ public struct GestureRecognizer: Sendable {
                 event = .slide(swipe.kind, .ended)
             } else {
                 // Movement is what the fingers present on both frames did, so a finger dropping out or rejoining
-                // never makes the highlight jump.
-                let moves = swipe.fingers.compactMap { id, last in
-                    down[id].map { ($0.position.x - last.x, $0.position.y - last.y) }
-                }
+                // never makes the highlight jump. While one finger is alone, its snaps are not movement.
                 let interval = (frame.time - swipe.lastTime) / .seconds(1)
-                for id in swipe.fingers.keys { swipe.fingers[id] = down[id]?.position }
-                for touch in joining { swipe.fingers[touch.id] = touch.position }
+                let isAlone = swipe.fingers.count + joining.count == 1
+                var counted: [(dxMM: Double, dyMM: Double)] = []
+                for (id, finger) in swipe.fingers {
+                    guard let touch = down[id] else { continue }
+                    let move = (
+                        dxMM: (touch.position.x - finger.position.x) * surface.widthMM,
+                        dyMM: (touch.position.y - finger.position.y) * surface.heightMM)
+                    let length = hypot(move.dxMM, move.dyMM)
+                    let snap = isAlone ? finger.snap : nil
+                    let undoesSnap = snap.map {
+                        hypot(move.dxMM + $0.move.dxMM, move.dyMM + $0.move.dyMM)
+                            <= GestureRules.snapUndoShare * hypot($0.move.dxMM, $0.move.dyMM)
+                    } ?? false
+                    let isSnap = isAlone && !undoesSnap && !finger.wasDiscarded && length > GestureRules.snapMinMM
+                        && finger.lastCountedMM.map { length > GestureRules.snapRatio * $0 + GestureRules.snapSlackMM } ?? false
+                    var finger = finger
+                    finger.position = touch.position
+                    finger.wasDiscarded = isSnap || undoesSnap
+                    if isSnap {
+                        finger.snap = Snap(move: move, framesLeft: GestureRules.snapMemoryFrames)
+                    } else if undoesSnap {
+                        finger.snap = nil
+                    } else if var aged = snap, aged.framesLeft > 1 {
+                        aged.framesLeft -= 1
+                        finger.snap = aged
+                    } else {
+                        finger.snap = nil
+                    }
+                    if !isSnap && !undoesSnap {
+                        counted.append(move)
+                        finger.lastCountedMM = length
+                    }
+                    swipe.fingers[id] = finger
+                }
+                for touch in joining { swipe.fingers[touch.id] = SwipeFinger(position: touch.position) }
                 swipe.lastTime = frame.time
-                // A frame with no finger on both frames is no movement, but still moves the window on, so travel keeps
-                // catching up while the fingers rest.
-                let count = Double(max(moves.count, 1))
+                // A frame with nothing counted is no movement, but still moves the window on, so travel keeps catching
+                // up while the fingers rest.
+                let count = Double(max(counted.count, 1))
                 swipe.recentMovesMM.append((
-                    dxMM: moves.map(\.0).reduce(0, +) / count * surface.widthMM,
-                    dyMM: moves.map(\.1).reduce(0, +) / count * surface.heightMM))
+                    dxMM: counted.map(\.dxMM).reduce(0, +) / count,
+                    dyMM: counted.map(\.dyMM).reduce(0, +) / count))
                 swipe.recentMovesMM.removeFirst(max(0, swipe.recentMovesMM.count - GestureRules.travelAveragingFrames))
                 let window = Double(GestureRules.travelAveragingFrames)
                 let travel = swipe.travelMM + self.travel.travel(
@@ -326,7 +356,9 @@ public struct GestureRecognizer: Sendable {
         guard let pair, let kind = move.slide, slides.contains(kind) else {
             return (.spoiled(anchor), nil)
         }
-        let fingers = Dictionary(uniqueKeysWithValues: pair.fingers.compactMap { id in down[id].map { (id, $0.position) } })
+        let fingers = Dictionary(uniqueKeysWithValues: pair.fingers.compactMap { id in
+            down[id].map { (id, SwipeFinger(position: $0.position)) }
+        })
         let swipe = Swipe(kind: kind, began: time, isConfirmed: kind == .swipe, fingers: fingers, lastTime: time, thumb: anchor)
         return (.swiping(swipe), .slide(kind, .began))
     }
@@ -402,6 +434,23 @@ public struct GestureRecognizer: Sendable {
         var canSwap: Bool
     }
 
+    /// A swipe finger: where it was on the last frame, and what its snap handling remembers. All of it goes with the
+    /// finger when it lifts.
+    private struct SwipeFinger: Sendable {
+        var position: SurfacePoint
+        /// The length of its last counted movement; nil until one has been counted in this slide.
+        var lastCountedMM: Double?
+        /// Its movement on the last frame was discarded: the frame after it is counted.
+        var wasDiscarded = false
+        var snap: Snap?
+    }
+
+    /// A discarded snap: the vector the finger moved by, and how many more frames it is remembered.
+    private struct Snap: Sendable {
+        let move: (dxMM: Double, dyMM: Double)
+        var framesLeft: Int
+    }
+
     private struct Swipe: Sendable {
         let kind: SlideKind
         let began: FrameTime
@@ -410,7 +459,7 @@ public struct GestureRecognizer: Sendable {
         /// starts confirmed.
         var isConfirmed: Bool
         /// The swipe fingers down now, at most two, with their positions on the last frame.
-        var fingers: [TouchID: SurfacePoint]
+        var fingers: [TouchID: SwipeFinger]
         var lastTime: FrameTime
         /// Travel since the swipe began, in step millimetres.
         var travelMM: Double = 0
