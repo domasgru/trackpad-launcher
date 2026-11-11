@@ -117,10 +117,14 @@ import LauncherCore
         return (tuning.pick, tuning.forceReduceMotion)
     }
 
+    /// The tuner's update card arrow drift now.
+    public var arrowDrift: ArrowDrift { LaunchTuning.current.arrow }
+
     /// Debug builds only. Opens the animation tuner; its launch and bounce previews play Finder's icon at the pointer,
     /// and its pick preview plays on the settings window's pickers, through the closures.
     public func showAnimationTuner(
-        previewPick: @escaping @MainActor () -> Void, canPreviewPick: @escaping @MainActor () -> Bool
+        previewPick: @escaping @MainActor () -> Void, canPreviewPick: @escaping @MainActor () -> Bool,
+        previewArrow: @escaping @MainActor () -> Void
     ) {
         if tuner == nil {
             let finder = AppEntry(
@@ -129,7 +133,7 @@ import LauncherCore
             tuner = AnimationTuner(
                 preview: { [overlay] in overlay.play(for: finder) },
                 previewBounce: { [bounces] isOn in isOn ? bounces.preview(finder) : bounces.stopPreview(finder) },
-                previewPick: previewPick, canPreviewPick: canPreviewPick)
+                previewPick: previewPick, canPreviewPick: canPreviewPick, previewArrow: previewArrow)
         }
         tuner?.show()
     }

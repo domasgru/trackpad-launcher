@@ -1,4 +1,5 @@
 import AppKit
+import LauncherCore
 import SwiftUI
 
 /// The update card's picture: a tray with an arrow-shaped hole and the arrow above it. Only the arrow and its hole
@@ -7,12 +8,12 @@ import SwiftUI
 final class UpdatePictureView: NSView {
     static let width: CGFloat = 71
     static let height: CGFloat = 89
-    static let drift: CGFloat = 4
-    /// Seconds from one end of the drift to the other; the whole cycle takes twice this.
-    static let halfPeriod: CFTimeInterval = 1.5
+    /// The farthest the arrow may drift, the Debug tuner's limit included.
+    static let maxDrift: CGFloat = 12
     static let animationKey = "drift"
-    /// The hole's mask is taller than the picture by the drift at each end, so the moving hole never uncovers an edge.
-    static let maskHeight = height + 2 * drift
+    /// The hole's mask is taller than the picture by the farthest drift at each end, so the moving hole never uncovers
+    /// an edge.
+    static let maskHeight = height + 2 * maxDrift
     private static let maskScale: CGFloat = 4
 
     let trayLayer = CALayer()
@@ -25,16 +26,19 @@ final class UpdatePictureView: NSView {
     private let arrow: NSImage?
     private let isOnScreen: (NSWindow) -> Bool
     private let reduceMotion: () -> Bool
+    private let drift: () -> ArrowDrift
     private var isObservingDisplayOptions = false
     private weak var observedWindow: NSWindow?
 
     init(
-        tray: NSImage?, arrow: NSImage?, isOnScreen: @escaping (NSWindow) -> Bool, reduceMotion: @escaping () -> Bool
+        tray: NSImage?, arrow: NSImage?, isOnScreen: @escaping (NSWindow) -> Bool, reduceMotion: @escaping () -> Bool,
+        drift: @escaping () -> ArrowDrift = { .shipped }
     ) {
         self.tray = tray
         self.arrow = arrow
         self.isOnScreen = isOnScreen
         self.reduceMotion = reduceMotion
+        self.drift = drift
         super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: Self.height))
         wantsLayer = true
         let silent: [String: CAAction] = [
@@ -67,7 +71,7 @@ final class UpdatePictureView: NSView {
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
 
     /// A solid rectangle the size of a mask layer with `shape` knocked out, the shape sitting where the picture's layers
-    /// sit, `drift` in from the mask's edges.
+    /// sit, `maxDrift` in from the mask's edges.
     static func knockout(_ shape: NSImage) -> NSImage? {
         let size = NSSize(width: width, height: maskHeight)
         let pixelsWide = Int(size.width * maskScale)
@@ -85,7 +89,7 @@ final class UpdatePictureView: NSView {
         NSColor.black.setFill()
         NSRect(origin: .zero, size: size).fill()
         shape.draw(
-            in: NSRect(x: 0, y: drift, width: width, height: height), from: .zero, operation: .destinationOut,
+            in: NSRect(x: 0, y: maxDrift, width: width, height: height), from: .zero, operation: .destinationOut,
             fraction: 1)
         context.flushGraphics()
         NSGraphicsContext.restoreGraphicsState()
@@ -153,33 +157,56 @@ final class UpdatePictureView: NSView {
         applyMotion()
     }
 
+    /// Starts the drift over from its first frame with the drift's values now. The Debug tuner calls it on every
+    /// change, so a tweak shows at once.
+    func restartDrift() {
+        for layer in [arrowLayer, maskLayer] { layer.removeAnimation(forKey: Self.animationKey) }
+        applyMotion()
+    }
+
     private func applyMotion() {
         let moves = window.map(isOnScreen) == true && !reduceMotion()
+        let drift = drift()
         for layer in [arrowLayer, maskLayer] {
             if !moves {
                 layer.removeAnimation(forKey: Self.animationKey)
             } else if layer.animation(forKey: Self.animationKey) == nil {
-                let drift = CABasicAnimation(keyPath: "position.y")
-                drift.byValue = -Self.drift
-                drift.duration = Self.halfPeriod
-                drift.autoreverses = true
-                drift.repeatCount = .infinity
-                drift.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                // Not a no-op, though the drift never completes: without it a real window opens with the arrow still.
-                drift.isRemovedOnCompletion = false
-                layer.add(drift, forKey: Self.animationKey)
+                layer.add(Self.animation(drift), forKey: Self.animationKey)
             }
         }
     }
+
+    /// Samples a second of the drift, like the pick animation's.
+    static let keyframesPerSecond: Double = 240
+
+    /// One cycle of `drift`, repeating, sampled so the spring back plays as it is: offsets from the resting place,
+    /// added to it. The view is not flipped, so down is negative and the overshoot above the place positive; both stay
+    /// within the mask's margin.
+    static func animation(_ drift: ArrowDrift) -> CAKeyframeAnimation {
+        let frames = drift.keyframes(perSecond: keyframesPerSecond)
+        let limit = Double(maxDrift)
+        let animation = CAKeyframeAnimation(keyPath: "position.y")
+        animation.isAdditive = true
+        animation.values = frames.offsets.map { min(max($0, -limit), limit) }
+        animation.keyTimes = frames.keyTimes.map { NSNumber(value: $0) }
+        animation.calculationMode = .linear
+        animation.duration = drift.period
+        animation.repeatCount = .infinity
+        // Not a no-op, though the drift never completes: without it a real window opens with the arrow still.
+        animation.isRemovedOnCompletion = false
+        return animation
+    }
 }
 
-/// The card's picture, drifting for as long as its window is on screen.
+/// The card's picture, drifting for as long as its window is on screen, by `drift` read whenever the drift starts.
 struct DriftingUpdatePicture: NSViewRepresentable {
+    let drift: () -> ArrowDrift
+
     func makeNSView(context: Context) -> UpdatePictureView {
         UpdatePictureView(
             tray: BundleImage.nsImage("update-tray"), arrow: BundleImage.nsImage("update-arrow"),
             isOnScreen: { $0.occlusionState.contains(.visible) },
-            reduceMotion: { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion })
+            reduceMotion: { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }, drift: drift)
     }
 
     func updateNSView(_ view: UpdatePictureView, context: Context) {}

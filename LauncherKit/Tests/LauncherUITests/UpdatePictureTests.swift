@@ -1,21 +1,28 @@
 import AppKit
+import LauncherCore
 import Testing
 @testable import LauncherUI
 
 @MainActor @Suite(.serialized) struct UpdatePictureTests {
+    private func offsets(_ animation: CAKeyframeAnimation?) -> [Double] {
+        animation?.values?.compactMap { ($0 as? NSNumber)?.doubleValue } ?? []
+    }
+
     private func expectDrifting(_ bench: UpdatePictureBench, sourceLocation: SourceLocation = #_sourceLocation) throws {
         let key = UpdatePictureView.animationKey
+        let frames = ArrowDrift.shipped.keyframes(perSecond: 240)
         for (layer, drift) in [(bench.view.arrowLayer, bench.arrowDrift), (bench.view.maskLayer, bench.maskDrift)] {
             let drift = try #require(drift, sourceLocation: sourceLocation)
             #expect(layer.animationKeys() == [key], sourceLocation: sourceLocation)
             #expect(drift.keyPath == "position.y", sourceLocation: sourceLocation)
-            #expect(drift.byValue as? Double == -4, sourceLocation: sourceLocation)
-            #expect(drift.duration == 1.5, sourceLocation: sourceLocation)
-            #expect(drift.autoreverses, sourceLocation: sourceLocation)
+            #expect(drift.isAdditive, sourceLocation: sourceLocation)
+            #expect(drift.calculationMode == .linear, sourceLocation: sourceLocation)
+            #expect(offsets(drift) == frames.offsets, sourceLocation: sourceLocation)
+            #expect(drift.keyTimes?.map(\.doubleValue) == frames.keyTimes, sourceLocation: sourceLocation)
+            #expect(abs(drift.duration - ArrowDrift.shipped.period) < 1e-9, sourceLocation: sourceLocation)
+            #expect(!drift.autoreverses, sourceLocation: sourceLocation)
             #expect(drift.repeatCount == .infinity, sourceLocation: sourceLocation)
             #expect(drift.isRemovedOnCompletion == false, sourceLocation: sourceLocation)
-            #expect(
-                drift.timingFunction == CAMediaTimingFunction(name: .easeInEaseOut), sourceLocation: sourceLocation)
         }
         #expect(bench.view.trayLayer.animationKeys() == nil, sourceLocation: sourceLocation)
         #expect(bench.view.layer?.animationKeys() == nil, sourceLocation: sourceLocation)
@@ -23,6 +30,34 @@ import Testing
 
     @Test func theArrowAndItsHoleDriftTogetherAndTheTrayStaysStill() throws {
         try expectDrifting(UpdatePictureBench())
+    }
+
+    @Test func aRestartPlaysTheDriftItReadsNow() throws {
+        var drift = ArrowDrift.shipped
+        let bench = UpdatePictureBench(drift: { drift })
+        drift.distance = 8
+        drift.bounciness = 0.7
+
+        #expect(offsets(bench.arrowDrift).min() == -4)
+        bench.view.restartDrift()
+
+        for animation in [bench.arrowDrift, bench.maskDrift] {
+            #expect(offsets(animation) == drift.keyframes(perSecond: 240).offsets)
+            #expect(offsets(animation).min() == -8)
+            #expect(abs((animation?.duration ?? 0) - drift.period) < 1e-9)
+        }
+    }
+
+    @Test func aDriftPastTheMasksMarginIsCappedAtIt() {
+        var drift = ArrowDrift.shipped
+        drift.distance = 30
+        drift.bounciness = 0.9
+        let values = offsets(UpdatePictureView.animation(drift))
+        #expect(values.min() == -12)
+        #expect(values.max() == 12)
+        drift.windUp = 30
+        drift.bounciness = 0
+        #expect(offsets(UpdatePictureView.animation(drift)).max() == 12)
     }
 
     @Test func thePictureTakesNoClicks() {
@@ -143,17 +178,17 @@ import Testing
 
     @Test func theHoleMaskIsSolidBesideTheShaftAndClearOnIt() throws {
         let mask = try #require(UpdatePictureView.knockout(load("update-arrow")))
-        #expect(mask.size == NSSize(width: 71, height: 97))
+        #expect(mask.size == NSSize(width: 71, height: 113))
         let rep = try #require(mask.representations.first as? NSBitmapImageRep)
         let scale = Double(rep.pixelsWide) / 71
 
         func alpha(x: Double, y: Double) -> Double {
             Double(rep.colorAt(x: Int(x * scale), y: Int(y * scale))?.alphaComponent ?? -1)
         }
-        // The shaft runs down the middle of the arrow, 4 points below the mask's top.
-        #expect(alpha(x: 35.5, y: 4 + 20) < 0.01)
-        #expect(alpha(x: 10, y: 4 + 20) > 0.99)
-        #expect(alpha(x: 35.5, y: 4 + 70) > 0.99)
+        // The shaft runs down the middle of the arrow, 12 points below the mask's top.
+        #expect(alpha(x: 35.5, y: 12 + 20) < 0.01)
+        #expect(alpha(x: 10, y: 12 + 20) > 0.99)
+        #expect(alpha(x: 35.5, y: 12 + 70) > 0.99)
         #expect(alpha(x: 35.5, y: 1) > 0.99)
     }
 
@@ -165,7 +200,7 @@ import Testing
         func alpha(x: Double, y: Double) -> Double {
             Double(rep.colorAt(x: Int(x * scale), y: Int(y * scale))?.alphaComponent ?? -1)
         }
-        #expect(alpha(x: 35.5, y: 4 + 10) > 0.99)
-        #expect(alpha(x: 35.5, y: 4 + 50) < 0.01)
+        #expect(alpha(x: 35.5, y: 12 + 10) > 0.99)
+        #expect(alpha(x: 35.5, y: 12 + 50) < 0.01)
     }
 }

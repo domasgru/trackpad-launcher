@@ -46,8 +46,11 @@ struct LaunchTuning: Equatable, Sendable {
     /// The launch bounce's numbers.
     var bounce = Bounce()
 
-    /// The pick animation's numbers: an app picker's icon growing into place.
+    /// The pick animation's numbers: an app picker's icon jumping into place from below.
     var pick: PickAnimation = .shipped
+
+    /// The update card arrow's drift.
+    var arrow: ArrowDrift = .shipped
 
     static let shipped = LaunchTuning()
 
@@ -92,12 +95,13 @@ extension LaunchTuning: Codable {
         swipeTrackingSpeed = try c.decode(.swipeTrackingSpeed, or: s.swipeTrackingSpeed)
         bounce = try c.decode(.bounce, or: s.bounce)
         pick = try c.decode(.pick, or: s.pick)
+        arrow = try c.decode(.arrow, or: s.arrow)
     }
 }
 
 extension PickAnimation: Codable {
     private enum CodingKeys: String, CodingKey {
-        case startScale, peakScale, growTime, settleTime
+        case startScale, peakScale, growTime, settleTime, rise, growCurve, settleCurve
     }
 
     public init(from decoder: any Decoder) throws {
@@ -107,7 +111,10 @@ extension PickAnimation: Codable {
             startScale: try c.decode(.startScale, or: s.startScale),
             peakScale: try c.decode(.peakScale, or: s.peakScale),
             growTime: try c.decode(.growTime, or: s.growTime),
-            settleTime: try c.decode(.settleTime, or: s.settleTime))
+            settleTime: try c.decode(.settleTime, or: s.settleTime),
+            rise: try c.decode(.rise, or: s.rise),
+            growCurve: try c.decode(.growCurve, or: s.growCurve),
+            settleCurve: try c.decode(.settleCurve, or: s.settleCurve))
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -116,12 +123,63 @@ extension PickAnimation: Codable {
         try c.encode(peakScale, forKey: .peakScale)
         try c.encode(growTime, forKey: .growTime)
         try c.encode(settleTime, forKey: .settleTime)
+        try c.encode(rise, forKey: .rise)
+        try c.encode(growCurve, forKey: .growCurve)
+        try c.encode(settleCurve, forKey: .settleCurve)
+    }
+}
+
+extension CubicCurve: Codable {
+    private enum CodingKeys: String, CodingKey { case x1, y1, x2, y2 }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            try c.decode(Double.self, forKey: .x1), try c.decode(Double.self, forKey: .y1),
+            try c.decode(Double.self, forKey: .x2), try c.decode(Double.self, forKey: .y2))
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(x1, forKey: .x1)
+        try c.encode(y1, forKey: .y1)
+        try c.encode(x2, forKey: .x2)
+        try c.encode(y2, forKey: .y2)
+    }
+}
+
+extension ArrowDrift: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case distance, dropTime, dropCurve, returnTime, bounciness, restTime, windUp, windUpTime
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let s = ArrowDrift.shipped
+        self.init(
+            distance: try c.decode(.distance, or: s.distance), dropTime: try c.decode(.dropTime, or: s.dropTime),
+            dropCurve: try c.decode(.dropCurve, or: s.dropCurve),
+            returnTime: try c.decode(.returnTime, or: s.returnTime),
+            bounciness: try c.decode(.bounciness, or: s.bounciness), restTime: try c.decode(.restTime, or: s.restTime),
+            windUp: try c.decode(.windUp, or: s.windUp), windUpTime: try c.decode(.windUpTime, or: s.windUpTime))
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(distance, forKey: .distance)
+        try c.encode(dropTime, forKey: .dropTime)
+        try c.encode(dropCurve, forKey: .dropCurve)
+        try c.encode(returnTime, forKey: .returnTime)
+        try c.encode(bounciness, forKey: .bounciness)
+        try c.encode(restTime, forKey: .restTime)
+        try c.encode(windUp, forKey: .windUp)
+        try c.encode(windUpTime, forKey: .windUpTime)
     }
 }
 
 /// The tuner's tabs. Each owns a disjoint part of a tuning, except Simulate Reduce motion, which belongs to none.
 enum TunerTab: String, CaseIterable, Sendable {
-    case launch, bounce, pick, swipe
+    case launch, bounce, pick, arrow, swipe
 }
 
 extension LaunchTuning {
@@ -149,6 +207,8 @@ extension LaunchTuning {
             t.bounce = s.bounce
         case .pick:
             t.pick = s.pick
+        case .arrow:
+            t.arrow = s.arrow
         case .swipe:
             t.swipeFollowsCursor = s.swipeFollowsCursor
             t.swipePointsPerStep = s.swipePointsPerStep

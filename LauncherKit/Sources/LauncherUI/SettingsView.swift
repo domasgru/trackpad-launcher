@@ -29,8 +29,8 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: Self.partSpacing) {
-            if let card = updater?.card {
-                UpdateCardView(card: card, updateNow: { updater?.updateNow() })
+            if let card = UpdateCardPreview.card(updater?.card) {
+                UpdateCardView(card: card, updateNow: { updater?.updateNow() }, arrowDrift: actions.arrowDrift)
                     .padding(.horizontal, Self.inset)
             }
             if launcher.showsAccessibilityHint {

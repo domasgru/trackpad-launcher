@@ -86,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         system = actions
         shell?.pickTuning = { [unowned actions] in actions.pickTuning }
+        shell?.arrowDrift = { [unowned actions] in actions.arrowDrift }
         showAnimationTuner()
         #endif
         return launcher
@@ -106,7 +107,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tunerWanted = false
         system.showAnimationTuner(
             previewPick: { [weak self] in self?.shell?.previewPickAnimation() },
-            canPreviewPick: { [weak self] in self?.shell?.canPreviewPickAnimation ?? false })
+            canPreviewPick: { [weak self] in self?.shell?.canPreviewPickAnimation ?? false },
+            previewArrow: { [weak self] in self?.shell?.previewArrowDrift() })
     }
     #endif
 }

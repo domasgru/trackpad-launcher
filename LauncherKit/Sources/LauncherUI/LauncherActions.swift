@@ -27,6 +27,8 @@ struct LauncherActions {
     let chooseOtherApp: (@escaping (URL) -> Void) -> Void
     /// The pick animation to play for an app pick now, or nil for none (Reduce motion).
     let pickAnimation: () -> PickAnimation?
+    /// The update card arrow's drift now: the shipped one, or the Debug tuner's.
+    let arrowDrift: () -> ArrowDrift
     /// Opens the System Settings pane; the settings window stays open.
     let openSettings: (SettingsPane) -> Void
     /// The *Quit Trackpad Launcher* button.

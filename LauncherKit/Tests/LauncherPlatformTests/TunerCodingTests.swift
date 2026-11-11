@@ -128,7 +128,7 @@ struct TunerCodingTests {
 
     @Test func `every pick knob survives a save and load`() throws {
         var tuning = LaunchTuning()
-        tuning.pick = PickAnimation(startScale: 0.25, peakScale: 1.35, growTime: 0.45, settleTime: 0.35)
+        tuning.pick = PickAnimation(startScale: 0.25, peakScale: 1.35, growTime: 0.45, settleTime: 0.35, rise: 11)
         let presets = [TuningPreset(name: "Grower", tuning: tuning)]
 
         let loaded = try JSONDecoder().decode([TuningPreset].self, from: JSONEncoder().encode(presets))
@@ -141,7 +141,7 @@ struct TunerCodingTests {
 
         let tuning = try JSONDecoder().decode(LaunchTuning.self, from: Data(json.utf8))
 
-        #expect(tuning.pick == PickAnimation(startScale: 0.4, peakScale: 1.1, growTime: 0.5, settleTime: 0.15))
+        #expect(tuning.pick == PickAnimation(startScale: 0.55, peakScale: 1.08, growTime: 0.5, settleTime: 0.1, rise: 9))
     }
 
     private static var everythingAwayFromShipped: LaunchTuning {
@@ -168,8 +168,40 @@ struct TunerCodingTests {
             style: .jump, height: 41, timeUp: 0.21, timeDown: 0.22, rest: 0.13, squash: 0.17, gap: 9, offset: 5,
             trailing: 0.31, spacing: 14, fadeOut: 0.27, slide: 0.23, pulseLow: 0.37, pulsePeriod: 1.9,
             inflateFrom: 30, inflateTime: 0.6, inflateCurve: 3, creep: 0.2, creepTime: 7)
-        t.pick = PickAnimation(startScale: 0.25, peakScale: 1.35, growTime: 0.45, settleTime: 0.35)
+        t.pick = PickAnimation(
+            startScale: 0.25, peakScale: 1.35, growTime: 0.45, settleTime: 0.35, rise: 11,
+            growCurve: CubicCurve(0.1, 1.4, 0.3, 1), settleCurve: CubicCurve(0.5, 0, 0.5, 1))
+        t.arrow = ArrowDrift(
+            distance: 7, dropTime: 0.4, dropCurve: CubicCurve(0.7, 0, 0.8, 0.6), returnTime: 0.9, bounciness: 0.65,
+            restTime: 0.5, windUp: 1.2, windUpTime: 0.35)
         return t
+    }
+
+    @Test func `every pick curve and arrow knob survives a save and load`() throws {
+        let presets = [TuningPreset(name: "Curvy", tuning: Self.everythingAwayFromShipped)]
+
+        let loaded = try JSONDecoder().decode([TuningPreset].self, from: JSONEncoder().encode(presets))
+
+        #expect(loaded == presets)
+    }
+
+    @Test func `a save from before the arrow and pick curves gets the shipped ones`() throws {
+        let json = #"{"pick":{"growTime":0.5},"arrow":{"liftTime":2,"restTime":2}}"#
+
+        let tuning = try JSONDecoder().decode(LaunchTuning.self, from: Data(json.utf8))
+
+        #expect(tuning.pick.growCurve == .easeOutCubic && tuning.pick.settleCurve == .smoothstep)
+        var arrow = ArrowDrift.shipped
+        arrow.restTime = 2
+        #expect(tuning.arrow == arrow, "a key no longer read is ignored")
+    }
+
+    @Test func `resetting Arrow ships only the arrow`() {
+        let away = Self.everythingAwayFromShipped
+        var expected = away
+        expected.arrow = .shipped
+
+        #expect(away.resettingToShipped(.arrow) == expected)
     }
 
     @Test func `resetting Pick ships the pick and keeps everything else`() {
