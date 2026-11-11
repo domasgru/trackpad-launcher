@@ -141,7 +141,7 @@ struct TunerCodingTests {
 
         let tuning = try JSONDecoder().decode(LaunchTuning.self, from: Data(json.utf8))
 
-        #expect(tuning.pick == PickAnimation(startScale: 0.5, peakScale: 1.08, growTime: 0.5, settleTime: 0.2, rise: 6))
+        #expect(tuning.pick == PickAnimation(startScale: 0.55, peakScale: 1.08, growTime: 0.5, settleTime: 0.1, rise: 9))
     }
 
     private static var everythingAwayFromShipped: LaunchTuning {

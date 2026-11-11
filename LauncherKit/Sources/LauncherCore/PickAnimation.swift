@@ -36,7 +36,7 @@ public struct PickAnimation: Equatable, Sendable {
     }
 
     public static let shipped = PickAnimation(
-        startScale: 0.5, peakScale: 1.08, growTime: 0.25, settleTime: 0.2, rise: 6)
+        startScale: 0.55, peakScale: 1.08, growTime: 0.16, settleTime: 0.1, rise: 9)
 
     /// Seconds from the pick to rest.
     public var duration: Double { growTime + settleTime }
@@ -63,10 +63,12 @@ public struct PickAnimation: Equatable, Sendable {
     }
 
     /// The curve sampled for Core Animation: key times as shares of the duration, scales and drops alongside. At least
-    /// ten steps, like the launch animation's sampling.
+    /// ten even steps, like the launch animation's sampling, with the peak as a sample of its own wherever it falls, so
+    /// the icon always reaches it.
     public func keyframes(perSecond: Double) -> (keyTimes: [Double], scales: [Double], drops: [Double]) {
         let steps = max(10, Int((duration * perSecond).rounded()))
-        let keyTimes = (0...steps).map { Double($0) / Double(steps) }
-        return (keyTimes, keyTimes.map { scale(at: $0 * duration) }, keyTimes.map { drop(at: $0 * duration) })
+        let even = (0...steps).map { duration * Double($0) / Double(steps) }
+        let times = even.contains { abs($0 - growTime) < 1e-9 } ? even : (even + [growTime]).sorted()
+        return (times.map { $0 / duration }, times.map { scale(at: $0) }, times.map { drop(at: $0) })
     }
 }

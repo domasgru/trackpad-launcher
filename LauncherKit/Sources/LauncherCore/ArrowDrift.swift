@@ -44,10 +44,10 @@ public struct ArrowDrift: Equatable, Sendable {
         self.restTime = restTime
     }
 
-    /// A slight wind-up, a quick drop that slows as it lands, a soft spring back past its place, a long pause.
+    /// A small wind-up, a quick drop that slows as it lands, a soft spring back past its place, a long pause.
     public static let shipped = ArrowDrift(
-        distance: 3, dropTime: 0.315, dropCurve: .easeOutCubic, returnTime: 0.45, bounciness: 0.4, restTime: 0.8,
-        windUp: 0.4, windUpTime: 0.2)
+        distance: 4, dropTime: 0.26, dropCurve: CubicCurve(0.33, 1, 0.68, 1), returnTime: 0.45, bounciness: 0.4,
+        restTime: 0.9, windUp: 1, windUpTime: 0.2)
 
     private var damping: Double { 1 - min(max(bounciness, 0), 0.95) }
     private var stiffness: Double { 2 * .pi / max(returnTime, 0.01) }
@@ -61,16 +61,19 @@ public struct ArrowDrift: Equatable, Sendable {
         return 1 - exp(-zeta * omega * t) * (cos(damped * t) + zeta * omega / damped * sin(damped * t))
     }
 
-    /// Seconds the return takes until the spring stays within `settledWithin` of the arrow's place.
+    /// Seconds the return takes until the spring stays within `settledWithin` of the arrow's place: where the
+    /// envelope its distance from the place never exceeds falls to that share.
     public var settleTime: Double {
-        let zeta = damping, omega = stiffness
-        // The spring's distance from its place never exceeds this envelope, so past its crossing it has settled.
-        func envelope(_ t: Double) -> Double {
-            zeta >= 1 ? exp(-omega * t) * (1 + omega * t) : exp(-zeta * omega * t) / (1 - zeta * zeta).squareRoot()
+        let zeta = damping, omega = stiffness, within = Self.settledWithin
+        if zeta < 1 {
+            // e^(−ζωt) / √(1 − ζ²) = within
+            return log(1 / (within * (1 - zeta * zeta).squareRoot())) / (zeta * omega)
         }
-        var t = 0.0
-        while envelope(t) > Self.settledWithin, t < 10 { t += 0.001 }
-        return t
+        // e^(−u)(1 + u) = within, u = ωt: Newton's method from u = 1, short of the root. Past 1 the function falls and
+        // is convex, so from where it is still above `within` each step lands closer without overshooting.
+        var u = 1.0
+        for _ in 0..<20 { u -= (exp(-u) * (1 + u) - within) / (-u * exp(-u)) }
+        return u / omega
     }
 
     /// Seconds of one whole cycle.

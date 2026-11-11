@@ -19,26 +19,25 @@ import Testing
         }
     }
 
-    @Test func shippedAnimationGrowsFromFiftyToOneOEightAndSettlesAtOneHundredPercent() {
+    @Test func shippedAnimationGrowsFromFiftyFiveToOneOEightAndSettlesAtOneHundredPercent() {
         let shipped = PickAnimation.shipped
-        #expect(shipped.scale(at: 0) == 0.5)
-        #expect(shipped.scale(at: 0.25) == 1.08)
-        #expect(shipped.scale(at: 0.45) == 1.0)
-        #expect(abs(shipped.duration - 0.45) < 1e-12)
+        #expect(shipped.scale(at: 0) == 0.55)
+        #expect(shipped.scale(at: 0.16) == 1.08)
+        #expect(shipped.scale(at: 0.26) == 1.0)
+        #expect(abs(shipped.duration - 0.26) < 1e-12)
 
         let frames = shipped.keyframes(perSecond: 240)
-        #expect(frames.keyTimes.count == 109)
-        #expect(frames.scales.count == 109)
-        #expect(frames.drops.count == 109)
+        // 62 even steps, 63 samples, and the peak at 0.16 s between two of them.
+        #expect(frames.keyTimes.count == 64)
+        #expect(frames.scales.count == 64)
+        #expect(frames.drops.count == 64)
         #expect(frames.keyTimes.first == 0)
         #expect(frames.keyTimes.last == 1)
-        for (i, time) in frames.keyTimes.enumerated() {
-            #expect(abs(time - Double(i) / 108) < 1e-12)
-        }
-        #expect(frames.scales.first == 0.5)
+        #expect(zip(frames.keyTimes, frames.keyTimes.dropFirst()).allSatisfy { $0 < $1 })
+        #expect(frames.scales.first == 0.55)
         #expect(frames.scales.last == 1.0)
 
-        let peak = frames.keyTimes.indices.first { abs(frames.keyTimes[$0] * shipped.duration - 0.25) < 1e-9 }!
+        let peak = frames.keyTimes.indices.first { abs(frames.keyTimes[$0] * shipped.duration - 0.16) < 1e-9 }!
         #expect(frames.scales[peak] == 1.08)
         #expect(frames.scales.max() == 1.08)
         for i in 1...peak { #expect(frames.scales[i] > frames.scales[i - 1]) }
@@ -49,19 +48,20 @@ import Testing
     @Test func growStartsFastAndSettleSlowsIntoRest() {
         let shipped = PickAnimation.shipped
         // Half the grow time in, an ease-out cubic has covered seven eighths of the way.
-        #expect(abs(shipped.scale(at: 0.125) - (0.5 + 0.58 * 0.875)) < 1e-9)
+        #expect(abs(shipped.scale(at: 0.08) - (0.55 + 0.53 * 0.875)) < 1e-9)
 
         let scales = shipped.keyframes(perSecond: 240).scales
-        let drops = zip(scales[60...], scales[61...]).map { $0 - $1 }
+        let peak = scales.firstIndex(of: scales.max()!)!
+        let drops = zip(scales[peak...], scales[(peak + 1)...]).map { $0 - $1 }
         #expect(drops.last! < drops.max()! / 4)
     }
 
     @Test func theIconJumpsFromBelowPastItsPlaceAndSettlesIntoIt() {
         let shipped = PickAnimation.shipped
-        #expect(shipped.drop(at: 0) == 6)
+        #expect(shipped.drop(at: 0) == 9)
         #expect(shipped.drop(at: shipped.duration) == 0)
-        let lift = shipped.drop(at: 0.25)
-        #expect(abs(lift - -6 * 0.08 / 0.5) < 1e-9)
+        let lift = shipped.drop(at: 0.16)
+        #expect(abs(lift - -9 * 0.08 / 0.45) < 1e-9)
 
         let drops = shipped.keyframes(perSecond: 240).drops
         let top = drops.indices.min { drops[$0] < drops[$1] }!
@@ -71,14 +71,21 @@ import Testing
     }
 
     @Test func noRiseKeepsTheIconInPlace() {
-        let animation = PickAnimation(startScale: 0.5, peakScale: 1.08, growTime: 0.25, settleTime: 0.2, rise: 0)
+        let animation = PickAnimation(startScale: 0.55, peakScale: 1.08, growTime: 0.16, settleTime: 0.1, rise: 0)
         #expect(animation.keyframes(perSecond: 240).drops.allSatisfy { $0 == 0 })
     }
 
-    @Test func shippedValuesAreFiftyOneOEightAndAQuickJumpFromSixPointsBelow() {
+    @Test func shippedValuesAreFiftyFiveOneOEightAndAQuickJumpFromNinePointsBelow() {
         #expect(
             PickAnimation.shipped
-                == PickAnimation(startScale: 0.5, peakScale: 1.08, growTime: 0.25, settleTime: 0.2, rise: 6))
+                == PickAnimation(startScale: 0.55, peakScale: 1.08, growTime: 0.16, settleTime: 0.1, rise: 9))
+    }
+
+    @Test func aPeakBetweenEvenStepsIsStillSampled() {
+        let animation = PickAnimation(startScale: 0.4, peakScale: 1.2, growTime: 0.123, settleTime: 0.1, rise: 6)
+        let frames = animation.keyframes(perSecond: 240)
+        #expect(frames.scales.max() == 1.2)
+        #expect(frames.keyTimes.contains { abs($0 * animation.duration - 0.123) < 1e-12 })
     }
 
     @Test func slowerGrowMovesThePeakLater() {

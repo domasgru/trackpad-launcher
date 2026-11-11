@@ -38,7 +38,7 @@ import Testing
         drift.distance = 8
         drift.bounciness = 0.7
 
-        #expect(offsets(bench.arrowDrift).min() == -3)
+        #expect(offsets(bench.arrowDrift).min() == -4)
         bench.view.restartDrift()
 
         for animation in [bench.arrowDrift, bench.maskDrift] {

@@ -131,13 +131,13 @@ final class PickerBench {
         #expect(iconLayerAnimationKeys == [PickerButton.pickKey], sourceLocation: sourceLocation)
         let animation = layer.animation(forKey: PickerButton.pickKey) as? CAKeyframeAnimation
         #expect(animation?.keyPath == "transform", sourceLocation: sourceLocation)
-        #expect(abs((animation?.duration ?? 0) - 0.45) < 1e-9, sourceLocation: sourceLocation)
+        #expect(abs((animation?.duration ?? 0) - 0.26) < 1e-9, sourceLocation: sourceLocation)
         let frames = PickAnimation.shipped.keyframes(perSecond: 240)
         let transforms = animation?.values?.compactMap { ($0 as? NSValue)?.caTransform3DValue } ?? []
         #expect(transforms.map(\.m11) == frames.scales.map { CGFloat($0) }, sourceLocation: sourceLocation)
         let keyTimes = animation?.keyTimes?.map(\.doubleValue)
         #expect(keyTimes == frames.keyTimes, sourceLocation: sourceLocation)
-        #expect(transforms.count == 109, sourceLocation: sourceLocation)
+        #expect(transforms.count == 64, sourceLocation: sourceLocation)
         #expect(keyTimes?.first == 0 && keyTimes?.last == 1, sourceLocation: sourceLocation)
         #expect(
             transforms.allSatisfy { $0.m11 == $0.m22 && $0.m33 == 1 && $0.m41 == 0 }, "uniform scales, no sideways move",
@@ -147,11 +147,11 @@ final class PickerBench {
         // layer's anchor its centre, so the edge sits at m42 + side / 2 × scale − side / 2.
         let half = PickerButton.iconSide / 2
         let bottoms = transforms.map { $0.m42 + half * $0.m11 - half }
-        #expect(abs((transforms.first?.m11 ?? 0) - 0.5) < 1e-9, sourceLocation: sourceLocation)
-        #expect(abs((bottoms.first ?? 0) - 6) < 1e-9, "starts 6 pt below its place", sourceLocation: sourceLocation)
+        #expect(abs((transforms.first?.m11 ?? 0) - 0.55) < 1e-9, sourceLocation: sourceLocation)
+        #expect(abs((bottoms.first ?? 0) - 9) < 1e-9, "starts 9 pt below its place", sourceLocation: sourceLocation)
         #expect(transforms.last.map(CATransform3DIsIdentity) == true, "rests in place", sourceLocation: sourceLocation)
-        let peak = keyTimes?.indices.first { abs(keyTimes![$0] * PickAnimation.shipped.duration - 0.25) < 1e-9 }
-        #expect(peak != nil, "a sample at 0.25 s", sourceLocation: sourceLocation)
+        let peak = keyTimes?.indices.first { abs(keyTimes![$0] * PickAnimation.shipped.duration - 0.16) < 1e-9 }
+        #expect(peak != nil, "a sample at 0.16 s", sourceLocation: sourceLocation)
         if let peak, peak < transforms.count {
             #expect(abs(transforms[peak].m11 - 1.08) < 1e-9, sourceLocation: sourceLocation)
             #expect(transforms.allSatisfy { $0.m11 <= transforms[peak].m11 + 1e-9 }, sourceLocation: sourceLocation)
