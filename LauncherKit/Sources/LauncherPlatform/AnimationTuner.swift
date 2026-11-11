@@ -218,8 +218,8 @@ struct TunerView: View {
                     reduceMotionSection
                 case .arrow:
                     arrowSection
-                    curveSection("Drop curve", \.arrow.dropCurve, hint: "from rest down")
-                    curveSection("Lift curve", \.arrow.liftCurve, hint: "from the bottom back to rest")
+                    easingSection("Drop easing", \.arrow.dropCurve, hint: "how the arrow moves on the way down")
+                    easingSection("Lift easing", \.arrow.liftCurve, hint: "how the arrow moves on the way back up")
                 case .swipe:
                     swipeSection
                 }
@@ -346,13 +346,49 @@ struct TunerView: View {
     private var arrowSection: some View {
         Section {
             knob("Distance", \.arrow.distance, 0...12, step: 0.5, unit: "pt", hint: "how far the arrow drops")
-            knob("Drop time", \.arrow.dropTime, 0.1...3, step: 0.05, unit: "s")
-            knob("Lift time", \.arrow.liftTime, 0.1...3, step: 0.05, unit: "s")
-            knob("Rest time", \.arrow.restTime, 0...3, step: 0.05, unit: "s", hint: "still at the top between cycles")
+            knob("Speed", \.arrow.moveTime, 0.3...4, step: 0.05, unit: "s",
+                 hint: "time to drop and come back up; lower is faster")
+            knob("Drop vs lift", \.arrow.dropPercent, 10...70, step: 1, unit: "%",
+                 hint: "share of that time spent dropping; 33% = a quick drop and a lift twice as long")
+            knob("Pause", \.arrow.restTime, 0...3, step: 0.05, unit: "s", hint: "still at the top between drops")
         } header: {
             Text("Update card arrow")
         } footer: {
             Text("Show the card with a Debug build launched with -PreviewUpdateCard YES. Changes restart the arrow.")
+        }
+    }
+
+    /// A timing curve picked by name, drawn beside the menu. Its control points, as CSS cubic-bezier(x1, y1, x2, y2),
+    /// are under Fine-tune, open when the curve is none of the named ones.
+    private func easingSection(
+        _ title: String, _ keyPath: WritableKeyPath<LaunchTuning, CubicCurve>, hint: String
+    ) -> some View {
+        let curve = model.tuning[keyPath: keyPath]
+        let named = Binding(
+            get: { NamedCurve.matching(model.tuning[keyPath: keyPath]) },
+            set: { picked in
+                if let points = picked.curve { model.tuning[keyPath: keyPath] = points }
+            })
+        return Section {
+            HStack(alignment: .center) {
+                Picker("Curve", selection: named) {
+                    ForEach(NamedCurve.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.menu)
+                Spacer()
+                CurvePicture(curve: curve)
+            }
+            DisclosureGroup("Fine-tune") {
+                knob("x1", keyPath.appending(path: \.x1), 0...1, step: 0.01)
+                knob("y1", keyPath.appending(path: \.y1), -1...2, step: 0.01)
+                knob("x2", keyPath.appending(path: \.x2), 0...1, step: 0.01)
+                knob("y2", keyPath.appending(path: \.y2), -1...2, step: 0.01)
+            }
+        } header: {
+            Text(title)
+        } footer: {
+            let points = [curve.x1, curve.y1, curve.x2, curve.y2].map { String(format: "%.2f", $0) }
+            Text(verbatim: "\(hint). cubic-bezier(\(points.joined(separator: ", ")))")
         }
     }
 
