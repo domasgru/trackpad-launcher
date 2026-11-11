@@ -46,7 +46,7 @@ struct LaunchTuning: Equatable, Sendable {
     /// The launch bounce's numbers.
     var bounce = Bounce()
 
-    /// The pick animation's numbers: an app picker's icon growing into place.
+    /// The pick animation's numbers: an app picker's icon jumping into place from below.
     var pick: PickAnimation = .shipped
 
     static let shipped = LaunchTuning()
@@ -97,7 +97,7 @@ extension LaunchTuning: Codable {
 
 extension PickAnimation: Codable {
     private enum CodingKeys: String, CodingKey {
-        case startScale, peakScale, growTime, settleTime
+        case startScale, peakScale, growTime, settleTime, rise
     }
 
     public init(from decoder: any Decoder) throws {
@@ -107,7 +107,8 @@ extension PickAnimation: Codable {
             startScale: try c.decode(.startScale, or: s.startScale),
             peakScale: try c.decode(.peakScale, or: s.peakScale),
             growTime: try c.decode(.growTime, or: s.growTime),
-            settleTime: try c.decode(.settleTime, or: s.settleTime))
+            settleTime: try c.decode(.settleTime, or: s.settleTime),
+            rise: try c.decode(.rise, or: s.rise))
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -116,6 +117,7 @@ extension PickAnimation: Codable {
         try c.encode(peakScale, forKey: .peakScale)
         try c.encode(growTime, forKey: .growTime)
         try c.encode(settleTime, forKey: .settleTime)
+        try c.encode(rise, forKey: .rise)
     }
 }
 

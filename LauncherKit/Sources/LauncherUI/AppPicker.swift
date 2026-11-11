@@ -273,11 +273,13 @@ final class PickerButton: NSPopUpButton {
     }
 
     /// Plays `animation` on the icon alone from its start; a running one is replaced. The model transform stays
-    /// identity, so when it ends the icon rests at full size with nothing to clean up.
+    /// identity, so when it ends the icon rests at full size in its place with nothing to clean up.
     func play(_ animation: PickAnimation) {
         let frames = animation.keyframes(perSecond: Self.keyframesPerSecond)
         let grow = CAKeyframeAnimation(keyPath: "transform")
-        grow.values = frames.scales.map { NSValue(caTransform3D: CATransform3DMakeScale($0, $0, 1)) }
+        grow.values = zip(frames.scales, frames.drops).map { scale, drop in
+            NSValue(caTransform3D: Self.transform(scale: scale, drop: drop))
+        }
         grow.keyTimes = frames.keyTimes.map { NSNumber(value: $0) }
         grow.duration = animation.duration
         grow.calculationMode = .linear
@@ -285,6 +287,15 @@ final class PickerButton: NSPopUpButton {
     }
 
     func stopPickAnimation() { iconLayer.removeAnimation(forKey: Self.pickKey) }
+
+    /// The icon scaled by `scale` about its bottom edge, then moved `drop` points down. The icon view is flipped, so
+    /// down is +y, and the layer's anchor is its centre, so keeping the bottom edge still moves it down by half the
+    /// side it loses.
+    static func transform(scale: Double, drop: Double) -> CATransform3D {
+        var transform = CATransform3DMakeScale(scale, scale, 1)
+        transform.m42 = drop + iconSide / 2 * (1 - scale)
+        return transform
+    }
 
     /// `image` with `iconTrailingSpace` of clear room on its right. A template image stays one, so the symbol still
     /// takes the button's colour.

@@ -8,8 +8,18 @@ final class UpdatePictureView: NSView {
     static let width: CGFloat = 71
     static let height: CGFloat = 89
     static let drift: CGFloat = 4
-    /// Seconds from one end of the drift to the other; the whole cycle takes twice this.
-    static let halfPeriod: CFTimeInterval = 1.5
+    /// Seconds the arrow takes to drop by `drift`: quick, easing in and landing softly.
+    static let dropTime: CFTimeInterval = 0.55
+    /// Seconds the arrow takes to lift back: a long, decelerating rise into its resting place.
+    static let liftTime: CFTimeInterval = 1.1
+    /// Seconds the arrow rests at the top before the next drop.
+    static let restTime: CFTimeInterval = 0.25
+    /// Seconds of one whole cycle: drop, lift, rest.
+    static let period: CFTimeInterval = dropTime + liftTime + restTime
+    /// The drop's curve: eases in, then lands softly.
+    static let dropCurve = CAMediaTimingFunction(controlPoints: 0.55, 0, 0.3, 1)
+    /// The lift's curve: leaves the bottom gently, then slows over a long tail, like an ease-out quint.
+    static let liftCurve = CAMediaTimingFunction(controlPoints: 0.3, 0, 0.1, 1)
     static let animationKey = "drift"
     /// The hole's mask is taller than the picture by the drift at each end, so the moving hole never uncovers an edge.
     static let maskHeight = height + 2 * drift
@@ -159,12 +169,16 @@ final class UpdatePictureView: NSView {
             if !moves {
                 layer.removeAnimation(forKey: Self.animationKey)
             } else if layer.animation(forKey: Self.animationKey) == nil {
-                let drift = CABasicAnimation(keyPath: "position.y")
-                drift.byValue = -Self.drift
-                drift.duration = Self.halfPeriod
-                drift.autoreverses = true
+                // Offsets from the resting place, added to it; the view is not flipped, so down is negative.
+                let drift = CAKeyframeAnimation(keyPath: "position.y")
+                drift.isAdditive = true
+                drift.values = [0, -Self.drift, 0, 0]
+                drift.keyTimes = [0, Self.dropTime, Self.dropTime + Self.liftTime, Self.period].map {
+                    NSNumber(value: $0 / Self.period)
+                }
+                drift.timingFunctions = [Self.dropCurve, Self.liftCurve, CAMediaTimingFunction(name: .linear)]
+                drift.duration = Self.period
                 drift.repeatCount = .infinity
-                drift.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 // Not a no-op, though the drift never completes: without it a real window opens with the arrow still.
                 drift.isRemovedOnCompletion = false
                 layer.add(drift, forKey: Self.animationKey)

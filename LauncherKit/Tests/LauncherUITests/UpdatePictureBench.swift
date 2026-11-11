@@ -46,12 +46,12 @@ final class UpdatePictureBench {
         NotificationCenter.default.post(name: NSWindow.didChangeOcclusionStateNotification, object: window)
     }
 
-    var arrowDrift: CABasicAnimation? {
-        view.arrowLayer.animation(forKey: UpdatePictureView.animationKey) as? CABasicAnimation
+    var arrowDrift: CAKeyframeAnimation? {
+        view.arrowLayer.animation(forKey: UpdatePictureView.animationKey) as? CAKeyframeAnimation
     }
 
-    var maskDrift: CABasicAnimation? {
-        view.maskLayer.animation(forKey: UpdatePictureView.animationKey) as? CABasicAnimation
+    var maskDrift: CAKeyframeAnimation? {
+        view.maskLayer.animation(forKey: UpdatePictureView.animationKey) as? CAKeyframeAnimation
     }
 
     var anyAnimation: Bool {

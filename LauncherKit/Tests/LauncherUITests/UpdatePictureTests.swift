@@ -9,13 +9,21 @@ import Testing
             let drift = try #require(drift, sourceLocation: sourceLocation)
             #expect(layer.animationKeys() == [key], sourceLocation: sourceLocation)
             #expect(drift.keyPath == "position.y", sourceLocation: sourceLocation)
-            #expect(drift.byValue as? Double == -4, sourceLocation: sourceLocation)
-            #expect(drift.duration == 1.5, sourceLocation: sourceLocation)
-            #expect(drift.autoreverses, sourceLocation: sourceLocation)
+            #expect(drift.isAdditive, sourceLocation: sourceLocation)
+            #expect(drift.values?.map { ($0 as? NSNumber)?.doubleValue } == [0, -4, 0, 0], sourceLocation: sourceLocation)
+            #expect(abs(drift.duration - 1.9) < 1e-9, sourceLocation: sourceLocation)
+            #expect(!drift.autoreverses, sourceLocation: sourceLocation)
             #expect(drift.repeatCount == .infinity, sourceLocation: sourceLocation)
             #expect(drift.isRemovedOnCompletion == false, sourceLocation: sourceLocation)
+            let times = drift.keyTimes?.map { $0.doubleValue * drift.duration } ?? []
+            #expect(times.count == 4, sourceLocation: sourceLocation)
+            let drop = times[1] - times[0], lift = times[2] - times[1]
+            #expect(abs(drop - 0.55) < 1e-9, "the drop is quick", sourceLocation: sourceLocation)
+            #expect(abs(lift - 1.1) < 1e-9, "the lift takes twice as long", sourceLocation: sourceLocation)
             #expect(
-                drift.timingFunction == CAMediaTimingFunction(name: .easeInEaseOut), sourceLocation: sourceLocation)
+                drift.timingFunctions == [
+                    UpdatePictureView.dropCurve, UpdatePictureView.liftCurve, CAMediaTimingFunction(name: .linear),
+                ], sourceLocation: sourceLocation)
         }
         #expect(bench.view.trayLayer.animationKeys() == nil, sourceLocation: sourceLocation)
         #expect(bench.view.layer?.animationKeys() == nil, sourceLocation: sourceLocation)

@@ -128,7 +128,7 @@ struct TunerCodingTests {
 
     @Test func `every pick knob survives a save and load`() throws {
         var tuning = LaunchTuning()
-        tuning.pick = PickAnimation(startScale: 0.25, peakScale: 1.35, growTime: 0.45, settleTime: 0.35)
+        tuning.pick = PickAnimation(startScale: 0.25, peakScale: 1.35, growTime: 0.45, settleTime: 0.35, rise: 11)
         let presets = [TuningPreset(name: "Grower", tuning: tuning)]
 
         let loaded = try JSONDecoder().decode([TuningPreset].self, from: JSONEncoder().encode(presets))
@@ -141,7 +141,7 @@ struct TunerCodingTests {
 
         let tuning = try JSONDecoder().decode(LaunchTuning.self, from: Data(json.utf8))
 
-        #expect(tuning.pick == PickAnimation(startScale: 0.4, peakScale: 1.1, growTime: 0.5, settleTime: 0.15))
+        #expect(tuning.pick == PickAnimation(startScale: 0.5, peakScale: 1.08, growTime: 0.5, settleTime: 0.2, rise: 6))
     }
 
     private static var everythingAwayFromShipped: LaunchTuning {
@@ -168,7 +168,7 @@ struct TunerCodingTests {
             style: .jump, height: 41, timeUp: 0.21, timeDown: 0.22, rest: 0.13, squash: 0.17, gap: 9, offset: 5,
             trailing: 0.31, spacing: 14, fadeOut: 0.27, slide: 0.23, pulseLow: 0.37, pulsePeriod: 1.9,
             inflateFrom: 30, inflateTime: 0.6, inflateCurve: 3, creep: 0.2, creepTime: 7)
-        t.pick = PickAnimation(startScale: 0.25, peakScale: 1.35, growTime: 0.45, settleTime: 0.35)
+        t.pick = PickAnimation(startScale: 0.25, peakScale: 1.35, growTime: 0.45, settleTime: 0.35, rise: 11)
         return t
     }
 

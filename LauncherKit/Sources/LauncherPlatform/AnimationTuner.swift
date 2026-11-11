@@ -283,11 +283,12 @@ struct TunerView: View {
     private var pickSection: some View {
         Section {
             knob("Start size", \.pick.startScale, 0.1...1, step: 0.01,
-                 hint: "share of the icon's side; 0.4 = 40%")
+                 hint: "share of the icon's side; 0.5 = 50%")
             knob("Peak size", \.pick.peakScale, 1...1.6, step: 0.01,
-                 hint: "share of the icon's side; 1.1 = 110%")
+                 hint: "share of the icon's side; 1.08 = 108%")
             knob("Grow time", \.pick.growTime, 0.05...1, step: 0.01, unit: "s", hint: "from the pick to the peak")
             knob("Settle time", \.pick.settleTime, 0.05...1, step: 0.01, unit: "s", hint: "from the peak to rest")
+            knob("Rise", \.pick.rise, 0...20, step: 0.5, unit: "pt", hint: "how far below its place the icon starts")
         } header: {
             Text("Pick animation")
         } footer: {
