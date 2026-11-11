@@ -209,7 +209,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         /// window. No assignment changes.
         public func previewPickAnimation() {
             guard case .open = launcher.window, let animation = currentPickAnimation() else { return }
-            for picker in pickers(in: window.contentView) where !picker.iconLayer.isHidden {
+            for picker in views(PickerButton.self, in: window.contentView) where !picker.iconLayer.isHidden {
                 picker.play(animation)
             }
         }
@@ -224,17 +224,13 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         /// Debug builds' tuner: restarts the update card arrow's drift with the tuner's values now, when the card is
         /// in the open settings window.
         public func previewArrowDrift() {
-            for picture in pictures(in: window.contentView) { picture.restartDrift() }
+            for picture in views(UpdatePictureView.self, in: window.contentView) { picture.restartDrift() }
         }
 
-        private func pictures(in view: NSView?) -> [UpdatePictureView] {
+        /// Every `T` in `view`'s tree, not looking inside a `T`.
+        private func views<T: NSView>(_ type: T.Type, in view: NSView?) -> [T] {
             guard let view else { return [] }
-            return (view as? UpdatePictureView).map { [$0] } ?? view.subviews.flatMap { pictures(in: $0) }
-        }
-
-        private func pickers(in view: NSView?) -> [PickerButton] {
-            guard let view else { return [] }
-            return (view as? PickerButton).map { [$0] } ?? view.subviews.flatMap { pickers(in: $0) }
+            return (view as? T).map { [$0] } ?? view.subviews.flatMap { views(type, in: $0) }
         }
     #endif
 

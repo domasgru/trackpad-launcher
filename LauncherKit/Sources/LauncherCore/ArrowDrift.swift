@@ -49,13 +49,15 @@ public struct ArrowDrift: Equatable, Sendable {
         distance: 4, dropTime: 0.26, dropCurve: CubicCurve(0.33, 1, 0.68, 1), returnTime: 0.45, bounciness: 0.4,
         restTime: 0.9, windUp: 1, windUpTime: 0.2)
 
-    private var damping: Double { 1 - min(max(bounciness, 0), 0.95) }
-    private var stiffness: Double { 2 * .pi / max(returnTime, 0.01) }
+    /// The spring's damping ratio ζ: 1 for no overshoot, lower for more.
+    private var dampingRatio: Double { 1 - min(max(bounciness, 0), 0.95) }
+    /// The spring's natural angular frequency ω, from its perceptual duration as SwiftUI defines it.
+    private var naturalFrequency: Double { 2 * .pi / max(returnTime, 0.01) }
 
     /// The spring's progress from the bottom (0) to the arrow's place (1), `t` seconds into the return; above 1 while
     /// it overshoots.
     func springProgress(at t: Double) -> Double {
-        let zeta = damping, omega = stiffness
+        let zeta = dampingRatio, omega = naturalFrequency
         if zeta >= 1 { return 1 - exp(-omega * t) * (1 + omega * t) }
         let damped = omega * (1 - zeta * zeta).squareRoot()
         return 1 - exp(-zeta * omega * t) * (cos(damped * t) + zeta * omega / damped * sin(damped * t))
@@ -64,7 +66,7 @@ public struct ArrowDrift: Equatable, Sendable {
     /// Seconds the return takes until the spring stays within `settledWithin` of the arrow's place: where the
     /// envelope its distance from the place never exceeds falls to that share.
     public var settleTime: Double {
-        let zeta = damping, omega = stiffness, within = Self.settledWithin
+        let zeta = dampingRatio, omega = naturalFrequency, within = Self.settledWithin
         if zeta < 1 {
             // e^(−ζωt) / √(1 − ζ²) = within
             return log(1 / (within * (1 - zeta * zeta).squareRoot())) / (zeta * omega)

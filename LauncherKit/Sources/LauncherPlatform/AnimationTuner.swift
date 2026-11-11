@@ -213,8 +213,8 @@ struct TunerView: View {
                     reduceMotionSection
                 case .pick:
                     pickSection
-                    curveSection("Grow curve", \.pick.growCurve, hint: "from the start size to the peak")
-                    curveSection("Settle curve", \.pick.settleCurve, hint: "from the peak to rest")
+                    easingSection("Grow easing", \.pick.growCurve, hint: "from the start size to the peak")
+                    easingSection("Settle easing", \.pick.settleCurve, hint: "from the peak to rest")
                     reduceMotionSection
                 case .arrow:
                     arrowSection
@@ -407,23 +407,6 @@ struct TunerView: View {
         }
     }
 
-    /// A timing curve as CSS cubic-bezier(x1, y1, x2, y2) control points.
-    private func curveSection(
-        _ title: String, _ keyPath: WritableKeyPath<LaunchTuning, CubicCurve>, hint: String
-    ) -> some View {
-        Section {
-            knob("x1", keyPath.appending(path: \.x1), 0...1, step: 0.01)
-            knob("y1", keyPath.appending(path: \.y1), -1...2, step: 0.01)
-            knob("x2", keyPath.appending(path: \.x2), 0...1, step: 0.01)
-            knob("y2", keyPath.appending(path: \.y2), -1...2, step: 0.01)
-        } header: {
-            Text(title)
-        } footer: {
-            let c = model.tuning[keyPath: keyPath]
-            let points = [c.x1, c.y1, c.x2, c.y2].map { String(format: "%.2f", $0) }.joined(separator: ", ")
-            Text(verbatim: "\(hint): cubic-bezier(\(points))")
-        }
-    }
 
     private var bounceSection: some View {
         Section {

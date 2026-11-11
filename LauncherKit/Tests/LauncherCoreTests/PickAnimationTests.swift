@@ -45,15 +45,15 @@ import Testing
         #expect(frames.scales[peak...].allSatisfy { $0 >= 1.0 })
     }
 
-    @Test func growStartsFastAndSettleSlowsIntoRest() {
+    @Test func growStartsFastAndSettleSlowsIntoRest() throws {
         let shipped = PickAnimation.shipped
         // Half the grow time in, an ease-out cubic has covered seven eighths of the way.
         #expect(abs(shipped.scale(at: 0.08) - (0.55 + 0.53 * 0.875)) < 1e-9)
 
         let scales = shipped.keyframes(perSecond: 240).scales
-        let peak = scales.firstIndex(of: scales.max()!)!
+        let peak = try #require(scales.indices.max { scales[$0] < scales[$1] })
         let drops = zip(scales[peak...], scales[(peak + 1)...]).map { $0 - $1 }
-        #expect(drops.last! < drops.max()! / 4)
+        #expect(try #require(drops.last) < (try #require(drops.max())) / 4)
     }
 
     @Test func theIconJumpsFromBelowPastItsPlaceAndSettlesIntoIt() {

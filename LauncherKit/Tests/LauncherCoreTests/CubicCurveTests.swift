@@ -11,13 +11,13 @@ import Testing
         }
     }
 
-    @Test func aCurveRunsFromZeroToOneWhateverItsControlPoints() {
+    @Test func aCurveRunsFromZeroToOneWhateverItsControlPoints() throws {
         let overshoot = CubicCurve(0.2, 1.6, 0.4, 1)
         #expect(overshoot.value(at: 0) == 0)
         #expect(overshoot.value(at: 1) == 1)
         #expect(overshoot.value(at: -1) == 0)
         #expect(overshoot.value(at: 2) == 1)
-        #expect((0...100).map { overshoot.value(at: Double($0) / 100) }.max()! > 1)
+        #expect(try #require((0...100).map { overshoot.value(at: Double($0) / 100) }.max()) > 1)
     }
 
     @Test func anEaseInCurveLagsTheLinearOne() {
