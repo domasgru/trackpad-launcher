@@ -3,9 +3,6 @@ import Testing
 import LauncherCore
 
 @Suite struct AveragedTravelTests {
-    private static let cursor = SwipeTravel.cursor(
-        PointerCurve(PointerCurve.builtInCurves, trackingSpeed: 0.6875)!, pointsPerStep: 100)
-
     private let h = HandFrames()
 
     /// The pair lands 8 mm apart, one frame moves it 3.5 mm and begins the slide, then each entry of `movesMM` is how
@@ -62,14 +59,13 @@ import LauncherCore
     }
 
     @Test func theCursorSeesTheAveragedSpeedSoAnUnevenHandTravelsLikeASteadyOne() {
-        let uneven = travel(hand([1, 3, 1, 3, 1, 3, 1, 3, 1, 3], rest: 0, along: .swipe), kind: .swipe, using: Self.cursor)
-        let steady = travel(hand(Array(repeating: 2, count: 10), rest: 0, along: .swipe), kind: .swipe, using: Self.cursor)
-        let curve = PointerCurve(PointerCurve.builtInCurves, trackingSpeed: 0.6875)!
-        let each = curve.cursorMove(dxMM: 2, dyMM: 0, interval: 0.01).x / 100 * 12
+        let uneven = travel(hand([1, 3, 1, 3, 1, 3, 1, 3, 1, 3], rest: 0, along: .swipe), kind: .swipe, using: RecordedSwipe.cursor)
+        let steady = travel(hand(Array(repeating: 2, count: 10), rest: 0, along: .swipe), kind: .swipe, using: RecordedSwipe.cursor)
+        let each = RecordedSwipe.curve.cursorMove(dxMM: 2, dyMM: 0, interval: 0.01).x / 100 * 12
         for phases in [uneven, steady] {
             let travels = phases.compactMap { phase -> Double? in if case .moved(let mm) = phase { mm } else { nil } }
             #expect(travels.count >= 10)
-            for (before, after) in zip(travels.dropFirst(3), travels.dropFirst(4)) {
+            for (before, after) in zip(travels.dropFirst(2), travels.dropFirst(3)) {
                 #expect(abs(after - before - each) < 1e-9)
             }
         }

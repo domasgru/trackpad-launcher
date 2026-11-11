@@ -4,13 +4,13 @@ import LauncherCore
 @MainActor @Suite struct SwitcherLiftTravelTests {
     private let apps = ["Safari", "Mail", "Slack", "Notes", "Preview", "Music"]
 
-    private func hand(_ world: World) -> TouchScript {
+    private func hand() -> TouchScript {
         TouchScript(.macBook14).thumb(atMM: (10, 10)).land(fingers: 2).slide(byMM: (3.5, 0)).slide(byMM: (48, 0))
     }
 
     @Test func aLiftOnTheFrameAfterTheLastMovementOpensWhatTheHighlightShowsNotWhereTheFingersReached() {
         let world = World.switcherWorld(apps: apps)
-        let script = hand(world)
+        let script = hand()
         var selected: [String] = []
         for step in world.playFrameByFrame(script, observing: { world.launcher.switcher?.selectedApp.name }) {
             if let step { selected.append(step) }
@@ -22,12 +22,12 @@ import LauncherCore
         }
         #expect(world.system.broughtToFront == [world.app("Notes")])
         #expect(world.hardware.feedback.count == 1)
-        #expect(!selected.contains("Preview"))
+        #expect(selected.contains("Preview") == false)
     }
 
     @Test func theSameHandSettlingBeforeTheLiftOpensWhereTheFingersReached() {
         let world = World.switcherWorld(apps: apps)
-        world.play(hand(world).settle().lift())
+        world.play(hand().settle().lift())
         #expect(world.system.broughtToFront == [world.app("Preview")])
     }
 }

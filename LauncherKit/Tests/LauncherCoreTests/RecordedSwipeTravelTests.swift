@@ -2,12 +2,9 @@ import Testing
 import LauncherCore
 
 @Suite struct RecordedSwipeTravelTests {
-    private static let cursor = SwipeTravel.cursor(
-        PointerCurve(PointerCurve.builtInCurves, trackingSpeed: 0.6875)!, pointsPerStep: 100)
-
     @Test func aRecordedSwipeBeginsAndEndsWhereItsHeaderSaysAndTheHighlightNeverLeaps() throws {
         let swipe = try #require(RecordedSwipe.load().first { $0.number == 2 })
-        let replay = swipe.replay(travel: Self.cursor)
+        let replay = swipe.replay(travel: RecordedSwipe.cursor)
         #expect(replay.beganAt == swipe.began)
         #expect(replay.endedAt == swipe.ended)
         #expect(replay.leaps.isEmpty)

@@ -24,3 +24,10 @@
 - R3's lift rule questioned by the plan's own note (a flick lifted mid-movement can land one item short) → kept as written; T12 stays.
 
 ## Implement
+- Verification skill: none in the repo (no `.claude/skills/verify-*`), so no verification run.
+- `SnapTravelTests` compared `.moved` values after merging repeats within 1e-9 (a cancelling window sends a ~1e-15 change), so "the last rest frame sends nothing" and T19's two silent frames went unasserted → the helper returns travel and whether an event came for every frame after the begin, and the rows assert both.
+- Force unwraps in `SnapTravelTests` and a `!` inside `#expect` in `SwitcherLiftTravelTests` broke swift-testing-pro's rules → `#require` and `== false`.
+- T4 checked equal steps from the fifth frame after the begin, not the fourth → starts at the fourth.
+- `settle()`'s comment gave R1's meaning without naming it → names R1 of plan 046.
+- Test smells: an unused `world` parameter, a dead ternary, the recorded cursor curve repeated in four places, force unwraps in the fixture loader → removed, removed, one shared `RecordedSwipe.cursor`, descriptive throws.
+- The snap judgement in `case .swiping` read and wrote only the finger's fields → moved into the private `SwipeFinger.follow(to:isAlone:on:)`, behaviour unchanged.

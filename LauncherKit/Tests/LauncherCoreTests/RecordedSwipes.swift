@@ -46,6 +46,16 @@ struct RecordedSwipe {
         return replay
     }
 
+    /// The pointer curve of the tracking speed the swipes were recorded at.
+    static let curve = PointerCurve(PointerCurve.builtInCurves, trackingSpeed: 0.6875)!
+
+    /// Travel as the cursor would move: that curve at 100 points per step.
+    static let cursor = SwipeTravel.cursor(curve, pointsPerStep: 100)
+
+    struct MalformedFixture: Error, CustomStringConvertible {
+        let description: String
+    }
+
     static let folder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "RecordedSwipes")
 
     static func load() throws -> [RecordedSwipe] {
@@ -63,9 +73,12 @@ struct RecordedSwipe {
             if line.hasPrefix("## swipe ") {
                 close()
                 let numbers = line.dropFirst("## swipe ".count).split { !"0123456789.".contains($0) }.compactMap { Double($0) }
-                header = (Int(numbers[0]), numbers[1], numbers[2])
+                guard numbers.count >= 3, let number = Int(exactly: numbers[0]) else {
+                    throw MalformedFixture(description: "swipe header without a number, begin and end: \(line)")
+                }
+                header = (number, numbers[1], numbers[2])
             } else if !line.hasPrefix("#") {
-                frames.append(parse(line))
+                frames.append(try parse(line))
             }
         }
         close()
@@ -75,16 +88,22 @@ struct RecordedSwipe {
     /// Mirrors `TouchFrame(parsing:count:timestamp:press:)` of the platform module, which the core tests cannot reach:
     /// only states 3 and 4 are contacts, 3 is a landing and 4 is down, each coordinate is read as a 32-bit `Float` and
     /// widened to `Double`, and y is `1 - Double(y)`.
-    private static func parse(_ line: Substring) -> TouchFrame {
+    private static func parse(_ line: Substring) throws -> TouchFrame {
         let fields = line.split(separator: " ")
-        let touches = fields.dropFirst().compactMap { field -> Touch? in
+        guard let first = fields.first, let seconds = Double(first) else {
+            throw MalformedFixture(description: "frame line without a time: \(line)")
+        }
+        let touches = try fields.dropFirst().compactMap { field -> Touch? in
             let parts = field.split(separator: ":")
-            guard let id = Int32(parts[0]), let state = Int(parts[1]), state == 3 || state == 4,
-                  let x = Float(parts[2]), let y = Float(parts[3]) else { return nil }
+            guard parts.count == 4, let id = Int32(parts[0]), let state = Int(parts[1]),
+                  let x = Float(parts[2]), let y = Float(parts[3]) else {
+                throw MalformedFixture(description: "touch \(field) is not id:state:x:y in: \(line)")
+            }
+            guard state == 3 || state == 4 else { return nil }
             return Touch(
                 id: TouchID(rawValue: id), phase: state == 3 ? .landing : .down,
                 position: SurfacePoint(x: Double(x), y: 1 - Double(y)))
         }
-        return TouchFrame(time: FrameTime(seconds: Double(fields[0])!), touches: touches, press: nil)
+        return TouchFrame(time: FrameTime(seconds: seconds), touches: touches, press: nil)
     }
 }

@@ -197,37 +197,11 @@ public struct GestureRecognizer: Sendable {
                 let interval = (frame.time - swipe.lastTime) / .seconds(1)
                 let isAlone = swipe.fingers.count + joining.count == 1
                 var counted: [(dxMM: Double, dyMM: Double)] = []
-                for (id, finger) in swipe.fingers {
+                for id in Array(swipe.fingers.keys) {
                     guard let touch = down[id] else { continue }
-                    let move = (
-                        dxMM: (touch.position.x - finger.position.x) * surface.widthMM,
-                        dyMM: (touch.position.y - finger.position.y) * surface.heightMM)
-                    let length = hypot(move.dxMM, move.dyMM)
-                    let snap = isAlone ? finger.snap : nil
-                    let undoesSnap = snap.map {
-                        hypot(move.dxMM + $0.move.dxMM, move.dyMM + $0.move.dyMM)
-                            <= GestureRules.snapUndoShare * hypot($0.move.dxMM, $0.move.dyMM)
-                    } ?? false
-                    let isSnap = isAlone && !undoesSnap && !finger.wasDiscarded && length > GestureRules.snapMinMM
-                        && finger.lastCountedMM.map { length > GestureRules.snapRatio * $0 + GestureRules.snapSlackMM } ?? false
-                    var finger = finger
-                    finger.position = touch.position
-                    finger.wasDiscarded = isSnap || undoesSnap
-                    if isSnap {
-                        finger.snap = Snap(move: move, framesLeft: GestureRules.snapMemoryFrames)
-                    } else if undoesSnap {
-                        finger.snap = nil
-                    } else if var aged = snap, aged.framesLeft > 1 {
-                        aged.framesLeft -= 1
-                        finger.snap = aged
-                    } else {
-                        finger.snap = nil
-                    }
-                    if !isSnap && !undoesSnap {
+                    if let move = swipe.fingers[id]?.follow(to: touch.position, isAlone: isAlone, on: surface) {
                         counted.append(move)
-                        finger.lastCountedMM = length
                     }
-                    swipe.fingers[id] = finger
                 }
                 for touch in joining { swipe.fingers[touch.id] = SwipeFinger(position: touch.position) }
                 swipe.lastTime = frame.time
@@ -443,6 +417,37 @@ public struct GestureRecognizer: Sendable {
         /// Its movement on the last frame was discarded: the frame after it is counted.
         var wasDiscarded = false
         var snap: Snap?
+
+        /// Moves the finger to `position`. Returns its movement, or nil when the movement is discarded as a snap or as
+        /// the undoing of one; snaps are only judged while the finger is alone.
+        mutating func follow(to position: SurfacePoint, isAlone: Bool, on surface: SurfaceSize) -> (dxMM: Double, dyMM: Double)? {
+            let move = (
+                dxMM: (position.x - self.position.x) * surface.widthMM,
+                dyMM: (position.y - self.position.y) * surface.heightMM)
+            let length = hypot(move.dxMM, move.dyMM)
+            let remembered = isAlone ? snap : nil
+            let undoesSnap = remembered.map {
+                hypot(move.dxMM + $0.move.dxMM, move.dyMM + $0.move.dyMM)
+                    <= GestureRules.snapUndoShare * hypot($0.move.dxMM, $0.move.dyMM)
+            } ?? false
+            let isSnap = isAlone && !undoesSnap && !wasDiscarded && length > GestureRules.snapMinMM
+                && lastCountedMM.map { length > GestureRules.snapRatio * $0 + GestureRules.snapSlackMM } ?? false
+            self.position = position
+            wasDiscarded = isSnap || undoesSnap
+            if isSnap {
+                snap = Snap(move: move, framesLeft: GestureRules.snapMemoryFrames)
+            } else if undoesSnap {
+                snap = nil
+            } else if var aged = remembered, aged.framesLeft > 1 {
+                aged.framesLeft -= 1
+                snap = aged
+            } else {
+                snap = nil
+            }
+            if isSnap || undoesSnap { return nil }
+            lastCountedMM = length
+            return move
+        }
     }
 
     /// A discarded snap: the vector the finger moved by, and how many more frames it is remembered.
