@@ -28,6 +28,11 @@ package enum GestureRules {
     /// 169 ms acted, every touch held 297 ms or more did not). Strictly less qualifies. Deliberately not
     /// `maxTapDuration`, though the number is the same: that says what fires a gesture, this says what macOS clicks.
     static let tapActionHoldLimit = Duration.milliseconds(400)
+    /// A slide's travel on each frame comes from the fingers' movement averaged over this many frames, the frame's own
+    /// and those before it. The driver splits a steady slide unevenly from frame to frame and sends one catch-up
+    /// frame of 3 to 5 times its neighbours just before the fingers stop, and the pointer acceleration turns that
+    /// into a leap: over the 18 recorded swipes, averaging over 4 frames cut single-frame leaps from 99 to 2.
+    static let travelAveragingFrames = 4
     /// The most icons a switcher row holds: the frontmost app and the most recently used others.
     static let switcherMaxApps = 10
     /// The most rows a window switcher holds: the front window, the other visible ones, then the minimised ones.

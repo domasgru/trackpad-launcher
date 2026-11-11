@@ -201,16 +201,22 @@ public struct GestureRecognizer: Sendable {
                 for id in swipe.fingers.keys { swipe.fingers[id] = down[id]?.position }
                 for touch in joining { swipe.fingers[touch.id] = touch.position }
                 swipe.lastTime = frame.time
-                if !moves.isEmpty {
-                    let count = Double(moves.count)
-                    let dxMM = moves.map(\.0).reduce(0, +) / count * surface.widthMM
-                    let dyMM = moves.map(\.1).reduce(0, +) / count * surface.heightMM
-                    let travel = swipe.travelMM
-                        + self.travel.travel(along: swipe.kind, dxMM: dxMM, dyMM: dyMM, interval: interval)
-                    if travel != swipe.travelMM {
-                        swipe.travelMM = travel
-                        event = .slide(swipe.kind, .moved(travelMM: travel))
-                    }
+                // A frame with no finger on both frames is no movement, but still moves the window on, so travel keeps
+                // catching up while the fingers rest.
+                let count = Double(max(moves.count, 1))
+                swipe.recentMovesMM.append((
+                    dxMM: moves.map(\.0).reduce(0, +) / count * surface.widthMM,
+                    dyMM: moves.map(\.1).reduce(0, +) / count * surface.heightMM))
+                swipe.recentMovesMM.removeFirst(max(0, swipe.recentMovesMM.count - GestureRules.travelAveragingFrames))
+                let window = Double(GestureRules.travelAveragingFrames)
+                let travel = swipe.travelMM + self.travel.travel(
+                    along: swipe.kind,
+                    dxMM: swipe.recentMovesMM.map(\.dxMM).reduce(0, +) / window,
+                    dyMM: swipe.recentMovesMM.map(\.dyMM).reduce(0, +) / window,
+                    interval: interval)
+                if travel != swipe.travelMM {
+                    swipe.travelMM = travel
+                    event = .slide(swipe.kind, .moved(travelMM: travel))
                 }
                 state = .swiping(swipe)
             }
@@ -408,6 +414,9 @@ public struct GestureRecognizer: Sendable {
         var lastTime: FrameTime
         /// Travel since the swipe began, in step millimetres.
         var travelMM: Double = 0
+        /// The fingers' movement on each of the last `GestureRules.travelAveragingFrames` frames, oldest first; empty
+        /// on the frame the slide begins. Kept here, not in `SwipeTravel`, which the adapter replaces mid-slide.
+        var recentMovesMM: [(dxMM: Double, dyMM: Double)] = []
         var thumb: Anchor?
     }
 

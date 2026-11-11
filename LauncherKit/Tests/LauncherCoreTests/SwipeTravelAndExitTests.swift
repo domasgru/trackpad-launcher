@@ -41,7 +41,7 @@ import LauncherCore
             frame(110, 66), frame(120, 70), frame(130, 74), frame(140, 78), frame(150, 82), frame(160, 86), frame(170, 86),
             frame(180, 86), frame(190, 86), frame(200, 86),
         ]
-        let expected: [SwipePhase] = [.began, .moved(travelMM: 2), .moved(travelMM: 4), .moved(travelMM: 6), .moved(travelMM: 8), .moved(travelMM: 10)]
+        let expected: [SwipePhase] = [.began, .moved(travelMM: 0.5), .moved(travelMM: 1.5), .moved(travelMM: 3), .moved(travelMM: 5), .moved(travelMM: 7), .moved(travelMM: 8.5), .moved(travelMM: 9.5), .moved(travelMM: 10)]
         #expect(phasesMatch(phases(frames), expected))
     }
 
@@ -65,7 +65,7 @@ import LauncherCore
             h.frame(atMS: 180, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45)]),
             h.frame(atMS: 230, [h.contact(9, atMM: 10, 10)]),
         ]
-        #expect(phasesMatch(phases(frames), [.began, .moved(travelMM: 14), .moved(travelMM: 24), .ended]))
+        #expect(phasesMatch(phases(frames), [.began, .moved(travelMM: 3.5), .moved(travelMM: 9.5), .moved(travelMM: 15.5), .moved(travelMM: 21.5), .moved(travelMM: 24), .ended]))
     }
 
     @Test func aFingerThatDropsOutAndComesBackWithANewIDRejoinsWithoutAJump() {
@@ -82,7 +82,7 @@ import LauncherCore
             h.frame(atMS: 130, [h.contact(9, atMM: 10, 10)]),
         ]
         #expect(phasesMatch(
-            phases(frames), [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]))
+            phases(frames), [.began, .moved(travelMM: 1), .moved(travelMM: 3), .moved(travelMM: 6), .moved(travelMM: 9), .moved(travelMM: 11), .moved(travelMM: 12), .ended]))
     }
 
     @Test func aThirdFingerLandingWhileBothAreDownStillCancels() {
@@ -106,7 +106,7 @@ import LauncherCore
             h.frame(atMS: 180, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45), h.contact(2, atMM: 94, 45)]),
             h.frame(atMS: 230, []),
         ]
-        #expect(phasesMatch(phases(frames), [.began, .moved(travelMM: 24), .ended]))
+        #expect(phasesMatch(phases(frames), [.began, .moved(travelMM: 6), .moved(travelMM: 12), .moved(travelMM: 18), .moved(travelMM: 24), .ended]))
         #expect(perFrame(frames).last?.blocks == false)
     }
 
@@ -214,7 +214,7 @@ import LauncherCore
         let seen = perFrame(frames).map(\.swipe)
         if press == .blocked {
             #expect(seen.count == 9 && seen[3] == nil && seen[8] == .ended)
-            #expect(phasesMatch(phases(frames), [.began, .moved(travelMM: 8), .ended]))
+            #expect(phasesMatch(phases(frames), [.began, .moved(travelMM: 2), .moved(travelMM: 4), .moved(travelMM: 6), .moved(travelMM: 8), .ended]))
         } else {
             #expect(seen == [nil, nil, .began, .cancelled, nil, nil, nil, nil, nil])
         }

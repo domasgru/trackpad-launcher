@@ -226,7 +226,7 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
             f.frame(atMS: 180, [f.thumb(), f.finger(1, at: 90)]),
             f.frame(atMS: 230, [f.thumb()]),
         ]
-        #expect(phasesMatch(slidePhases(kind, frames), [.began, .moved(travelMM: 14), .moved(travelMM: 24), .ended]))
+        #expect(phasesMatch(slidePhases(kind, frames), [.began, .moved(travelMM: 3.5), .moved(travelMM: 9.5), .moved(travelMM: 15.5), .moved(travelMM: 21.5), .moved(travelMM: 24), .ended]))
     }
 
     @Test(arguments: [SlideKind.swipe, .windowSwipe])
@@ -245,7 +245,7 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
             f.frame(atMS: 130, [f.thumb()]),
         ]
         #expect(phasesMatch(
-            slidePhases(kind, frames), [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]))
+            slidePhases(kind, frames), [.began, .moved(travelMM: 1), .moved(travelMM: 3), .moved(travelMM: 6), .moved(travelMM: 9), .moved(travelMM: 11), .moved(travelMM: 12), .ended]))
     }
 
     @Test(arguments: [SlideKind.swipe, .windowSwipe])
@@ -261,7 +261,7 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
             f.frame(atMS: 180, [f.thumb(), f.finger(1, at: 90), f.finger(2, at: 94)]),
             f.frame(atMS: 230, []),
         ]
-        #expect(phasesMatch(slidePhases(kind, frames), [.began, .moved(travelMM: 24), .ended]))
+        #expect(phasesMatch(slidePhases(kind, frames), [.began, .moved(travelMM: 6), .moved(travelMM: 12), .moved(travelMM: 18), .moved(travelMM: 24), .ended]))
         #expect(perFrame(frames).last?.blocks == false)
     }
 
@@ -306,7 +306,7 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
             f.frame(atMS: 130, [f.thumb()]),
         ] + tapAfter
         if press == .blocked {
-            #expect(phasesMatch(windowPhases(frames), [.began, .moved(travelMM: 8), .ended]))
+            #expect(phasesMatch(windowPhases(frames), [.began, .moved(travelMM: 2), .moved(travelMM: 4), .moved(travelMM: 6), .moved(travelMM: 8), .ended]))
         } else {
             #expect(windowPhases(frames) == [.began, .cancelled])
         }
