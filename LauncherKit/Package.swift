@@ -25,7 +25,7 @@ let package = Package(
         .executableTarget(name: "card-contract", dependencies: ["CardContract"]),
         .testTarget(name: "CardContractTests", dependencies: ["CardContract", "card-contract"]),
         .testTarget(name: "ReleaseTests"),
-        .testTarget(name: "LauncherCoreTests", dependencies: ["LauncherCore"]),
+        .testTarget(name: "LauncherCoreTests", dependencies: ["LauncherCore"], exclude: ["RecordedSwipes"]),
         .testTarget(
             name: "LauncherUITests",
             dependencies: ["LauncherUI", "LauncherCore"],

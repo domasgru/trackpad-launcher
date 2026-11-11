@@ -146,12 +146,12 @@ import LauncherCore
     @Test func aFingerAtTheTopEdgeTakesPartInASwipe() {
         let all = frames([
             Track.still(9, from: 0, until: 10_000, atMM: 10, 10),
-            Track(id: 1, from: 100, until: 160) { ms in (62 + 0.4 * Double(min(ms, 150) - 100), 45) },
-            Track(id: 2, from: 100, until: 160) { ms in (62.4 + 0.4 * Double(min(ms, 150) - 100), 1) },
-        ], throughMS: 200)
+            Track(id: 1, from: 100, until: 190) { ms in (62 + 0.4 * Double(min(ms, 150) - 100), 45) },
+            Track(id: 2, from: 100, until: 190) { ms in (62.4 + 0.4 * Double(min(ms, 150) - 100), 1) },
+        ], throughMS: 230)
         let events = swipeEvents(all)
-        #expect(events.at == [110, 120, 130, 140, 150, 160])
-        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .moved(travelMM: 16), .ended]), "phases were \(events.phases)")
+        #expect(events.at == [110, 120, 130, 140, 150, 160, 170, 180, 190])
+        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 1), .moved(travelMM: 3), .moved(travelMM: 6), .moved(travelMM: 10), .moved(travelMM: 13), .moved(travelMM: 15), .moved(travelMM: 16), .ended]), "phases were \(events.phases)")
         #expect(fired(all) == [])
     }
 
@@ -282,12 +282,12 @@ import LauncherCore
 
     @Test func aThirdContactAtTheEdgeDoesNotCancelASwipe() {
         let all = frames([
-            Track.still(9, from: 0, until: 170, atMM: 10, 10),
-            Track(id: 1, from: 100, until: 140) { ms in (62 + 0.4 * Double(ms - 100), 45) },
-            Track(id: 2, from: 100, until: 140) { ms in (70 + 0.4 * Double(ms - 100), 45) },
-            Track(id: 3, from: 120, until: 160) { ms in (123.8, 60 + Double(ms - 120)) },
-        ], throughMS: 200)
-        #expect(phasesMatch(swipeEvents(all).phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .ended]), "phases were \(swipeEvents(all).phases)")
+            Track.still(9, from: 0, until: 200, atMM: 10, 10),
+            Track(id: 1, from: 100, until: 170) { ms in (62 + 0.4 * Double(min(ms, 130) - 100), 45) },
+            Track(id: 2, from: 100, until: 170) { ms in (70 + 0.4 * Double(min(ms, 130) - 100), 45) },
+            Track(id: 3, from: 120, until: 190) { ms in (123.8, 60 + Double(ms - 120)) },
+        ], throughMS: 230)
+        #expect(phasesMatch(swipeEvents(all).phases, [.began, .moved(travelMM: 1), .moved(travelMM: 3), .moved(travelMM: 5), .moved(travelMM: 7), .moved(travelMM: 8), .ended]), "phases were \(swipeEvents(all).phases)")
         #expect(fired(all) == [])
     }
 
@@ -312,14 +312,14 @@ import LauncherCore
 
     @Test func anEdgeContactCannotRejoinASwipeAfterAFingerLifts() {
         let all = frames([
-            Track.still(9, from: 0, until: 160, atMM: 10, 10),
-            Track(id: 1, from: 100, until: 150) { ms in (62 + 0.4 * Double(ms - 100), 45) },
+            Track.still(9, from: 0, until: 190, atMM: 10, 10),
+            Track(id: 1, from: 100, until: 180) { ms in (62 + 0.4 * Double(min(ms, 140) - 100), 45) },
             Track(id: 2, from: 100, until: 120) { ms in (70 + 0.4 * Double(ms - 100), 45) },
-            Track(id: 3, from: 130, until: 160) { ms in (62 + 0.8 * Double(ms - 130), 75.8) },
-        ], throughMS: 200)
+            Track(id: 3, from: 130, until: 190) { ms in (62 + 0.8 * Double(ms - 130), 75.8) },
+        ], throughMS: 230)
         let events = swipeEvents(all)
-        #expect(events.at == [110, 120, 130, 140, 150])
-        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]), "phases were \(events.phases)")
+        #expect(events.at == [110, 120, 130, 140, 150, 160, 170, 180])
+        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 1), .moved(travelMM: 3), .moved(travelMM: 6), .moved(travelMM: 9), .moved(travelMM: 11), .moved(travelMM: 12), .ended]), "phases were \(events.phases)")
         #expect(fired(all) == [])
     }
 
@@ -335,26 +335,26 @@ import LauncherCore
 
     @Test func anEdgeContactLandingDuringAWindowSwipeDoesNotCancelIt() {
         let all = frames([
-            Track.still(9, from: 0, until: 170, atMM: 10, 10),
-            Track(id: 1, from: 100, until: 140) { ms in (62, 30 + 0.4 * Double(ms - 100)) },
-            Track(id: 2, from: 100, until: 140) { ms in (70, 30 + 0.4 * Double(ms - 100)) },
-            Track(id: 3, from: 120, until: 160) { ms in (123.8, 40 + Double(ms - 120)) },
-        ], throughMS: 200)
+            Track.still(9, from: 0, until: 200, atMM: 10, 10),
+            Track(id: 1, from: 100, until: 170) { ms in (62, 30 + 0.4 * Double(min(ms, 130) - 100)) },
+            Track(id: 2, from: 100, until: 170) { ms in (70, 30 + 0.4 * Double(min(ms, 130) - 100)) },
+            Track(id: 3, from: 120, until: 190) { ms in (123.8, 40 + Double(ms - 120)) },
+        ], throughMS: 230)
         let phases = windowSwipeEvents(all).phases
-        #expect(phasesMatch(phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .ended]), "phases were \(phases)")
+        #expect(phasesMatch(phases, [.began, .moved(travelMM: 1), .moved(travelMM: 3), .moved(travelMM: 5), .moved(travelMM: 7), .moved(travelMM: 8), .ended]), "phases were \(phases)")
         #expect(fired(all) == [])
     }
 
     @Test func anEdgeContactCannotRejoinAWindowSwipeAfterAFingerLifts() {
         let all = frames([
-            Track.still(9, from: 0, until: 160, atMM: 10, 10),
-            Track(id: 1, from: 100, until: 150) { ms in (62, 30 + 0.4 * Double(ms - 100)) },
+            Track.still(9, from: 0, until: 190, atMM: 10, 10),
+            Track(id: 1, from: 100, until: 180) { ms in (62, 30 + 0.4 * Double(min(ms, 140) - 100)) },
             Track(id: 2, from: 100, until: 120) { ms in (70, 30 + 0.4 * Double(ms - 100)) },
-            Track(id: 3, from: 130, until: 160) { ms in (123.8, 40 + 0.8 * Double(ms - 130)) },
-        ], throughMS: 200)
+            Track(id: 3, from: 130, until: 190) { ms in (123.8, 40 + 0.8 * Double(ms - 130)) },
+        ], throughMS: 230)
         let events = windowSwipeEvents(all)
-        #expect(events.at == [110, 120, 130, 140, 150])
-        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]), "phases were \(events.phases)")
+        #expect(events.at == [110, 120, 130, 140, 150, 160, 170, 180])
+        #expect(phasesMatch(events.phases, [.began, .moved(travelMM: 1), .moved(travelMM: 3), .moved(travelMM: 6), .moved(travelMM: 9), .moved(travelMM: 11), .moved(travelMM: 12), .ended]), "phases were \(events.phases)")
         #expect(fired(all) == [])
     }
 

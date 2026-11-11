@@ -153,6 +153,15 @@ struct TouchScript {
         return s
     }
 
+    /// Holds the fingers still for 3 frames (R1 of plan 046): the travel after 3 further frames equals the fingers'
+    /// total movement, so a test reads travel only after the hand has rested. The 3 is the travel window of 4 frames
+    /// less the frame that moved last; a window over 4 frames would make every settling test fail.
+    func settle() -> TouchScript {
+        var s = self
+        s.cursorMS += 3 * Self.frameIntervalMS
+        return s
+    }
+
     /// Lifts the fingers that are down, one frame after the last slide's final frame: all of them, or only the first or
     /// last landed. Ends a press in progress.
     func lift(_ which: Lift = .all) -> TouchScript {

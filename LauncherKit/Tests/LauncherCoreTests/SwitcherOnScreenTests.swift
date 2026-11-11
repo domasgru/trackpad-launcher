@@ -180,7 +180,8 @@ import LauncherCore
         #expect(slow.hardware.lightTicks == [trackpad.id, trackpad.id, trackpad.id])
 
         let jump = World.switcherWorld()
-        jump.play(thumb.land(fingers: 2).slide(byMM: (3.5, 0)).slide(byMM: (36, 0), over: .milliseconds(10)))
+        jump.swipe(3.5, lift: false)
+        jump.hardware.inject(.swipe(SwipeEvent(phase: .moved(travelMM: 36.35), trackpad: trackpad.id)))
         #expect(jump.hardware.lightTicks.count == 3)
     }
 
@@ -243,7 +244,10 @@ import LauncherCore
             h.frame(atMS: 50, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]),
             h.frame(atMS: 60, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 66, 45), h.contact(2, atMM: 70, 45)]),
             h.frame(atMS: 150, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45), h.contact(2, atMM: 94, 45)]),
-            h.frame(atMS: 200),
+            h.frame(atMS: 160, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45), h.contact(2, atMM: 94, 45)]),
+            h.frame(atMS: 170, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45), h.contact(2, atMM: 94, 45)]),
+            h.frame(atMS: 180, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45), h.contact(2, atMM: 94, 45)]),
+            h.frame(atMS: 230),
         ]
         world.hardware.touch(frames, on: trackpad.id)
 
@@ -471,16 +475,16 @@ import LauncherCore
         #expect((world.launcher.switcher?.selection.stretch ?? 0) < 0)
         #expect(world.hardware.lightTicks.isEmpty)
 
-        let turned = pushed.slide(byMM: (5, 0))
+        let turned = pushed.slide(byMM: (5, 0)).settle()
         world.play(turned)
         #expect(world.launcher.switcher?.selectedApp.name == "Safari")
         #expect(world.launcher.switcher?.selection.stretch == 0)
 
-        world.play(turned.slide(byMM: (2, 0)))
+        world.play(turned.slide(byMM: (2, 0)).settle())
         #expect(world.launcher.switcher?.selectedApp.name == "Mail")
         #expect(world.hardware.lightTicks.count == 1)
 
-        world.play(turned.slide(byMM: (2, 0)).lift())
+        world.play(turned.slide(byMM: (2, 0)).settle().lift())
         #expect(world.system.broughtToFront == [world.app("Mail")])
     }
 
