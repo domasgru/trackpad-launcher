@@ -1,8 +1,18 @@
 import AppKit
+import LauncherCore
 import Testing
 @testable import LauncherUI
 
 @MainActor @Suite(.serialized) struct UpdatePictureTests {
+    /// A timing function's two control points, rounded to Float's precision as Core Animation keeps them.
+    private static func points(_ function: CAMediaTimingFunction) -> [Float] {
+        [1, 2].flatMap { index -> [Float] in
+            var point: [Float] = [0, 0]
+            function.getControlPoint(at: index, values: &point)
+            return point
+        }
+    }
+
     private func expectDrifting(_ bench: UpdatePictureBench, sourceLocation: SourceLocation = #_sourceLocation) throws {
         let key = UpdatePictureView.animationKey
         for (layer, drift) in [(bench.view.arrowLayer, bench.arrowDrift), (bench.view.maskLayer, bench.maskDrift)] {
@@ -21,9 +31,8 @@ import Testing
             #expect(abs(drop - 0.55) < 1e-9, "the drop is quick", sourceLocation: sourceLocation)
             #expect(abs(lift - 1.1) < 1e-9, "the lift takes twice as long", sourceLocation: sourceLocation)
             #expect(
-                drift.timingFunctions == [
-                    UpdatePictureView.dropCurve, UpdatePictureView.liftCurve, CAMediaTimingFunction(name: .linear),
-                ], sourceLocation: sourceLocation)
+                drift.timingFunctions?.map(Self.points) == [[0.55, 0, 0.3, 1], [0.3, 0, 0.1, 1], [0, 0, 1, 1]],
+                sourceLocation: sourceLocation)
         }
         #expect(bench.view.trayLayer.animationKeys() == nil, sourceLocation: sourceLocation)
         #expect(bench.view.layer?.animationKeys() == nil, sourceLocation: sourceLocation)
@@ -31,6 +40,35 @@ import Testing
 
     @Test func theArrowAndItsHoleDriftTogetherAndTheTrayStaysStill() throws {
         try expectDrifting(UpdatePictureBench())
+    }
+
+    @Test func aRestartPlaysTheDriftItReadsNow() throws {
+        var drift = ArrowDrift.shipped
+        let bench = UpdatePictureBench(drift: { drift })
+        drift.distance = 8
+        drift.dropTime = 0.3
+        drift.liftTime = 2
+        drift.restTime = 0
+        drift.liftCurve = CubicCurve(0.2, 0.8, 0.4, 1)
+
+        #expect(bench.arrowDrift?.values?.map { ($0 as? NSNumber)?.doubleValue } == [0, -4, 0, 0])
+        bench.view.restartDrift()
+
+        for animation in [bench.arrowDrift, bench.maskDrift] {
+            let animation = try #require(animation)
+            #expect(animation.values?.map { ($0 as? NSNumber)?.doubleValue } == [0, -8, 0, 0])
+            #expect(abs(animation.duration - 2.3) < 1e-9)
+            let times = animation.keyTimes?.map { $0.doubleValue * animation.duration } ?? []
+            #expect(abs(times[1] - 0.3) < 1e-9 && abs(times[2] - 2.3) < 1e-9)
+            #expect(animation.timingFunctions.map { Self.points($0[1]) } == [0.2, 0.8, 0.4, 1])
+        }
+    }
+
+    @Test func aDriftPastTheMasksMarginIsCappedAtIt() {
+        var drift = ArrowDrift.shipped
+        drift.distance = 30
+        #expect(
+            UpdatePictureView.animation(drift).values?.map { ($0 as? NSNumber)?.doubleValue } == [0, -12, 0, 0])
     }
 
     @Test func thePictureTakesNoClicks() {
@@ -151,17 +189,17 @@ import Testing
 
     @Test func theHoleMaskIsSolidBesideTheShaftAndClearOnIt() throws {
         let mask = try #require(UpdatePictureView.knockout(load("update-arrow")))
-        #expect(mask.size == NSSize(width: 71, height: 97))
+        #expect(mask.size == NSSize(width: 71, height: 113))
         let rep = try #require(mask.representations.first as? NSBitmapImageRep)
         let scale = Double(rep.pixelsWide) / 71
 
         func alpha(x: Double, y: Double) -> Double {
             Double(rep.colorAt(x: Int(x * scale), y: Int(y * scale))?.alphaComponent ?? -1)
         }
-        // The shaft runs down the middle of the arrow, 4 points below the mask's top.
-        #expect(alpha(x: 35.5, y: 4 + 20) < 0.01)
-        #expect(alpha(x: 10, y: 4 + 20) > 0.99)
-        #expect(alpha(x: 35.5, y: 4 + 70) > 0.99)
+        // The shaft runs down the middle of the arrow, 12 points below the mask's top.
+        #expect(alpha(x: 35.5, y: 12 + 20) < 0.01)
+        #expect(alpha(x: 10, y: 12 + 20) > 0.99)
+        #expect(alpha(x: 35.5, y: 12 + 70) > 0.99)
         #expect(alpha(x: 35.5, y: 1) > 0.99)
     }
 
@@ -173,7 +211,7 @@ import Testing
         func alpha(x: Double, y: Double) -> Double {
             Double(rep.colorAt(x: Int(x * scale), y: Int(y * scale))?.alphaComponent ?? -1)
         }
-        #expect(alpha(x: 35.5, y: 4 + 10) > 0.99)
-        #expect(alpha(x: 35.5, y: 4 + 50) < 0.01)
+        #expect(alpha(x: 35.5, y: 12 + 10) > 0.99)
+        #expect(alpha(x: 35.5, y: 12 + 50) < 0.01)
     }
 }

@@ -2,8 +2,9 @@ import Foundation
 
 /// The pick animation: an app picker's icon jumping into place from below when the user picks an app in it. It starts
 /// at `startScale` of its side, `rise` points below its place, and grows from its bottom edge to `peakScale` in
-/// `growTime`, starting fast and slowing, while it rises; it then settles back to 100% over `settleTime`, at rest at the
-/// peak and at 100% so there is no second wobble. The rise follows the grow, so as the icon overshoots its size it
+/// `growTime` on `growCurve` while it rises; it then settles back to 100% over `settleTime` on `settleCurve`. The
+/// shipped curves start the grow fast and slow it into the peak, and rest at the peak and at 100% so there is no second
+/// wobble. The rise follows the grow, so as the icon overshoots its size it
 /// overshoots its place by the same share, then settles down into it.
 public struct PickAnimation: Equatable, Sendable {
     /// Share of the icon's side at the pick.
@@ -16,13 +17,22 @@ public struct PickAnimation: Equatable, Sendable {
     public var settleTime: Double
     /// Points the icon's bottom edge starts below its resting place.
     public var rise: Double
+    /// Progress from the start to the peak over the grow.
+    public var growCurve: CubicCurve
+    /// Progress from the peak to rest over the settle.
+    public var settleCurve: CubicCurve
 
-    public init(startScale: Double, peakScale: Double, growTime: Double, settleTime: Double, rise: Double) {
+    public init(
+        startScale: Double, peakScale: Double, growTime: Double, settleTime: Double, rise: Double,
+        growCurve: CubicCurve = .easeOutCubic, settleCurve: CubicCurve = .smoothstep
+    ) {
         self.startScale = startScale
         self.peakScale = peakScale
         self.growTime = growTime
         self.settleTime = settleTime
         self.rise = rise
+        self.growCurve = growCurve
+        self.settleCurve = settleCurve
     }
 
     public static let shipped = PickAnimation(
@@ -37,13 +47,10 @@ public struct PickAnimation: Equatable, Sendable {
         let t = [growTime, duration].first { abs(t - $0) < 1e-9 } ?? t
         if t <= 0 { return startScale }
         if t < growTime {
-            // An ease-out cubic: a quick jump that slows into the peak.
-            let p = 1 - t / growTime
-            return startScale + (peakScale - startScale) * (1 - p * p * p)
+            return startScale + (peakScale - startScale) * growCurve.value(at: t / growTime)
         }
         if t < duration {
-            let q = (t - growTime) / settleTime
-            return peakScale + (1 - peakScale) * (3 * q * q - 2 * q * q * q)
+            return peakScale + (1 - peakScale) * settleCurve.value(at: (t - growTime) / settleTime)
         }
         return 1
     }

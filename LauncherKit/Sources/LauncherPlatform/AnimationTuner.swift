@@ -9,8 +9,8 @@ import Synchronization
 let tunerOverride = Mutex(LaunchTuning.shipped)
 
 /// Debug builds only: a floating window with a slider per `LaunchTuning` knob, for polishing the launch animation, the
-/// launch bounce, the pick animation and the switcher swipe. A segmented control shows one of those four tabs at a
-/// time; presets cover all of them. Changes apply to the next gesture, bounce or pick at once. The current tuning, the
+/// launch bounce, the pick animation, the update card's arrow and the switcher swipe. A segmented control shows one of
+/// those five tabs at a time; presets cover all of them. Changes apply to the next gesture, bounce or pick at once. The current tuning, the
 /// shown tab and named presets persist in user defaults. To ship a tuning, copy its values into `LaunchTuning`'s
 /// defaults.
 @MainActor final class AnimationTuner {
@@ -18,13 +18,14 @@ let tunerOverride = Mutex(LaunchTuning.shipped)
 
     init(
         preview: @escaping @MainActor () -> Void, previewBounce: @escaping @MainActor (Bool) -> Void,
-        previewPick: @escaping @MainActor () -> Void, canPreviewPick: @escaping @MainActor () -> Bool
+        previewPick: @escaping @MainActor () -> Void, canPreviewPick: @escaping @MainActor () -> Bool,
+        previewArrow: @escaping @MainActor () -> Void
     ) {
         let model = TunerModel()
         let content = NSHostingView(
             rootView: TunerView(
                 model: model, preview: preview, previewBounce: previewBounce, previewPick: previewPick,
-                canPreviewPick: canPreviewPick))
+                canPreviewPick: canPreviewPick, previewArrow: previewArrow))
         panel = TunerPanel(
             contentRect: CGRect(x: 0, y: 0, width: 420, height: 760),
             styleMask: [.titled, .resizable, .utilityWindow, .miniaturizable], backing: .buffered, defer: false)
@@ -185,6 +186,8 @@ struct TunerView: View {
     let previewPick: @MainActor () -> Void
     /// False while the settings window is closed or no picker shows an installed app's icon.
     let canPreviewPick: @MainActor () -> Bool
+    /// Restarts the update card arrow's drift with the tuning now, when the card is in the open settings window.
+    let previewArrow: @MainActor () -> Void
     @State private var isPreviewingBounce = false
 
     var body: some View {
@@ -193,6 +196,7 @@ struct TunerView: View {
                 Text("Launch").tag(TunerTab.launch)
                 Text("Bounce").tag(TunerTab.bounce)
                 Text("Pick").tag(TunerTab.pick)
+                Text("Arrow").tag(TunerTab.arrow)
                 Text("Swipe").tag(TunerTab.swipe)
             }
             .pickerStyle(.segmented)
@@ -209,7 +213,13 @@ struct TunerView: View {
                     reduceMotionSection
                 case .pick:
                     pickSection
+                    curveSection("Grow curve", \.pick.growCurve, hint: "from the start size to the peak")
+                    curveSection("Settle curve", \.pick.settleCurve, hint: "from the peak to rest")
                     reduceMotionSection
+                case .arrow:
+                    arrowSection
+                    curveSection("Drop curve", \.arrow.dropCurve, hint: "from rest down")
+                    curveSection("Lift curve", \.arrow.liftCurve, hint: "from the bottom back to rest")
                 case .swipe:
                     swipeSection
                 }
@@ -228,12 +238,16 @@ struct TunerView: View {
                     Button("Preview in settings") { previewPick() }
                         .buttonStyle(.borderedProminent)
                         .disabled(!canPreviewPick())
+                case .arrow:
+                    Button("Restart on card") { previewArrow() }
+                        .buttonStyle(.borderedProminent)
                 case .bounce, .swipe:
                     EmptyView()
                 }
             }
             .padding(12)
         }
+        .onChange(of: model.tuning.arrow) { previewArrow() }
         .frame(minWidth: 380, minHeight: 500)
         .onChange(of: model.tab) { old, _ in
             if old == .bounce, isPreviewingBounce {
@@ -321,8 +335,42 @@ struct TunerView: View {
             Button { model.preview(tuning, play: previewPick) } label: { Image(systemName: "play.fill") }
                 .help("Play once on the settings window's pickers without loading")
                 .disabled(!canPreviewPick())
+        case .arrow:
+            Button { model.preview(tuning, play: previewArrow) } label: { Image(systemName: "play.fill") }
+                .help("Restart the card's arrow with these values without loading; it keeps them until the next change")
         case .bounce, .swipe:
             EmptyView()
+        }
+    }
+
+    private var arrowSection: some View {
+        Section {
+            knob("Distance", \.arrow.distance, 0...12, step: 0.5, unit: "pt", hint: "how far the arrow drops")
+            knob("Drop time", \.arrow.dropTime, 0.1...3, step: 0.05, unit: "s")
+            knob("Lift time", \.arrow.liftTime, 0.1...3, step: 0.05, unit: "s")
+            knob("Rest time", \.arrow.restTime, 0...3, step: 0.05, unit: "s", hint: "still at the top between cycles")
+        } header: {
+            Text("Update card arrow")
+        } footer: {
+            Text("Show the card with a Debug build launched with -PreviewUpdateCard YES. Changes restart the arrow.")
+        }
+    }
+
+    /// A timing curve as CSS cubic-bezier(x1, y1, x2, y2) control points.
+    private func curveSection(
+        _ title: String, _ keyPath: WritableKeyPath<LaunchTuning, CubicCurve>, hint: String
+    ) -> some View {
+        Section {
+            knob("x1", keyPath.appending(path: \.x1), 0...1, step: 0.01)
+            knob("y1", keyPath.appending(path: \.y1), -1...2, step: 0.01)
+            knob("x2", keyPath.appending(path: \.x2), 0...1, step: 0.01)
+            knob("y2", keyPath.appending(path: \.y2), -1...2, step: 0.01)
+        } header: {
+            Text(title)
+        } footer: {
+            let c = model.tuning[keyPath: keyPath]
+            let points = [c.x1, c.y1, c.x2, c.y2].map { String(format: "%.2f", $0) }.joined(separator: ", ")
+            Text(verbatim: "\(hint): cubic-bezier(\(points))")
         }
     }
 

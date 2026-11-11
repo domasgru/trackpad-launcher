@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
     /// time.
     private final class TuningHook {
         var read: (() -> SettingsShell.PickTuning)?
+        var readArrow: (() -> ArrowDrift)?
     }
 #endif
 
@@ -34,6 +35,11 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             get { tuningHook.read }
             set { tuningHook.read = newValue }
         }
+        /// The Debug tuner's arrow drift, read whenever the update card's arrow starts drifting.
+        public var arrowDrift: (() -> ArrowDrift)? {
+            get { tuningHook.readArrow }
+            set { tuningHook.readArrow = newValue }
+        }
         private let tuningHook = TuningHook()
         private let currentPickAnimation: () -> PickAnimation?
     #endif
@@ -54,11 +60,13 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         #if DEBUG
             let hook = tuningHook
             let tuned: () -> PickTuning? = { hook.read?() }
+            let arrowDrift: () -> ArrowDrift = { hook.readArrow?() ?? .shipped }
         #else
             let tuned: () -> PickTuning? = { nil }
+            let arrowDrift: () -> ArrowDrift = { .shipped }
         #endif
         let actions = Self.makeActions(
-            launcher: launcher, icons: icons, window: window, quit: quit, tuned: tuned)
+            launcher: launcher, icons: icons, window: window, quit: quit, tuned: tuned, arrowDrift: arrowDrift)
         window.install(content: SettingsView(launcher: launcher, updater: updater, actions: actions))
         #if DEBUG
             currentPickAnimation = actions.pickAnimation
@@ -81,7 +89,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                     Fit(
                         inactiveNotice: launcher.inactiveNotice, showsAccessibilityHint: launcher.showsAccessibilityHint,
                         isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint,
-                        card: updater?.card)
+                        card: UpdateCardPreview.card(updater?.card))
                 }) {
                     guard fit != last else { continue }
                     last = fit
@@ -213,6 +221,17 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             return launcher.rows.contains { if case .present = $0.app { true } else { false } }
         }
 
+        /// Debug builds' tuner: restarts the update card arrow's drift with the tuner's values now, when the card is
+        /// in the open settings window.
+        public func previewArrowDrift() {
+            for picture in pictures(in: window.contentView) { picture.restartDrift() }
+        }
+
+        private func pictures(in view: NSView?) -> [UpdatePictureView] {
+            guard let view else { return [] }
+            return (view as? UpdatePictureView).map { [$0] } ?? view.subviews.flatMap { pictures(in: $0) }
+        }
+
         private func pickers(in view: NSView?) -> [PickerButton] {
             guard let view else { return [] }
             return (view as? PickerButton).map { [$0] } ?? view.subviews.flatMap { pickers(in: $0) }
@@ -231,7 +250,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
 
     private static func makeActions(
         launcher: Launcher, icons: AppIcons, window: SettingsWindow, quit: @escaping () -> Void,
-        tuned: @escaping () -> PickTuning?
+        tuned: @escaping () -> PickTuning?, arrowDrift: @escaping () -> ArrowDrift
     ) -> LauncherActions {
         LauncherActions(
             cachedIcon: { icons.cachedIcon(for: $0) },
@@ -251,6 +270,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                 pickAnimation(
                     reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, tuned: tuned())
             },
+            arrowDrift: arrowDrift,
             openSettings: { pane in NSWorkspace.shared.open(pane.url) },
             quit: quit)
     }

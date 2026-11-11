@@ -1,4 +1,5 @@
 import AppKit
+import LauncherCore
 @testable import LauncherUI
 
 /// An `UpdatePictureView` put into a borderless window that is never ordered in; setting the content view moves it in.
@@ -18,12 +19,13 @@ final class UpdatePictureBench {
         }
     }
 
-    init(reduceMotion: Bool = false, onScreen: Bool = true) {
+    init(reduceMotion: Bool = false, onScreen: Bool = true, drift: @escaping () -> ArrowDrift = { .shipped }) {
         _ = NSApplication.shared
         let state = State(reduceMotion: reduceMotion, onScreen: onScreen)
         self.state = state
         view = UpdatePictureView(
-            tray: nil, arrow: nil, isOnScreen: { _ in state.onScreen }, reduceMotion: { state.reduceMotion })
+            tray: nil, arrow: nil, isOnScreen: { _ in state.onScreen }, reduceMotion: { state.reduceMotion },
+            drift: drift)
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 200, height: 200), styleMask: .borderless, backing: .buffered,
             defer: true)

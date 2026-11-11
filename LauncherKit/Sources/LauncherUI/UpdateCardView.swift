@@ -6,6 +6,8 @@ import SwiftUI
 struct UpdateCardView: View {
     let card: UpdateCard
     let updateNow: () -> Void
+    /// The arrow's drift, read whenever it starts.
+    let arrowDrift: () -> ArrowDrift
 
     /// The picture's place within the card's padded content.
     private static let picture = (x: CGFloat(203), y: CGFloat(-8))
@@ -25,7 +27,7 @@ struct UpdateCardView: View {
         .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
         .padding(.horizontal, GroupStyle.sideInset)
         .pictureCardFrame(alignment: .topLeading) {
-            DriftingUpdatePicture()
+            DriftingUpdatePicture(drift: arrowDrift)
                 .frame(width: UpdatePictureView.width, height: UpdatePictureView.height)
                 .offset(x: GroupStyle.sideInset + Self.picture.x, y: Self.picture.y)
         }
