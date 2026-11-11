@@ -173,7 +173,7 @@ struct TunerCodingTests {
             growCurve: CubicCurve(0.1, 1.4, 0.3, 1), settleCurve: CubicCurve(0.5, 0, 0.5, 1))
         t.arrow = ArrowDrift(
             distance: 7, dropTime: 0.4, dropCurve: CubicCurve(0.7, 0, 0.8, 0.6), returnTime: 0.9, bounciness: 0.65,
-            restTime: 0.5)
+            restTime: 0.5, windUp: 1.2, windUpTime: 0.35)
         return t
     }
 

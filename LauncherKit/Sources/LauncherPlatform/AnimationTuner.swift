@@ -345,6 +345,9 @@ struct TunerView: View {
 
     private var arrowSection: some View {
         Section {
+            knob("Wind-up", \.arrow.windUp, 0...3, step: 0.05, unit: "pt",
+                 hint: "how far the arrow lifts before it drops; 0 = straight into the drop")
+            knob("Wind-up time", \.arrow.windUpTime, 0...1, step: 0.01, unit: "s")
             knob("Distance", \.arrow.distance, 0...12, step: 0.5, unit: "pt", hint: "how far the arrow drops")
             knob("Drop time", \.arrow.dropTime, 0.1...2, step: 0.005, unit: "s", hint: "lower is a quicker drop")
         } header: {

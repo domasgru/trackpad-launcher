@@ -55,6 +55,9 @@ import Testing
         let values = offsets(UpdatePictureView.animation(drift))
         #expect(values.min() == -12)
         #expect(values.max() == 12)
+        drift.windUp = 30
+        drift.bounciness = 0
+        #expect(offsets(UpdatePictureView.animation(drift)).max() == 12)
     }
 
     @Test func thePictureTakesNoClicks() {

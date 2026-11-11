@@ -150,7 +150,7 @@ extension CubicCurve: Codable {
 
 extension ArrowDrift: Codable {
     private enum CodingKeys: String, CodingKey {
-        case distance, dropTime, dropCurve, returnTime, bounciness, restTime
+        case distance, dropTime, dropCurve, returnTime, bounciness, restTime, windUp, windUpTime
     }
 
     public init(from decoder: any Decoder) throws {
@@ -160,7 +160,8 @@ extension ArrowDrift: Codable {
             distance: try c.decode(.distance, or: s.distance), dropTime: try c.decode(.dropTime, or: s.dropTime),
             dropCurve: try c.decode(.dropCurve, or: s.dropCurve),
             returnTime: try c.decode(.returnTime, or: s.returnTime),
-            bounciness: try c.decode(.bounciness, or: s.bounciness), restTime: try c.decode(.restTime, or: s.restTime))
+            bounciness: try c.decode(.bounciness, or: s.bounciness), restTime: try c.decode(.restTime, or: s.restTime),
+            windUp: try c.decode(.windUp, or: s.windUp), windUpTime: try c.decode(.windUpTime, or: s.windUpTime))
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -171,6 +172,8 @@ extension ArrowDrift: Codable {
         try c.encode(returnTime, forKey: .returnTime)
         try c.encode(bounciness, forKey: .bounciness)
         try c.encode(restTime, forKey: .restTime)
+        try c.encode(windUp, forKey: .windUp)
+        try c.encode(windUpTime, forKey: .windUpTime)
     }
 }
 

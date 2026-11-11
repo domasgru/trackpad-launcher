@@ -15,18 +15,31 @@ import Testing
         #expect(frames.keyTimes.first == 0 && frames.keyTimes.last == 1)
         #expect(frames.offsets.first == 0 && frames.offsets.last == 0)
         #expect(frames.offsets.min() == -3)
-        let bottom = frames.keyTimes.firstIndex { abs($0 * shipped.period - shipped.dropTime) < 1e-9 }!
+        let top = frames.keyTimes.firstIndex { abs($0 * shipped.period - shipped.windUpTime) < 1e-9 }!
+        let bottom = frames.keyTimes.firstIndex { abs($0 * shipped.period - shipped.dropEnd) < 1e-9 }!
+        #expect(frames.offsets[top] == 0.4)
         #expect(frames.offsets[bottom] == -3)
-        for i in 1...bottom { #expect(frames.offsets[i] < frames.offsets[i - 1], "drops") }
+        for i in 1...top { #expect(frames.offsets[i] > frames.offsets[i - 1], "winds up") }
+        for i in (top + 1)...bottom { #expect(frames.offsets[i] < frames.offsets[i - 1], "drops") }
         #expect(zip(frames.keyTimes, frames.keyTimes.dropFirst()).allSatisfy { $0 < $1 })
-        let rest = frames.keyTimes.filter { $0 * shipped.period > shipped.dropTime + shipped.settleTime + 1e-9 }
+        let rest = frames.keyTimes.filter { $0 * shipped.period > shipped.dropEnd + shipped.settleTime + 1e-9 }
         #expect(rest.count == 1, "the pause is one still stretch")
+    }
+
+    @Test func noWindUpDropsStraightFromThePlace() {
+        var drift = ArrowDrift.shipped
+        drift.windUp = 0
+        let offsets = drift.keyframes(perSecond: 240).offsets
+        let bottom = offsets.firstIndex(of: -3)!
+        #expect(offsets[...bottom].allSatisfy { $0 <= 0 })
     }
 
     @Test func aBouncySpringPassesItsPlaceAndSettlesBack() {
         for bounciness in [0.2, 0.4, 0.7] {
             let drift = drift(bounciness: bounciness)
-            let offsets = drift.keyframes(perSecond: 240).offsets
+            let frames = drift.keyframes(perSecond: 240)
+            let bottom = frames.offsets.firstIndex(of: -3)!
+            let offsets = Array(frames.offsets[bottom...])
             let zeta = 1 - bounciness
             // A damped spring's first overshoot, as a share of where it started from.
             let overshoot = exp(-zeta * .pi / (1 - zeta * zeta).squareRoot())
@@ -36,7 +49,8 @@ import Testing
 
     @Test func noBouncinessComesBackWithoutPassingItsPlace() {
         let offsets = drift(bounciness: 0).keyframes(perSecond: 240).offsets
-        #expect(offsets.allSatisfy { $0 <= 0 })
+        let bottom = offsets.firstIndex(of: -3)!
+        #expect(offsets[bottom...].allSatisfy { $0 <= 0 })
     }
 
     @Test func moreBouncinessSwingsLonger() {
@@ -48,8 +62,8 @@ import Testing
 
     @Test func theSpringLeavesTheBottomAtRest() {
         let drift = ArrowDrift.shipped
-        let start = drift.offset(at: drift.dropTime + 1e-6)
+        let start = drift.offset(at: drift.dropEnd + 1e-6)
         #expect(abs(start - -3) < 1e-6)
-        #expect(abs(drift.offset(at: drift.dropTime + drift.settleTime - 1e-6)) < 3 * 0.003 + 1e-9)
+        #expect(abs(drift.offset(at: drift.dropEnd + drift.settleTime - 1e-6)) < 3 * 0.003 + 1e-9)
     }
 }
