@@ -4,38 +4,25 @@ import Testing
 @testable import LauncherUI
 
 @MainActor @Suite(.serialized) struct UpdatePictureTests {
-    /// A timing function's two control points, rounded to Float's precision as Core Animation keeps them.
-    private static func points(_ function: CAMediaTimingFunction) -> [Float] {
-        [1, 2].flatMap { index -> [Float] in
-            var point: [Float] = [0, 0]
-            function.getControlPoint(at: index, values: &point)
-            return point
-        }
+    private func offsets(_ animation: CAKeyframeAnimation?) -> [Double] {
+        animation?.values?.compactMap { ($0 as? NSNumber)?.doubleValue } ?? []
     }
 
     private func expectDrifting(_ bench: UpdatePictureBench, sourceLocation: SourceLocation = #_sourceLocation) throws {
         let key = UpdatePictureView.animationKey
+        let frames = ArrowDrift.shipped.keyframes(perSecond: 240)
         for (layer, drift) in [(bench.view.arrowLayer, bench.arrowDrift), (bench.view.maskLayer, bench.maskDrift)] {
             let drift = try #require(drift, sourceLocation: sourceLocation)
             #expect(layer.animationKeys() == [key], sourceLocation: sourceLocation)
             #expect(drift.keyPath == "position.y", sourceLocation: sourceLocation)
             #expect(drift.isAdditive, sourceLocation: sourceLocation)
-            #expect(
-                drift.values?.map { ($0 as? NSNumber)?.doubleValue } == [0, -4, 1.5, 0, 0], sourceLocation: sourceLocation)
-            #expect(abs(drift.duration - 2.3) < 1e-9, sourceLocation: sourceLocation)
+            #expect(drift.calculationMode == .linear, sourceLocation: sourceLocation)
+            #expect(offsets(drift) == frames.offsets, sourceLocation: sourceLocation)
+            #expect(drift.keyTimes?.map(\.doubleValue) == frames.keyTimes, sourceLocation: sourceLocation)
+            #expect(abs(drift.duration - ArrowDrift.shipped.period) < 1e-9, sourceLocation: sourceLocation)
             #expect(!drift.autoreverses, sourceLocation: sourceLocation)
             #expect(drift.repeatCount == .infinity, sourceLocation: sourceLocation)
             #expect(drift.isRemovedOnCompletion == false, sourceLocation: sourceLocation)
-            let times = drift.keyTimes?.map { $0.doubleValue * drift.duration } ?? []
-            #expect(times.count == 5, sourceLocation: sourceLocation)
-            let drop = times[1] - times[0], lift = times[2] - times[1], settle = times[3] - times[2]
-            #expect(abs(drop - 0.55) < 1e-9, "the drop is quick", sourceLocation: sourceLocation)
-            #expect(abs(lift - 1.1) < 1e-9, "the lift takes twice as long", sourceLocation: sourceLocation)
-            #expect(abs(settle - 0.4) < 1e-9, "the bounce settles back", sourceLocation: sourceLocation)
-            #expect(
-                drift.timingFunctions?.map(Self.points)
-                    == [[0.55, 0, 0.3, 1], [0.3, 0, 0.1, 1], [0.37, 0, 0.63, 1], [0, 0, 1, 1]],
-                sourceLocation: sourceLocation)
         }
         #expect(bench.view.trayLayer.animationKeys() == nil, sourceLocation: sourceLocation)
         #expect(bench.view.layer?.animationKeys() == nil, sourceLocation: sourceLocation)
@@ -49,32 +36,25 @@ import Testing
         var drift = ArrowDrift.shipped
         let bench = UpdatePictureBench(drift: { drift })
         drift.distance = 8
-        drift.dropTime = 0.3
-        drift.liftTime = 2
-        drift.restTime = 0
-        drift.bounce = 0
-        drift.bounceTime = 0
-        drift.liftCurve = CubicCurve(0.2, 0.8, 0.4, 1)
+        drift.bounciness = 0.7
 
-        #expect(bench.arrowDrift?.values?.map { ($0 as? NSNumber)?.doubleValue } == [0, -4, 1.5, 0, 0])
+        #expect(offsets(bench.arrowDrift).min() == -3)
         bench.view.restartDrift()
 
         for animation in [bench.arrowDrift, bench.maskDrift] {
-            let animation = try #require(animation)
-            #expect(animation.values?.map { ($0 as? NSNumber)?.doubleValue } == [0, -8, 0, 0, 0])
-            #expect(abs(animation.duration - 2.3) < 1e-9)
-            let times = animation.keyTimes?.map { $0.doubleValue * animation.duration } ?? []
-            #expect(abs(times[1] - 0.3) < 1e-9 && abs(times[2] - 2.3) < 1e-9)
-            #expect(animation.timingFunctions.map { Self.points($0[1]) } == [0.2, 0.8, 0.4, 1])
+            #expect(offsets(animation) == drift.keyframes(perSecond: 240).offsets)
+            #expect(offsets(animation).min() == -8)
+            #expect(abs((animation?.duration ?? 0) - drift.period) < 1e-9)
         }
     }
 
     @Test func aDriftPastTheMasksMarginIsCappedAtIt() {
         var drift = ArrowDrift.shipped
         drift.distance = 30
-        drift.bounce = 30
-        #expect(
-            UpdatePictureView.animation(drift).values?.map { ($0 as? NSNumber)?.doubleValue } == [0, -12, 12, 0, 0])
+        drift.bounciness = 0.9
+        let values = offsets(UpdatePictureView.animation(drift))
+        #expect(values.min() == -12)
+        #expect(values.max() == 12)
     }
 
     @Test func thePictureTakesNoClicks() {

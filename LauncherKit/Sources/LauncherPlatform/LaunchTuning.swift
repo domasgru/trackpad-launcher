@@ -149,28 +149,28 @@ extension CubicCurve: Codable {
 }
 
 extension ArrowDrift: Codable {
-    private enum CodingKeys: String, CodingKey { case distance, dropTime, liftTime, restTime, dropCurve, liftCurve, bounce, bounceTime }
+    private enum CodingKeys: String, CodingKey {
+        case distance, dropTime, dropCurve, returnTime, bounciness, restTime
+    }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let s = ArrowDrift.shipped
         self.init(
             distance: try c.decode(.distance, or: s.distance), dropTime: try c.decode(.dropTime, or: s.dropTime),
-            liftTime: try c.decode(.liftTime, or: s.liftTime), restTime: try c.decode(.restTime, or: s.restTime),
-            dropCurve: try c.decode(.dropCurve, or: s.dropCurve), liftCurve: try c.decode(.liftCurve, or: s.liftCurve),
-            bounce: try c.decode(.bounce, or: s.bounce), bounceTime: try c.decode(.bounceTime, or: s.bounceTime))
+            dropCurve: try c.decode(.dropCurve, or: s.dropCurve),
+            returnTime: try c.decode(.returnTime, or: s.returnTime),
+            bounciness: try c.decode(.bounciness, or: s.bounciness), restTime: try c.decode(.restTime, or: s.restTime))
     }
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(distance, forKey: .distance)
         try c.encode(dropTime, forKey: .dropTime)
-        try c.encode(liftTime, forKey: .liftTime)
-        try c.encode(restTime, forKey: .restTime)
         try c.encode(dropCurve, forKey: .dropCurve)
-        try c.encode(liftCurve, forKey: .liftCurve)
-        try c.encode(bounce, forKey: .bounce)
-        try c.encode(bounceTime, forKey: .bounceTime)
+        try c.encode(returnTime, forKey: .returnTime)
+        try c.encode(bounciness, forKey: .bounciness)
+        try c.encode(restTime, forKey: .restTime)
     }
 }
 

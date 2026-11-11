@@ -176,31 +176,25 @@ final class UpdatePictureView: NSView {
         }
     }
 
-    /// One cycle of `drift`, repeating: offsets from the resting place, added to it. The view is not flipped, so down
-    /// is negative and the bounce above the place positive. Both ends stay within the mask's margin.
+    /// Samples a second of the drift, like the pick animation's.
+    static let keyframesPerSecond: Double = 240
+
+    /// One cycle of `drift`, repeating, sampled so the spring back plays as it is: offsets from the resting place,
+    /// added to it. The view is not flipped, so down is negative and the overshoot above the place positive; both stay
+    /// within the mask's margin.
     static func animation(_ drift: ArrowDrift) -> CAKeyframeAnimation {
-        let distance = min(drift.distance, Double(maxDrift))
-        let bounce = min(max(drift.bounce, 0), Double(maxDrift))
+        let frames = drift.keyframes(perSecond: keyframesPerSecond)
+        let limit = Double(maxDrift)
         let animation = CAKeyframeAnimation(keyPath: "position.y")
         animation.isAdditive = true
-        animation.values = [0, -distance, bounce, 0, 0]
-        let lifted = drift.dropTime + drift.liftTime
-        animation.keyTimes = [0, drift.dropTime, lifted, lifted + drift.bounceTime, drift.period].map {
-            NSNumber(value: $0 / drift.period)
-        }
-        animation.timingFunctions = [
-            timingFunction(drift.dropCurve), timingFunction(drift.liftCurve),
-            timingFunction(ArrowDrift.settleCurve), CAMediaTimingFunction(name: .linear),
-        ]
+        animation.values = frames.offsets.map { min(max($0, -limit), limit) }
+        animation.keyTimes = frames.keyTimes.map { NSNumber(value: $0) }
+        animation.calculationMode = .linear
         animation.duration = drift.period
         animation.repeatCount = .infinity
         // Not a no-op, though the drift never completes: without it a real window opens with the arrow still.
         animation.isRemovedOnCompletion = false
         return animation
-    }
-
-    static func timingFunction(_ curve: CubicCurve) -> CAMediaTimingFunction {
-        CAMediaTimingFunction(controlPoints: Float(curve.x1), Float(curve.y1), Float(curve.x2), Float(curve.y2))
     }
 }
 

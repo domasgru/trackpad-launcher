@@ -172,8 +172,8 @@ struct TunerCodingTests {
             startScale: 0.25, peakScale: 1.35, growTime: 0.45, settleTime: 0.35, rise: 11,
             growCurve: CubicCurve(0.1, 1.4, 0.3, 1), settleCurve: CubicCurve(0.5, 0, 0.5, 1))
         t.arrow = ArrowDrift(
-            distance: 7, dropTime: 0.4, liftTime: 1.6, restTime: 0.5, dropCurve: CubicCurve(0.7, 0, 0.8, 0.6),
-            liftCurve: CubicCurve(0.1, 0.9, 0.2, 1), bounce: 2.5, bounceTime: 0.6)
+            distance: 7, dropTime: 0.4, dropCurve: CubicCurve(0.7, 0, 0.8, 0.6), returnTime: 0.9, bounciness: 0.65,
+            restTime: 0.5)
         return t
     }
 
@@ -186,14 +186,14 @@ struct TunerCodingTests {
     }
 
     @Test func `a save from before the arrow and pick curves gets the shipped ones`() throws {
-        let json = #"{"pick":{"growTime":0.5},"arrow":{"liftTime":2}}"#
+        let json = #"{"pick":{"growTime":0.5},"arrow":{"liftTime":2,"restTime":2}}"#
 
         let tuning = try JSONDecoder().decode(LaunchTuning.self, from: Data(json.utf8))
 
         #expect(tuning.pick.growCurve == .easeOutCubic && tuning.pick.settleCurve == .smoothstep)
         var arrow = ArrowDrift.shipped
-        arrow.liftTime = 2
-        #expect(tuning.arrow == arrow)
+        arrow.restTime = 2
+        #expect(tuning.arrow == arrow, "a key no longer read is ignored")
     }
 
     @Test func `resetting Arrow ships only the arrow`() {

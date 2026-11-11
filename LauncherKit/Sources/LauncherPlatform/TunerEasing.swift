@@ -74,27 +74,4 @@ struct CurvePicture: View {
     }
 }
 
-extension ArrowDrift {
-    /// Seconds to drop and lift back, the pause aside. Setting it keeps the split between drop and lift.
-    var moveTime: Double {
-        get { dropTime + liftTime }
-        set {
-            let share = dropShare
-            dropTime = newValue * share
-            liftTime = newValue - dropTime
-        }
-    }
-
-    /// Share of the move spent dropping, as a percentage. Setting it keeps the move time.
-    var dropPercent: Double {
-        get { dropShare * 100 }
-        set {
-            let move = moveTime
-            dropTime = move * newValue / 100
-            liftTime = move - dropTime
-        }
-    }
-
-    private var dropShare: Double { moveTime > 0 ? dropTime / moveTime : 0.5 }
-}
 #endif

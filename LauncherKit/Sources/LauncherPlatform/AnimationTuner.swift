@@ -219,7 +219,7 @@ struct TunerView: View {
                 case .arrow:
                     arrowSection
                     easingSection("Drop easing", \.arrow.dropCurve, hint: "how the arrow moves on the way down")
-                    easingSection("Lift easing", \.arrow.liftCurve, hint: "how the arrow moves on the way back up")
+                    arrowReturnSection
                 case .swipe:
                     swipeSection
                 }
@@ -346,19 +346,27 @@ struct TunerView: View {
     private var arrowSection: some View {
         Section {
             knob("Distance", \.arrow.distance, 0...12, step: 0.5, unit: "pt", hint: "how far the arrow drops")
-            knob("Speed", \.arrow.moveTime, 0.3...4, step: 0.05, unit: "s",
-                 hint: "time to drop and come back up to the top of the bounce; lower is faster")
-            knob("Drop vs lift", \.arrow.dropPercent, 10...70, step: 1, unit: "%",
-                 hint: "share of that time spent dropping; 33% = a quick drop and a lift twice as long")
-            knob("Bounce", \.arrow.bounce, 0...6, step: 0.25, unit: "pt",
-                 hint: "how far the arrow springs past its place on the way back; 0 = no bounce")
-            knob("Bounce time", \.arrow.bounceTime, 0...1.5, step: 0.05, unit: "s",
-                 hint: "from the top of the bounce back into place")
-            knob("Pause", \.arrow.restTime, 0...3, step: 0.05, unit: "s", hint: "still at the top between drops")
+            knob("Drop time", \.arrow.dropTime, 0.1...2, step: 0.005, unit: "s", hint: "lower is a quicker drop")
         } header: {
-            Text("Update card arrow")
+            Text("Update card arrow: drop")
         } footer: {
             Text("Show the card with a Debug build launched with -PreviewUpdateCard YES. Changes restart the arrow.")
+        }
+    }
+
+    private var arrowReturnSection: some View {
+        Section {
+            knob("Return time", \.arrow.returnTime, 0.1...2, step: 0.01, unit: "s",
+                 hint: "how quick the spring back is; lower is snappier")
+            knob("Bounciness", \.arrow.bounciness, 0...0.9, step: 0.01,
+                 hint: "0 = no overshoot, 0.4 = a soft spring, 0.6+ = springy, swings a few times")
+            knob("Pause", \.arrow.restTime, 0...3, step: 0.05, unit: "s", hint: "still in place between drops")
+        } header: {
+            Text("Spring back")
+        } footer: {
+            let drift = model.tuning.arrow
+            Text(verbatim: String(
+                format: "Settles in %.2f s; one cycle takes %.2f s.", drift.settleTime, drift.period))
         }
     }
 
