@@ -72,8 +72,8 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
     ) {
         let start = TouchScript(surface).thumb(atMM: thumb).land(fingers: 2, atMM: (62, 30))
             .slide(byMM: (0, 3.5))
-        let down = start.slide(byMM: (0, 12)).lift().frames
-        let up = start.slide(byMM: (0, -12)).lift().frames
+        let down = start.slide(byMM: (0, 12)).settle().lift().frames
+        let up = start.slide(byMM: (0, -12)).settle().lift().frames
         let downPhases = windowPhases(down, corner: corner, surface: surface)
         let upPhases = windowPhases(up, corner: corner, surface: surface)
         let lastMove: ([SwipePhase]) -> SwipePhase? = { $0.last { if case .moved = $0 { true } else { false } } }
@@ -126,7 +126,7 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
     func aSlideNeverTurnsIntoTheOtherKind(kind: SlideKind) {
         let across: (x: Double, y: Double) = kind == .swipe ? (0, 20) : (20, 0)
         let frames = TouchScript(.macBook14).thumb(atMM: (10, 10)).land(fingers: 2, atMM: (40, 30))
-            .slide(byMM: along(kind, 3.5)).slide(byMM: across).slide(byMM: along(kind, 12)).lift().frames
+            .slide(byMM: along(kind, 3.5)).slide(byMM: across).slide(byMM: along(kind, 12)).settle().lift().frames
         let seen = perFrame(frames)
         let other = seen.compactMap { kind == .swipe ? $0.windowSwipe : $0.swipe }
         let own = slidePhases(kind, frames)
@@ -221,7 +221,10 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
             f.frame(atMS: 60, [f.thumb(), f.finger(1, at: 66), f.finger(2, at: 70)]),
             f.frame(atMS: 100, [f.thumb(), f.finger(1, at: 80)]),
             f.frame(atMS: 150, [f.thumb(), f.finger(1, at: 90)]),
-            f.frame(atMS: 200, [f.thumb()]),
+            f.frame(atMS: 160, [f.thumb(), f.finger(1, at: 90)]),
+            f.frame(atMS: 170, [f.thumb(), f.finger(1, at: 90)]),
+            f.frame(atMS: 180, [f.thumb(), f.finger(1, at: 90)]),
+            f.frame(atMS: 230, [f.thumb()]),
         ]
         #expect(phasesMatch(slidePhases(kind, frames), [.began, .moved(travelMM: 14), .moved(travelMM: 24), .ended]))
     }
@@ -236,7 +239,10 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
             f.frame(atMS: 70, [f.thumb(), f.finger(1, at: 70)]),
             f.frame(atMS: 80, [f.thumb(), f.finger(1, at: 74), f.finger(5, .landing, at: 90)]),
             f.frame(atMS: 90, [f.thumb(), f.finger(1, at: 78), f.finger(5, at: 94)]),
-            f.frame(atMS: 100, [f.thumb()]),
+            f.frame(atMS: 100, [f.thumb(), f.finger(1, at: 78), f.finger(5, at: 94)]),
+            f.frame(atMS: 110, [f.thumb(), f.finger(1, at: 78), f.finger(5, at: 94)]),
+            f.frame(atMS: 120, [f.thumb(), f.finger(1, at: 78), f.finger(5, at: 94)]),
+            f.frame(atMS: 130, [f.thumb()]),
         ]
         #expect(phasesMatch(
             slidePhases(kind, frames), [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]))
@@ -250,7 +256,10 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
             f.frame(atMS: 50, [f.thumb(), f.finger(1, .landing, at: 62), f.finger(2, .landing, at: 70)]),
             f.frame(atMS: 60, [f.thumb(), f.finger(1, at: 66), f.finger(2, at: 70)]),
             f.frame(atMS: 150, [f.thumb(), f.finger(1, at: 90), f.finger(2, at: 94)]),
-            f.frame(atMS: 200, []),
+            f.frame(atMS: 160, [f.thumb(), f.finger(1, at: 90), f.finger(2, at: 94)]),
+            f.frame(atMS: 170, [f.thumb(), f.finger(1, at: 90), f.finger(2, at: 94)]),
+            f.frame(atMS: 180, [f.thumb(), f.finger(1, at: 90), f.finger(2, at: 94)]),
+            f.frame(atMS: 230, []),
         ]
         #expect(phasesMatch(slidePhases(kind, frames), [.began, .moved(travelMM: 24), .ended]))
         #expect(perFrame(frames).last?.blocks == false)
@@ -291,7 +300,10 @@ private func pairSpot(_ kind: SlideKind) -> (x: Double, y: Double) {
         let frames = head + [
             f.frame(atMS: 70, [f.thumb(), f.finger(1, at: 66), f.finger(2, at: 70)], press: press),
             f.frame(atMS: 80, [f.thumb(), f.finger(1, at: 74), f.finger(2, at: 78)], press: press),
-            f.frame(atMS: 100, [f.thumb()]),
+            f.frame(atMS: 90, [f.thumb(), f.finger(1, at: 74), f.finger(2, at: 78)], press: press),
+            f.frame(atMS: 100, [f.thumb(), f.finger(1, at: 74), f.finger(2, at: 78)], press: press),
+            f.frame(atMS: 110, [f.thumb(), f.finger(1, at: 74), f.finger(2, at: 78)], press: press),
+            f.frame(atMS: 130, [f.thumb()]),
         ] + tapAfter
         if press == .blocked {
             #expect(phasesMatch(windowPhases(frames), [.began, .moved(travelMM: 8), .ended]))

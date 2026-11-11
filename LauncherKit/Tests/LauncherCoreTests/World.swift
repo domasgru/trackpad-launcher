@@ -369,14 +369,15 @@ extension World {
     func window(_ title: String) -> WindowID { system.windows.id(title) }
 
     /// The thumb at `thumb`, two fingers down at (62, 30), each slide straight down in turn (millimetres, positive
-    /// down), then the fingers lift unless `lift` is false. Returns its script so a row can continue it with `play`.
+    /// down) with the fingers settling after each, so callers think in the millimetres the fingers reached; then the
+    /// fingers lift unless `lift` is false. Returns its script so a row can continue it with `play`.
     @discardableResult
     func windowSwipe(
         _ slidesMM: Double..., lift: Bool = true, thumbAtMM thumb: (x: Double, y: Double) = (10, 10),
         on trackpad: Trackpad = .macBook14
     ) -> TouchScript {
         var script = TouchScript(trackpad.surface).thumb(atMM: thumb).land(fingers: 2, atMM: (62, 30))
-        for slide in slidesMM { script = script.slide(byMM: (0, slide)) }
+        for slide in slidesMM { script = script.slide(byMM: (0, slide)).settle() }
         if lift { script = script.lift() }
         play(script, on: trackpad)
         return script
@@ -401,15 +402,16 @@ extension World {
         }
     }
 
-    /// Thumb at (10, 10), two fingers down, each slide in turn (millimetres, positive right), then the fingers lift
-    /// unless `lift` is false. Returns its script so a row can continue it with `play`.
+    /// Thumb at (10, 10), two fingers down, each slide in turn (millimetres, positive right) with the fingers settling
+    /// after each, so callers think in the millimetres the fingers reached; then the fingers lift unless `lift` is
+    /// false. Returns its script so a row can continue it with `play`.
     @discardableResult
     func swipe(
         _ slidesMM: Double..., lift: Bool = true, thumbAtMM thumb: (x: Double, y: Double) = (10, 10),
         on trackpad: Trackpad = .macBook14
     ) -> TouchScript {
         var script = TouchScript(trackpad.surface).thumb(atMM: thumb).land(fingers: 2)
-        for slide in slidesMM { script = script.slide(byMM: (slide, 0)) }
+        for slide in slidesMM { script = script.slide(byMM: (slide, 0)).settle() }
         if lift { script = script.lift() }
         play(script, on: trackpad)
         return script

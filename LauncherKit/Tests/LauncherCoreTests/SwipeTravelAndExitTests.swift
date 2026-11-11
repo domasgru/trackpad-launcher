@@ -25,8 +25,8 @@ import LauncherCore
         surface: SurfaceSize, corner: ThumbCorner, thumb: (x: Double, y: Double)
     ) {
         let start = TouchScript(surface).thumb(atMM: thumb).land(fingers: 2).slide(byMM: (3.5, 0))
-        let right = phases(start.slide(byMM: (12, 0)).frames, corner: corner, surface: surface)
-        let left = phases(start.slide(byMM: (-12, 0)).frames, corner: corner, surface: surface)
+        let right = phases(start.slide(byMM: (12, 0)).settle().frames, corner: corner, surface: surface)
+        let left = phases(start.slide(byMM: (-12, 0)).settle().frames, corner: corner, surface: surface)
         #expect(right.last?.isCloseTo(.moved(travelMM: 12.35)) == true)
         #expect(left.last?.isCloseTo(.moved(travelMM: -11.65)) == true)
     }
@@ -39,6 +39,7 @@ import LauncherCore
             h.frame(atMS: 0, [h.contact(9, .landing, atMM: 10, 10)]),
             h.frame(atMS: 100, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]),
             frame(110, 66), frame(120, 70), frame(130, 74), frame(140, 78), frame(150, 82), frame(160, 86), frame(170, 86),
+            frame(180, 86), frame(190, 86), frame(200, 86),
         ]
         let expected: [SwipePhase] = [.began, .moved(travelMM: 2), .moved(travelMM: 4), .moved(travelMM: 6), .moved(travelMM: 8), .moved(travelMM: 10)]
         #expect(phasesMatch(phases(frames), expected))
@@ -59,7 +60,10 @@ import LauncherCore
             h.frame(atMS: 60, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 66, 45), h.contact(2, atMM: 70, 45)]),
             h.frame(atMS: 100, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 80, 45)]),
             h.frame(atMS: 150, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45)]),
-            h.frame(atMS: 200, [h.contact(9, atMM: 10, 10)]),
+            h.frame(atMS: 160, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45)]),
+            h.frame(atMS: 170, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45)]),
+            h.frame(atMS: 180, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45)]),
+            h.frame(atMS: 230, [h.contact(9, atMM: 10, 10)]),
         ]
         #expect(phasesMatch(phases(frames), [.began, .moved(travelMM: 14), .moved(travelMM: 24), .ended]))
     }
@@ -72,7 +76,10 @@ import LauncherCore
             h.frame(atMS: 70, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 70, 45)]),
             h.frame(atMS: 80, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 74, 45), h.contact(5, .landing, atMM: 90, 45)]),
             h.frame(atMS: 90, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 78, 45), h.contact(5, atMM: 94, 45)]),
-            h.frame(atMS: 100, [h.contact(9, atMM: 10, 10)]),
+            h.frame(atMS: 100, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 78, 45), h.contact(5, atMM: 94, 45)]),
+            h.frame(atMS: 110, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 78, 45), h.contact(5, atMM: 94, 45)]),
+            h.frame(atMS: 120, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 78, 45), h.contact(5, atMM: 94, 45)]),
+            h.frame(atMS: 130, [h.contact(9, atMM: 10, 10)]),
         ]
         #expect(phasesMatch(
             phases(frames), [.began, .moved(travelMM: 4), .moved(travelMM: 8), .moved(travelMM: 12), .ended]))
@@ -94,7 +101,10 @@ import LauncherCore
             h.frame(atMS: 50, [h.contact(9, atMM: 10, 10), h.contact(1, .landing, atMM: 62, 45), h.contact(2, .landing, atMM: 70, 45)]),
             h.frame(atMS: 60, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 66, 45), h.contact(2, atMM: 70, 45)]),
             h.frame(atMS: 150, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45), h.contact(2, atMM: 94, 45)]),
-            h.frame(atMS: 200, []),
+            h.frame(atMS: 160, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45), h.contact(2, atMM: 94, 45)]),
+            h.frame(atMS: 170, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45), h.contact(2, atMM: 94, 45)]),
+            h.frame(atMS: 180, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 90, 45), h.contact(2, atMM: 94, 45)]),
+            h.frame(atMS: 230, []),
         ]
         #expect(phasesMatch(phases(frames), [.began, .moved(travelMM: 24), .ended]))
         #expect(perFrame(frames).last?.blocks == false)
@@ -196,14 +206,17 @@ import LauncherCore
             h.frame(atMS: 60, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 66, 45), h.contact(2, atMM: 70, 45)]),
             h.frame(atMS: 70, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 66, 45), h.contact(2, atMM: 70, 45)], press: press),
             h.frame(atMS: 80, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 74, 45), h.contact(2, atMM: 78, 45)], press: press),
-            h.frame(atMS: 100, [h.contact(9, atMM: 10, 10)]),
+            h.frame(atMS: 90, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 74, 45), h.contact(2, atMM: 78, 45)], press: press),
+            h.frame(atMS: 100, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 74, 45), h.contact(2, atMM: 78, 45)], press: press),
+            h.frame(atMS: 110, [h.contact(9, atMM: 10, 10), h.contact(1, atMM: 74, 45), h.contact(2, atMM: 78, 45)], press: press),
+            h.frame(atMS: 130, [h.contact(9, atMM: 10, 10)]),
         ]
         let seen = perFrame(frames).map(\.swipe)
         if press == .blocked {
-            #expect(seen.count == 6 && seen[3] == nil && seen[5] == .ended)
+            #expect(seen.count == 9 && seen[3] == nil && seen[8] == .ended)
             #expect(phasesMatch(phases(frames), [.began, .moved(travelMM: 8), .ended]))
         } else {
-            #expect(seen == [nil, nil, .began, .cancelled, nil, nil])
+            #expect(seen == [nil, nil, .began, .cancelled, nil, nil, nil, nil, nil])
         }
     }
 
