@@ -31,3 +31,14 @@
 - Test planner: T19 and T21 (c) assert the designed answers to two open questions → noted under Open questions.
 - Docs: `docs/domain-model.md` updated before implementation (Thumb corner, Mixed trackpads (new), Trackpad, Anchor corner, Edge contact, First run, Settings window, Hide background apps setting) → the doc items in S2 and S3 became checks that the entries match what was built.
 - Open questions resolved by the orchestrating session on safe defaults (/do runs without human review until Finish): restarting the other trackpad on a corner change is accepted, as today for every settings change; a login start writing the External corner key once is accepted; the key beside the settings record counts as "the user's settings"; an unreadable value counts as mixed with Bottom left. The Figma node 2231-13555 was captured as `plans/048-external-trackpad-corner/.temp/figma-thumb-corner.png` for M1 and the layout: "Thumb corner:" title, two indented rows "MacBook trackpad" / "External trackpad" each with a trailing corner pop-up, a divider, then "Hide background apps" switch.
+
+## Implement
+- Verification skill: none in the repo (`.claude/skills/verify-*` absent) → step skipped.
+- Coordinator, mid-run: the Figma node was read into `design-spec.md`, and the human asked for it to be followed closely → the two-row group was rebuilt as one form cell (16 pt line spacing, rows indented 20 pt, system pop-up kept), overriding the plan's "match by eye" TODO.
+- Review, standards: new verification helpers (`World.previousVersionSaves`, `convergesAfterAKillAnywhereIn`) reported failures at the helper → they take `sourceLocation:`.
+- Review, standards: `world.login()!` in the new mixed-trackpads suite → `try #require`.
+- Review, standards: `SettingsView`'s header comment still described one thumb corner row and 46 pt for every row → updated for the mixed-trackpads cell.
+- Review, standards: `CornerPicker(fixedHeight:)` and bare layout literals → renamed `isFormRow`; spacing, indent and padding named on `ThumbCornerRows`, the indent applied once.
+- Review, plan: the cell's 16 pt vertical padding added to the form's own cell padding → measured offscreen against the Hide background apps cell; 4 pt matches the design's edge-to-text distance.
+- Review, plan: T11's control ran in a fresh world → it now runs under case (b)'s resting thumb.
+- Review, standards: `opposite(of:)`, the fired count and the external-key reader duplicated across two suites → moved to `Fixtures.swift` and `World`.

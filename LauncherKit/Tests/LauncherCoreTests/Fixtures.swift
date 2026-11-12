@@ -22,6 +22,17 @@ extension SurfaceSize {
     }
 }
 
+extension ThumbCorner {
+    var diagonallyOpposite: ThumbCorner {
+        switch self {
+        case .topLeft: .bottomRight
+        case .topRight: .bottomLeft
+        case .bottomLeft: .topRight
+        case .bottomRight: .topLeft
+        }
+    }
+}
+
 extension Trackpad {
     static let macBook14 = Trackpad(id: TrackpadID(rawValue: 1), kind: .builtIn, surface: .macBook14)
     static let magicTrackpad = Trackpad(id: TrackpadID(rawValue: 2), kind: .external, surface: .magicTrackpad)

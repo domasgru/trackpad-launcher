@@ -5,10 +5,12 @@ import SwiftUI
 /// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges: the update card,
 /// while this opening's check has found a newer version; the Accessibility hint card, while the permission is missing; the settings form, a
 /// SwiftUI grouped Form drawn as System Settings draws one, its sections the five gesture rows and the Animate app
-/// launch switch, the switcher section, and the thumb corner row with the Hide background apps switch below it; the
+/// launch switch, the switcher section, and the thumb corner group, with the Hide background apps switch below it: one
+/// row, or once the Mac has mixed trackpads one cell with a title and two indented pop-up rows; the
 /// no trackpad notice, while it applies, in a rounded group; then *Quit Trackpad Launcher* and *Close*, aligned
 /// right. The form keeps the system's own fonts, insets and controls, and every row of the form is 46 pt tall
-/// (`formRowContent()`), except the *Switch windows* row, which grows while the screen recording hint sits in it. The illustrations are 45 × 28 pt. The guide naming the two
+/// (`formRowContent()`), except the *Switch windows* row, which grows while the screen recording hint sits in it, and
+/// the mixed trackpads cell, which is as tall as its three lines. The illustrations are 45 × 28 pt. The guide naming the two
 /// marks sits over the first illustration for the top-left corner only, where its arrows meet the thumb.
 struct SettingsView: View {
     let launcher: Launcher
@@ -253,24 +255,41 @@ struct Guide: View {
 struct ThumbCornerRows: View {
     let launcher: Launcher
 
+    /// The cell's metrics come from the design (Figma node 2231:13555,
+    /// `plans/048-external-trackpad-corner/design-spec.md`).
+    private static let lineSpacing: CGFloat = 16
+    private static let indent: CGFloat = 20
+    /// The design's 16 pt is the edge-to-text distance, which the grouped form's own cell padding already supplies in
+    /// part: measured, 4 pt more puts the title and the last line as far from the cell's edges as the Hide background
+    /// apps label is from its own.
+    private static let cellPadding: CGFloat = 4
+
     var body: some View {
         switch launcher.thumbCorners {
         case .single(let corner):
             CornerPicker(title: Copy.thumbCornerRow, corner: corner) { launcher.setThumbCorner($0) }
         case .perKind(let macBook, let external):
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Self.lineSpacing) {
                 Text(Copy.thumbCornerGroupTitle)
-                CornerPicker(title: Copy.macBookTrackpadRow, corner: macBook, fixedHeight: false) {
-                    launcher.setThumbCorner($0)
+                IndentedLine {
+                    CornerPicker(title: Copy.macBookTrackpadRow, corner: macBook, isFormRow: false) {
+                        launcher.setThumbCorner($0)
+                    }
                 }
-                .padding(.leading, 20)
-                CornerPicker(title: Copy.externalTrackpadRow, corner: external, fixedHeight: false) {
-                    launcher.setExternalThumbCorner($0)
+                IndentedLine {
+                    CornerPicker(title: Copy.externalTrackpadRow, corner: external, isFormRow: false) {
+                        launcher.setExternalThumbCorner($0)
+                    }
                 }
-                .padding(.leading, 20)
             }
-            .padding(.vertical, 16)
+            .padding(.vertical, Self.cellPadding)
         }
+    }
+
+    private struct IndentedLine<Content: View>: View {
+        @ViewBuilder let content: Content
+
+        var body: some View { content.padding(.leading, ThumbCornerRows.indent) }
     }
 }
 
@@ -278,7 +297,9 @@ struct ThumbCornerRows: View {
 struct CornerPicker: View {
     let title: String
     let corner: ThumbCorner
-    var fixedHeight = true
+    /// True when the label is a whole form row, 46 pt tall through `formRowContent()`; false when it is one line of a
+    /// cell that sets its own height.
+    var isFormRow = true
     let choose: (ThumbCorner) -> Void
 
     var body: some View {
@@ -287,7 +308,7 @@ struct CornerPicker: View {
                 Text(Copy.thumbCornerTitle(corner)).tag(corner)
             }
         } label: {
-            if fixedHeight { Text(title).formRowContent() } else { Text(title) }
+            if isFormRow { Text(title).formRowContent() } else { Text(title) }
         }
         .pickerStyle(.menu)
     }

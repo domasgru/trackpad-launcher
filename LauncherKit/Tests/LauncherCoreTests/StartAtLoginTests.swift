@@ -118,7 +118,8 @@ import Testing
     @discardableResult
     private func convergesAfterAKillAnywhereIn(
         _ world: LifecycleWorld, keys expectedKeys: Set<String> = ["settings"], attached: [Trackpad] = [.macBook14],
-        thumbCorners expectedCorners: ThumbCorners? = nil, loginItemEndsOn: Bool? = nil, run: (LifecycleWorld) -> Void
+        thumbCorners expectedCorners: ThumbCorners? = nil, loginItemEndsOn: Bool? = nil,
+        sourceLocation: SourceLocation = #_sourceLocation, run: (LifecycleWorld) -> Void
     ) -> [LifecycleWorld.Snapshot] {
         let before = world.snapshot()
         run(world)
@@ -136,16 +137,16 @@ import Testing
         }
 
         let uncrashed = endAfterOpeningByHand(from: left.last!)
-        #expect(uncrashed.keys == expectedKeys)
-        #expect(left.count > 2)
-        if let loginItemEndsOn { #expect(uncrashed.isOn == loginItemEndsOn) }
+        #expect(uncrashed.keys == expectedKeys, sourceLocation: sourceLocation)
+        #expect(left.count > 2, sourceLocation: sourceLocation)
+        if let loginItemEndsOn { #expect(uncrashed.isOn == loginItemEndsOn, sourceLocation: sourceLocation) }
         for (index, snapshot) in left.enumerated() {
             let end = endAfterOpeningByHand(from: snapshot)
-            #expect(end.isOn == uncrashed.isOn, "login item after a kill at effect \(index)")
-            #expect(end.keys == expectedKeys, "suite after a kill at effect \(index)")
-            #expect(end.record == uncrashed.record, "record after a kill at effect \(index)")
+            #expect(end.isOn == uncrashed.isOn, "login item after a kill at effect \(index)", sourceLocation: sourceLocation)
+            #expect(end.keys == expectedKeys, "suite after a kill at effect \(index)", sourceLocation: sourceLocation)
+            #expect(end.record == uncrashed.record, "record after a kill at effect \(index)", sourceLocation: sourceLocation)
             if let expectedCorners {
-                #expect(end.corners == expectedCorners, "thumb corners after a kill at effect \(index)")
+                #expect(end.corners == expectedCorners, "thumb corners after a kill at effect \(index)", sourceLocation: sourceLocation)
             }
         }
         return left

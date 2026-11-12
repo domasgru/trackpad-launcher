@@ -7,8 +7,6 @@ import Testing
     private let both: [Trackpad] = [.macBook14, .magicTrackpad]
     private let mixed = ThumbCorners.perKind(macBook: .topLeft, external: .bottomLeft)
 
-    private func externalCornerKey(_ world: World) -> String? { world.suiteDomain()["externalThumbCorner"] as? String }
-
     private func startedWorld(attached: [Trackpad], gestures: [Gesture: String] = [.one: "Arc"]) -> World {
         let world = World(apps: ["Arc", "Figma"], attached: attached)
         world.launcher.start()
@@ -16,19 +14,8 @@ import Testing
         return world
     }
 
-    private func firedCount(_ world: World) -> Int { world.system.broughtToFront.count }
-
     private func nothingHappened(_ world: World) -> Bool {
         world.system.broughtToFront.isEmpty && world.hardware.pulses.isEmpty && world.launcher.switcher == nil
-    }
-
-    private func opposite(of corner: ThumbCorner) -> ThumbCorner {
-        switch corner {
-        case .topLeft: .bottomRight
-        case .topRight: .bottomLeft
-        case .bottomLeft: .topRight
-        case .bottomRight: .topLeft
-        }
     }
 
     // MARK: Detection
@@ -55,7 +42,7 @@ import Testing
         let runs = world.hardware.runCount
         #expect(record != nil)
         #expect(world.launcher.thumbCorners == .single(.topLeft))
-        #expect(externalCornerKey(world) == nil)
+        #expect(world.savedExternalCorner() == nil)
 
         switch arrival {
         case .hotPlugged: world.hardware.attach(.magicTrackpad)
@@ -68,7 +55,7 @@ import Testing
 
         #expect(world.launcher.thumbCorners == mixed)
         #expect(world.launcher.drawnThumbCorner == .bottomLeft)
-        #expect(externalCornerKey(world) == "bottomLeft")
+        #expect(world.savedExternalCorner() == "bottomLeft")
         #expect(world.settingsRecordBytes() == record)
         #expect(world.hardware.runCount == runs + 1)
     }
@@ -93,16 +80,16 @@ import Testing
             world.hardware.attach(second)
             #expect(world.launcher.thumbCorners == .single(.topLeft))
             #expect(world.launcher.drawnThumbCorner == .topLeft)
-            #expect(externalCornerKey(world) == nil)
+            #expect(world.savedExternalCorner() == nil)
         }
         for trackpad in [Trackpad.magicTrackpad, .secondMagicTrackpad] {
             world.tap(1, on: trackpad, thumbIn: .bottomLeft)
-            #expect(firedCount(world) == 0)
+            #expect(world.firedCount == 0)
         }
         world.tap(1, on: .magicTrackpad, thumbIn: .topLeft)
-        #expect(firedCount(world) == 1)
+        #expect(world.firedCount == 1)
         world.tap(1, on: .secondMagicTrackpad, thumbIn: .topLeft)
-        #expect(firedCount(world) == 2)
+        #expect(world.firedCount == 2)
     }
 
     @Test func aMagicMouseConnectingDoesNotGiveTheMacMixedTrackpads() {
@@ -112,7 +99,7 @@ import Testing
         world.hardware.connectMagicMouse()
 
         #expect(world.launcher.thumbCorners == .single(.topLeft))
-        #expect(externalCornerKey(world) == nil)
+        #expect(world.savedExternalCorner() == nil)
     }
 
     @Test func nothingTheUserDoesAndNoDisconnectOrRelaunchClearsTheRecord() {
@@ -121,7 +108,7 @@ import Testing
         var recorded: [Bool] = []
         func step(_ action: () -> Void) {
             action()
-            recorded.append(world.launcher.thumbCorners.hasMixedTrackpads && externalCornerKey(world) == "bottomLeft")
+            recorded.append(world.launcher.thumbCorners.hasMixedTrackpads && world.savedExternalCorner() == "bottomLeft")
         }
 
         step { world.hardware.detach(Trackpad.magicTrackpad.id) }
@@ -187,9 +174,9 @@ import Testing
 
         #expect(world.launcher.thumbCorners == .perKind(macBook: .topRight, external: .bottomLeft))
         world.tap(2, on: .magicTrackpad, thumbIn: .bottomLeft)
-        #expect(firedCount(world) == 1)
+        #expect(world.firedCount == 1)
         world.tap(2, thumbIn: .topRight)
-        #expect(firedCount(world) == 2)
+        #expect(world.firedCount == 2)
     }
 
     // MARK: Each trackpad anchors in its own corner
@@ -199,13 +186,13 @@ import Testing
         var counts: [Int] = []
 
         world.tap(2, on: .magicTrackpad, thumbIn: .bottomLeft)
-        counts.append(firedCount(world))
+        counts.append(world.firedCount)
         world.tap(2, on: .macBook14, thumbIn: .bottomLeft)
-        counts.append(firedCount(world))
+        counts.append(world.firedCount)
         world.tap(2, on: .macBook14, thumbIn: .topLeft)
-        counts.append(firedCount(world))
+        counts.append(world.firedCount)
         world.tap(2, on: .magicTrackpad, thumbIn: .topLeft)
-        counts.append(firedCount(world))
+        counts.append(world.firedCount)
 
         #expect(counts == [1, 1, 2, 2])
         #expect(world.hardware.feedback == [Trackpad.magicTrackpad.id, Trackpad.macBook14.id])
@@ -240,16 +227,16 @@ import Testing
         let resting = startedWorld(attached: both, gestures: [.two: "Arc"])
         resting.play(TouchScript(.magicTrackpad).thumb(atMM: (10, 105)), on: .magicTrackpad)
         resting.play(TouchScript(.macBook14).tap(fingers: 2), on: .macBook14)
-        #expect(firedCount(resting) == 0)
+        #expect(resting.firedCount == 0)
 
         let other = startedWorld(attached: both, gestures: [.two: "Arc"])
-        other.play(TouchScript(.macBook14).thumb(atMM: (10, 10)), on: .macBook14)
+        let restingThumb = TouchScript(.macBook14).thumb(atMM: (10, 10))
+        other.play(restingThumb, on: .macBook14)
         other.play(TouchScript(.magicTrackpad).tap(fingers: 2), on: .magicTrackpad)
-        #expect(firedCount(other) == 0)
+        #expect(other.firedCount == 0)
 
-        let control = startedWorld(attached: both, gestures: [.two: "Arc"])
-        control.tap(2, on: .macBook14, thumbIn: .topLeft)
-        #expect(firedCount(control) == 1)
+        other.play(restingThumb.tap(fingers: 2), on: .macBook14)
+        #expect(other.firedCount == 1)
     }
 
     @Test func edgeContactsFollowTheCornerOfTheTrackpadTheyLandOn() {
@@ -279,14 +266,14 @@ import Testing
 
         #expect(world.launcher.thumbCorners == .perKind(macBook: .topLeft, external: corner))
         world.tap(1, on: .magicTrackpad, thumbIn: corner)
-        #expect(firedCount(world) == 1)
-        world.tap(1, on: .magicTrackpad, thumbIn: opposite(of: corner))
-        #expect(firedCount(world) == 1)
+        #expect(world.firedCount == 1)
+        world.tap(1, on: .magicTrackpad, thumbIn: corner.diagonallyOpposite)
+        #expect(world.firedCount == 1)
         world.tap(1, on: .macBook14, thumbIn: .topLeft)
-        #expect(firedCount(world) == 2)
+        #expect(world.firedCount == 2)
         world.hardware.attach(.secondMagicTrackpad)
         world.tap(1, on: .secondMagicTrackpad, thumbIn: corner)
-        #expect(firedCount(world) == 3)
+        #expect(world.firedCount == 3)
     }
 
     // MARK: Kept while a trackpad is gone, and drawn
@@ -299,9 +286,9 @@ import Testing
         #expect(world.launcher.thumbCorners == mixed)
         #expect(world.launcher.drawnThumbCorner == .bottomLeft)
         world.tap(1, on: .magicTrackpad, thumbIn: .topLeft)
-        #expect(firedCount(world) == 0)
+        #expect(world.firedCount == 0)
         world.tap(1, on: .magicTrackpad, thumbIn: .bottomLeft)
-        #expect(firedCount(world) == 1)
+        #expect(world.firedCount == 1)
 
         world.hardware.detach(Trackpad.magicTrackpad.id)
 
@@ -332,11 +319,11 @@ import Testing
 
     // MARK: Lifecycle
 
-    @Test func aLoginStartOnAMacWithOneSavedCornerKeepsTheSingleRowAndItsCorner() {
+    @Test func aLoginStartOnAMacWithOneSavedCornerKeepsTheSingleRowAndItsCorner() throws {
         let world = LifecycleWorld(record: [.one: "Arc"], corner: .bottomRight, loginItemOn: true)
         let record = world.mac.settingsRecordBytes()
 
-        let process = world.login()!
+        let process = try #require(world.login())
 
         #expect(process.launcher.thumbCorners == .single(.bottomRight))
         #expect(process.launcher.drawnThumbCorner == .bottomRight)

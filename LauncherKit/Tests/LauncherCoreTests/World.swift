@@ -130,6 +130,12 @@ final class LaunchRecord: Sendable {
         Self.startAtLogin(item: loginItem, suiteName: suiteName, placement: placement)
     }
 
+    /// The External trackpad corner as saved, in its wire form.
+    func savedExternalCorner() -> String? { suiteDomain()["externalThumbCorner"] as? String }
+
+    /// How many times an app has been brought to the front.
+    var firedCount: Int { system.broughtToFront.count }
+
     /// Every key the suite holds, as a new process would read it.
     func suiteDomain() -> [String: Any] {
         UserDefaults(suiteName: suiteName)!.persistentDomain(forName: suiteName) ?? [:]
@@ -149,10 +155,10 @@ final class LaunchRecord: Sendable {
     /// The previous version run over this Mac's record: it reads the `settings` key, applies `change`, and writes back
     /// only that key, as it does not know the External trackpad corner's.
     @discardableResult
-    func previousVersionSaves(_ change: (inout PersistenceTests.Build1018Settings) -> Void) throws
-        -> PersistenceTests.Build1018Settings
-    {
-        let bytes = try #require(settingsRecordBytes())
+    func previousVersionSaves(
+        sourceLocation: SourceLocation = #_sourceLocation, _ change: (inout PersistenceTests.Build1018Settings) -> Void
+    ) throws -> PersistenceTests.Build1018Settings {
+        let bytes = try #require(settingsRecordBytes(), sourceLocation: sourceLocation)
         var settings = try PropertyListDecoder().decode(PersistenceTests.Build1018Settings.self, from: bytes)
         change(&settings)
         let encoder = PropertyListEncoder()
