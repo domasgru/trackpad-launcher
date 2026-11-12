@@ -42,3 +42,4 @@
 - Review, plan: the cell's 16 pt vertical padding added to the form's own cell padding → measured offscreen against the Hide background apps cell; 4 pt matches the design's edge-to-text distance.
 - Review, plan: T11's control ran in a fresh world → it now runs under case (b)'s resting thumb.
 - Review, standards: `opposite(of:)`, the fired count and the external-key reader duplicated across two suites → moved to `Fixtures.swift` and `World`.
+- Human, after screenshots: gaps between the two pop-ups and from the second pop-up to the cell's edge measured 13 pt → 15 pt each (pop-up spacing 18, bottom padding 6), re-measured at 30 px at 2x on the running window.

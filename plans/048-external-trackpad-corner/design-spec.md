@@ -20,3 +20,6 @@ When the Mac does not have mixed trackpads, the group stays exactly as today.
 
 ## Notes for implementation
 Match these metrics in SwiftUI's grouped `Form` on macOS 26: a single `Form` row/cell containing a `VStack(alignment: .leading, spacing: 16)` of the title and two `LabeledContent`/`HStack` lines with `.padding(.leading, 20)`, so the grouped form draws no separators between them. Prefer the system's own label font/colours (they map to the tokens above) over hardcoded values. Verify by screenshot of the running settings window side by side with the Figma screenshot (hand check M1).
+
+## Human's correction after review (2026-11-13)
+Between the MacBook trackpad and External trackpad pop-ups: 15 pt, badge to badge. From the External trackpad pop-up to the divider below the cell: 15 pt. Both measured on a screenshot of the running window, 30 px at 2x each.

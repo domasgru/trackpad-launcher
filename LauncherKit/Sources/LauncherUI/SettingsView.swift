@@ -258,11 +258,16 @@ struct ThumbCornerRows: View {
     /// The cell's metrics come from the design (Figma node 2231:13555,
     /// `plans/048-external-trackpad-corner/design-spec.md`).
     private static let lineSpacing: CGFloat = 16
+    /// Between the two pop-up lines. A pop-up's frame reaches 1.5 pt past its badge, so 18 pt leaves the 15 pt the
+    /// design asks for between the two badges (measured on a screenshot of the running window).
+    private static let pickerSpacing: CGFloat = 18
     private static let indent: CGFloat = 20
     /// The design's 16 pt is the edge-to-text distance, which the grouped form's own cell padding already supplies in
-    /// part: measured, 4 pt more puts the title and the last line as far from the cell's edges as the Hide background
-    /// apps label is from its own.
-    private static let cellPadding: CGFloat = 4
+    /// part: measured, 4 pt more puts the title as far from the cell's top edge as the Hide background apps label is
+    /// from its own.
+    private static let topPadding: CGFloat = 4
+    /// 15 pt from the last badge to the divider below it, as the design asks (measured).
+    private static let bottomPadding: CGFloat = 6
 
     var body: some View {
         switch launcher.thumbCorners {
@@ -271,18 +276,21 @@ struct ThumbCornerRows: View {
         case .perKind(let macBook, let external):
             VStack(alignment: .leading, spacing: Self.lineSpacing) {
                 Text(Copy.thumbCornerGroupTitle)
-                IndentedLine {
-                    CornerPicker(title: Copy.macBookTrackpadRow, corner: macBook, isFormRow: false) {
-                        launcher.setThumbCorner($0)
+                VStack(alignment: .leading, spacing: Self.pickerSpacing) {
+                    IndentedLine {
+                        CornerPicker(title: Copy.macBookTrackpadRow, corner: macBook, isFormRow: false) {
+                            launcher.setThumbCorner($0)
+                        }
                     }
-                }
-                IndentedLine {
-                    CornerPicker(title: Copy.externalTrackpadRow, corner: external, isFormRow: false) {
-                        launcher.setExternalThumbCorner($0)
+                    IndentedLine {
+                        CornerPicker(title: Copy.externalTrackpadRow, corner: external, isFormRow: false) {
+                            launcher.setExternalThumbCorner($0)
+                        }
                     }
                 }
             }
-            .padding(.vertical, Self.cellPadding)
+            .padding(.top, Self.topPadding)
+            .padding(.bottom, Self.bottomPadding)
         }
     }
 
