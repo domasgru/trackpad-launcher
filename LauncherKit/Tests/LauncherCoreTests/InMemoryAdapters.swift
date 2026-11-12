@@ -60,13 +60,16 @@ import LauncherCore
     private(set) var runCount = 0
 
     func run(
-        _ trackpads: [Trackpad], corner: ThumbCorner, blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>,
-        swaps: Bool
+        _ trackpads: [TrackpadRun], blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>, swaps: Bool
     ) {
         runCount += 1
         running = Dictionary(
             uniqueKeysWithValues: trackpads.map {
-                ($0.id, GestureRecognizer(corner: corner, surface: $0.surface, slides: slides, swaps: swaps, travel: .linear))
+                (
+                    $0.trackpad.id,
+                    GestureRecognizer(
+                        corner: $0.corner, surface: $0.trackpad.surface, slides: slides, swaps: swaps, travel: .linear)
+                )
             })
         deaf = []
         states = [:]

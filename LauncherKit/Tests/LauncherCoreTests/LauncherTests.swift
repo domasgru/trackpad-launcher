@@ -196,7 +196,7 @@ extension Launcher {
         let world = World(apps: ["Arc"])
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
-        #expect(world.launcher.thumbCorner == .topLeft)
+        #expect(world.launcher.thumbCorners == .single(.topLeft))
 
         world.launcher.setThumbCorner(.topRight)
         world.tap(1, thumbAtMM: (114.8, 10))
@@ -210,7 +210,7 @@ extension Launcher {
         let world = World(apps: ["Arc"])
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
-        #expect(world.launcher.thumbCorner == .topLeft)
+        #expect(world.launcher.thumbCorners == .single(.topLeft))
 
         let s1 = TouchScript(.macBook14).thumb(atMM: (10, 10)).tap(fingers: 1)
         world.play(s1)
@@ -218,7 +218,7 @@ extension Launcher {
 
         let runs = world.hardware.runCount
         world.launcher.setThumbCorner(.bottomRight)
-        #expect(world.launcher.thumbCorner == .bottomRight)
+        #expect(world.launcher.thumbCorners == .single(.bottomRight))
         #expect(world.hardware.runCount == runs + 1)
 
         let s2 = s1.wait(.milliseconds(20)).tap(fingers: 1)

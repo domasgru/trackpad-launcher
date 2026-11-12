@@ -28,6 +28,7 @@ struct SettingsView: View {
     private static let formMargins = (top: CGFloat(20), bottom: CGFloat(20), side: CGFloat(20))
 
     var body: some View {
+        let corner = launcher.drawnThumbCorner
         VStack(spacing: Self.partSpacing) {
             if let card = UpdateCardPreview.card(updater?.card) {
                 UpdateCardView(card: card, updateNow: { updater?.updateNow() }, arrowDrift: actions.arrowDrift)
@@ -40,7 +41,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     ForEach(launcher.rows) { row in
-                        GestureRowView(row: row, launcher: launcher, actions: actions)
+                        GestureRowView(row: row, corner: corner, launcher: launcher, actions: actions)
                     }
                     Toggle(
                         isOn: Binding(
@@ -50,7 +51,7 @@ struct SettingsView: View {
                     }
                     .toggleStyle(.switch)
                 }
-                Section { SwitcherSection(launcher: launcher, actions: actions) }
+                Section { SwitcherSection(launcher: launcher, corner: corner, actions: actions) }
                 Section {
                     ThumbCornerRow(launcher: launcher)
                     Toggle(
@@ -122,12 +123,13 @@ struct FormRow<Content: View>: View {
 /// A gesture row reads the model and sends one intent.
 struct GestureRowView: View {
     let row: GestureRow
+    let corner: ThumbCorner
     let launcher: Launcher
     let actions: LauncherActions
 
     var body: some View {
         HStack(spacing: 0) {
-            GestureIllustration(gesture: row.gesture, corner: launcher.thumbCorner)
+            GestureIllustration(gesture: row.gesture, corner: corner)
                 .overlay(alignment: .topLeading) {
                     if showsGuide {
                         // Where the arrows end on the thumb and the tapping finger.
@@ -151,7 +153,7 @@ struct GestureRowView: View {
         .zIndex(row.gesture == .one ? 1 : 0)
     }
 
-    private var showsGuide: Bool { row.gesture == .one && launcher.thumbCorner.showsGuide }
+    private var showsGuide: Bool { row.gesture == .one && corner.showsGuide }
 }
 
 struct GestureIllustration: View {
@@ -251,7 +253,7 @@ struct ThumbCornerRow: View {
     let launcher: Launcher
 
     var body: some View {
-        Picker(selection: Binding(get: { launcher.thumbCorner }, set: { launcher.setThumbCorner($0) })) {
+        Picker(selection: Binding(get: { launcher.thumbCorners.corner(for: .builtIn) }, set: { launcher.setThumbCorner($0) })) {
             ForEach(ThumbCorner.allCases, id: \.self) { corner in
                 Text(Copy.thumbCornerTitle(corner)).tag(corner)
             }

@@ -5,15 +5,16 @@ import SwiftUI
 /// Three setting rows of the settings form: the swipe, the window swipe, then the thumb tap.
 struct SwitcherSection: View {
     let launcher: Launcher
+    let corner: ThumbCorner
     let actions: LauncherActions
 
     var body: some View {
         SettingRow(
-            illustration: "swipe", title: "Switch recent", corner: launcher.thumbCorner,
+            illustration: "swipe", title: "Switch recent", corner: corner,
             isOn: Binding(get: { launcher.isSwipeOn }, set: { launcher.setSwipe(on: $0) }))
         VStack(alignment: .leading, spacing: 4) {
             SettingRow(
-                illustration: "window-swipe", title: "Switch windows", corner: launcher.thumbCorner,
+                illustration: "window-swipe", title: "Switch windows", corner: corner,
                 isOn: Binding(get: { launcher.isWindowSwipeOn }, set: { launcher.setWindowSwipe(on: $0) }))
             if let hint = launcher.screenRecordingHint {
                 ScreenRecordingHintView(hint: hint, launcher: launcher, actions: actions)
@@ -21,7 +22,7 @@ struct SwitcherSection: View {
             }
         }
         SettingRow(
-            illustration: "thumb-tap", title: "Toggle recent", corner: launcher.thumbCorner,
+            illustration: "thumb-tap", title: "Toggle recent", corner: corner,
             isOn: Binding(get: { launcher.isSwapOn }, set: { launcher.setSwap(on: $0) }))
     }
 }

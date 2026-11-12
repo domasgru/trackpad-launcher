@@ -15,7 +15,7 @@ import LauncherCore
         let relaunched = world.relaunch()
 
         #expect(relaunched.rows.map(\.app) == names.map { .present(world.app($0)) })
-        #expect(relaunched.thumbCorner == .topRight)
+        #expect(relaunched.thumbCorners == .single(.topRight))
     }
 
     @Test func firstRunShowsFreshDefaultsOpensTheWindowAndRegistersTheLoginItem() {
@@ -25,7 +25,7 @@ import LauncherCore
         world.launcher.start()
 
         #expect(world.launcher.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
-        #expect(world.launcher.thumbCorner == .topLeft)
+        #expect(world.launcher.thumbCorners == .single(.topLeft))
         #expect(world.launcher.isLaunchAnimationOn)
         #expect(world.launcher.isSwipeOn)
         #expect(world.launcher.isSwapOn)
@@ -57,7 +57,7 @@ import LauncherCore
         #expect(world.loginItem.calls.isEmpty)
         #expect(world.permissions.asks.isEmpty)
         #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: 5))
-        #expect(relaunched.thumbCorner == .topLeft)
+        #expect(relaunched.thumbCorners == .single(.topLeft))
         #expect(relaunched.isLaunchAnimationOn)
         #expect(relaunched.isSwipeOn)
         #expect(relaunched.isSwapOn)
@@ -96,7 +96,7 @@ import LauncherCore
                 .present(world.app("Arc")), .present(world.app("Figma")), .unassigned, .unassigned,
                 .present(world.app("Spotify")),
             ])
-        #expect(relaunched.thumbCorner == .topRight)
+        #expect(relaunched.thumbCorners == .single(.topRight))
         #expect(!relaunched.isLaunchAnimationOn)
         #expect(!relaunched.isSwipeOn)
         #expect(relaunched.isSwapOn)
@@ -116,7 +116,7 @@ import LauncherCore
         relaunched.start()
 
         #expect(relaunched.isWindowOpen == false)
-        #expect(relaunched.thumbCorner == .topRight)
+        #expect(relaunched.thumbCorners == .single(.topRight))
         #expect(
             relaunched.rows.map(\.app) == [
                 .present(world.app("Arc")), .present(world.app("Figma")), .unassigned, .unassigned,
@@ -133,13 +133,13 @@ import LauncherCore
 
         relaunched.openedByHand()
         #expect(relaunched.isWindowOpen)
-        #expect(relaunched.thumbCorner == .topRight)
+        #expect(relaunched.thumbCorners == .single(.topRight))
     }
 
     @Test func aRecordSavedWithLeftThumbLoadsAsTopLeft() {
         let world = World()
         world.seedSettingsRecord(Fixtures.recordSavedByPlan002(handMode: "right"))
-        #expect(world.relaunch().thumbCorner == .topLeft)
+        #expect(world.relaunch().thumbCorners == .single(.topLeft))
     }
 
     @Test func aChosenCornerOpensTheWindowShowingIt() {
@@ -151,7 +151,7 @@ import LauncherCore
         relaunched.start()
         relaunched.openedByHand()
 
-        #expect(relaunched.thumbCorner == .bottomLeft)
+        #expect(relaunched.thumbCorners == .single(.bottomLeft))
         #expect(relaunched.isWindowOpen)
     }
 
@@ -163,7 +163,7 @@ import LauncherCore
 
         let relaunched = world.relaunch()
         relaunched.start()
-        #expect(relaunched.thumbCorner == .bottomRight)
+        #expect(relaunched.thumbCorners == .single(.bottomRight))
 
         world.tap(1, thumbAtMM: (114.8, 66.8))
         #expect(world.system.broughtToFront == [world.app("Arc")])
@@ -171,7 +171,7 @@ import LauncherCore
         #expect(world.system.broughtToFront == [world.app("Arc")])
 
         relaunched.openedByHand()
-        #expect(relaunched.thumbCorner == .bottomRight)
+        #expect(relaunched.thumbCorners == .single(.bottomRight))
     }
 
     @Test func aFirstRunAnchorsTopLeft() {
@@ -179,7 +179,7 @@ import LauncherCore
         world.launcher.start()
         world.launcher.openedByHand()
         world.launcher.setAssignment(.app(world.app("Arc")), for: .one)
-        #expect(world.launcher.thumbCorner == .topLeft)
+        #expect(world.launcher.thumbCorners == .single(.topLeft))
 
         world.tap(1, thumbAtMM: (10, 10))
         #expect(world.system.broughtToFront == [world.app("Arc")])
@@ -357,7 +357,7 @@ import LauncherCore
 
         #expect(relaunched.isLaunchAnimationOn)
         #expect(relaunched.isSwipeOn)
-        #expect(relaunched.thumbCorner == .topRight)
+        #expect(relaunched.thumbCorners == .single(.topRight))
         #expect(relaunched.rows.map(\.app) == threeAppsThenUnassigned(world))
         #expect(world.loginItem.calls.isEmpty)
         #expect(world.permissions.asks.isEmpty)
@@ -373,7 +373,7 @@ import LauncherCore
         let relaunched = world.relaunch()
 
         #expect(!relaunched.isLaunchAnimationOn)
-        #expect(relaunched.thumbCorner == .topRight)
+        #expect(relaunched.thumbCorners == .single(.topRight))
         #expect(relaunched.rows.map(\.app) == threeAppsThenUnassigned(world))
     }
 
@@ -388,7 +388,7 @@ import LauncherCore
 
         #expect(relaunched.isLaunchAnimationOn)
         #expect(relaunched.isSwipeOn)
-        #expect(relaunched.thumbCorner == .topLeft)
+        #expect(relaunched.thumbCorners == .single(.topLeft))
         #expect(relaunched.rows.map(\.app) == Array(repeating: .unassigned, count: Gesture.allCases.count))
         #expect(world.loginItem.calls.isEmpty)
         #expect(world.permissions.asks.isEmpty)
@@ -425,7 +425,7 @@ import LauncherCore
         #expect(loaded.isSwipeOn)
         #expect(loaded.isSwapOn)
         #expect(!loaded.isWindowSwipeOn)
-        #expect(loaded.thumbCorner == .topRight)
+        #expect(loaded.thumbCorners == .single(.topRight))
         #expect(loaded.rows.map(\.app)[1] == .present(arc))
     }
 

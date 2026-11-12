@@ -23,3 +23,10 @@ public struct Trackpad: Hashable, Sendable, Identifiable {
         self.surface = surface
     }
 }
+
+/// One trackpad of a run: the device, and the corner its fresh recognizer anchors the thumb in.
+public struct TrackpadRun: Hashable, Sendable {
+    public let trackpad: Trackpad
+    public let corner: ThumbCorner
+    public init(_ trackpad: Trackpad, corner: ThumbCorner) { self.trackpad = trackpad; self.corner = corner }
+}
