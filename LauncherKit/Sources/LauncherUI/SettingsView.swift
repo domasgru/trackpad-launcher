@@ -248,20 +248,28 @@ struct Guide: View {
     }
 }
 
-/// The thumb corner group's rows: one row, or once the Mac has mixed trackpads a title and a row for each kind.
+/// The thumb corner group's rows: one row, or once the Mac has mixed trackpads one cell holding a title and a pop-up
+/// for each kind. A single cell, so the grouped form draws no divider between its lines.
 struct ThumbCornerRows: View {
     let launcher: Launcher
 
     var body: some View {
         switch launcher.thumbCorners {
         case .single(let corner):
-            CornerPicker(title: Copy.thumbCornerRow, corner: corner, indented: false) { launcher.setThumbCorner($0) }
+            CornerPicker(title: Copy.thumbCornerRow, corner: corner) { launcher.setThumbCorner($0) }
         case .perKind(let macBook, let external):
-            Text(Copy.thumbCornerGroupTitle).formRowContent()
-            CornerPicker(title: Copy.macBookTrackpadRow, corner: macBook, indented: true) { launcher.setThumbCorner($0) }
-            CornerPicker(title: Copy.externalTrackpadRow, corner: external, indented: true) {
-                launcher.setExternalThumbCorner($0)
+            VStack(alignment: .leading, spacing: 16) {
+                Text(Copy.thumbCornerGroupTitle)
+                CornerPicker(title: Copy.macBookTrackpadRow, corner: macBook, fixedHeight: false) {
+                    launcher.setThumbCorner($0)
+                }
+                .padding(.leading, 20)
+                CornerPicker(title: Copy.externalTrackpadRow, corner: external, fixedHeight: false) {
+                    launcher.setExternalThumbCorner($0)
+                }
+                .padding(.leading, 20)
             }
+            .padding(.vertical, 16)
         }
     }
 }
@@ -270,7 +278,7 @@ struct ThumbCornerRows: View {
 struct CornerPicker: View {
     let title: String
     let corner: ThumbCorner
-    let indented: Bool
+    var fixedHeight = true
     let choose: (ThumbCorner) -> Void
 
     var body: some View {
@@ -279,7 +287,7 @@ struct CornerPicker: View {
                 Text(Copy.thumbCornerTitle(corner)).tag(corner)
             }
         } label: {
-            Text(title).formRowContent().padding(.leading, indented ? 16 : 0)
+            if fixedHeight { Text(title).formRowContent() } else { Text(title) }
         }
         .pickerStyle(.menu)
     }
