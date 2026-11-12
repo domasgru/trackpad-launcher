@@ -122,7 +122,7 @@ import Testing
         #expect(new.engine.probes == 0)
         #expect(new.engine.updates == 0)
         #expect(world.loginItem.calls.isEmpty)
-        #expect(new.launcher.thumbCorner == .topRight)
+        #expect(new.launcher.thumbCorners == .single(.topRight))
         #expect(new.launcher.isHideBackgroundAppsOn)
         new.tap(1, thumbAtMM: Self.rightThumb)
         #expect(new.system.broughtToFront == [world.mac.app("Arc")])

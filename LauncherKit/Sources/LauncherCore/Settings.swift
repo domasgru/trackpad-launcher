@@ -76,10 +76,12 @@ private enum HandMode: String, Codable {
     case left
 }
 
-/// One plist-encoded record under one key. Local-substitutable: tests use a throwaway `UserDefaults` suite.
+/// The settings record under `settings`, plus, beside it, the one key the previous version must never drop.
+/// Local-substitutable: tests use a throwaway `UserDefaults` suite.
 @MainActor public struct SettingsStore {
     private let defaults: UserDefaults
     private let key = "settings"
+    private let externalCornerKey = "externalThumbCorner"
 
     public init(defaults: UserDefaults) {
         self.defaults = defaults
@@ -97,5 +99,43 @@ private enum HandMode: String, Codable {
         encoder.outputFormat = .binary
         guard let data = try? encoder.encode(settings) else { return }
         defaults.set(data, forKey: key)
+    }
+
+    /// The External trackpad corner; nil until the Mac has mixed trackpads. The key's presence is that record, so a
+    /// value this build cannot read loads as `ThumbCorners.defaultExternal`, never as nil.
+    func loadExternalCorner() -> ThumbCorner? {
+        guard let saved = defaults.object(forKey: externalCornerKey) else { return nil }
+        return (saved as? String).flatMap(SavedCorner.init(rawValue:))?.corner ?? ThumbCorners.defaultExternal
+    }
+
+    /// One synchronous `set` of one key beside the record. It survives a force-quit, a version that does not
+    /// know the key never rewrites it, and it neither ends nor fakes a first run. Takes no nil: nothing
+    /// clears the record.
+    func saveExternalCorner(_ corner: ThumbCorner) {
+        defaults.set(SavedCorner(corner).rawValue, forKey: externalCornerKey)
+    }
+}
+
+/// The key's permanent values. Exhaustive switches map them to and from `ThumbCorner`, so renaming a case there
+/// cannot change what is saved, and `ThumbCorner` stays non-`Codable`.
+private enum SavedCorner: String {
+    case topLeft, topRight, bottomLeft, bottomRight
+
+    init(_ corner: ThumbCorner) {
+        switch corner {
+        case .topLeft: self = .topLeft
+        case .topRight: self = .topRight
+        case .bottomLeft: self = .bottomLeft
+        case .bottomRight: self = .bottomRight
+        }
+    }
+
+    var corner: ThumbCorner {
+        switch self {
+        case .topLeft: .topLeft
+        case .topRight: .topRight
+        case .bottomLeft: .bottomLeft
+        case .bottomRight: .bottomRight
+        }
     }
 }

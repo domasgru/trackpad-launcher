@@ -1,6 +1,6 @@
 import Foundation
 
-/// The corner of the trackpad the thumb anchors in. One global setting; default `.topLeft`.
+/// The corner of the trackpad the thumb anchors in. Which corner a trackpad uses is `ThumbCorners`' rule.
 public enum ThumbCorner: Hashable, Sendable, CaseIterable {
     case topLeft
     case topRight

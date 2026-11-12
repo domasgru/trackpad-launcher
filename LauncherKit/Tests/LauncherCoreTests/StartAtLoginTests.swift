@@ -113,27 +113,43 @@ import Testing
     }
 
     /// Whatever the run does, a kill between any two of its effects, then an opening by hand from /Applications, ends
-    /// as the uncrashed run does: the same login item status, only `settings` in the suite, the same record.
-    private func convergesAfterAKillAnywhereIn(_ world: LifecycleWorld, run: (LifecycleWorld) -> Void) {
+    /// as the uncrashed run does: the same login item status, exactly `keys` in the suite, the same record and, when
+    /// given, these thumb corners. Returns the snapshots it restored from, in order.
+    @discardableResult
+    private func convergesAfterAKillAnywhereIn(
+        _ world: LifecycleWorld, keys expectedKeys: Set<String> = ["settings"], attached: [Trackpad] = [.macBook14],
+        thumbCorners expectedCorners: ThumbCorners? = nil, loginItemEndsOn: Bool? = nil,
+        sourceLocation: SourceLocation = #_sourceLocation, run: (LifecycleWorld) -> Void
+    ) -> [LifecycleWorld.Snapshot] {
         let before = world.snapshot()
         run(world)
         let left = [before] + world.snapshots + [world.snapshot()]
 
-        func endAfterOpeningByHand(from snapshot: LifecycleWorld.Snapshot) -> (isOn: Bool, keys: Set<String>, record: Settings?) {
+        func endAfterOpeningByHand(
+            from snapshot: LifecycleWorld.Snapshot
+        ) -> (isOn: Bool, keys: Set<String>, record: Settings?, corners: ThumbCorners) {
             let mac = LifecycleWorld(restoring: snapshot)
-            mac.launch(.byHand)
-            return (mac.loginItem.isOn, Set(mac.mac.suiteDomain().keys), mac.mac.freshStore().load())
+            let process = mac.launch(.byHand, attached: attached)
+            return (
+                mac.loginItem.isOn, Set(mac.mac.suiteDomain().keys), mac.mac.freshStore().load(),
+                process.launcher.thumbCorners
+            )
         }
 
         let uncrashed = endAfterOpeningByHand(from: left.last!)
-        #expect(uncrashed.keys == ["settings"])
-        #expect(left.count > 2)
+        #expect(uncrashed.keys == expectedKeys, sourceLocation: sourceLocation)
+        #expect(left.count > 2, sourceLocation: sourceLocation)
+        if let loginItemEndsOn { #expect(uncrashed.isOn == loginItemEndsOn, sourceLocation: sourceLocation) }
         for (index, snapshot) in left.enumerated() {
             let end = endAfterOpeningByHand(from: snapshot)
-            #expect(end.isOn == uncrashed.isOn, "login item after a kill at effect \(index)")
-            #expect(end.keys == ["settings"], "suite after a kill at effect \(index)")
-            #expect(end.record == uncrashed.record, "record after a kill at effect \(index)")
+            #expect(end.isOn == uncrashed.isOn, "login item after a kill at effect \(index)", sourceLocation: sourceLocation)
+            #expect(end.keys == expectedKeys, "suite after a kill at effect \(index)", sourceLocation: sourceLocation)
+            #expect(end.record == uncrashed.record, "record after a kill at effect \(index)", sourceLocation: sourceLocation)
+            if let expectedCorners {
+                #expect(end.corners == expectedCorners, "thumb corners after a kill at effect \(index)", sourceLocation: sourceLocation)
+            }
         }
+        return left
     }
 
     @Test func aKillAnywhereInAQuitConvergesOnTheNextOpeningByHand() {
@@ -150,6 +166,16 @@ import Testing
 
     @Test func aKillAnywhereInAFirstRunConverges() {
         convergesAfterAKillAnywhereIn(LifecycleWorld(accessGranted: false)) { world in world.launch(.byHand) }
+    }
+
+    @Test func aKillAnywhereInAFirstRunWithBothTrackpadsConverges() {
+        let both: [Trackpad] = [.macBook14, .magicTrackpad]
+        let left = convergesAfterAKillAnywhereIn(
+            LifecycleWorld(accessGranted: false), keys: ["settings", "externalThumbCorner"], attached: both,
+            thumbCorners: .perKind(macBook: .topLeft, external: .bottomLeft), loginItemEndsOn: true
+        ) { world in world.launch(.byHand, attached: both) }
+
+        #expect(left.dropLast().allSatisfy { $0.suite["settings"] == nil })
     }
 
     @Test func aDevelopmentBuildOutsideApplicationsNeverTouchesStartingAtLogin() {

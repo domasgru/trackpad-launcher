@@ -60,13 +60,16 @@ import LauncherCore
     private(set) var runCount = 0
 
     func run(
-        _ trackpads: [Trackpad], corner: ThumbCorner, blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>,
-        swaps: Bool
+        _ trackpads: [TrackpadRun], blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>, swaps: Bool
     ) {
         runCount += 1
         running = Dictionary(
             uniqueKeysWithValues: trackpads.map {
-                ($0.id, GestureRecognizer(corner: corner, surface: $0.surface, slides: slides, swaps: swaps, travel: .linear))
+                (
+                    $0.trackpad.id,
+                    GestureRecognizer(
+                        corner: $0.corner, surface: $0.trackpad.surface, slides: slides, swaps: swaps, travel: .linear)
+                )
             })
         deaf = []
         states = [:]
@@ -92,6 +95,12 @@ import LauncherCore
         attached.append(trackpad)
         onEvent?(.trackpadsChanged)
     }
+
+    /// A Magic Mouse matches the same IOKit notification and is no trackpad: a push with nothing attached.
+    func connectMagicMouse() { onEvent?(.trackpadsChanged) }
+
+    /// Connects while the Mac sleeps: nothing is pushed, so the `wake()` that follows is the only signal.
+    func attachWhileAsleep(_ trackpad: Trackpad) { attached.append(trackpad) }
 
     func detach(_ id: TrackpadID) {
         attached.removeAll { $0.id == id }

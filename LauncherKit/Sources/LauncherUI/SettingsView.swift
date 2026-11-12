@@ -5,10 +5,12 @@ import SwiftUI
 /// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges: the update card,
 /// while this opening's check has found a newer version; the Accessibility hint card, while the permission is missing; the settings form, a
 /// SwiftUI grouped Form drawn as System Settings draws one, its sections the five gesture rows and the Animate app
-/// launch switch, the switcher section, and the thumb corner row with the Hide background apps switch below it; the
+/// launch switch, the switcher section, and the thumb corner group, with the Hide background apps switch below it: one
+/// row, or once the Mac has mixed trackpads one cell with a title and two indented pop-up rows; the
 /// no trackpad notice, while it applies, in a rounded group; then *Quit Trackpad Launcher* and *Close*, aligned
 /// right. The form keeps the system's own fonts, insets and controls, and every row of the form is 46 pt tall
-/// (`formRowContent()`), except the *Switch windows* row, which grows while the screen recording hint sits in it. The illustrations are 45 × 28 pt. The guide naming the two
+/// (`formRowContent()`), except the *Switch windows* row, which grows while the screen recording hint sits in it, and
+/// the mixed trackpads cell, which is as tall as its three lines. The illustrations are 45 × 28 pt. The guide naming the two
 /// marks sits over the first illustration for the top-left corner only, where its arrows meet the thumb.
 struct SettingsView: View {
     let launcher: Launcher
@@ -28,6 +30,7 @@ struct SettingsView: View {
     private static let formMargins = (top: CGFloat(20), bottom: CGFloat(20), side: CGFloat(20))
 
     var body: some View {
+        let corner = launcher.drawnThumbCorner
         VStack(spacing: Self.partSpacing) {
             if let card = UpdateCardPreview.card(updater?.card) {
                 UpdateCardView(card: card, updateNow: { updater?.updateNow() }, arrowDrift: actions.arrowDrift)
@@ -40,7 +43,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     ForEach(launcher.rows) { row in
-                        GestureRowView(row: row, launcher: launcher, actions: actions)
+                        GestureRowView(row: row, corner: corner, launcher: launcher, actions: actions)
                     }
                     Toggle(
                         isOn: Binding(
@@ -50,9 +53,9 @@ struct SettingsView: View {
                     }
                     .toggleStyle(.switch)
                 }
-                Section { SwitcherSection(launcher: launcher, actions: actions) }
+                Section { SwitcherSection(launcher: launcher, corner: corner, actions: actions) }
                 Section {
-                    ThumbCornerRow(launcher: launcher)
+                    ThumbCornerRows(launcher: launcher)
                     Toggle(
                         isOn: Binding(
                             get: { launcher.isHideBackgroundAppsOn }, set: { launcher.setHideBackgroundApps(on: $0) })
@@ -122,12 +125,13 @@ struct FormRow<Content: View>: View {
 /// A gesture row reads the model and sends one intent.
 struct GestureRowView: View {
     let row: GestureRow
+    let corner: ThumbCorner
     let launcher: Launcher
     let actions: LauncherActions
 
     var body: some View {
         HStack(spacing: 0) {
-            GestureIllustration(gesture: row.gesture, corner: launcher.thumbCorner)
+            GestureIllustration(gesture: row.gesture, corner: corner)
                 .overlay(alignment: .topLeading) {
                     if showsGuide {
                         // Where the arrows end on the thumb and the tapping finger.
@@ -151,7 +155,7 @@ struct GestureRowView: View {
         .zIndex(row.gesture == .one ? 1 : 0)
     }
 
-    private var showsGuide: Bool { row.gesture == .one && launcher.thumbCorner.showsGuide }
+    private var showsGuide: Bool { row.gesture == .one && corner.showsGuide }
 }
 
 struct GestureIllustration: View {
@@ -246,17 +250,73 @@ struct Guide: View {
     }
 }
 
-/// The thumb corner row: the form's own pop-up listing the four corners.
-struct ThumbCornerRow: View {
+/// The thumb corner group's rows: one row, or once the Mac has mixed trackpads one cell holding a title and a pop-up
+/// for each kind. A single cell, so the grouped form draws no divider between its lines.
+struct ThumbCornerRows: View {
     let launcher: Launcher
 
+    /// The cell's metrics come from the design (Figma node 2231:13555,
+    /// `plans/048-external-trackpad-corner/design-spec.md`).
+    private static let lineSpacing: CGFloat = 16
+    /// Between the two pop-up lines. A pop-up's frame reaches 1.5 pt past its badge, so 18 pt leaves the 15 pt the
+    /// design asks for between the two badges (measured on a screenshot of the running window).
+    private static let pickerSpacing: CGFloat = 18
+    private static let indent: CGFloat = 20
+    /// The design's 16 pt is the edge-to-text distance, which the grouped form's own cell padding already supplies in
+    /// part: measured, 4 pt more puts the title as far from the cell's top edge as the Hide background apps label is
+    /// from its own.
+    private static let topPadding: CGFloat = 4
+    /// 15 pt from the last badge to the divider below it, as the design asks (measured).
+    private static let bottomPadding: CGFloat = 6
+
     var body: some View {
-        Picker(selection: Binding(get: { launcher.thumbCorner }, set: { launcher.setThumbCorner($0) })) {
+        switch launcher.thumbCorners {
+        case .single(let corner):
+            CornerPicker(title: Copy.thumbCornerRow, corner: corner) { launcher.setThumbCorner($0) }
+        case .perKind(let macBook, let external):
+            VStack(alignment: .leading, spacing: Self.lineSpacing) {
+                Text(Copy.thumbCornerGroupTitle)
+                VStack(alignment: .leading, spacing: Self.pickerSpacing) {
+                    IndentedLine {
+                        CornerPicker(title: Copy.macBookTrackpadRow, corner: macBook, isFormRow: false) {
+                            launcher.setThumbCorner($0)
+                        }
+                    }
+                    IndentedLine {
+                        CornerPicker(title: Copy.externalTrackpadRow, corner: external, isFormRow: false) {
+                            launcher.setExternalThumbCorner($0)
+                        }
+                    }
+                }
+            }
+            .padding(.top, Self.topPadding)
+            .padding(.bottom, Self.bottomPadding)
+        }
+    }
+
+    private struct IndentedLine<Content: View>: View {
+        @ViewBuilder let content: Content
+
+        var body: some View { content.padding(.leading, ThumbCornerRows.indent) }
+    }
+}
+
+/// A form pop-up listing the four corners, its title at the leading edge.
+struct CornerPicker: View {
+    let title: String
+    let corner: ThumbCorner
+    /// True when the label is a whole form row, 46 pt tall through `formRowContent()`; false when it is one line of a
+    /// cell that sets its own height.
+    var isFormRow = true
+    let choose: (ThumbCorner) -> Void
+
+    var body: some View {
+        Picker(selection: Binding(get: { corner }, set: choose)) {
             ForEach(ThumbCorner.allCases, id: \.self) { corner in
                 Text(Copy.thumbCornerTitle(corner)).tag(corner)
             }
         } label: {
-            Text(Copy.thumbCornerRow).formRowContent()
+            if isFormRow { Text(title).formRowContent() } else { Text(title) }
         }
         .pickerStyle(.menu)
     }

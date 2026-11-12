@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 import LauncherCore
 import Synchronization
 
@@ -129,6 +130,12 @@ final class LaunchRecord: Sendable {
         Self.startAtLogin(item: loginItem, suiteName: suiteName, placement: placement)
     }
 
+    /// The External trackpad corner as saved, in its wire form.
+    func savedExternalCorner() -> String? { suiteDomain()["externalThumbCorner"] as? String }
+
+    /// How many times an app has been brought to the front.
+    var firedCount: Int { system.broughtToFront.count }
+
     /// Every key the suite holds, as a new process would read it.
     func suiteDomain() -> [String: Any] {
         UserDefaults(suiteName: suiteName)!.persistentDomain(forName: suiteName) ?? [:]
@@ -143,6 +150,21 @@ final class LaunchRecord: Sendable {
     /// A store over a fresh `UserDefaults` instance on the same suite: what a new process would read.
     func freshStore() -> SettingsStore {
         SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
+    }
+
+    /// The previous version run over this Mac's record: it reads the `settings` key, applies `change`, and writes back
+    /// only that key, as it does not know the External trackpad corner's.
+    @discardableResult
+    func previousVersionSaves(
+        sourceLocation: SourceLocation = #_sourceLocation, _ change: (inout PersistenceTests.Build1018Settings) -> Void
+    ) throws -> PersistenceTests.Build1018Settings {
+        let bytes = try #require(settingsRecordBytes(), sourceLocation: sourceLocation)
+        var settings = try PropertyListDecoder().decode(PersistenceTests.Build1018Settings.self, from: bytes)
+        change(&settings)
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        seedSettingsRecord(try encoder.encode(settings))
+        return settings
     }
 
     /// The saved record exactly as stored.
@@ -205,6 +227,10 @@ final class LaunchRecord: Sendable {
         hardware.touch(TouchScript(trackpad.surface).thumb(atMM: thumb).tap(fingers: fingers).frames, on: trackpad.id)
     }
 
+    func tap(_ fingers: Int, on trackpad: Trackpad = .macBook14, thumbIn corner: ThumbCorner) {
+        tap(fingers, on: trackpad, thumbAtMM: trackpad.surface.thumbMM(in: corner))
+    }
+
     /// Delivers the frames of `script` newer than any already delivered on that trackpad, so one hand in progress can
     /// be played in pieces with intents and reconciles in between.
     func play(_ script: TouchScript, on trackpad: Trackpad = .macBook14) {
@@ -256,9 +282,9 @@ extension World {
     /// Safari, Mail, Slack and Notes, Safari frontmost.
     static func switcherWorld(
         apps: [String] = ["Safari", "Mail", "Slack", "Notes"], running: [String]? = nil, frontmost: String? = "Safari",
-        accessGranted: Bool = false
+        accessGranted: Bool = false, attached: [Trackpad] = [.macBook14]
     ) -> World {
-        let world = World(apps: apps, accessGranted: accessGranted)
+        let world = World(apps: apps, attached: attached, accessGranted: accessGranted)
         world.launcher.start()
         world.makeRunning(running ?? apps)
         world.makeFrontmost(frontmost)

@@ -24,7 +24,12 @@ public final class Launcher {
     /// Called with true when the settings window goes from closed to open and false from open to closed; never on a
     /// re-front.
     @ObservationIgnored public var onWindowEdge: (@MainActor (Bool) -> Void)?
-    public var thumbCorner: ThumbCorner { settings.thumbCorner }
+    public var thumbCorners: ThumbCorners { ThumbCorners(macBook: settings.thumbCorner, external: externalCorner) }
+    /// The one corner every illustration draws.
+    public var drawnThumbCorner: ThumbCorner { thumbCorners.drawn(connected: connectedKinds) }
+    /// nil until the Mac has mixed trackpads.
+    private var externalCorner: ThumbCorner?
+    private var connectedKinds: Set<TrackpadKind> { Set(connected.map(\.kind)) }
     public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
     public var isSwipeOn: Bool { settings.isSwipeOn }
     public var isSwapOn: Bool { settings.isSwapOn }
@@ -32,7 +37,7 @@ public final class Launcher {
     public var isWindowSwipeOn: Bool { settings.isWindowSwipeOn }
     /// One derivation, read by the notice and the fire guard.
     public var activity: GestureActivity {
-        GestureActivity(connected: Set(connected.map(\.kind)))
+        GestureActivity(connected: connectedKinds)
     }
 
     /// The sentence the settings window shows while gestures are inactive; nil while they are active.
@@ -106,11 +111,13 @@ public final class Launcher {
         let stored = store.load()
         isFirstLaunch = stored == nil
         settings = stored ?? Settings()
+        externalCorner = store.loadExternalCorner()
         rows = makeRows()
     }
 
-    /// Gestures on: wires the adapters, scans, reconciles. Asks nothing, opens nothing, saves nothing: all a login
-    /// start does, so a first run waits for the first opening by hand. Call once.
+    /// Gestures on. Asks nothing, opens nothing and never saves the settings record, so a first run still waits for
+    /// the first opening by hand. It may write one thing, once in a Mac's life: the External corner (see `reconcile`).
+    /// Call once.
     public func start() {
         hardware.onEvent = { [unowned self] event in
             switch event {
@@ -159,6 +166,16 @@ public final class Launcher {
         guard corner != settings.thumbCorner else { return }
         settings.thumbCorner = corner
         store.save(settings)
+        reconcile()
+    }
+
+    /// The External trackpad corner. Saved at once under its own key; the reconcile re-runs the trackpads only if an
+    /// external trackpad is connected, since only then does a corner in effect change. Does nothing on a Mac without
+    /// mixed trackpads, which has no External corner and no row to set it from.
+    public func setExternalThumbCorner(_ corner: ThumbCorner) {
+        guard let current = externalCorner, corner != current else { return }
+        externalCorner = corner
+        store.saveExternalCorner(corner)
         reconcile()
     }
 
@@ -243,8 +260,7 @@ public final class Launcher {
     /// What the trackpads were last run with. A reconcile that would run them the same way leaves them, and any swipe
     /// in progress, alone: preference and trust notifications also fire for writes that change nothing here.
     private struct Run: Equatable {
-        let trackpads: [Trackpad]
-        let corner: ThumbCorner
+        let trackpads: [TrackpadRun]
         let blockClicks: Bool
         let blockTapClicks: Bool
         let slides: Set<SlideKind>
@@ -259,6 +275,12 @@ public final class Launcher {
     /// across sleep.
     private func reconcile(restart: Bool = false) {
         connected = hardware.connected()
+        // Mixed trackpads seen for the first time: a start, a hot-plug, a wake, a login start or hand-over after an
+        // update. Never the settings record. Idempotent: a later pass finds an External corner and writes nothing.
+        if externalCorner == nil, ThumbCorners.areMixed(connectedKinds) {
+            store.saveExternalCorner(ThumbCorners.defaultExternal)
+            externalCorner = ThumbCorners.defaultExternal
+        }
         preferenceValues = preferences.current()
         let granted = permissions.isGranted(.accessibility)
         isAccessibilityGranted = granted
@@ -268,17 +290,19 @@ public final class Launcher {
         // Blocking needs gestures active and access granted; without either, presses are plain clicks. Without access
         // no window can be read, so a slide up or down is what it is with the window swipe setting off.
         let blockClicks = active && granted
-        let tapToClickIsOn = TapBoundSetting.on(connected: Set(connected.map(\.kind)), values: preferenceValues)
+        let tapToClickIsOn = TapBoundSetting.on(connected: connectedKinds, values: preferenceValues)
             .contains(.tapToClick)
+        let corners = thumbCorners
         let run = Run(
-            trackpads: active ? connected : [], corner: settings.thumbCorner, blockClicks: blockClicks,
+            trackpads: active ? connected.map { TrackpadRun($0, corner: corners.corner(for: $0.kind)) } : [],
+            blockClicks: blockClicks,
             blockTapClicks: blockClicks && tapToClickIsOn,
             slides: granted ? settings.slides : settings.slides.subtracting([.windowSwipe]), swaps: settings.isSwapOn)
         guard restart || run != lastRun else { return }
         lastRun = run
         // Running replaces every recognizer, which ends any swipe or window swipe in progress.
         shown = nil
-        hardware.run(run.trackpads, corner: run.corner, blockClicks: run.blockClicks,
+        hardware.run(run.trackpads, blockClicks: run.blockClicks,
             blockTapClicks: run.blockTapClicks, slides: run.slides, swaps: run.swaps)
     }
 

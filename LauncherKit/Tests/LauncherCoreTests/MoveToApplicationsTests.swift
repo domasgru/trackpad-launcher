@@ -153,7 +153,7 @@ import Testing
         #expect(world.loginItem.isOn)
         #expect(Set(world.mac.suiteDomain().keys) == ["settings"])
         #expect(installed.window == .open(request: 1))
-        #expect(installed.launcher.thumbCorner == .topRight)
+        #expect(installed.launcher.thumbCorners == .single(.topRight))
         installed.tap(1, thumbAtMM: Self.leftThumbEdge)
         #expect(installed.system.broughtToFront == [world.mac.app("Arc")])
     }

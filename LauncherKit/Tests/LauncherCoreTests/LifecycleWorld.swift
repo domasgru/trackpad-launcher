@@ -234,9 +234,13 @@ struct RunningBuild {
         hardware.touch(TouchScript(Trackpad.macBook14.surface).land(fingers: 2).frames, on: Trackpad.macBook14.id)
     }
 
-    func tap(_ fingers: Int, thumbAtMM thumb: (x: Double, y: Double) = (10, 10)) {
-        hardware.touch(
-            TouchScript(Trackpad.macBook14.surface).thumb(atMM: thumb).tap(fingers: fingers).frames,
-            on: Trackpad.macBook14.id)
+    func tap(
+        _ fingers: Int, on trackpad: Trackpad = .macBook14, thumbAtMM thumb: (x: Double, y: Double) = (10, 10)
+    ) {
+        hardware.touch(TouchScript(trackpad.surface).thumb(atMM: thumb).tap(fingers: fingers).frames, on: trackpad.id)
+    }
+
+    func tap(_ fingers: Int, on trackpad: Trackpad = .macBook14, thumbIn corner: ThumbCorner) {
+        tap(fingers, on: trackpad, thumbAtMM: trackpad.surface.thumbMM(in: corner))
     }
 }

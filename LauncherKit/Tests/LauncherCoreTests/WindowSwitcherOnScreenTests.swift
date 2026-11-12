@@ -286,7 +286,7 @@ import LauncherCore
         #expect(appSwitcher != nil)
 
         let magicID = Trackpad.magicTrackpad.id
-        let magic = TouchScript(Trackpad.magicTrackpad.surface).thumb(atMM: (10, 10)).wait(.seconds(4))
+        let magic = TouchScript(Trackpad.magicTrackpad.surface).thumb(atMM: (10, 105)).wait(.seconds(4))
             .land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 20))
         let history = world.playFrameByFrame(magic, on: .magicTrackpad)
 

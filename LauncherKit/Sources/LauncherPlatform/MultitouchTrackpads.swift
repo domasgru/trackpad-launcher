@@ -63,11 +63,11 @@ import LauncherCore
         listTrackpads().map(\.trackpad)
     }
 
-    /// Forgets every session, stops every device, then starts exactly `trackpads` with a fresh recognizer each.
+    /// Forgets every session, stops every device, then starts exactly the trackpads in `trackpads`, each with a fresh
+    /// recognizer anchoring the thumb in that entry's corner.
     /// A click tap exists afterwards iff `blockClicks`, the system allows it and a trackpad is running.
     public func run(
-        _ trackpads: [Trackpad], corner: ThumbCorner, blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>,
-        swaps: Bool
+        _ trackpads: [TrackpadRun], blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>, swaps: Bool
     ) {
         runs += 1
         guard let framework else { return }
@@ -85,10 +85,9 @@ import LauncherCore
         startedDevices = []
 
         let generation = runs
-        let wanted = Set(trackpads.map(\.id))
-        let devices = listTrackpads().filter { wanted.contains($0.trackpad.id) }
+        let devices = devicesToRun(listTrackpads(), trackpads)
         if blockClicks && !devices.isEmpty { clickTap = ClickTap.install(blocksTapClicks: blockTapClicks) }
-        for (device, trackpad) in devices {
+        for (device, trackpad, corner) in devices {
             let ref = Unmanaged.passUnretained(device).toOpaque()
             let session = DeviceSession(
                 trackpad: trackpad.id,

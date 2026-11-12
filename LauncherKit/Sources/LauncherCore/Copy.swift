@@ -27,6 +27,9 @@ public enum Copy {
 
     /// The settings window's thumb corner row and its pop-up's choices.
     public static let thumbCornerRow = "Thumb corner"
+    public static let thumbCornerGroupTitle = "Thumb corner:"
+    public static let macBookTrackpadRow = "MacBook trackpad"
+    public static let externalTrackpadRow = "External trackpad"
     public static func thumbCornerTitle(_ corner: ThumbCorner) -> String {
         switch corner {
         case .topLeft: "Top left"
