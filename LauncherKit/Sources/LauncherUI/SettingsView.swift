@@ -53,7 +53,7 @@ struct SettingsView: View {
                 }
                 Section { SwitcherSection(launcher: launcher, corner: corner, actions: actions) }
                 Section {
-                    ThumbCornerRow(launcher: launcher)
+                    ThumbCornerRows(launcher: launcher)
                     Toggle(
                         isOn: Binding(
                             get: { launcher.isHideBackgroundAppsOn }, set: { launcher.setHideBackgroundApps(on: $0) })
@@ -248,17 +248,38 @@ struct Guide: View {
     }
 }
 
-/// The thumb corner row: the form's own pop-up listing the four corners.
-struct ThumbCornerRow: View {
+/// The thumb corner group's rows: one row, or once the Mac has mixed trackpads a title and a row for each kind.
+struct ThumbCornerRows: View {
     let launcher: Launcher
 
     var body: some View {
-        Picker(selection: Binding(get: { launcher.thumbCorners.corner(for: .builtIn) }, set: { launcher.setThumbCorner($0) })) {
+        switch launcher.thumbCorners {
+        case .single(let corner):
+            CornerPicker(title: Copy.thumbCornerRow, corner: corner, indented: false) { launcher.setThumbCorner($0) }
+        case .perKind(let macBook, let external):
+            Text(Copy.thumbCornerGroupTitle).formRowContent()
+            CornerPicker(title: Copy.macBookTrackpadRow, corner: macBook, indented: true) { launcher.setThumbCorner($0) }
+            CornerPicker(title: Copy.externalTrackpadRow, corner: external, indented: true) {
+                launcher.setExternalThumbCorner($0)
+            }
+        }
+    }
+}
+
+/// A form pop-up listing the four corners, its title at the leading edge.
+struct CornerPicker: View {
+    let title: String
+    let corner: ThumbCorner
+    let indented: Bool
+    let choose: (ThumbCorner) -> Void
+
+    var body: some View {
+        Picker(selection: Binding(get: { corner }, set: choose)) {
             ForEach(ThumbCorner.allCases, id: \.self) { corner in
                 Text(Copy.thumbCornerTitle(corner)).tag(corner)
             }
         } label: {
-            Text(Copy.thumbCornerRow).formRowContent()
+            Text(title).formRowContent().padding(.leading, indented ? 16 : 0)
         }
         .pickerStyle(.menu)
     }

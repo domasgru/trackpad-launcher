@@ -213,6 +213,41 @@ import LauncherCore
         }
     }
 
+    /// What build 1.0.18 reads and writes: the one corner under `handMode` and `isThumbAtBottom`, for every trackpad, and
+    /// no key for the External trackpad corner. Frozen from that build's `Settings`; never regenerate it.
+    struct Build1018Settings: Codable {
+        enum HandMode: String, Codable { case right, left }
+
+        var handMode: HandMode = .right
+        var isThumbAtBottom = false
+        var assignments: [Gesture: AssignedApp] = [:]
+        var isLaunchAnimationOn = true
+        var isSwipeOn = true
+        var isSwapOn = true
+        var isWindowSwipeOn = false
+        var hasAskedForScreenRecording = false
+        var isHideBackgroundAppsOn = false
+
+        init() {}
+
+        init(from decoder: any Decoder) throws {
+            self.init()
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            handMode = try container.decodeIfPresent(HandMode.self, forKey: .handMode) ?? handMode
+            isThumbAtBottom = try container.decodeIfPresent(Bool.self, forKey: .isThumbAtBottom) ?? isThumbAtBottom
+            assignments = try container.decodeIfPresent([Gesture: AssignedApp].self, forKey: .assignments) ?? assignments
+            isLaunchAnimationOn =
+                try container.decodeIfPresent(Bool.self, forKey: .isLaunchAnimationOn) ?? isLaunchAnimationOn
+            isSwipeOn = try container.decodeIfPresent(Bool.self, forKey: .isSwipeOn) ?? isSwipeOn
+            isSwapOn = try container.decodeIfPresent(Bool.self, forKey: .isSwapOn) ?? isSwapOn
+            isWindowSwipeOn = try container.decodeIfPresent(Bool.self, forKey: .isWindowSwipeOn) ?? isWindowSwipeOn
+            hasAskedForScreenRecording =
+                try container.decodeIfPresent(Bool.self, forKey: .hasAskedForScreenRecording) ?? hasAskedForScreenRecording
+            isHideBackgroundAppsOn =
+                try container.decodeIfPresent(Bool.self, forKey: .isHideBackgroundAppsOn) ?? isHideBackgroundAppsOn
+        }
+    }
+
     private func savedRecord(_ world: World) throws -> [String: Any] {
         let bytes = try #require(world.settingsRecordBytes())
         return try #require(try PropertyListSerialization.propertyList(from: bytes, format: nil) as? [String: Any])

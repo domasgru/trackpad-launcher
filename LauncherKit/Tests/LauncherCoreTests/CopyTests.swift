@@ -7,6 +7,12 @@ import LauncherCore
         #expect(Copy.openSettingsButton == "Open Settings…")
     }
 
+    @Test func theMixedTrackpadsRowsAreNamedAndTitled() {
+        #expect(Copy.thumbCornerGroupTitle == "Thumb corner:")
+        #expect(Copy.macBookTrackpadRow == "MacBook trackpad")
+        #expect(Copy.externalTrackpadRow == "External trackpad")
+    }
+
     @Test func theThumbCornerRowNamesItsFourChoicesInOrder() {
         #expect(Copy.thumbCornerRow == "Thumb corner")
         #expect(ThumbCorner.allCases == [.topLeft, .topRight, .bottomLeft, .bottomRight])

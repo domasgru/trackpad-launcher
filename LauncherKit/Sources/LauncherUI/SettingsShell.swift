@@ -51,6 +51,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         let isSwipeOn: Bool
         let screenRecordingHint: ScreenRecordingHint?
         let card: UpdateCard?
+        let hasMixedTrackpads: Bool
     }
 
     public init(launcher: Launcher, updater: Updater?, quit: @escaping () -> Void) {
@@ -89,7 +90,8 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                     Fit(
                         inactiveNotice: launcher.inactiveNotice, showsAccessibilityHint: launcher.showsAccessibilityHint,
                         isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint,
-                        card: UpdateCardPreview.card(updater?.card))
+                        card: UpdateCardPreview.card(updater?.card),
+                        hasMixedTrackpads: launcher.thumbCorners.hasMixedTrackpads)
                 }) {
                     guard fit != last else { continue }
                     last = fit

@@ -169,6 +169,16 @@ public final class Launcher {
         reconcile()
     }
 
+    /// The External trackpad corner. Saved at once under its own key; the reconcile re-runs the trackpads only if an
+    /// external trackpad is connected, since only then does a corner in effect change. Does nothing on a Mac without
+    /// mixed trackpads, which has no External corner and no row to set it from.
+    public func setExternalThumbCorner(_ corner: ThumbCorner) {
+        guard let current = externalCorner, corner != current else { return }
+        externalCorner = corner
+        store.saveExternalCorner(corner)
+        reconcile()
+    }
+
     /// Launch animation switch. Saved at once; the next gesture obeys it.
     public func setLaunchAnimation(on: Bool) {
         guard on != settings.isLaunchAnimationOn else { return }

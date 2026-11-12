@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 import LauncherCore
 import Synchronization
 
@@ -143,6 +144,21 @@ final class LaunchRecord: Sendable {
     /// A store over a fresh `UserDefaults` instance on the same suite: what a new process would read.
     func freshStore() -> SettingsStore {
         SettingsStore(defaults: UserDefaults(suiteName: suiteName)!)
+    }
+
+    /// The previous version run over this Mac's record: it reads the `settings` key, applies `change`, and writes back
+    /// only that key, as it does not know the External trackpad corner's.
+    @discardableResult
+    func previousVersionSaves(_ change: (inout PersistenceTests.Build1018Settings) -> Void) throws
+        -> PersistenceTests.Build1018Settings
+    {
+        let bytes = try #require(settingsRecordBytes())
+        var settings = try PropertyListDecoder().decode(PersistenceTests.Build1018Settings.self, from: bytes)
+        change(&settings)
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        seedSettingsRecord(try encoder.encode(settings))
+        return settings
     }
 
     /// The saved record exactly as stored.
