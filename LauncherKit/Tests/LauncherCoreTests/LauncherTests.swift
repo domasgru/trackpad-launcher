@@ -254,7 +254,7 @@ extension Launcher {
 
         world.hardware.attach(.magicTrackpad)
         #expect(Set(world.hardware.running.keys) == [Trackpad.macBook14.id, Trackpad.magicTrackpad.id])
-        world.tap(1, on: .magicTrackpad)
+        world.tap(1, on: .magicTrackpad, thumbAtMM: (10, 105))
         #expect(world.system.broughtToFront == [world.app("Arc")])
         #expect(world.hardware.feedback == [Trackpad.magicTrackpad.id])
 

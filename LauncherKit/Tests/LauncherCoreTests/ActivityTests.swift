@@ -24,7 +24,7 @@ import LauncherCore
         world.preferences.set(.lookUpTapWithThreeFingers, rawValue: 2, for: .external)
         #expect(world.launcher.activity == .active)
 
-        world.tap(3, on: .magicTrackpad)
+        world.tap(3, on: .magicTrackpad, thumbAtMM: (10, 105))
         world.tap(3)
 
         #expect(world.system.broughtToFront == [world.app("Notes"), world.app("Notes")])
@@ -126,7 +126,7 @@ import LauncherCore
         world.preferences.set(.lookUpTapWithThreeFingers, rawValue: 2, for: .external)
 
         #expect(world.launcher.activity == .active)
-        world.tap(1, on: .magicTrackpad)
+        world.tap(1, on: .magicTrackpad, thumbAtMM: (10, 105))
         #expect(world.system.broughtToFront == [world.app("Arc")])
         #expect(world.hardware.feedback == [Trackpad.magicTrackpad.id])
     }

@@ -148,7 +148,7 @@ import LauncherCore
     @Test func twoTrackpadsMergeToTheHighestLevelAndTheGateFollowsTheOneThatStillWantsIt() {
         let world = World(attached: [.macBook14, .magicTrackpad], accessGranted: true)
         world.launcher.start()
-        let magic = TouchScript(.magicTrackpad).thumb(atMM: (10, 10))
+        let magic = TouchScript(.magicTrackpad).thumb(atMM: (10, 105))
         world.play(magic, on: .magicTrackpad)
         #expect(world.hardware.isGatedPortOn)
         #expect(world.hardware.scroll(.unphased) == .pass)

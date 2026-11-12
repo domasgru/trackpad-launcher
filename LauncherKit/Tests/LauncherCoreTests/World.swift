@@ -205,6 +205,10 @@ final class LaunchRecord: Sendable {
         hardware.touch(TouchScript(trackpad.surface).thumb(atMM: thumb).tap(fingers: fingers).frames, on: trackpad.id)
     }
 
+    func tap(_ fingers: Int, on trackpad: Trackpad = .macBook14, thumbIn corner: ThumbCorner) {
+        tap(fingers, on: trackpad, thumbAtMM: trackpad.surface.thumbMM(in: corner))
+    }
+
     /// Delivers the frames of `script` newer than any already delivered on that trackpad, so one hand in progress can
     /// be played in pieces with intents and reconciles in between.
     func play(_ script: TouchScript, on trackpad: Trackpad = .macBook14) {
@@ -256,9 +260,9 @@ extension World {
     /// Safari, Mail, Slack and Notes, Safari frontmost.
     static func switcherWorld(
         apps: [String] = ["Safari", "Mail", "Slack", "Notes"], running: [String]? = nil, frontmost: String? = "Safari",
-        accessGranted: Bool = false
+        accessGranted: Bool = false, attached: [Trackpad] = [.macBook14]
     ) -> World {
-        let world = World(apps: apps, accessGranted: accessGranted)
+        let world = World(apps: apps, attached: attached, accessGranted: accessGranted)
         world.launcher.start()
         world.makeRunning(running ?? apps)
         world.makeFrontmost(frontmost)

@@ -96,6 +96,12 @@ import LauncherCore
         onEvent?(.trackpadsChanged)
     }
 
+    /// A Magic Mouse matches the same IOKit notification and is no trackpad: a push with nothing attached.
+    func connectMagicMouse() { onEvent?(.trackpadsChanged) }
+
+    /// Connects while the Mac sleeps: nothing is pushed, so the `wake()` that follows is the only signal.
+    func attachWhileAsleep(_ trackpad: Trackpad) { attached.append(trackpad) }
+
     func detach(_ id: TrackpadID) {
         attached.removeAll { $0.id == id }
         onEvent?(.trackpadsChanged)

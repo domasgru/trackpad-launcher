@@ -10,11 +10,22 @@ extension SurfaceSize {
     func point(mm x: Double, _ y: Double) -> SurfacePoint {
         SurfacePoint(x: x / widthMM, y: y / heightMM)
     }
+
+    /// A point 10 mm in from the corner's two edges; y grows downwards.
+    func thumbMM(in corner: ThumbCorner) -> (x: Double, y: Double) {
+        switch corner {
+        case .topLeft: (10, 10)
+        case .topRight: (widthMM - 10, 10)
+        case .bottomLeft: (10, heightMM - 10)
+        case .bottomRight: (widthMM - 10, heightMM - 10)
+        }
+    }
 }
 
 extension Trackpad {
     static let macBook14 = Trackpad(id: TrackpadID(rawValue: 1), kind: .builtIn, surface: .macBook14)
     static let magicTrackpad = Trackpad(id: TrackpadID(rawValue: 2), kind: .external, surface: .magicTrackpad)
+    static let secondMagicTrackpad = Trackpad(id: TrackpadID(rawValue: 3), kind: .external, surface: .magicTrackpad)
 }
 
 /// Runs a fresh recognizer over `frames` and returns everything that fired, in order.

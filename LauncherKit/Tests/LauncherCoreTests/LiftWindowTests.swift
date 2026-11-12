@@ -65,7 +65,7 @@ import LauncherCore
 
     @Test func aTapOnTheExternalTrackpadMakesNoRightClick() {
         let world = world(attached: [.macBook14, .magicTrackpad], tapToClick: .external)
-        world.play(TouchScript(.magicTrackpad).thumb(atMM: (10, 10)).tap(fingers: 2).wait(.milliseconds(180)), on: .magicTrackpad)
+        world.play(TouchScript(.magicTrackpad).thumb(atMM: (10, 105)).tap(fingers: 2).wait(.milliseconds(180)), on: .magicTrackpad)
 
         #expect(click(world, button: 1) == dropped)
         #expect(world.system.broughtToFront == [world.app("Figma")])

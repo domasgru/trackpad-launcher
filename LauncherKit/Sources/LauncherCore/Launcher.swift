@@ -24,9 +24,11 @@ public final class Launcher {
     /// Called with true when the settings window goes from closed to open and false from open to closed; never on a
     /// re-front.
     @ObservationIgnored public var onWindowEdge: (@MainActor (Bool) -> Void)?
-    public var thumbCorners: ThumbCorners { ThumbCorners(macBook: settings.thumbCorner, external: nil) }
+    public var thumbCorners: ThumbCorners { ThumbCorners(macBook: settings.thumbCorner, external: externalCorner) }
     /// The one corner every illustration draws.
     public var drawnThumbCorner: ThumbCorner { thumbCorners.drawn(connected: connectedKinds) }
+    /// nil until the Mac has mixed trackpads.
+    private var externalCorner: ThumbCorner?
     private var connectedKinds: Set<TrackpadKind> { Set(connected.map(\.kind)) }
     public var isLaunchAnimationOn: Bool { settings.isLaunchAnimationOn }
     public var isSwipeOn: Bool { settings.isSwipeOn }
@@ -109,11 +111,13 @@ public final class Launcher {
         let stored = store.load()
         isFirstLaunch = stored == nil
         settings = stored ?? Settings()
+        externalCorner = store.loadExternalCorner()
         rows = makeRows()
     }
 
-    /// Gestures on: wires the adapters, scans, reconciles. Asks nothing, opens nothing, saves nothing: all a login
-    /// start does, so a first run waits for the first opening by hand. Call once.
+    /// Gestures on. Asks nothing, opens nothing and never saves the settings record, so a first run still waits for
+    /// the first opening by hand. It may write one thing, once in a Mac's life: the External corner (see `reconcile`).
+    /// Call once.
     public func start() {
         hardware.onEvent = { [unowned self] event in
             switch event {
@@ -261,6 +265,12 @@ public final class Launcher {
     /// across sleep.
     private func reconcile(restart: Bool = false) {
         connected = hardware.connected()
+        // Mixed trackpads seen for the first time: a start, a hot-plug, a wake, a login start or hand-over after an
+        // update. Never the settings record. Idempotent: a later pass finds an External corner and writes nothing.
+        if externalCorner == nil, ThumbCorners.areMixed(connectedKinds) {
+            store.saveExternalCorner(ThumbCorners.defaultExternal)
+            externalCorner = ThumbCorners.defaultExternal
+        }
         preferenceValues = preferences.current()
         let granted = permissions.isGranted(.accessibility)
         isAccessibilityGranted = granted
