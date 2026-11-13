@@ -71,7 +71,7 @@ Fingers that touch down and lift again within a short window, without dragging. 
 ## Thumbless tap
 A tap with no thumb that fires its finger count's gesture while the hold thumb setting is off. It is a touch that meets all of these:
 - one to five fingers touch one trackpad;
-- the first finger lands while no other contact is on that trackpad, edge contacts aside, after the trackpad has been silent (no contact but edge contacts) for at least 100 ms; recognition restarting counts as the last contact;
+- the first finger lands while no other contact is on that trackpad, edge contacts aside, after the trackpad has been silent (no contact but edge contacts) for at least 100 ms; after recognition restarts, a finger landing on an empty trackpad counts as quiet, while one already resting starts no tap;
 - every finger lifts within the thumbless tap window, counted from the first landing, without dragging past the thumbless drag limit: 70 ms and 3 mm for 1 or 2 fingers, 90 ms and 5 mm for 3, 4 or 5 (against the 400 ms and 3 mm a thumb-held tap allows). Recorded deliberate taps: 1–2 fingers at most 64 ms; 3–5 fingers at most 80 ms with up to 4.3 mm of roll;
 - no contact lands inside the anchor corner;
 - the trackpad is not pressed to a click, a press that click blocking withholds included.
