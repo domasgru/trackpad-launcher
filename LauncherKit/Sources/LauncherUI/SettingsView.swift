@@ -30,7 +30,8 @@ struct SettingsView: View {
     private static let formMargins = (top: CGFloat(20), bottom: CGFloat(20), side: CGFloat(20))
 
     var body: some View {
-        let corner = launcher.drawnThumbCorner
+        let drawn = launcher.drawnThumbCorner
+        let gestureThumb = launcher.gestureThumbCorner
         VStack(spacing: Self.partSpacing) {
             if let card = UpdateCardPreview.card(updater?.card) {
                 UpdateCardView(card: card, updateNow: { updater?.updateNow() }, arrowDrift: actions.arrowDrift)
@@ -43,7 +44,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     ForEach(launcher.rows) { row in
-                        GestureRowView(row: row, corner: corner, launcher: launcher, actions: actions)
+                        GestureRowView(row: row, thumb: gestureThumb, launcher: launcher, actions: actions)
                     }
                     Toggle(
                         isOn: Binding(
@@ -59,7 +60,7 @@ struct SettingsView: View {
                     }
                     .toggleStyle(.switch)
                 }
-                Section { SwitcherSection(launcher: launcher, corner: corner, actions: actions) }
+                Section { SwitcherSection(launcher: launcher, corner: drawn, actions: actions) }
                 Section {
                     ThumbCornerRows(launcher: launcher)
                     Toggle(
@@ -131,7 +132,7 @@ struct FormRow<Content: View>: View {
 /// A gesture row reads the model and sends one intent.
 struct GestureRowView: View {
     let row: GestureRow
-    let corner: ThumbCorner
+    let thumb: ThumbCorner?
     let launcher: Launcher
     let actions: LauncherActions
 
@@ -144,7 +145,7 @@ struct GestureRowView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            GestureIllustration(gesture: row.gesture, corner: corner)
+            GestureIllustration(gesture: row.gesture, thumb: thumb)
                 .overlay(alignment: .topLeading) {
                     if showsGuide {
                         // Where the arrows end on the thumb and the tapping finger.
@@ -197,28 +198,43 @@ struct GestureRowView: View {
         .zIndex(row.gesture == .one ? 1 : 0)
     }
 
-    private var showsGuide: Bool { row.gesture == .one && corner.showsGuide }
+    private var showsGuide: Bool { row.gesture == .one && thumb?.showsGuide == true }
 }
 
 struct GestureIllustration: View {
     let gesture: LauncherCore.Gesture
-    let corner: ThumbCorner
+    let thumb: ThumbCorner?
 
     var body: some View {
-        Illustration(name: "gesture-\(gesture.fingerCount)", corner: corner)
+        Illustration(name: "gesture-\(gesture.fingerCount)", thumb: thumb)
             .accessibilityLabel("\(gesture.fingerCount)-finger gesture")
     }
 }
 
-/// The paper card with a gesture's marks on it: one @2x PNG from the Figma export, the same in light and dark.
+/// The paper card with a gesture's marks on it, the same in light and dark. The small pictures are 4x PNGs (180 x 112
+/// px for 45 x 28 pt). The top-left versions are drawn by hand; `Scripts/corner-illustrations.swift` derives the other
+/// corners' versions and the gesture pictures without a thumb.
 struct Illustration: View {
     let name: String
-    let corner: ThumbCorner
+    /// The corner the thumb is drawn in; nil for the picture without one.
+    let thumb: ThumbCorner?
 
     static let size = CGSize(width: 45, height: 28)
 
+    /// The one rule that names a picture's file: the top-left version has the base name, the other corners
+    /// `-inverse` (top right), `-bottom` (bottom left) and `-bottom-inverse` (bottom right), and no thumb `-no-thumb`.
+    nonisolated static func file(_ name: String, thumb: ThumbCorner?) -> String {
+        switch thumb {
+        case .topLeft: name
+        case .topRight: name + "-inverse"
+        case .bottomLeft: name + "-bottom"
+        case .bottomRight: name + "-bottom-inverse"
+        case nil: name + "-no-thumb"
+        }
+    }
+
     var body: some View {
-        BundleImage.view(corner.illustration(name), type: "png", size: Self.size)
+        BundleImage.view(Self.file(name, thumb: thumb), type: "png", size: Self.size)
     }
 }
 
@@ -245,18 +261,6 @@ extension View {
 }
 
 extension ThumbCorner {
-    /// The illustrations are drawn with the thumb in the top-left corner. The other corners' copies are derived from
-    /// them by `Scripts/corner-illustrations.swift`: `-inverse` top-right, `-bottom` bottom-left and
-    /// `-bottom-inverse` bottom-right.
-    func illustration(_ name: String) -> String {
-        switch self {
-        case .topLeft: name
-        case .topRight: name + "-inverse"
-        case .bottomLeft: name + "-bottom"
-        case .bottomRight: name + "-bottom-inverse"
-        }
-    }
-
     /// Only the top-left illustration puts the thumb where the guide's arrows end.
     var showsGuide: Bool { self == .topLeft }
 }

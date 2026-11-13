@@ -25,8 +25,10 @@ public final class Launcher {
     /// re-front.
     @ObservationIgnored public var onWindowEdge: (@MainActor (Bool) -> Void)?
     public var thumbCorners: ThumbCorners { ThumbCorners(macBook: settings.thumbCorner, external: externalCorner) }
-    /// The one corner every illustration draws.
+    /// The one corner every illustration that draws a thumb draws it in.
     public var drawnThumbCorner: ThumbCorner { thumbCorners.drawn(connected: connectedKinds) }
+    /// The corner the gesture illustrations draw the thumb in; none while the hold thumb setting is off.
+    public var gestureThumbCorner: ThumbCorner? { settings.isHoldThumbOn ? drawnThumbCorner : nil }
     /// nil until the Mac has mixed trackpads.
     private var externalCorner: ThumbCorner?
     private var connectedKinds: Set<TrackpadKind> { Set(connected.map(\.kind)) }

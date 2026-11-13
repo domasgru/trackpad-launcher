@@ -69,7 +69,7 @@ struct SettingRow: View {
     var body: some View {
         Toggle(isOn: isOn) {
             HStack(spacing: Self.titleGap) {
-                Illustration(name: illustration, corner: corner)
+                Illustration(name: illustration, thumb: corner)
                     .accessibilityHidden(true)
                 Text(title)
             }
