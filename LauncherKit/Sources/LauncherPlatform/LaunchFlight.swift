@@ -1,9 +1,11 @@
 import AppKit
+import LauncherCore
 import QuartzCore
 
 /// A connected display as the launch animation sees it: its frame in global screen coordinates (y up) and its
 /// backing scale.
 struct LaunchDisplay: Equatable {
+    let id: DisplayID
     let frame: CGRect
     let scale: CGFloat
 }
@@ -22,6 +24,15 @@ extension LaunchDisplay {
     }
 }
 
+extension NSScreen {
+    /// The window server's number for this display, from the device description.
+    var displayID: DisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber).map {
+            DisplayID(rawValue: $0.uint32Value)
+        }
+    }
+}
+
 /// Where the pointer is and which displays exist, read now: what a bounce reads when it starts and on every move.
 struct ScreenRead {
     let pointer: CGPoint
@@ -31,43 +42,48 @@ struct ScreenRead {
     @MainActor static func now() -> ScreenRead {
         ScreenRead(
             pointer: NSEvent.mouseLocation,
-            displays: NSScreen.screens.map { LaunchDisplay(frame: $0.frame, scale: $0.backingScaleFactor) })
+            displays: NSScreen.screens.compactMap { screen in
+                screen.displayID.map { LaunchDisplay(id: $0, frame: screen.frame, scale: screen.backingScaleFactor) }
+            })
     }
 }
 
 /// Draws launch flights, and remembers the sides of the last two moving ones so the same side never comes up three
 /// times in a row.
 struct LaunchFlights {
-    private var lastSides: [Side] = []
-
-    private enum Side {
-        case left, right
-
-        var opposite: Side {
-            switch self {
-            case .left: .right
-            case .right: .left
-            }
-        }
-
-        var sign: CGFloat {
-            switch self {
-            case .left: -1
-            case .right: 1
-            }
-        }
-    }
+    private var lastSides: [SplitSide] = []
 
     /// `draw` is a uniform random number in -1...1. Its sign picks the side (zero veers right) and its magnitude the
     /// size of the sway. A side that would be the third in a row is swapped for the other, with the same size.
-    /// Reduce-motion flights neither sway nor count towards a streak.
-    mutating func next(draw: Double, reduceMotion: Bool) -> LaunchFlight {
+    /// Reduce-motion flights neither sway nor count towards a streak. With `toward`, that side, whatever the draw's
+    /// sign: a directed flight neither reads nor feeds the streak.
+    mutating func next(draw: Double, reduceMotion: Bool, toward directed: SplitSide? = nil) -> LaunchFlight {
         guard !reduceMotion else { return LaunchFlight(motion: .fadeInPlace) }
-        var side: Side = draw < 0 ? .left : .right
-        if lastSides.count == 2, lastSides.allSatisfy({ $0 == side }) { side = side.opposite }
-        lastSides = Array((lastSides + [side]).suffix(2))
+        var side: SplitSide = draw < 0 ? .left : .right
+        if let directed {
+            side = directed
+        } else {
+            if lastSides.count == 2, lastSides.allSatisfy({ $0 == side }) { side = side.opposite }
+            lastSides = Array((lastSides + [side]).suffix(2))
+        }
         let size = LaunchFlight.minimumSway + (1 - LaunchFlight.minimumSway) * min(abs(draw), 1)
         return LaunchFlight(motion: .sway(side.sign * size * LaunchFlight.maximumSway))
+    }
+}
+
+private extension SplitSide {
+    var opposite: SplitSide {
+        switch self {
+        case .left: .right
+        case .right: .left
+        }
+    }
+
+    var sign: CGFloat {
+        switch self {
+        case .left: -1
+        case .right: 1
+        }
     }
 }
 
@@ -85,6 +101,8 @@ struct LaunchFlight {
     /// Every side of the flight, as a share of the icon's side: 1 from the pointer; a bounce's ending passes its icon's
     /// side then, so an inflated icon swells on from where it is instead of snapping back first.
     private var size: CGFloat = 1
+    /// How long the icon rests at its first pose, shown, before it moves.
+    private var delay: CFTimeInterval = 0
 
     fileprivate init(motion: Motion) {
         self.motion = motion
@@ -94,6 +112,13 @@ struct LaunchFlight {
     func sized(_ size: CGFloat) -> LaunchFlight {
         var flight = self
         flight.size = size
+        return flight
+    }
+
+    /// This flight resting at its first pose for `delay` before it plays: the icon shows at once and starts later.
+    func delayed(by delay: CFTimeInterval) -> LaunchFlight {
+        var flight = self
+        flight.delay = delay
         return flight
     }
 
@@ -154,13 +179,40 @@ struct LaunchFlight {
         (0...Self.steps).map { pose(at: CGFloat($0) / CGFloat(Self.steps)) }
     }
 
+    /// The gap between a split's two icons as they start, at rest size. While the second swells, their squares come
+    /// up to 3 points closer than touching, inside the clear margin every macOS app icon has around its shape, so the
+    /// icons themselves never touch.
+    static let splitGap: CGFloat = 8
+
+    /// How much later a split's second icon starts than its first.
+    static let splitStagger: CFTimeInterval = 0.02
+
+    /// Where a split gesture's icon starts for a pointer at `pointer`: beside it on its side, `splitGap` from the other,
+    /// so the two icons start side by side, then each sways further to its side. Like the bounce row, the pair slides
+    /// sideways just enough to start whole on the pointer's display, at its largest.
+    static func start(at pointer: CGPoint, toward side: SplitSide, on display: LaunchDisplay) -> CGPoint {
+        let centres = iconSide + splitGap
+        let width = centres + peakSide
+        var left = pointer.x - width / 2
+        left = min(left, display.frame.maxX - width)
+        left = max(left, display.frame.minX)
+        let centre = side == .left ? left + peakSide / 2 : left + peakSide / 2 + centres
+        return CGPoint(x: centre, y: pointer.y)
+    }
+
     /// Where and how the icon moves for a pointer at `pointer`, in global screen coordinates (y up).
     /// Nil when there is no display, or nothing of the flight's reach is left on the pointer's display.
     func staged(at pointer: CGPoint, among displays: [LaunchDisplay]) -> LaunchStage? {
         guard let display = LaunchDisplay.containing(pointer, among: displays) else { return nil }
+        return staged(at: pointer, on: display)
+    }
+
+    /// As `staged(at:among:)`, on `display` whether or not `start` lies on it: a split's icon starts beside the
+    /// pointer, which may be past the edge of the pointer's display, and plays on that display all the same.
+    func staged(at start: CGPoint, on display: LaunchDisplay) -> LaunchStage? {
         let start = CGPoint(
-            x: (pointer.x * display.scale).rounded() / display.scale,
-            y: (pointer.y * display.scale).rounded() / display.scale)
+            x: (start.x * display.scale).rounded() / display.scale,
+            y: (start.y * display.scale).rounded() / display.scale)
         let poses = poses
         let reach = poses.map { Self.bounds(of: $0, from: start) }.reduce(CGRect.null) { $0.union($1) }.integral
         let frame = reach.intersection(display.frame)
@@ -168,7 +220,7 @@ struct LaunchFlight {
         let centre = CGPoint(x: start.x - frame.minX, y: start.y - frame.minY)
         return LaunchStage(
             frame: frame, scale: display.scale, iconSide: Self.iconSide, iconCentre: centre,
-            animations: Self.animations(poses, from: centre))
+            animations: Self.animations(poses, from: centre, delay: delay))
     }
 
     /// The box holding a pose's square, rotated.
@@ -178,13 +230,24 @@ struct LaunchFlight {
             x: start.x + pose.offset.x - half, y: start.y + pose.offset.y - half, width: 2 * half, height: 2 * half)
     }
 
-    private static func animations(_ poses: [Pose], from centre: CGPoint) -> [CAKeyframeAnimation] {
-        let keyTimes = poses.indices.map { NSNumber(value: Double($0) / Double(steps)) }
+    /// One keyframe per pose; with a `delay`, a first keyframe holds the first pose from the start until the motion
+    /// begins, so the icon shows at once and rests until then.
+    private static func animations(
+        _ poses: [Pose], from centre: CGPoint, delay: CFTimeInterval
+    ) -> [CAKeyframeAnimation] {
+        let total = delay + duration
+        var times = poses.indices.map { (delay + Double($0) / Double(steps) * duration) / total }
+        var poses = poses
+        if delay > 0, let first = poses.first {
+            times.insert(0, at: 0)
+            poses.insert(first, at: 0)
+        }
+        let keyTimes = times.map { NSNumber(value: $0) }
         func animation(_ keyPath: String, _ values: [Any]) -> CAKeyframeAnimation {
             let animation = CAKeyframeAnimation(keyPath: keyPath)
             animation.values = values
             animation.keyTimes = keyTimes
-            animation.duration = duration
+            animation.duration = total
             animation.calculationMode = .linear
             return animation
         }

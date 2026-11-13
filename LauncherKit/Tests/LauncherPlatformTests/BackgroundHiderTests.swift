@@ -9,7 +9,10 @@ import Testing
 @MainActor private final class Stage {
     var frontmost: String? = "com.example.before"
     var shown: Set<String> = []
+    /// The front app each hide kept, in order.
     var hides: [String] = []
+    /// What each hide kept, in order.
+    var kept: [KeptApps] = []
     var onHide: (() -> Void)?
 
     var apps: BackgroundHider.Apps {
@@ -17,7 +20,8 @@ import Testing
             frontmost: { [unowned self] in frontmost },
             isShowing: { [unowned self] in shown.contains($0) },
             hideOthers: { [unowned self] in
-                hides.append($0)
+                hides.append($0.front.rawValue)
+                kept.append($0)
                 onHide?()
             })
     }
@@ -53,7 +57,7 @@ import Testing
     @Test func aHiddenAppThatActivatesHidesNothingUntilItIsUnhidden() async {
         let stage = Stage()
         let hider = BackgroundHider(apps: stage.apps, recheckWaits: [])
-        hider.hideOthers(than: safari)
+        hider.hideOthers(keeping: KeptApps(front: safari))
         await stage.settle()
         stage.activate(safari.rawValue)
         await stage.settle()
@@ -67,7 +71,7 @@ import Testing
     @Test func anUnhideBeforeTheActivationHidesOnTheActivation() async {
         let stage = Stage()
         let hider = BackgroundHider(apps: stage.apps, recheckWaits: [])
-        hider.hideOthers(than: safari)
+        hider.hideOthers(keeping: KeptApps(front: safari))
         stage.unhide(safari.rawValue)
         await stage.settle()
         #expect(stage.hides.isEmpty)
@@ -80,7 +84,7 @@ import Testing
         let stage = Stage()
         stage.shown = [safari.rawValue]
         let hider = BackgroundHider(apps: stage.apps, recheckWaits: [])
-        hider.hideOthers(than: safari)
+        hider.hideOthers(keeping: KeptApps(front: safari))
         stage.activate("com.example.helper")
         await stage.settle()
         #expect(stage.hides.isEmpty)
@@ -94,7 +98,7 @@ import Testing
         stage.frontmost = safari.rawValue
         stage.shown = [safari.rawValue]
         let hider = BackgroundHider(apps: stage.apps, recheckWaits: [])
-        hider.hideOthers(than: safari)
+        hider.hideOthers(keeping: KeptApps(front: safari))
         #expect(stage.hides.isEmpty)
         await stage.settle()
         #expect(stage.hides == [safari.rawValue])
@@ -105,8 +109,8 @@ import Testing
         let mail = "com.apple.mail"
         stage.shown = [safari.rawValue, mail]
         let hider = BackgroundHider(apps: stage.apps, recheckWaits: [])
-        hider.hideOthers(than: safari)
-        hider.hideOthers(than: BundleID(rawValue: mail))
+        hider.hideOthers(keeping: KeptApps(front: safari))
+        hider.hideOthers(keeping: KeptApps(front: BundleID(rawValue: mail)))
         stage.activate(safari.rawValue)
         await stage.settle()
         #expect(stage.hides.isEmpty)
@@ -118,7 +122,7 @@ import Testing
     @Test func aGoalThatNeverArrivesGivesUpAndHidesNothing() async {
         let stage = Stage()
         let hider = BackgroundHider(apps: stage.apps, arrivalLimit: .milliseconds(50), recheckWaits: [])
-        hider.hideOthers(than: safari)
+        hider.hideOthers(keeping: KeptApps(front: safari))
         let host = await awaiting("the run to end", within: .seconds(30)) { (done: @escaping @Sendable (Bool) -> Void) in
             Task { @MainActor in
                 while LaunchClock.hostPanel != nil { try? await Task.sleep(for: .milliseconds(20)) }
@@ -139,9 +143,75 @@ import Testing
         let hider = BackgroundHider(apps: stage.apps, recheckWaits: [.milliseconds(20), .milliseconds(20)])
         let passes = await awaiting("three passes", within: .seconds(30)) { (done: @escaping @Sendable (Int) -> Void) in
             stage.onHide = { if stage.hides.count == 3 { done(3) } }
-            hider.hideOthers(than: safari)
+            hider.hideOthers(keeping: KeptApps(front: safari))
         }
         #expect(passes == 3)
+    }
+
+    private let notes = BundleID(rawValue: "com.apple.Notes")
+
+    @Test func aHideKeepsBothAppsOfASplitGesture() async {
+        let stage = Stage()
+        stage.frontmost = notes.rawValue
+        stage.shown = [notes.rawValue, safari.rawValue]
+        let hider = BackgroundHider(apps: stage.apps, recheckWaits: [])
+        hider.hideOthers(keeping: KeptApps(front: notes, beside: safari))
+        await stage.settle()
+        #expect(stage.kept == [KeptApps(front: notes, beside: safari)])
+    }
+
+    @Test func theAppBesideTheGoalInFrontHidesNothingAndTheRunGoesOn() async {
+        let stage = Stage()
+        stage.frontmost = notes.rawValue
+        stage.shown = [notes.rawValue, safari.rawValue]
+        let hider = BackgroundHider(apps: stage.apps, recheckWaits: [.milliseconds(300), .milliseconds(300)])
+        hider.hideOthers(keeping: KeptApps(front: notes, beside: safari))
+        await stage.settle()
+        #expect(stage.hides.count == 1)
+        stage.frontmost = safari.rawValue
+        try? await Task.sleep(for: .milliseconds(450))
+        #expect(stage.hides.count == 1)
+        stage.frontmost = notes.rawValue
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(stage.hides.count == 2)
+    }
+
+    @Test func aThirdAppInFrontEndsTheRunOfASplitGesture() async {
+        let stage = Stage()
+        stage.frontmost = notes.rawValue
+        stage.shown = [notes.rawValue, safari.rawValue]
+        let hider = BackgroundHider(apps: stage.apps, recheckWaits: [.milliseconds(300), .milliseconds(300)])
+        hider.hideOthers(keeping: KeptApps(front: notes, beside: safari))
+        await stage.settle()
+        stage.frontmost = "com.apple.mail"
+        try? await Task.sleep(for: .milliseconds(450))
+        stage.frontmost = notes.rawValue
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(stage.hides.count == 1)
+    }
+
+    @Test func theBesideAppInFrontAtTheCallHidesNothingUntilTheGoalArrives() async {
+        let stage = Stage()
+        stage.frontmost = safari.rawValue
+        stage.shown = [safari.rawValue]
+        let hider = BackgroundHider(apps: stage.apps, recheckWaits: [])
+        hider.hideOthers(keeping: KeptApps(front: notes, beside: safari))
+        await stage.settle()
+        #expect(stage.hides.isEmpty)
+        stage.unhide(notes.rawValue)
+        stage.activate(notes.rawValue)
+        await stage.settle()
+        #expect(stage.hides == [notes.rawValue])
+    }
+
+    @Test func anAppKeptBesideItselfIsKeptAlone() async {
+        let stage = Stage()
+        stage.frontmost = notes.rawValue
+        stage.shown = [notes.rawValue]
+        let hider = BackgroundHider(apps: stage.apps, recheckWaits: [])
+        hider.hideOthers(keeping: KeptApps(front: notes, beside: notes))
+        await stage.settle()
+        #expect(stage.kept == [KeptApps(front: notes)])
     }
 
     @Test func aUserWhoMovedOnKeepsWhatTheySee() async {
@@ -149,7 +219,7 @@ import Testing
         stage.frontmost = safari.rawValue
         stage.shown = [safari.rawValue]
         let hider = BackgroundHider(apps: stage.apps, recheckWaits: [.milliseconds(300)])
-        hider.hideOthers(than: safari)
+        hider.hideOthers(keeping: KeptApps(front: safari))
         await stage.settle()
         #expect(stage.hides.count == 1)
         stage.frontmost = "com.apple.mail"

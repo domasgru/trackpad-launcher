@@ -338,7 +338,7 @@ import LauncherCore
 
         var expected = Settings()
         expected.thumbCorner = .topRight
-        expected.assignments = [.three: AssignedApp(world.app("Arc"))]
+        expected.assignments = [.three: Assignment(first: AssignedApp(world.app("Arc")))]
         expected.isLaunchAnimationOn = false
         expected.isSwipeOn = false
         expected.isSwapOn = false
@@ -528,7 +528,7 @@ import LauncherCore
         let world = World(apps: ["Arc"])
         var settings = Settings()
         settings.thumbCorner = .bottomRight
-        settings.assignments = [.three: AssignedApp(world.app("Arc"))]
+        settings.assignments = [.three: Assignment(first: AssignedApp(world.app("Arc")))]
         settings.isLaunchAnimationOn = false
         settings.isSwipeOn = false
         settings.isSwapOn = false

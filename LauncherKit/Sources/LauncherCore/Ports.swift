@@ -61,13 +61,14 @@ public enum Haptic: Sendable { case gesture, lightTick }
 @MainActor public protocol SystemActions: AnyObject {
     /// Bring to front: launch, or unhide / restore / reopen / activate exactly like a Dock click.
     func bringToFront(_ app: AppEntry)
-    /// Hides every running app with a Dock icon whose bundle identifier differs from `app` (every copy of `app` stays),
+    /// Hides every running app with a Dock icon whose bundle identifier is not kept (every copy of a kept app stays),
     /// on every display and Space, full-screen apps included; menu bar apps stay. Trackpad Launcher itself is included
-    /// while its Dock icon shows (its settings window is open), unless it is `app`. Idempotent; needs no permission;
-    /// returns at once. Nothing hides until `app` is active and no longer hidden, whichever comes last, and within about
-    /// 3 s or not at all; a later call replaces the goal and hides whatever this one had not. Hides that do not land are
-    /// sent again within about half a second, while `app` stays in front.
-    func hideOtherApps(than app: BundleID)
+    /// while its Dock icon shows (its settings window is open), unless it is kept. Idempotent; needs no permission;
+    /// returns at once. Nothing hides until `kept.front` is active and no longer hidden, whichever comes last, and
+    /// within about 3 s or not at all; a later call replaces the goal and hides whatever this one had not. Hides that do
+    /// not land are sent again within about half a second, while `kept.front` stays in front; a pass that finds
+    /// `kept.beside` in front hides nothing and the run goes on.
+    func hideOtherApps(keeping kept: KeptApps)
     /// The apps the next launch animations and launch bounces may be for. Each call replaces the previous set. Readies
     /// whatever a later `playLaunchAnimation` or `bringToFrontWatching` for one of them needs now, so that call does no
     /// slow work.
@@ -89,12 +90,36 @@ public enum Haptic: Sendable { case gesture, lightTick }
     //                                                                   // opens the app first, then the watch
     //   .finishedLaunching:    system.limitLaunch(of: id, to: 2 s)
     //   .windowShown:          system.endLaunch(of: id, with: .launchAnimation), then, when the gesture's hide setting
-    //                          was on and the app is frontmost, system.hideOtherApps(than: id)
+    //                          was on and the app is frontmost, system.hideOtherApps(keeping: KeptApps(front: id))
     //   .wentNowhere:          system.endLaunch(of: id, with: .quietFade)
     //   .ranOut:               either ending, by how far the launch got; never a hide
     //
     // Time is the adapter's: `.ranOut` arrives at the cap, or at the limit set once the app finished launching,
     // whichever comes first. Tests push it like any other report.
+
+    /// A split gesture's bring to front, in one call so the order is the adapter's to keep: brings the app `focus` does
+    /// not name to front, then opens the one it names, activated, before anything else, each as `bringToFront` opens
+    /// an app, except that the other app is activated only when it is `.running` and `secondEntry` is `.focused`, and
+    /// when `.unfocused` is only unhidden while it has a window to show. So the focused app ends active with its front
+    /// window on top, and an app that finishes launching never takes the focus from it; for a moment afterwards, the
+    /// other app taking the focus by itself gives it back. Then each watch asked for (`cap`; reports through
+    /// `onLaunchProgress`; one watch per app), then the bounces, the first app's first, then the launch animations;
+    /// each app sways toward its side, a bounce's ending included.
+    func bringToFront(_ split: SplitArrival, cap: Duration)
+
+    /// The display under the pointer now; nil with none. Reads only.
+    func pointerDisplay() -> DisplayID?
+
+    /// The half of the display's usable area the pointer is over now, by the line between a split's halves: `.left`
+    /// left of it or off the display. Reads only.
+    func pointerSide(on display: DisplayID) -> SplitSide
+
+    /// Puts the app's front window in that half, if the app runs and has one, and returns at once: the work runs away
+    /// from the main actor and answers nothing, ever. A full-screen window leaves full screen first; a window that
+    /// cannot take the half's size keeps the closest it allows, at the half's top-left corner (`.left`) or top-right
+    /// corner (`.right`). A window already there is left alone; a later call for the same app wins. Needs
+    /// Accessibility: the caller checks it.
+    func placeFrontWindow(of app: BundleID, in half: ScreenHalf)
 
     /// Whether macOS reports a process for the app now, still launching or finished, menu bar apps included; unlike
     /// `runningApps()`, not the ⌘-Tab list. Under 0.1 ms; reads only.

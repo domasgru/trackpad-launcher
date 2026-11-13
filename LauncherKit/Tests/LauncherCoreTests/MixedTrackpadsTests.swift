@@ -258,7 +258,7 @@ import Testing
         let world = World(apps: ["Arc"], attached: both)
         var settings = Settings()
         settings.thumbCorner = .topLeft
-        settings.assignments[.one] = AssignedApp(world.app("Arc"))
+        settings.assignments[.one] = Assignment(first: AssignedApp(world.app("Arc")))
         world.freshStore().save(settings)
         world.seedSuite(["externalThumbCorner": wire])
 
