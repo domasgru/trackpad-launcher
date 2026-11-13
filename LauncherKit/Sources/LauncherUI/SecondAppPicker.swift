@@ -197,16 +197,21 @@ final class AddAppButton: NSPopUpButton {
 }
 
 /// The plus and minus buttons' symbols, drawn as the picker's chevron badge is: a 20 pt circle in the badge's fill,
-/// its sign in the chevrons' colour.
+/// its sign in the chevrons' colour and about their weight.
 enum CircleSymbol {
     /// The circle's diameter, and the buttons' side: the chevron badge's 20 pt as the system draws it.
     static let side: CGFloat = 20
+    /// The light weight's sign is the closest to the chevrons' strokes: measured at 2 px per point, the chevrons'
+    /// stroke is 3.2 px, light's 2.7 and regular's 3.4, and regular's long arms read bolder still.
+    static let weight = NSFont.Weight.light
+    /// At light weight and medium scale, 20.5 pt draws the circle exactly `side` across, inside a 25 pt image with
+    /// 2.5 pt of clear margin on each side (measured on macOS 26).
+    static let pointSize: CGFloat = 20.5
 
-    /// `name` at 20 pt, medium scale, which draws its circle exactly 20 pt across inside a 23 pt image with 1.5 pt
-    /// of clear margin on each side (measured on macOS 26). A button shows it unscaled and centred in its 20 pt
-    /// frame, so the circle fills the frame. Palette colours are the system's own, so both appearances follow.
+    /// `name` at `pointSize` and `weight`. A button shows it unscaled and centred in its 20 pt frame, so the circle
+    /// fills the frame. Palette colours are the system's own, so both appearances follow.
     static func image(_ name: String, label: String) -> NSImage? {
-        let configuration = NSImage.SymbolConfiguration(pointSize: side, weight: .regular, scale: .medium)
+        let configuration = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight, scale: .medium)
             .applying(.init(paletteColors: [.labelColor, .secondarySystemFill]))
         return NSImage(systemSymbolName: name, accessibilityDescription: label)?.withSymbolConfiguration(configuration)
     }

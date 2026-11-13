@@ -154,8 +154,9 @@ import Testing
         let far = 19.5, middle = 10.0
 
         for (name, rep) in [("plus", plus), ("minus", minus)] {
-            // The circle fills the 20 pt frame: painted at each edge's midpoint, clear in the corners.
-            for (x, y) in [(0.5, middle), (far, middle), (middle, 0.5), (middle, far)] {
+            // The circle fills the 20 pt frame to within a quarter point: painted 1 pt in from each edge's midpoint,
+            // clear in the corners.
+            for (x, y) in [(1.0, middle), (19.0, middle), (middle, 1.0), (middle, 19.0)] {
                 #expect(try colour(in: rep, atPoint: x, y).alphaComponent > 0.03, "\(name) edge \(x),\(y)")
             }
             for (x, y) in [(0.5, 0.5), (far, 0.5), (0.5, far), (far, far)] {
