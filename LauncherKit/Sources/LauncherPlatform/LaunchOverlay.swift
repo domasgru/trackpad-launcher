@@ -32,13 +32,13 @@ import Synchronization
     }
 
     /// `toward`: a split gesture's app, which starts beside the pointer on that side and sways further to it, so the
-    /// split's two icons start side by side and part, the second app's a moment after the first's; nil: from the
-    /// pointer, to a random side.
-    func play(for app: AppEntry, toward: SplitSide? = nil) {
+    /// split's two icons start side by side and part; nil: from the pointer, to a random side. `waits`: it starts
+    /// `LaunchFlight.splitStagger` after the other split icon, its app not being the one that ends active.
+    func play(for app: AppEntry, toward: SplitSide? = nil, waits: Bool = false) {
         let read = ScreenRead.now()
         guard let display = LaunchDisplay.containing(read.pointer, among: read.displays) else { return }
         let start = toward.map { LaunchFlight.start(at: read.pointer, toward: $0, on: display) } ?? read.pointer
-        let delay = toward == .right ? LaunchFlight.splitStagger : 0
+        let delay = waits ? LaunchFlight.splitStagger : 0
         play(for: app, from: start, on: display, size: 1, toward: toward, delay: delay)
     }
 

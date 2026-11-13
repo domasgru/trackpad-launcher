@@ -13,7 +13,9 @@ struct SplitSteps: Equatable {
         case keepFocus(AppEntry, against: BundleID)
         case startWatch(BundleID)
         case bounce(AppEntry, toward: SplitSide)
-        case launchAnimation(AppEntry, toward: SplitSide)
+        /// `waits`: the icon starts a moment after the other's, its app not being the focused one, so the icon that
+        /// moves first marks the window that ends active.
+        case launchAnimation(AppEntry, toward: SplitSide, waits: Bool)
     }
 
     let steps: [Step]
@@ -45,7 +47,7 @@ struct SplitSteps: Equatable {
         }
         for entry in sides {
             if case .running(animates: true, _) = entry.member.entrance {
-                steps.append(.launchAnimation(entry.member.app, toward: entry.side))
+                steps.append(.launchAnimation(entry.member.app, toward: entry.side, waits: entry.side != split.focus))
             }
         }
         self.steps = steps

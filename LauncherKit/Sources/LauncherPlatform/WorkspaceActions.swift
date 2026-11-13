@@ -87,8 +87,8 @@ import LauncherCore
                 launches[id]?.watch.start(cap: cap)
             case .bounce(let app, let side):
                 bounces.start(app, toward: side)
-            case .launchAnimation(let app, let side):
-                overlay.play(for: app, toward: side)
+            case .launchAnimation(let app, let side, let waits):
+                overlay.play(for: app, toward: side, waits: waits)
             }
         }
     }

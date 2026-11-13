@@ -44,12 +44,12 @@ import LauncherCore
     }
 
     /// The keyframes of a split's icon on `side`, started beside the pointer at the middle of the built-in display, as
-    /// the overlay plays it: the right one `splitStagger` late.
-    private func splitKeyframes(_ side: SplitSide, draw: Double) throws -> [Keyframe] {
+    /// the overlay plays it: the icon whose app is not focused `splitStagger` late.
+    private func splitKeyframes(_ side: SplitSide, draw: Double, focus: SplitSide) throws -> [Keyframe] {
         var flights = LaunchFlights()
         let start = LaunchFlight.start(at: middle, toward: side, on: .builtIn)
         let flight = flights.next(draw: draw, reduceMotion: false, toward: side)
-            .delayed(by: side == .right ? LaunchFlight.splitStagger : 0)
+            .delayed(by: side == focus ? 0 : LaunchFlight.splitStagger)
         return try #require(flight.staged(at: start, on: .builtIn)).keyframes()
     }
 
@@ -77,10 +77,16 @@ import LauncherCore
             side: mix(a.side, b.side), degrees: mix(a.rotationDegrees, b.rotationDegrees))
     }
 
-    @Test(arguments: LaunchFlightTests.draws)
-    func aSplitsTwoIconsStartSideBySideAndPartWithoutEverTouching(draw: Double) throws {
-        let left = try splitKeyframes(.left, draw: draw)
-        let right = try splitKeyframes(.right, draw: draw)
+    @Test(arguments: LaunchFlightTests.draws, [SplitSide.left, .right])
+    func aSplitsTwoIconsStartSideBySideTheFocusedOneFirstAndPartWithoutEverTouching(
+        draw: Double, focus: SplitSide
+    ) throws {
+        let left = try splitKeyframes(.left, draw: draw, focus: focus)
+        let right = try splitKeyframes(.right, draw: draw, focus: focus)
+        // The focused app's icon moves first: the other holds its start for the stagger.
+        let (focused, waiting) = focus == .left ? (left, right) : (right, left)
+        #expect(focused.count + 1 == waiting.count, "only the other icon holds a first keyframe")
+        #expect(abs(waiting[1].time - LaunchFlight.splitStagger) < 1e-9 && focused[0].time == 0)
         // Side by side about the pointer at its height, 8 points apart as they start.
         let leftStart = try #require(left.first).screenPosition, rightStart = try #require(right.first).screenPosition
         #expect(LaunchFlight.splitGap == 8)

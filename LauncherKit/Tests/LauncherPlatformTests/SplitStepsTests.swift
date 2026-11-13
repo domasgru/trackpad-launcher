@@ -34,7 +34,7 @@ import Testing
                 .open(safari, activates: true, watched: true), .open(notes, activates: true, watched: true),
                 .keepFocus(notes, against: safari.bundleID),
                 .startWatch(notes.bundleID), .startWatch(safari.bundleID),
-                .launchAnimation(notes, toward: .left), .launchAnimation(safari, toward: .right),
+                .launchAnimation(notes, toward: .left, waits: false), .launchAnimation(safari, toward: .right, waits: true),
             ])
     }
 
@@ -43,14 +43,14 @@ import Testing
             steps(running(), running(), focus: .right) == [
                 .open(notes, activates: true, watched: false), .open(safari, activates: true, watched: false),
                 .keepFocus(safari, against: notes.bundleID),
-                .launchAnimation(notes, toward: .left), .launchAnimation(safari, toward: .right),
+                .launchAnimation(notes, toward: .left, waits: true), .launchAnimation(safari, toward: .right, waits: false),
             ])
         #expect(
             steps(running(followed: true), .launching(watch: .bouncing), focus: .right, secondEntry: .unfocused) == [
                 .reveal(notes, watched: true), .open(safari, activates: true, watched: true),
                 .keepFocus(safari, against: notes.bundleID),
                 .startWatch(notes.bundleID), .startWatch(safari.bundleID),
-                .bounce(safari, toward: .right), .launchAnimation(notes, toward: .left),
+                .bounce(safari, toward: .right), .launchAnimation(notes, toward: .left, waits: true),
             ])
     }
 
@@ -60,7 +60,7 @@ import Testing
                 .reveal(safari, watched: true), .open(notes, activates: true, watched: true),
                 .keepFocus(notes, against: safari.bundleID),
                 .startWatch(notes.bundleID), .startWatch(safari.bundleID),
-                .launchAnimation(notes, toward: .left), .launchAnimation(safari, toward: .right),
+                .launchAnimation(notes, toward: .left, waits: false), .launchAnimation(safari, toward: .right, waits: true),
             ])
     }
 
@@ -70,7 +70,7 @@ import Testing
             steps(running(), .launching(watch: .bouncing), secondEntry: entry) == [
                 .open(safari, activates: false, watched: true), .open(notes, activates: true, watched: false),
                 .keepFocus(notes, against: safari.bundleID),
-                .startWatch(safari.bundleID), .bounce(safari, toward: .right), .launchAnimation(notes, toward: .left),
+                .startWatch(safari.bundleID), .bounce(safari, toward: .right), .launchAnimation(notes, toward: .left, waits: false),
             ])
     }
 
@@ -96,7 +96,7 @@ import Testing
         #expect(
             steps(running(), .alreadyLaunching) == [
                 .open(safari, activates: false, watched: false), .open(notes, activates: true, watched: false),
-                .keepFocus(notes, against: safari.bundleID), .launchAnimation(notes, toward: .left),
+                .keepFocus(notes, against: safari.bundleID), .launchAnimation(notes, toward: .left, waits: false),
             ])
     }
 
