@@ -15,7 +15,8 @@ import UniformTypeIdentifiers
 /// The thin AppKit shell: maps AppKit signals to `Launcher` intents and renders `Launcher` state.
 /// Create it before `Launcher.start()`: its first icon pass must finish before gestures run.
 ///
-/// It renders `launcher.window`: the settings window opens centred on the pointer's display and the app joins the
+/// It renders `launcher.window`: the settings window opens centred on the pointer's display, at most 90% of that
+/// display's visible height and scrolling beyond it, and the app joins the
 /// Dock and ⌘-Tab; closing it removes both. It is the only place the activation policy changes. The window closes
 /// only through the model: the close button, ⌘W, Escape and Close Settings (⌘Q) all send `closeWindow()`.
 public final class SettingsShell: NSObject, NSWindowDelegate {
@@ -102,6 +103,22 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             })
         observations.append(
             Task { [weak self] in
+                for await _ in NotificationCenter.default.notifications(
+                    named: NSApplication.didChangeScreenParametersNotification)
+                {
+                    self?.refit()
+                }
+            })
+        observations.append(
+            Task { [weak self] in
+                for await _ in NotificationCenter.default.notifications(
+                    named: NSScroller.preferredScrollerStyleDidChangeNotification)
+                {
+                    self?.refit()
+                }
+            })
+        observations.append(
+            Task { [weak self] in
                 for await _ in Observations({ launcher.installedApps }) {
                     self?.renderIcons()
                 }
@@ -164,8 +181,10 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                 isShown = true
                 NSApp.setActivationPolicy(.regular)
                 renderIcons()
-                fit()
-                centre()
+                let screen = Displays.screen(under: NSEvent.mouseLocation)
+                fit(on: screen)
+                window.scrollToTop()
+                centre(on: screen)
             }
             if window.isMiniaturized { window.deminiaturize(nil) }
             // An opening by hand while the app is hidden shows the window where it was; this also covers a window
@@ -186,12 +205,29 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
 
     private func renderIcons() { icons.renderOffMainActor(Self.iconTargets(launcher)) }
 
-    /// Sizes the window to its content, keeping the top edge where it is.
-    private func fit() {
+    /// Sizes the window to its content, keeping the top edge where it is. The window is never taller than 90% of the
+    /// visible height of `screen` (the window's own display by default): content taller than that scrolls inside the
+    /// window's scroll view, and content that fits leaves the window as tall as it is.
+    private func fit(on screen: NSScreen? = nil) {
+        let size = window.contentFittingSize
+        var height = size.height
+        if let visible = (screen ?? window.screen)?.visibleFrame.height {
+            height = SettingsWindowHeight.contentHeight(
+                fitting: size.height, titleBar: window.titleBarHeight, visible: visible)
+        }
+        // The document keeps its own width, so a legacy scroller gets room beside it rather than taking from it.
+        let scrollerWidth =
+            NSScroller.preferredScrollerStyle == .legacy
+            ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
+        let width = SettingsWindowHeight.contentWidth(
+            fitting: size.width, isCapped: height < size.height, scrollerWidth: scrollerWidth)
         let top = window.frame.maxY
-        window.setContentSize(window.contentFittingSize)
+        window.setContentSize(NSSize(width: width, height: height))
         window.setFrameTopLeftPoint(NSPoint(x: window.frame.minX, y: top))
     }
+
+    /// Refits against the window's new display.
+    public func windowDidChangeScreen(_ notification: Notification) { refit() }
 
     private func refit() {
         guard isShown else { return }
@@ -199,8 +235,8 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     }
 
     /// The middle of the visible frame of the display under the pointer.
-    private func centre() {
-        guard let screen = Displays.screen(under: NSEvent.mouseLocation) else { return window.center() }
+    private func centre(on screen: NSScreen?) {
+        guard let screen else { return window.center() }
         let visible = screen.visibleFrame
         let size = window.frame.size
         window.setFrameOrigin(

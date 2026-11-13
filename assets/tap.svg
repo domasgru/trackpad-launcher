@@ -1,0 +1,8 @@
+<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle cx="5" cy="5" r="4.7" stroke-width="0.6" stroke="#232323"/>
+<ellipse cx="4.99805" cy="5" rx="3" ry="3" fill="#232323"/>
+<mask id="stroke0_2241_3904" fill="white">
+<path d="M7.99805 5C7.99805 6.65685 6.6549 8 4.99805 8C3.34119 8 1.99805 6.65685 1.99805 5C1.99805 3.34315 3.34119 2 4.99805 2C6.6549 2 7.99805 3.34315 7.99805 5Z"/>
+</mask>
+<ellipse cx="4.99805" cy="5" rx="3" ry="3" stroke="#232323" mask="url(#stroke0_2241_3904)"/>
+</svg>

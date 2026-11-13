@@ -2,16 +2,18 @@ import AppKit
 import LauncherCore
 import SwiftUI
 
-/// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges: the update card,
-/// while this opening's check has found a newer version; the Accessibility hint card, while the permission is missing; the settings form, a
-/// SwiftUI grouped Form drawn as System Settings draws one, its sections the five gesture rows, the Animate app
-/// launch switch and the Hold thumb switch, the switcher section, and the thumb corner group, with the Hide background apps switch below it: one
-/// row, or once the Mac has mixed trackpads one cell with a title and two indented pop-up rows; the
-/// no trackpad notice, while it applies, in a rounded group; then *Quit Trackpad Launcher* and *Close*, aligned
-/// right. The form keeps the system's own fonts, insets and controls, and every row of the form is 46 pt tall
-/// (`formRowContent()`), except the *Switch windows* row, which grows while the screen recording hint sits in it, and
-/// the mixed trackpads cell, which is as tall as its three lines. The illustrations are 45 × 28 pt. The guide naming the two
-/// marks sits over the first illustration for the top-left corner only, where its arrows meet the thumb.
+/// One column, the window's 358 pt width and 16 pt in from its edges, so every group is 326 pt wide: the update card,
+/// while this opening's check has found a newer version, and the Accessibility hint card, while the permission is
+/// missing, 10 pt apart and 16 pt above the form; the settings form, a SwiftUI grouped Form drawn as System Settings
+/// draws one, its sections 10 pt apart: the five gesture rows, the Animate app launch switch and the Hold thumb
+/// switch, the switcher section, and the thumb corner group, with the Hide background apps switch below it: one
+/// row, or once the Mac has mixed trackpads one cell with a title and two indented pop-up rows; the no trackpad
+/// notice, while it applies, in a rounded group 10 pt below the form; then *Quit Trackpad Launcher* and *Close*,
+/// aligned right, 20 pt below the last of them. The form keeps the system's own fonts, insets and controls. A
+/// one-line row is 48 pt tall and a two-line row 86 pt (`formRow(height:)`), except the 1-finger gesture's, which is 70 pt
+/// or 86 pt, the *Switch windows* row, which grows while the screen recording hint sits in it, and the mixed trackpads
+/// cell, which is as tall as its three lines. The small illustrations are 45 x 28 pt. The first gesture's picture is
+/// not row content: `FirstGestureArt` overlays the form at the gesture group's top-leading corner.
 struct SettingsView: View {
     let launcher: Launcher
     /// Nil for a copy that never updates.
@@ -22,51 +24,78 @@ struct SettingsView: View {
     static let labelFont = Font.system(size: 13, weight: .medium)
     /// The window's edges to the column's parts, the form's sections included.
     private static let inset: CGFloat = 16
-    /// Between the column's parts: the Accessibility hint card, the form, the no trackpad notice and the buttons.
-    private static let partSpacing: CGFloat = 20
+    /// Between the update card and the Accessibility hint card.
+    private static let cardSpacing: CGFloat = 10
+    /// From the last card to the form.
+    private static let cardsToForm: CGFloat = 16
+    /// From the form to the no trackpad notice.
+    private static let noticeSpacing: CGFloat = 10
+    /// From the last part above to the buttons.
+    private static let buttonsSpacing: CGFloat = 20
     /// A grouped Form's own room around its sections: SwiftUI's and not exposed. `contentMargins` leaves the top and
     /// bottom as they are and adds to the sides, so these are measured on macOS 26
     /// (`plans/030-thumb-corner-popup-style`, `plans/036-settings-form-padding`).
     private static let formMargins = (top: CGFloat(20), bottom: CGFloat(20), side: CGFloat(20))
+    /// A grouped Form's own padding above and below every row, measured on macOS 27.2: rows of 28, 50 and 66 pt content
+    /// come out 48, 70 and 86 pt. A grouped Form ignores `listRowInsets`, so `formRow(height:)` takes this off.
+    static let formRowPadding: CGFloat = 20
+    /// The group's width, which the first gesture's picture is clipped to.
+    static let groupWidth: CGFloat = 326
+    /// The column's width: the groups and the inset on each side.
+    static let columnWidth: CGFloat = groupWidth + 2 * inset
+    /// The heights of the rows, `formRow(height:)`'s argument: a one-line row, the first gesture's row with one line,
+    /// and a two-line row.
+    static let oneLineRowHeight: CGFloat = 48
+    static let firstGestureRowHeight: CGFloat = 70
+    static let twoLineRowHeight: CGFloat = 86
 
     var body: some View {
-        let corner = launcher.drawnThumbCorner
-        VStack(spacing: Self.partSpacing) {
-            if let card = UpdateCardPreview.card(updater?.card) {
-                UpdateCardView(card: card, updateNow: { updater?.updateNow() }, arrowDrift: actions.arrowDrift)
-                    .padding(.horizontal, Self.inset)
-            }
-            if launcher.showsAccessibilityHint {
-                AccessibilityHintCard(actions: actions)
-                    .padding(.horizontal, Self.inset)
+        let drawn = launcher.drawnThumbCorner
+        let gestureThumb = launcher.gestureThumbCorner
+        let updateCard = UpdateCardPreview.card(updater?.card)
+        VStack(spacing: 0) {
+            if updateCard != nil || launcher.showsAccessibilityHint {
+                WholeHeight {
+                    VStack(spacing: Self.cardSpacing) {
+                        if let card = updateCard {
+                            UpdateCardView(
+                                card: card, updateNow: { updater?.updateNow() }, arrowDrift: actions.arrowDrift)
+                        }
+                        if launcher.showsAccessibilityHint {
+                            AccessibilityHintCard(actions: actions)
+                        }
+                    }
+                }
+                .padding(.horizontal, Self.inset)
+                .padding(.bottom, Self.cardsToForm)
             }
             Form {
                 Section {
                     ForEach(launcher.rows) { row in
-                        GestureRowView(row: row, corner: corner, launcher: launcher, actions: actions)
+                        GestureRowView(row: row, thumb: gestureThumb, launcher: launcher, actions: actions)
                     }
                     Toggle(
                         isOn: Binding(
                             get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
                     ) {
-                        Text("Animate app launch").formRowContent()
+                        Text("Animate app launch").formRow(height: Self.oneLineRowHeight)
                     }
                     .toggleStyle(.switch)
                     Toggle(
                         isOn: Binding(get: { launcher.isHoldThumbOn }, set: { launcher.setHoldThumb(on: $0) })
                     ) {
-                        Text("Hold thumb").formRowContent()
+                        Text("Hold thumb").formRow(height: Self.oneLineRowHeight)
                     }
                     .toggleStyle(.switch)
                 }
-                Section { SwitcherSection(launcher: launcher, corner: corner, actions: actions) }
+                Section { SwitcherSection(launcher: launcher, corner: drawn, actions: actions) }
                 Section {
                     ThumbCornerRows(launcher: launcher)
                     Toggle(
                         isOn: Binding(
                             get: { launcher.isHideBackgroundAppsOn }, set: { launcher.setHideBackgroundApps(on: $0) })
                     ) {
-                        Text("Hide background apps").formRowContent()
+                        Text("Hide background apps").formRow(height: Self.oneLineRowHeight)
                     }
                     .toggleStyle(.switch)
                 }
@@ -78,10 +107,17 @@ struct SettingsView: View {
             .padding(.top, -Self.formMargins.top)
             .padding(.bottom, -Self.formMargins.bottom)
             .padding(.horizontal, Self.inset - Self.formMargins.side)
+            .overlay(alignment: .topLeading) {
+                FirstGestureArt(
+                    thumb: gestureThumb, showsTapHand: launcher.showsTapHand, showsHoldHand: launcher.showsHoldHand)
+                    .padding(.leading, Self.inset)
+            }
             // Under its neighbours, so the margins it lays over them never cover or take their clicks.
             .zIndex(-1)
             if let notice = launcher.inactiveNotice {
-                SettingsNotice(message: notice).padding(.horizontal, Self.inset)
+                SettingsNotice(message: notice)
+                    .padding(.horizontal, Self.inset)
+                    .padding(.top, Self.noticeSpacing)
             }
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
@@ -92,9 +128,10 @@ struct SettingsView: View {
                     .buttonBorderShape(.roundedRectangle(radius: 6))
             }
             .padding(.horizontal, Self.inset)
+            .padding(.top, Self.buttonsSpacing)
         }
         .padding(.vertical, Self.inset)
-        .frame(width: 326)
+        .frame(width: Self.columnWidth)
         .fixedSize(horizontal: true, vertical: false)
     }
 }
@@ -117,21 +154,10 @@ struct FormGroup<Content: View>: View {
     }
 }
 
-/// One row of a group: at least 46 pt tall, as the settings form's rows are, its content centred.
-struct FormRow<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        HStack(spacing: 0) { content }
-            .padding(.vertical, 2)
-            .frame(maxWidth: .infinity, minHeight: 46)
-    }
-}
-
 /// A gesture row reads the model and sends one intent.
 struct GestureRowView: View {
     let row: GestureRow
-    let corner: ThumbCorner
+    let thumb: ThumbCorner?
     let launcher: Launcher
     let actions: LauncherActions
 
@@ -144,13 +170,15 @@ struct GestureRowView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            GestureIllustration(gesture: row.gesture, corner: corner)
-                .overlay(alignment: .topLeading) {
-                    if showsGuide {
-                        // Where the arrows end on the thumb and the tapping finger.
-                        Guide().offset(x: 12, y: -4.37)
-                    }
-                }
+            if row.gesture == .one {
+                // Room for `FirstGestureArt`, which draws the picture over the form.
+                Color.clear
+                    .frame(width: Illustration.size.width, height: Illustration.size.height)
+                    .accessibilityElement()
+                    .accessibilityLabel("1-finger gesture")
+            } else {
+                GestureIllustration(gesture: row.gesture, thumb: thumb)
+            }
             Spacer(minLength: 12)
             let layout = row.lineCount == 2
                 ? AnyLayout(VStackLayout(alignment: .trailing, spacing: Self.lineSpacing))
@@ -192,48 +220,172 @@ struct GestureRowView: View {
                 }
             }
         }
-        .formRowContent(lines: row.lineCount)
-        // Above the next row, so the guide's arrows draw over it.
-        .zIndex(row.gesture == .one ? 1 : 0)
+        .formRow(height: height)
     }
 
-    private var showsGuide: Bool { row.gesture == .one && corner.showsGuide }
+    /// 48 pt with one line, 86 pt with two; the first gesture's row is 70 pt with one line.
+    private var height: CGFloat {
+        if row.lineCount == 2 {
+            SettingsView.twoLineRowHeight
+        } else if row.gesture == .one {
+            SettingsView.firstGestureRowHeight
+        } else {
+            SettingsView.oneLineRowHeight
+        }
+    }
+}
+
+/// Everything the first gesture shows at its leading side, drawn over the form from the gesture group's top-leading
+/// corner, which every position is an offset from. Not row content: a grouped Form clips a row to its group, and the
+/// overlay keeps its place when the first row grows. Only the picture is clipped; the hand guide reaches past the row
+/// and the group. It takes no clicks.
+struct FirstGestureArt: View {
+    let thumb: ThumbCorner?
+    let showsTapHand: Bool
+    /// Only ever true together with `showsTapHand`.
+    let showsHoldHand: Bool
+
+    /// The picture's top-left corner from the group's, and its width.
+    private static let picture = (x: CGFloat(-12), y: CGFloat(-1), width: CGFloat(137))
+    /// The first row with one line, which is as far as the picture reaches down.
+    private static let rowHeight = SettingsView.firstGestureRowHeight
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ZStack(alignment: .topLeading) {
+                BundleImage.view(Illustration.file("gesture-1", thumb: thumb), type: "png", width: Self.picture.width)
+                    .offset(x: Self.picture.x, y: Self.picture.y)
+            }
+            .frame(width: SettingsView.groupWidth, height: Self.rowHeight, alignment: .topLeading)
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: GroupStyle.cornerRadius))
+            .accessibilityHidden(true)
+            if showsTapHand {
+                HandGuide(showsHoldHand: showsHoldHand)
+            }
+        }
+        .frame(width: SettingsView.groupWidth, height: Self.rowHeight, alignment: .topLeading)
+        .allowsHitTesting(false)
+    }
+}
+
+/// The hands and labels over the first picture: the right hand taps the trackpad's centre, and, while the thumb is
+/// held, the left hand holds its top-left corner.
+struct HandGuide: View {
+    let showsHoldHand: Bool
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if showsHoldHand {
+                BundleImage.view("left-hand", type: "png", width: 52.48)
+                    .opacity(0.9)
+                    .offset(x: -11.5, y: 10.5)
+            }
+            BundleImage.view("right-hand", type: "png", width: 60)
+                .opacity(0.9)
+                .offset(x: 55, y: 24)
+            if showsHoldHand {
+                HandLabel(text: "Hold", dot: .hold)
+                    .offset(x: -11, y: 49)
+            }
+            HandLabel(text: "Tap", dot: .tap)
+                .offset(x: 92, y: 55)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            showsHoldHand
+                ? "The filled dot is the thumb you hold, the ringed dots are fingers that tap"
+                : "The ringed dots are fingers that tap")
+    }
+}
+
+/// A small light tooltip: a dot, then the word, in the macOS tooltip's 11 pt medium. The shadows sit on the background
+/// shape alone, so the text and the dot are never rasterised through them.
+struct HandLabel: View {
+    /// The name of the dot's SVG in the bundle.
+    enum Dot: String { case hold, tap }
+
+    let text: String
+    let dot: Dot
+
+    var body: some View {
+        HStack(spacing: 4) {
+            BundleImage.view(dot.rawValue)
+            Text(text).font(.system(size: 11, weight: .medium)).foregroundStyle(.black)
+        }
+        .padding(.leading, 6).padding(.trailing, 6).padding(.top, 3).padding(.bottom, 2)
+        .frame(height: 18)
+        .fixedSize()
+        .background {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(.ultraThickMaterial)
+                .shadow(color: .black.opacity(0.4), radius: 1)
+                .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+        }
+    }
+}
+
+/// Lays out its one child as it is, at a height rounded up to a whole point, so what sits below it, the first gesture's
+/// art among it, starts on a pixel boundary whatever the child's text measures.
+private struct WholeHeight<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View { WholeHeightLayout { content } }
+}
+
+private struct WholeHeightLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = subviews.first?.sizeThatFits(proposal) ?? .zero
+        return CGSize(width: size.width, height: size.height.rounded(.up))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: nil))
+    }
 }
 
 struct GestureIllustration: View {
     let gesture: LauncherCore.Gesture
-    let corner: ThumbCorner
+    let thumb: ThumbCorner?
 
     var body: some View {
-        Illustration(name: "gesture-\(gesture.fingerCount)", corner: corner)
+        Illustration(name: "gesture-\(gesture.fingerCount)", thumb: thumb)
             .accessibilityLabel("\(gesture.fingerCount)-finger gesture")
     }
 }
 
-/// The paper card with a gesture's marks on it: one @2x PNG from the Figma export, the same in light and dark.
+/// The paper card with a gesture's marks on it, the same in light and dark. The small pictures are 4x PNGs (180 x 112
+/// px for 45 x 28 pt). The top-left versions are drawn by hand; `Scripts/corner-illustrations.swift` derives the other
+/// corners' versions and the gesture pictures without a thumb.
 struct Illustration: View {
     let name: String
-    let corner: ThumbCorner
+    /// The corner the thumb is drawn in; nil for the picture without one.
+    let thumb: ThumbCorner?
 
     static let size = CGSize(width: 45, height: 28)
 
+    /// The one rule that names a picture's file: the top-left version has the base name, the other corners
+    /// `-inverse` (top right), `-bottom` (bottom left) and `-bottom-inverse` (bottom right), and no thumb `-no-thumb`.
+    nonisolated static func file(_ name: String, thumb: ThumbCorner?) -> String {
+        switch thumb {
+        case .topLeft: name
+        case .topRight: name + "-inverse"
+        case .bottomLeft: name + "-bottom"
+        case .bottomRight: name + "-bottom-inverse"
+        case nil: name + "-no-thumb"
+        }
+    }
+
     var body: some View {
-        BundleImage.view(corner.illustration(name), type: "png", size: Self.size)
+        BundleImage.view(Self.file(name, thumb: thumb), type: "png", size: Self.size)
     }
 }
 
 extension View {
-    /// A settings form row's content: 26 pt, which the form's own 10 pt above and below makes a 46 pt row. An
-    /// illustration, which is taller, stays centred and reaches into that padding. The height is set here because a
-    /// grouped Form ignores `listRowInsets` on macOS 26, measured offscreen in a one-row form.
-    func formRowContent() -> some View {
-        formRowContent(lines: 1)
-    }
-
-    /// A row of `lines` lines of 16 pt controls, 16 pt apart: 26 pt for one, 56 pt for two, which with the form's
-    /// own padding make rows of 46 and 76 pt.
-    func formRowContent(lines: Int) -> some View {
-        frame(height: lines == 1 ? 26 : 56)
+    /// A settings form row `height` pt tall, its content centred. The height is set here because a grouped Form ignores
+    /// `listRowInsets` on macOS, and the form pads every row by `SettingsView.formRowPadding`, which this takes off. An
+    /// illustration, which is taller than a one-line row's content, stays centred and reaches into that padding.
+    func formRow(height: CGFloat) -> some View {
+        frame(height: height - SettingsView.formRowPadding)
     }
 
     /// The message of a hint: 11 pt, wrapping at `maxWidth` to as many lines as it needs.
@@ -242,23 +394,6 @@ extension View {
             .frame(maxWidth: maxWidth, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
     }
-}
-
-extension ThumbCorner {
-    /// The illustrations are drawn with the thumb in the top-left corner. The other corners' copies are derived from
-    /// them by `Scripts/corner-illustrations.swift`: `-inverse` top-right, `-bottom` bottom-left and
-    /// `-bottom-inverse` bottom-right.
-    func illustration(_ name: String) -> String {
-        switch self {
-        case .topLeft: name
-        case .topRight: name + "-inverse"
-        case .bottomLeft: name + "-bottom"
-        case .bottomRight: name + "-bottom-inverse"
-        }
-    }
-
-    /// Only the top-left illustration puts the thumb where the guide's arrows end.
-    var showsGuide: Bool { self == .topLeft }
 }
 
 enum BundleImage {
@@ -286,15 +421,14 @@ enum BundleImage {
                 .frame(width: (size ?? image.size).width, height: (size ?? image.size).height)
         }
     }
-}
 
-/// Handwritten *Hold* and *Tap* with arrows to the thumb and the tapping finger of the first illustration.
-struct Guide: View {
-    var body: some View {
-        BundleImage.view("guide", template: true)
-            .foregroundStyle(.primary)
-            .allowsHitTesting(false)
-            .accessibilityLabel("The filled dot is the thumb you hold, the ringed dots are fingers that tap")
+    /// `width` pt wide at the image's own aspect ratio.
+    @ViewBuilder static func view(_ name: String, type: String, width: CGFloat) -> some View {
+        if let image = nsImage(name, type: type) {
+            Image(nsImage: image).resizable()
+                .aspectRatio(image.size, contentMode: .fit)
+                .frame(width: width)
+        }
     }
 }
 
@@ -353,7 +487,7 @@ struct ThumbCornerRows: View {
 struct CornerPicker: View {
     let title: String
     let corner: ThumbCorner
-    /// True when the label is a whole form row, 46 pt tall through `formRowContent()`; false when it is one line of a
+    /// True when the label is a whole form row, 48 pt tall through `formRow(height:)`; false when it is one line of a
     /// cell that sets its own height.
     var isFormRow = true
     let choose: (ThumbCorner) -> Void
@@ -364,7 +498,7 @@ struct CornerPicker: View {
                 Text(Copy.thumbCornerTitle(corner)).tag(corner)
             }
         } label: {
-            if isFormRow { Text(title).formRowContent() } else { Text(title) }
+            if isFormRow { Text(title).formRow(height: SettingsView.oneLineRowHeight) } else { Text(title) }
         }
         .pickerStyle(.menu)
     }
