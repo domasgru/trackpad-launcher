@@ -34,6 +34,7 @@ public final class Launcher {
     public var isSwipeOn: Bool { settings.isSwipeOn }
     public var isSwapOn: Bool { settings.isSwapOn }
     public var isHideBackgroundAppsOn: Bool { settings.isHideBackgroundAppsOn }
+    public var isHoldThumbOn: Bool { settings.isHoldThumbOn }
     public var isWindowSwipeOn: Bool { settings.isWindowSwipeOn }
     /// One derivation, read by the notice and the fire guard.
     public var activity: GestureActivity {
@@ -238,6 +239,14 @@ public final class Launcher {
         reconcile()
     }
 
+    /// Hold thumb switch. Saved at once; the recognizers are rebuilt, so the next tap obeys it.
+    public func setHoldThumb(on: Bool) {
+        guard on != settings.isHoldThumbOn else { return }
+        settings.isHoldThumbOn = on
+        store.save(settings)
+        reconcile()
+    }
+
     /// Hide background apps switch. Saved at once; it hides and shows nothing now and applies to the next action.
     public func setHideBackgroundApps(on: Bool) {
         guard on != settings.isHideBackgroundAppsOn else { return }
@@ -290,8 +299,7 @@ public final class Launcher {
         let trackpads: [TrackpadRun]
         let blockClicks: Bool
         let blockTapClicks: Bool
-        let slides: Set<SlideKind>
-        let swaps: Bool
+        let options: RecognizerOptions
     }
 
     @ObservationIgnored private var lastRun: Run?
@@ -324,13 +332,15 @@ public final class Launcher {
             trackpads: active ? connected.map { TrackpadRun($0, corner: corners.corner(for: $0.kind)) } : [],
             blockClicks: blockClicks,
             blockTapClicks: blockClicks && tapToClickIsOn,
-            slides: granted ? settings.slides : settings.slides.subtracting([.windowSwipe]), swaps: settings.isSwapOn)
+            options: RecognizerOptions(
+                slides: granted ? settings.slides : settings.slides.subtracting([.windowSwipe]),
+                swaps: settings.isSwapOn, thumblessTaps: !settings.isHoldThumbOn))
         guard restart || run != lastRun else { return }
         lastRun = run
         // Running replaces every recognizer, which ends any swipe or window swipe in progress.
         shown = nil
         hardware.run(run.trackpads, blockClicks: run.blockClicks,
-            blockTapClicks: run.blockTapClicks, slides: run.slides, swaps: run.swaps)
+            blockTapClicks: run.blockTapClicks, options: run.options)
     }
 
     private func hideOtherApps(than app: BundleID) {

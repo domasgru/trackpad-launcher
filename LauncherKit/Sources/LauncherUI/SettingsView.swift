@@ -4,8 +4,8 @@ import SwiftUI
 
 /// One column the window's 326 pt width, its parts 20 pt apart and 16 pt in from the window's edges: the update card,
 /// while this opening's check has found a newer version; the Accessibility hint card, while the permission is missing; the settings form, a
-/// SwiftUI grouped Form drawn as System Settings draws one, its sections the five gesture rows and the Animate app
-/// launch switch, the switcher section, and the thumb corner group, with the Hide background apps switch below it: one
+/// SwiftUI grouped Form drawn as System Settings draws one, its sections the five gesture rows, the Animate app
+/// launch switch and the Hold thumb switch, the switcher section, and the thumb corner group, with the Hide background apps switch below it: one
 /// row, or once the Mac has mixed trackpads one cell with a title and two indented pop-up rows; the
 /// no trackpad notice, while it applies, in a rounded group; then *Quit Trackpad Launcher* and *Close*, aligned
 /// right. The form keeps the system's own fonts, insets and controls, and every row of the form is 46 pt tall
@@ -50,6 +50,12 @@ struct SettingsView: View {
                             get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
                     ) {
                         Text("Animate app launch").formRowContent()
+                    }
+                    .toggleStyle(.switch)
+                    Toggle(
+                        isOn: Binding(get: { launcher.isHoldThumbOn }, set: { launcher.setHoldThumb(on: $0) })
+                    ) {
+                        Text("Hold thumb").formRowContent()
                     }
                     .toggleStyle(.switch)
                 }

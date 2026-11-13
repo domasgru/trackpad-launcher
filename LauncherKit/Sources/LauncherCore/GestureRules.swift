@@ -17,6 +17,21 @@ package enum GestureRules {
     static let edgeBandTop = 0.40
     /// First finger down to last finger up.
     static let maxTapDuration = Duration.milliseconds(400)
+    /// First finger down to last finger up, for a tap with no thumb (Hold thumb off). Much shorter than
+    /// `maxTapDuration`: with no thumb to say the touch is meant, only a brisk tap can be told from ordinary use. The
+    /// deliberate taps recorded on a real trackpad ran at most 64 ms, while a still tap to click ran 104 ms. Inclusive.
+    static let maxThumblessTapDuration = Duration.milliseconds(70)
+    /// The same window for a tap of three, four or five fingers, which take longer to land and lift together. The
+    /// recorded deliberate taps ran at most 72 ms (3 fingers), 80 ms (4) and 80 ms (5, one 128 ms outlier aside).
+    /// Inclusive.
+    static let maxThumblessMultiTapDuration = Duration.milliseconds(90)
+    /// The drag limit for a thumbless tap of three, four or five fingers: the recorded deliberate 4-finger taps rolled
+    /// up to 4.3 mm, past the 3 mm that holds for one or two fingers.
+    static let thumblessMultiDragThresholdMM = 5.0
+    /// A thumbless tap starts only after the trackpad held no contact (edge contacts aside) for this long, counted
+    /// from the frame the last contact was gone. The recorded deliberate taps had at least 856 ms of quiet before
+    /// them, while an accidental still touch landed 88 ms after the previous one lifted. Inclusive.
+    static let thumblessQuietBefore = Duration.milliseconds(100)
     /// A finger farther than this from its landing point is dragging, not tapping.
     static let dragThresholdMM = 3.0
     /// Clicks are blocked for this long after a thumb anchors. Strictly less blocks.

@@ -230,6 +230,16 @@ final class LaunchRecord: Sendable {
         hardware.touch(TouchScript(trackpad.surface).thumb(atMM: thumb).tap(fingers: fingers).frames, on: trackpad.id)
     }
 
+    /// A tap of `fingers` with no thumb, brisk enough to be a thumbless tap. Taps made this way can follow one
+    /// another: each starts 200 ms after the last frame delivered on that trackpad, so the quiet rule holds.
+    func tapWithoutThumb(_ fingers: Int, on trackpad: Trackpad = .macBook14, atMM point: (x: Double, y: Double) = (62, 45)) {
+        let quietMS = (delivered[trackpad.id]).map { Int((($0 - 1.0) * 1000).rounded()) + 200 } ?? 0
+        play(
+            TouchScript(trackpad.surface).wait(.milliseconds(quietMS))
+                .tap(fingers: fingers, atMM: point, hold: .milliseconds(50)),
+            on: trackpad)
+    }
+
     func tap(_ fingers: Int, on trackpad: Trackpad = .macBook14, thumbIn corner: ThumbCorner) {
         tap(fingers, on: trackpad, thumbAtMM: trackpad.surface.thumbMM(in: corner))
     }

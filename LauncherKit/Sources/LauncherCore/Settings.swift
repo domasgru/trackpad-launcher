@@ -38,6 +38,8 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Whether an action that brings an app or window to the front also hides every other app. The key is this field's
     /// name, permanently.
     public var isHideBackgroundAppsOn = false
+    /// Whether a gesture needs the thumb held in the anchor corner. The key is this field's name, permanently.
+    public var isHoldThumbOn = true
 
     /// The apps some gesture holds alone, missing ones included: one tap away, so the switcher leaves them out.
     /// Derived, never stored.
@@ -70,6 +72,7 @@ public struct Settings: Codable, Equatable, Sendable {
             try container.decodeIfPresent(Bool.self, forKey: .hasAskedForScreenRecording) ?? hasAskedForScreenRecording
         isHideBackgroundAppsOn =
             try container.decodeIfPresent(Bool.self, forKey: .isHideBackgroundAppsOn) ?? isHideBackgroundAppsOn
+        isHoldThumbOn = try container.decodeIfPresent(Bool.self, forKey: .isHoldThumbOn) ?? isHoldThumbOn
     }
 }
 

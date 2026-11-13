@@ -535,6 +535,7 @@ import LauncherCore
         settings.isWindowSwipeOn = true
         settings.hasAskedForScreenRecording = true
         settings.isHideBackgroundAppsOn = true
+        settings.isHoldThumbOn = false
         #expect(settings != Settings())
 
         world.store.save(settings)
