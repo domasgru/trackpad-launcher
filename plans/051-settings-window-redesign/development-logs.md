@@ -33,3 +33,6 @@
 - The one-proof-per-requirement note copied plan 037 without its offer to split the mixed requirement → the offer to split R5 into its rule and its drawing is listed for the user.
 - R3's notice step said a MacBook can never show the notice, though the model treats a closed lid as the trackpad disconnecting → the step tries the closed lid first, then a Mac with no trackpad, then reading the diff.
 - S2's criterion for the handwritten guide's removal named code identifiers → it states the result, and the command sits under Further Notes.
+
+## Implement
+- The user added R8 (a tall window scrolls) after planning → folded in as S4 after S3, so it does not collide with S2's work in the settings view: a pure height cap rule with its test T12, the settings view hosted in a scroll view, the cap applied on every fit and on a display change, and a by-hand check for R8. The domain model's *Settings window* entry states the cap.

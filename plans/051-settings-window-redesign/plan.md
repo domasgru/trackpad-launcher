@@ -236,6 +236,25 @@ The swipe, window swipe and thumb tap pictures MUST keep showing the thumb in th
 - **WHEN** the user changes the thumb corner
 - **THEN** the gesture pictures stay the same, and the *Switch recent*, *Switch windows* and *Toggle recent* pictures move their thumb to the new corner
 
+### R8. A tall window scrolls
+
+The settings window MUST be at most 90% as tall as the visible area of the display it is on: the display minus the menu bar and the Dock. When its content is taller, the window MUST stay at that height, and the content MUST scroll vertically inside it, with the system's own scroller. When the content fits, the window MUST stay as tall as its content, and nothing scrolls. The limit MUST hold every time the window resizes to fit: when a card, a hint or the notice appears or disappears, when a gesture row gains or loses its second line, when the thumb corner row becomes two, and when the window moves to another display. The hands and labels from R5 scroll with the first gesture row.
+
+#### Scenario: Short display
+- **GIVEN** a display whose visible area is 800 pt tall, and window content 1,000 pt tall
+- **WHEN** the user opens the settings window
+- **THEN** the window is 720 pt tall, and scrolling reaches the *Quit Trackpad Launcher* and *Close* buttons at the bottom
+
+#### Scenario: Content fits
+- **GIVEN** a display whose visible area is 1,200 pt tall
+- **WHEN** the user opens the settings window
+- **THEN** the window is as tall as its content and shows no scroller
+
+#### Scenario: Content grows past the limit
+- **GIVEN** the window is just under 90% of the visible area
+- **WHEN** the update card appears
+- **THEN** the window grows to 90% of the visible area and no further, and its content scrolls
+
 ## Non-goals
 
 - **The *Filter launch apps* switch** under *Switch recent* in the mockup. It is new behaviour: today the switcher always leaves out the apps a gesture holds alone. It gets a feature of its own later.
@@ -329,9 +348,18 @@ The swipe, window swipe and thumb tap pictures MUST keep showing the thumb in th
 - **The handwritten guide is removed:** its view, its rule, its test and its SVG.
 - Gesture rows 2 to 5 keep their 45 × 28 pt picture at the leading edge, centred vertically.
 
+### A tall window scrolls (R8)
+
+- **The cap is one pure rule in the UI**, beside the window: given the content's fitting height, the window's title bar height and the visible height of the display, it returns the content height to set: the fitting height, or 90% of the visible height less the title bar, whichever is smaller. R8 measures the whole window, title bar included, against the visible area (`NSScreen.visibleFrame`, which leaves out the menu bar and the Dock).
+- **The window hosts the settings view in an `NSScrollView`**: the hosting view is its document view, pinned to the top, with the system's vertical scroller, shown only when the content is taller than the window (`autohidesScrollers`), and no horizontal scroller. The document view keeps the content's own size, so the column's 358 pt width and every measure of R1 to R4 stand. The window's content size is the column's width and the capped height.
+- **The hands and labels scroll with the first row** with no code of their own: the first gesture's overlay is part of the settings view, which is the scroll view's document.
+- **Every fit applies the cap**, on the display the window will be on. The shell's one fit already runs on each change of what decides the height (the cards, the hints, the notice, a second line, the two thumb corner rows). On opening it measures against the display under the pointer, where the window is centred. It also runs when the window moves to another display (`windowDidChangeScreen`) and when the displays' arrangement or the Dock changes the visible area (`NSApplication.didChangeScreenParametersNotification`): both are pushes, so the no-polling rule holds.
+- A fit keeps the window's top edge where it is, as today. When the content shrinks back under the cap the scroller goes and the window is as tall as its content.
+
 ### Docs
 
 - `docs/domain-model.md` is updated with this plan: the settings window's spacing and row heights, the gesture row, the hold thumb setting's effect on the pictures, and two new entries, *Illustration* and *Hand guide*.
+- `docs/domain-model.md`'s *Settings window* entry also says the window is at most 90% as tall as its display's visible area and scrolls beyond it (R8).
 - `docs/architecture.md` does not change. No core decision moves.
 - The doc comments that state 46 pt rows, the 20 pt spacing, @2x pictures and the handwritten guide are brought up to date with the code they describe.
 
@@ -339,7 +367,7 @@ The swipe, window swipe and thumb tap pictures MUST keep showing the thumb in th
 
 ### Strategy
 
-Two existing seams prove what a test can prove. No new seam is added.
+Two existing seams prove what a test can prove, and one pure rule is added for R8.
 
 - **`World`** (`LauncherKit/Tests/LauncherCoreTests/World.swift`): the real `Launcher` and the real settings store, over the in-memory trackpads.
   - A test flips Hold thumb, picks corners, attaches and detaches trackpads, and relaunches. Then it reads `gestureThumbCorner` and `showsHandGuide` beside `drawnThumbCorner`.
@@ -352,6 +380,8 @@ Two existing seams prove what a test can prove. No new seam is added.
   - It misses whether the bundle carries the file, which the project's unchanged resource rule does, and how the window draws it.
   - The mark mask in these tests is the tests' own, apart from the script's. Its measures become points, as the script's do.
   - The existing corner-suffix test goes: the file tests call the rule for every name. The guide-rule test goes with the rule.
+
+- **The height cap rule** (R8): the pure function that caps the window's content height, called with numbers. It observes the cap and when it applies. It misses the scroll view, the scroller and which display the shell measures against, which R8's by-hand check covers. Its tests sit in `LauncherKit/Tests/LauncherUITests/`.
 
 Nothing is faked beyond the `World`'s existing in-memory adapters. The asset files are read for real.
 
@@ -376,10 +406,11 @@ R5, R6 and R7 each join a rule a test can prove with a look only eyes can judge.
 | T9 | R5 | World | Given T1's world. Then `showsHandGuide` is true. When each of the other three corners is picked in turn. Then it is false after each pick. When *Top left* is picked again. Then it is true. | R5 "Default settings" and "Another corner" |
 | T10 | R5 | World | Given the mixed world. Then `showsHandGuide` is false. When the Magic Trackpad detaches. Then it is true. When the Magic Trackpad attaches again. Then it is false. | R5 "Mixed trackpads with the external one connected" |
 | T11 | R5 | World | (a) Given T1's world. When Hold thumb turns off. Then `showsHandGuide` is false on the next read. When it turns on. Then true. (b) For each of the other three corners, with Hold thumb on and with it off. Then false. (c) Given T1's world with Hold thumb turned off, which saves. When the process relaunches, starts and is opened by hand. Then false. | R5 "Hold thumb off"; R5's rule "in every other state it MUST show neither"; R7 "Opening with Hold thumb off" |
+| T12 | R8 | Height cap rule | The rule called with a title bar of 28 pt. (a) Visible height 800, fitting height 1,000 − 28: returns 692, so the window is 720 pt tall. (b) Visible height 1,200, fitting height 900: returns 900. (c) Visible height 1,000, fitting height 860 (just under the cap of 872), then 960: returns 860, then 872. (d) Fitting height exactly at the cap: returns it. | R8 "Short display", "Content fits", "Content grows past the limit" |
 
 ### Verified without a test
 
-All four are checked by hand on a Debug build, in one sitting at the end of S2. A test is not the right proof for the reason under Strategy: the measures exist only in the real window.
+R1 to R4 are checked by hand on a Debug build, in one sitting at the end of S2; R8 at the end of S4. A test is not the right proof for the reason under Strategy: the measures exist only in the real window.
 
 The method, shared by all four:
 
@@ -424,6 +455,14 @@ The method, shared by all four:
 3. Give it Notes, then Mail as its second app. Expected: the row is 86 pt tall. The two dots have not moved. Below the picture only the group's fill shows, down to the separator. The pickers' two lines are centred in the row.
 4. Remove Mail. Expected: the row is 70 pt tall again.
 5. Lay the first row beside the mockup's. Expected: the keyboard, the trackpad and the two dots sit where the mockup has them, within 1 pt, measured from the group's top-leading corner.
+
+**R8. A tall window scrolls.** On a display short enough for the content to pass the cap, or with the cap's 90% lowered temporarily in a local build (and put back):
+
+1. Open the window. Expected: the window's frame is 90% of the display's visible height, within 1 pt. The system's vertical scroller shows. Scrolling to the end shows the *Quit Trackpad Launcher* and *Close* buttons with the 16 pt inset below them.
+2. Scroll part way down. Expected: the hands and labels stay at their offsets over the first row's picture (R5) as it moves, and nothing draws over the title bar.
+3. Make the content shorter than the cap (remove a second app, or close a card), and taller again. Expected: the window shrinks to its content with no scroller, then grows back to the cap and no further, its top edge still.
+4. With a second display of another height, drag the window onto it. Expected: the cap follows the new display.
+5. At full height on a tall display, with the cap restored. Expected: no scroller, and the window is as tall as its content, as in R1 to R4's checks.
 
 ## Further Notes
 
@@ -546,3 +585,20 @@ The app's deployment target is macOS 26. These values were not measured there. T
 - [ ] The hands and labels show exactly while the model says the hand guide shows. Nothing else in the view decides it.
 - [ ] The by-eye checks for S3 under Further Notes, all ten, each with its stated result.
 - [ ] `make test` is green. The tests this slice can break: the Hold thumb, corner choice and mixed trackpads suites, which read the same model, and the source-scan test.
+
+### S4: A tall window scrolls
+
+**What to build:** The settings window is never taller than 90% of its display's visible area. Content taller than that scrolls inside the window with the system's scroller, and the hands and labels scroll with the first row. Content that fits keeps the window at its content's height with no scroller. The cap holds on every fit and when the window moves to another display.
+
+**Blocked by:** S3 (the hands and labels that must scroll with the first row).
+
+**Requirements:** R8.
+
+**Test scenarios:** T12.
+
+**Skills:** `macos-dev-workflow:axiom-macos`, `macos-dev-workflow:swift-testing-pro`.
+
+- [ ] T12 is green.
+- [ ] The by-hand check for R8 under Verified without a test, all five steps, each with its stated result.
+- [ ] R1 to R4's measures are unchanged when the content fits.
+- [ ] `make test` is green, and `make gate` ends with "gate: all green".
