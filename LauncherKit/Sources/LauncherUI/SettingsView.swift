@@ -96,10 +96,11 @@ struct SettingsView: View {
             .padding(.top, -Self.formMargins.top)
             .padding(.bottom, -Self.formMargins.bottom)
             .padding(.horizontal, Self.inset - Self.formMargins.side)
-            // Under its neighbours, so the margins it lays over them never cover or take their clicks.
             .overlay(alignment: .topLeading) {
-                FirstGestureArt(thumb: gestureThumb).padding(.leading, Self.inset)
+                FirstGestureArt(thumb: gestureThumb, showsHandGuide: launcher.showsHandGuide)
+                    .padding(.leading, Self.inset)
             }
+            // Under its neighbours, so the margins it lays over them never cover or take their clicks.
             .zIndex(-1)
             if let notice = launcher.inactiveNotice {
                 SettingsNotice(message: notice)
@@ -220,9 +221,11 @@ struct GestureRowView: View {
 
 /// Everything the first gesture shows at its leading side, drawn over the form from the gesture group's top-leading
 /// corner, which every position is an offset from. Not row content: a grouped Form clips a row to its group, and the
-/// overlay keeps its place when the first row grows. It takes no clicks.
+/// overlay keeps its place when the first row grows. Only the picture is clipped; the hand guide reaches past the row
+/// and the group. It takes no clicks.
 struct FirstGestureArt: View {
     let thumb: ThumbCorner?
+    let showsHandGuide: Bool
 
     /// The picture's top-left corner from the group's, and its width.
     private static let picture = (x: CGFloat(-12), y: CGFloat(-1), width: CGFloat(137))
@@ -231,14 +234,68 @@ struct FirstGestureArt: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            BundleImage.view(Illustration.file("gesture-1", thumb: thumb), type: "png", width: Self.picture.width)
-                .offset(x: Self.picture.x, y: Self.picture.y)
+            ZStack(alignment: .topLeading) {
+                BundleImage.view(Illustration.file("gesture-1", thumb: thumb), type: "png", width: Self.picture.width)
+                    .offset(x: Self.picture.x, y: Self.picture.y)
+            }
+            .frame(width: SettingsView.groupWidth, height: Self.rowHeight, alignment: .topLeading)
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: GroupStyle.cornerRadius))
+            .accessibilityHidden(true)
+            if showsHandGuide {
+                HandGuide()
+            }
         }
         .frame(width: SettingsView.groupWidth, height: Self.rowHeight, alignment: .topLeading)
-        .clipShape(UnevenRoundedRectangle(topLeadingRadius: GroupStyle.cornerRadius))
-        .frame(width: SettingsView.groupWidth, height: Self.rowHeight, alignment: .topLeading)
         .allowsHitTesting(false)
-        .accessibilityHidden(true)
+    }
+}
+
+/// Two hands and two labels over the first picture: the left hand holds the trackpad's top-left corner, the right
+/// hand taps its centre.
+struct HandGuide: View {
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            BundleImage.view("left-hand", type: "png", width: 52.48)
+                .opacity(0.9)
+                .offset(x: -11.5, y: 10.5)
+            BundleImage.view("right-hand", type: "png", width: 60)
+                .opacity(0.9)
+                .offset(x: 55, y: 24)
+            HandLabel(text: "Hold", dot: .filled)
+                .offset(x: -11, y: 49)
+            HandLabel(text: "Tap", dot: .ringed)
+                .offset(x: 92, y: 55)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("The filled dot is the thumb you hold, the ringed dots are fingers that tap")
+    }
+}
+
+/// A small light tooltip: a dot, then the word.
+struct HandLabel: View {
+    enum Dot { case filled, ringed }
+
+    let text: String
+    let dot: Dot
+
+    var body: some View {
+        HStack(spacing: 4) {
+            switch dot {
+            case .filled:
+                Circle().fill(.black).frame(width: 7.17, height: 7.17)
+            case .ringed:
+                Circle().fill(Color(white: 0.2)).frame(width: 6, height: 6)
+                    .overlay(Circle().strokeBorder(.black, lineWidth: 1).frame(width: 10.67, height: 10.67))
+                    .frame(width: 10.67, height: 10.67)
+            }
+            Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(.black)
+        }
+        .padding(.leading, 6).padding(.trailing, 6).padding(.top, 3).padding(.bottom, 2)
+        .frame(height: 18)
+        .fixedSize()
+        .background(Color(white: 0.93), in: .rect(cornerRadius: 3))
+        .shadow(color: .black.opacity(0.4), radius: 1)
+        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
     }
 }
 
