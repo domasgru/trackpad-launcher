@@ -234,6 +234,7 @@ extension World {
 
         world.tap(1, thumbIn: .topRight)
         #expect(world.system.broughtToFront == [world.app("Arc")])
+        #expect(world.system.splits.isEmpty)
     }
 
     @Test func aRecordTheReleasedVersionWroteShowsItsAppAsOneApp() throws {

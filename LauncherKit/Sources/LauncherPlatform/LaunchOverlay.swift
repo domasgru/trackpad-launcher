@@ -31,18 +31,22 @@ import Synchronization
         }
     }
 
-    func play(for app: AppEntry) {
+    /// `toward`: the side the icon sways to, for a split gesture's app; nil: random.
+    func play(for app: AppEntry, toward: SplitSide? = nil) {
         let read = ScreenRead.now()
-        play(for: app, from: read.pointer, among: read.displays)
+        play(for: app, from: read.pointer, among: read.displays, toward: toward)
     }
 
     /// As `play(for:)`, staged at `start` among `displays` instead of at the pointer among the connected screens: a
     /// bounce's ending, from wherever its icon is, among the displays the bounce read, so one `ScreenRead` places both.
     /// `size` is the icon's side then, as a share of the usual: the whole flight plays at that size.
-    func play(for app: AppEntry, from start: CGPoint, among displays: [LaunchDisplay], size: CGFloat = 1) {
+    func play(
+        for app: AppEntry, from start: CGPoint, among displays: [LaunchDisplay], size: CGFloat = 1,
+        toward: SplitSide? = nil
+    ) {
         let reduceMotion =
             NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || LaunchTuning.current.forceReduceMotion
-        let flight = flights.next(draw: .random(in: -1...1), reduceMotion: reduceMotion).sized(size)
+        let flight = flights.next(draw: .random(in: -1...1), reduceMotion: reduceMotion, toward: toward).sized(size)
         guard let stage = flight.staged(at: start, among: displays),
               case let (panel, host)? = Self.makePanel(frame: stage.frame)
         else { return }

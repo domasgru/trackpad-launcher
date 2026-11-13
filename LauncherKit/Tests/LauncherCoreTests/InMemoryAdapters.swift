@@ -303,17 +303,20 @@ import LauncherCore
         onBringToFront?(app)
     }
 
-    /// Every hide, by the app it kept, in order.
-    private(set) var hidesOthers: [BundleID] = []
-    /// Which apps are hidden now. A hide adds every ⌘-Tab app and the frontmost app but the kept one at once: the
+    /// Every hide, by the apps it kept, in order.
+    private(set) var kept: [KeptApps] = []
+    /// Every hide, by the front app it kept, in order.
+    var hidesOthers: [BundleID] { kept.map(\.front) }
+    /// Which apps are hidden now. A hide adds every ⌘-Tab app and the frontmost app but the kept ones at once: the
     /// adapter's deferral and next-turn hop are its own mechanics. Any bring to front shows the app again.
     private(set) var hiddenApps: Set<BundleID> = []
     /// Runs inside `hideOtherApps`, after recording, so a test can see what was already recorded.
     var onHideOtherApps: (() -> Void)?
 
-    func hideOtherApps(than app: BundleID) {
-        hidesOthers.append(app)
-        hiddenApps.formUnion((running + (frontmost.map { [$0] } ?? [])).map(\.bundleID).filter { $0 != app })
+    func hideOtherApps(keeping kept: KeptApps) {
+        self.kept.append(kept)
+        hiddenApps.formUnion(
+            (running + (frontmost.map { [$0] } ?? [])).map(\.bundleID).filter { $0 != kept.front && $0 != kept.beside })
         onHideOtherApps?()
     }
 
@@ -454,6 +457,33 @@ import LauncherCore
         hiddenApps.remove(app.bundleID)
         launches.append(Launch(app: app, cap: cap, bouncing: bouncing))
         onBringToFrontWatching?()
+    }
+
+    struct Split: Equatable {
+        let arrival: SplitArrival
+        let cap: Duration
+    }
+
+    /// Every split bring to front, in order.
+    private(set) var splits: [Split] = []
+    /// Runs inside the split bring to front, after recording, like `onBringToFrontWatching`.
+    var onBringToFrontSplit: (() -> Void)?
+
+    /// Shows both apps again, then appends the watch each entrance starts, first app first: a watch for
+    /// `.running(followed: true)` and `.launching(watch:)`, bouncing for `.bouncing` only.
+    func bringToFront(_ split: SplitArrival, cap: Duration) {
+        splits.append(Split(arrival: split, cap: cap))
+        for part in [split.first, split.second] {
+            hiddenApps.remove(part.app.bundleID)
+            switch part.entrance {
+            case .running(_, followed: true), .launching(watch: .unseen?):
+                launches.append(Launch(app: part.app, cap: cap, bouncing: false))
+            case .launching(watch: .bouncing?):
+                launches.append(Launch(app: part.app, cap: cap, bouncing: true))
+            case .running, .launching, .alreadyLaunching: break
+            }
+        }
+        onBringToFrontSplit?()
     }
 
     func limitLaunch(of app: BundleID, to limit: Duration) {

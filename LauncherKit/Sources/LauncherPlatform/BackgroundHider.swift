@@ -21,12 +21,13 @@ import LauncherCore
         var frontmost: @MainActor () -> String?
         /// Whether a copy of the app is running and not hidden.
         var isShowing: @MainActor (String) -> Bool
-        /// Hides each running app with a Dock icon and another bundle identifier that is not hidden yet.
-        var hideOthers: @MainActor (String) -> Void
+        /// Hides each running app with a Dock icon and a bundle identifier outside `kept` that is not hidden yet.
+        var hideOthers: @MainActor (_ kept: KeptApps) -> Void
     }
 
     private struct Run {
-        let goal: String
+        let kept: KeptApps
+        var goal: String { kept.front.rawValue }
         let clock: LaunchClock
         var observers: [any NSObjectProtocol]
         var hasArrived = false
@@ -52,7 +53,7 @@ import LauncherCore
     }
 
     /// Returns at once. The goal's app arriving, here or later, starts the passes.
-    func hideOthers(than app: BundleID) {
+    func hideOthers(keeping kept: KeptApps) {
         end()
         let clock = LaunchClock()
         let center = NSWorkspace.shared.notificationCenter
@@ -62,7 +63,7 @@ import LauncherCore
                 MainActor.assumeIsolated { self?.look() }
             }
         }
-        run = Run(goal: app.rawValue, clock: clock, observers: observers)
+        run = Run(kept: kept, clock: clock, observers: observers)
         clock.after(arrivalLimit) { [weak self] in
             if self?.run?.hasArrived == false { self?.end() }
         }
@@ -75,16 +76,22 @@ import LauncherCore
             Self.hasArrived(goal: goal, frontmost: apps.frontmost(), isShowing: apps.isShowing(goal))
         else { return }
         run?.hasArrived = true
-        pass(goal, then: recheckWaits[...])
+        pass(then: recheckWaits[...])
     }
 
-    /// Hides what still shows, while the goal's app is in front. A user who has moved on keeps what they see.
-    private func pass(_ goal: String, then waits: ArraySlice<Duration>) {
-        guard apps.frontmost() == goal else { return end() }
-        apps.hideOthers(goal)
+    /// Hides what still shows, while the goal's app is in front. A user who has moved on keeps what they see. The kept
+    /// app beside the goal in front is not moving on: that pass hides nothing and the run goes on.
+    private func pass(then waits: ArraySlice<Duration>) {
+        guard let kept = run?.kept else { return }
+        let frontmost = apps.frontmost()
+        if frontmost == kept.front.rawValue {
+            apps.hideOthers(kept)
+        } else if frontmost == nil || frontmost != kept.beside?.rawValue {
+            return end()
+        }
         guard let wait = waits.first else { return end() }
         run?.clock.after(wait) { [weak self] in
-            self?.pass(goal, then: waits.dropFirst())
+            self?.pass(then: waits.dropFirst())
         }
     }
 
@@ -109,10 +116,11 @@ extension BackgroundHider.Apps {
                     !$0.isTerminated && !$0.isHidden
                 }
             },
-            hideOthers: { id in
+            hideOthers: { kept in
                 for app in NSWorkspace.shared.runningApplications
                 where app.activationPolicy == .regular && !app.isTerminated && !app.isHidden
-                    && app.bundleIdentifier != id && isInScope(app) {
+                    && app.bundleIdentifier != kept.front.rawValue && app.bundleIdentifier != kept.beside?.rawValue
+                    && isInScope(app) {
                     hide(app)
                 }
             })

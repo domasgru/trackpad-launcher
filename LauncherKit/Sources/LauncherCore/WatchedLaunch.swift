@@ -25,8 +25,8 @@ public enum LaunchBounceEnding: Equatable, Sendable {
 /// are the same either way. A launch that ended is absent from `Launcher.launches`, so a late report finds nothing.
 struct WatchedLaunch: Equatable, Sendable {
     var stage: Stage
-    /// The hide background apps setting as the latest gesture for this app left it.
-    var hidesOthersOnWindow: Bool
+    /// What hides when its first window shows, as the latest gesture for this app left it; nil: nothing.
+    var hidesOnWindow: KeptApps?
 
     enum Stage: Equatable, Sendable {
         case startingUp

@@ -333,29 +333,39 @@ public final class Launcher {
 
     private func hideOtherApps(than app: BundleID) {
         guard settings.isHideBackgroundAppsOn else { return }
-        system.hideOtherApps(than: app)
+        system.hideOtherApps(keeping: KeptApps(front: app))
     }
 
-    /// Every silent case decided here and only here: inactive, unassigned, missing. Reads `hasProcess` only when it
-    /// decides something: the launch animation or the hide setting is on, and no launch of the app is watched.
+    /// Every silent case decided here and only here: inactive, unassigned, every app missing. A one-app gesture reads
+    /// `hasProcess` only when it decides something: the launch animation or the hide setting is on, and no launch of the
+    /// app is watched. A split gesture reads it for each app without a watched launch, since the entrance decides who
+    /// is activated.
     private func fire(_ event: GestureEvent) {
-        guard activity.isActive,
-              let assigned = settings.assignments[event.gesture]?.first,
-              let app = catalog.locate(assigned)
-        else { return }
+        guard activity.isActive, let assignment = settings.assignments[event.gesture] else { return }
+        let target = assignment.target(locate: catalog.locate)
+        guard target != .nothing else { return }
         hardware.playFeedback(.gesture, on: event.trackpad)
+        switch target {
+        case .nothing: break
+        case .one(let app): bringOneToFront(app)
+        case .split(let first, let second): splitToFront(first, second)
+        }
+    }
+
+    private func bringOneToFront(_ app: AppEntry) {
         let animates = settings.isLaunchAnimationOn
         let hides = settings.isHideBackgroundAppsOn
         let id = app.bundleID
+        let kept = hides ? KeptApps(front: id) : nil
         // A watched launch keeps its one watch, bouncing or unseen; only its hide follows the latest gesture.
         if launches[id] != nil {
-            launches[id]?.hidesOthersOnWindow = hides
+            launches[id]?.hidesOnWindow = kept
             system.bringToFront(app)
             return
         }
         guard animates || hides else { return system.bringToFront(app) }
         guard system.hasProcess(id) else {
-            launches[id] = WatchedLaunch(stage: .startingUp, hidesOthersOnWindow: hides)
+            launches[id] = WatchedLaunch(stage: .startingUp, hidesOnWindow: kept)
             // Opens the app first, inside the call.
             system.bringToFrontWatching(app, cap: WatchedLaunch.cap, bouncing: animates)
             return
@@ -366,6 +376,29 @@ public final class Launcher {
             system.playLaunchAnimation(for: app)
         }
         hideOtherApps(than: id)
+    }
+
+    /// Both apps in one port call, so the adapter keeps the open order. The first app ends active; a launching app
+    /// hides the others once its window shows, and never hides the other app of the gesture.
+    private func splitToFront(_ first: AppEntry, _ second: AppEntry) {
+        let animates = settings.isLaunchAnimationOn
+        let kept = settings.isHideBackgroundAppsOn ? KeptApps(front: first.bundleID, beside: second.bundleID) : nil
+        func entrance(_ app: AppEntry) -> SplitApp {
+            let id = app.bundleID
+            if launches[id] != nil {
+                launches[id]?.hidesOnWindow = kept
+                return SplitApp(app, .alreadyLaunching)
+            }
+            guard !system.hasProcess(id) else { return SplitApp(app, .running(animates: animates, followed: false)) }
+            let watched = animates || kept != nil
+            if watched { launches[id] = WatchedLaunch(stage: .startingUp, hidesOnWindow: kept) }
+            return SplitApp(app, .launching(watch: watched ? (animates ? .bouncing : .unseen) : nil))
+        }
+        let arrival = SplitArrival(first: entrance(first), second: entrance(second))
+        system.bringToFront(arrival, cap: WatchedLaunch.cap)
+        if let kept, launches[first.bundleID] == nil, launches[second.bundleID] == nil {
+            system.hideOtherApps(keeping: kept)
+        }
     }
 
     /// A report for an app whose launch ended finds no record: a late window plays and hides nothing.
@@ -380,9 +413,11 @@ public final class Launcher {
             launches[app] = nil
             system.endLaunch(of: app, with: ending)
             // After the end, so a bounce's launch animation starts first. The record decides, not the switch now.
-            if progress == .windowShown, launch.hidesOthersOnWindow,
-               system.runningApps().frontmost?.bundleID == app {
-                system.hideOtherApps(than: app)
+            if progress == .windowShown, let kept = launch.hidesOnWindow,
+               kept.hides(
+                   onWindowOf: app, frontmost: system.runningApps().frontmost?.bundleID,
+                   frontStillWaits: launches[kept.front]?.hidesOnWindow != nil) {
+                system.hideOtherApps(keeping: kept)
             }
         }
     }

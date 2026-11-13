@@ -38,7 +38,7 @@ import LauncherCore
 
     public func bringToFront(_ app: AppEntry) { open(app) }
 
-    public func hideOtherApps(than app: BundleID) { hider.hideOthers(than: app) }
+    public func hideOtherApps(keeping kept: KeptApps) { hider.hideOthers(keeping: kept) }
 
     public func hasProcess(_ app: BundleID) -> Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: app.rawValue).allSatisfy(\.isTerminated)
@@ -56,6 +56,33 @@ import LauncherCore
         if bouncing { bounces.start(app) }
     }
 
+    public func bringToFront(_ split: SplitArrival, cap: Duration) {
+        var started: Set<BundleID> = []
+        for step in SplitSteps(split).steps {
+            switch step {
+            case .open(let app, let activates, let watched):
+                let id = app.bundleID
+                guard watched, launches[id] == nil else {
+                    open(app, activates: activates)
+                    continue
+                }
+                // Made before the open, with no clock yet, so the open can hand it the pid.
+                let report: @MainActor (LaunchProgress) -> Void = { [weak self] in self?.report($0, of: id) }
+                let watch = LaunchWatch(report: report)
+                launches[id] = Launch(watch: watch)
+                started.insert(id)
+                open(app, activates: activates, then: watch.opened)
+            case .startWatch(let id):
+                guard started.contains(id) else { continue }
+                launches[id]?.watch.start(cap: cap)
+            case .bounce(let app, let side):
+                bounces.start(app, toward: side)
+            case .launchAnimation(let app, let side):
+                overlay.play(for: app, toward: side)
+            }
+        }
+    }
+
     public func limitLaunch(of app: BundleID, to limit: Duration) { launches[app]?.watch.limit(to: limit) }
 
     public func endLaunch(of app: BundleID, with ending: LaunchBounceEnding) {
@@ -66,9 +93,9 @@ import LauncherCore
     /// One call reproduces a Dock click: launches, unhides, restores, reopens and activates. `opened`, when given, hears
     /// macOS's answer from any thread: the launched pid, or nil when it could not launch the app or the process
     /// ended before checking in (pid -1).
-    private func open(_ app: AppEntry, then opened: (@Sendable (pid_t?) -> Void)? = nil) {
+    private func open(_ app: AppEntry, activates: Bool = true, then opened: (@Sendable (pid_t?) -> Void)? = nil) {
         let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
+        configuration.activates = activates
         configuration.promptsUserIfNeeded = promptsUser
         guard let opened else {
             NSWorkspace.shared.openApplication(at: app.url, configuration: configuration)

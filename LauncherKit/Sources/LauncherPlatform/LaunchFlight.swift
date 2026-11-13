@@ -1,4 +1,5 @@
 import AppKit
+import LauncherCore
 import QuartzCore
 
 /// A connected display as the launch animation sees it: its frame in global screen coordinates (y up) and its
@@ -60,12 +61,17 @@ struct LaunchFlights {
 
     /// `draw` is a uniform random number in -1...1. Its sign picks the side (zero veers right) and its magnitude the
     /// size of the sway. A side that would be the third in a row is swapped for the other, with the same size.
-    /// Reduce-motion flights neither sway nor count towards a streak.
-    mutating func next(draw: Double, reduceMotion: Bool) -> LaunchFlight {
+    /// Reduce-motion flights neither sway nor count towards a streak. With `toward`, that side, whatever the draw's
+    /// sign: a directed flight neither reads nor feeds the streak.
+    mutating func next(draw: Double, reduceMotion: Bool, toward directed: SplitSide? = nil) -> LaunchFlight {
         guard !reduceMotion else { return LaunchFlight(motion: .fadeInPlace) }
         var side: Side = draw < 0 ? .left : .right
-        if lastSides.count == 2, lastSides.allSatisfy({ $0 == side }) { side = side.opposite }
-        lastSides = Array((lastSides + [side]).suffix(2))
+        if let directed {
+            side = directed == .left ? .left : .right
+        } else {
+            if lastSides.count == 2, lastSides.allSatisfy({ $0 == side }) { side = side.opposite }
+            lastSides = Array((lastSides + [side]).suffix(2))
+        }
         let size = LaunchFlight.minimumSway + (1 - LaunchFlight.minimumSway) * min(abs(draw), 1)
         return LaunchFlight(motion: .sway(side.sign * size * LaunchFlight.maximumSway))
     }
