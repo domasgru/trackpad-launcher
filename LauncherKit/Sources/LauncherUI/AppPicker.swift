@@ -78,6 +78,9 @@ struct AppPicker: NSViewRepresentable {
 
     @MainActor final class Coordinator: NSObject, NSMenuDelegate {
         weak var button: PickerButton?
+        /// The second app's plus button: a pop-up button of its own whose menu holds the same items, so it opens,
+        /// looks and picks exactly as the picker's does. The picks still show in `button`.
+        weak var addButton: NSPopUpButton?
         var current = RowApp.unassigned
         var installedApps = InstalledApps.empty
         var cachedIcon: (URL) -> NSImage = { _ in NSImage() }
@@ -95,6 +98,11 @@ struct AppPicker: NSViewRepresentable {
             self.button = button
         }
 
+        func attachAdd(_ addButton: NSPopUpButton) {
+            addButton.menu?.delegate = self
+            self.addButton = addButton
+        }
+
         /// The row's app in the button. A running pick animation is left alone.
         func showCurrent() {
             guard let button else { return }
@@ -108,32 +116,30 @@ struct AppPicker: NSViewRepresentable {
         /// The row's app and the list the menu was last built from.
         private var builtFrom: (app: RowApp, list: InstalledApps, unavailable: BundleID?)?
 
-        /// Builds the menu when the row's app, the list or the disabled app changed since it was last built.
+        /// Builds the menus when the row's app, the list or the disabled app changed since they were last built.
         func buildMenuIfChanged() {
-            guard let menu = button?.menu,
-                builtFrom?.app != current || builtFrom?.list != installedApps || builtFrom?.unavailable != unavailable
+            guard builtFrom?.app != current || builtFrom?.list != installedApps || builtFrom?.unavailable != unavailable
             else { return }
-            build(menu)
+            for menu in popUps.compactMap(\.menu) { build(menu) }
         }
 
-        /// Runs each time the menu is about to open, once AppKit has placed it: the same items again, with any icon
+        /// The pop-up buttons whose menus this coordinator fills.
+        private var popUps: [NSPopUpButton] {
+            let attached: [NSPopUpButton?] = [button, addButton]
+            return attached.compactMap(\.self)
+        }
+
+        /// Runs each time a menu is about to open, once AppKit has placed it: the same items again, with any icon
         /// drawn since the last build.
         func menuNeedsUpdate(_ menu: NSMenu) { build(menu) }
 
         /// The menu for the row's app and the list. The row's app, matched by bundle identifier, is checked and
-        /// selected, so the menu opens with it over the button; with no row app in the menu, it opens at its top.
+        /// selected, so the menu opens with it over its button; with no row app in the menu, it opens with its top
+        /// item over the button.
         private func build(_ menu: NSMenu) {
-            guard let button else { return }
             builtFrom = (current, installedApps, unavailable)
-            button.selectItem(at: fill(menu))
-        }
-
-        /// A fresh menu with the picker's items, for a control other than the picker's button to pop up.
-        func standaloneMenu() -> NSMenu {
-            let menu = NSMenu()
-            menu.autoenablesItems = false
-            fill(menu)
-            return menu
+            let selected = fill(menu)
+            popUps.first { $0.menu === menu }?.selectItem(at: selected)
         }
 
         /// Fills `menu` with the items; answers the index of the checked one, or 0.

@@ -19,7 +19,7 @@ import Testing
         return titles(menu)
     }
 
-    @Test func thePlusButtonOpensThePickersMenuWithTheFirstAppDisabledAndAPickMakesTheSecondApp() throws {
+    @Test func thePlusButtonIsAPopUpOverThePickersMenuWithTheFirstAppDisabledAndAPickMakesTheSecondApp() throws {
         let bench = SecondPickerBench(slot: .add, unavailable: bundleID("Notes"))
         let plus = bench.view.plusButton
         #expect(bench.showsPlus)
@@ -27,19 +27,25 @@ import Testing
         #expect(plus.toolTip == "Add a second app")
         #expect(plus.accessibilityLabel() == "Add a second app")
 
-        bench.pressPlus()
+        let menu = try bench.plusMenu()
 
-        let popped = try #require(bench.poppedUp.first)
-        #expect(bench.poppedUp.count == 1)
-        #expect(popped.button === plus)
-        #expect(titles(popped.menu) == (try firstPickerTitles()))
-        #expect(popped.menu.items.allSatisfy { $0.state != .on })
-        #expect(popped.menu.autoenablesItems == false)
-        for item in popped.menu.items where !item.isSeparatorItem {
+        // The system's pop-up button, as the picker is, so the menu opens over the button rather than below it,
+        // with its top item over the button as an unassigned picker's does; no bezel and no chevrons.
+        #expect(!plus.pullsDown)
+        #expect(!plus.isBordered)
+        #expect((plus.cell as? NSPopUpButtonCell)?.arrowPosition == .noArrow)
+        #expect(plus.indexOfSelectedItem == 0)
+        #expect(titles(menu) == (try firstPickerTitles()))
+        #expect(menu.items.allSatisfy { $0.state != .on })
+        #expect(menu.autoenablesItems == false)
+        for item in menu.items where !item.isSeparatorItem {
             #expect(item.isEnabled == (item.title != "Notes"), "\(item.title)")
+            if let entry = item.representedObject as? AppEntry {
+                #expect(item.image === bench.menuIcons[entry.url], "\(item.title) shows its icon")
+            }
         }
 
-        try bench.pick("Safari", from: popped.menu)
+        try bench.pick("Safari", from: menu)
 
         #expect(bench.chosen == ["Safari"])
         #expect(bench.showsMinusAndPicker)
@@ -52,8 +58,7 @@ import Testing
 
     @Test func noneChangesNothingFromEitherMenu() throws {
         let add = SecondPickerBench(slot: .add)
-        add.pressPlus()
-        try add.pick("None", from: try #require(add.poppedUp.first).menu)
+        try add.pick("None", from: try add.plusMenu())
         #expect(add.chosen.isEmpty && add.removed == 0 && add.otherCalls == 0)
         #expect(add.showsPlus)
         #expect(add.noLayerAnimates)
@@ -68,8 +73,7 @@ import Testing
 
     @Test func otherFromThePlusMenuShowsAndPlaysOnlyWhenTheModelAcceptsTheApp() throws {
         let accepted = SecondPickerBench(slot: .add)
-        accepted.pressPlus()
-        try accepted.pick("Other…", from: try #require(accepted.poppedUp.first).menu)
+        try accepted.pick("Other…", from: try accepted.plusMenu())
         #expect(accepted.otherCalls == 1)
         #expect(accepted.showsPlus)
         accepted.otherCompletion?(accepted.entry("Calendar"))
@@ -79,8 +83,7 @@ import Testing
         PickerBench.expectPlaysPickAnimation(on: accepted.pickerButton, icon: accepted.icon("Calendar"))
 
         let ignored = SecondPickerBench(slot: .add)
-        ignored.pressPlus()
-        try ignored.pick("Other…", from: try #require(ignored.poppedUp.first).menu)
+        try ignored.pick("Other…", from: try ignored.plusMenu())
         ignored.otherCompletion?(nil)
         #expect(ignored.showsPlus)
         #expect(ignored.noLayerAnimates)
@@ -120,6 +123,50 @@ import Testing
         #expect(bench.noLayerAnimates)
         #expect(Copy.addSecondApp == "Add a second app")
         #expect(Copy.removeSecondApp == "Remove the second app")
+    }
+
+    /// `button` drawn alone in the light appearance at 2 pixels per point.
+    private func drawn(_ button: NSView) throws -> NSBitmapImageRep {
+        button.appearance = NSAppearance(named: .aqua)
+        let side = Int(button.bounds.width * 2)
+        let rep = try #require(
+            NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8, samplesPerPixel: 4,
+                hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        rep.size = button.bounds.size
+        button.cacheDisplay(in: button.bounds, to: rep)
+        return rep
+    }
+
+    /// The colour at a point, measured from the top-left corner, in sRGB.
+    private func colour(in rep: NSBitmapImageRep, atPoint x: CGFloat, _ y: CGFloat) throws -> NSColor {
+        try #require(rep.colorAt(x: Int(x * 2), y: Int(y * 2))?.usingColorSpace(.sRGB))
+    }
+
+    @Test func thePlusAndMinusDrawASixteenPointCircleInTheBadgesFillWithTheSignInTheChevronsColour() throws {
+        let bench = SecondPickerBench(slot: .add)
+        bench.render(.add)
+        let plus = try drawn(bench.view.plusButton)
+        bench.render(.app(.present(PickerBenchEntries.safari)))
+        let minus = try drawn(bench.view.minusButton)
+
+        for (name, rep) in [("plus", plus), ("minus", minus)] {
+            // The circle fills the 16 pt frame: painted at each edge's midpoint, clear in the corners.
+            for (x, y) in [(0.5, 8.0), (15.5, 8.0), (8.0, 0.5), (8.0, 15.5)] {
+                #expect(try colour(in: rep, atPoint: x, y).alphaComponent > 0.03, "\(name) edge \(x),\(y)")
+            }
+            for (x, y) in [(0.5, 0.5), (15.5, 0.5), (0.5, 15.5), (15.5, 15.5)] {
+                #expect(try colour(in: rep, atPoint: x, y).alphaComponent < 0.01, "\(name) corner \(x),\(y)")
+            }
+            // The circle's fill, away from the sign: the badge's 8 % black.
+            let fill = try colour(in: rep, atPoint: 4, 4)
+            #expect(abs(fill.alphaComponent - 0.078) < 0.02, "\(name) fill alpha \(fill.alphaComponent)")
+            #expect(fill.redComponent + fill.greenComponent + fill.blueComponent < 0.05, "\(name) fill is black")
+            // The sign's middle: the chevrons' label colour, 85 % black.
+            let sign = try colour(in: rep, atPoint: 8, 8)
+            #expect(abs(sign.alphaComponent - 0.85) < 0.06, "\(name) sign alpha \(sign.alphaComponent)")
+            #expect(sign.redComponent + sign.greenComponent + sign.blueComponent < 0.05, "\(name) sign is black")
+        }
     }
 
     @Test func rendersNeverAnimateAndAMissingAppShowsGreyedByItsName() {

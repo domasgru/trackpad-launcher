@@ -70,3 +70,9 @@
 - Review, Plan:
   - `SecondPickerBench` bypassed `SecondAppPicker.makeView` → the bench goes through the production make and update.
   - T25 hard-coded the missing render → it compares against `PickerBench`'s render of `.missing`.
+- Human review of the build (requested changes):
+  - the plus button opened a standalone menu, which macOS draws without item icons and places below the button → the plus button is a borderless pop-up button (`AddAppButton`) whose menu the picker's coordinator fills, so it opens over the button with the same items, icons and style;
+  - the plus and minus circles drew 13 pt, scaled down from the 19 pt symbol image → `CircleSymbol` draws them at 16 pt, medium scale, unscaled, which makes the circle exactly 16 pt (measured);
+  - their colours differed from the chevron badge → the sign is `labelColor` and the circle `secondarySystemFill`, the badge's measured 8 % black;
+  - a pop-up cell draws its item's image off centre → `AddAppButton`'s cell draws the image alone, centred;
+  - a new test draws both buttons and checks the 16 pt circle, its fill and the sign's colour.

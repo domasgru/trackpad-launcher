@@ -3,8 +3,10 @@ import LauncherCore
 import SwiftUI
 
 /// The second slot of a gesture row: the plus button, or the minus button and the second app's picker. One NSView
-/// holding three controls, driven by an `AppPicker.Coordinator` for the picker and its menu.
-/// - The plus button pops up a menu built by the coordinator's own builder, nothing checked, the first app disabled.
+/// holding three controls, driven by an `AppPicker.Coordinator` for the picker, the plus button and their menus.
+/// - The plus button is a pop-up button of its own, its menu filled by the same coordinator: it opens, looks and picks
+///   exactly as the picker does, with the app icons, its top item over the button, nothing checked, the first app
+///   disabled.
 /// - An accepted pick, from the plus button's menu or the picker's, shows the minus button and the picker at once, and
 ///   the picker's icon plays the pick animation. Renders never play it.
 /// - None from either menu is inert, as closing the menu is.
@@ -22,10 +24,6 @@ struct SecondAppPicker: NSViewRepresentable {
     let chooseOther: (@escaping (AppEntry?) -> Void) -> Void
     let remove: () -> Void
     let pickAnimation: () -> PickAnimation?
-    /// How the plus button's menu opens. A real pop-up runs a modal tracking loop, so a bench replaces it.
-    var popUp: @MainActor (NSMenu, NSView) -> Void = { menu, button in
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.isFlipped ? button.bounds.maxY : 0), in: button)
-    }
 
     func makeCoordinator() -> AppPicker.Coordinator { AppPicker.Coordinator() }
 
@@ -41,7 +39,6 @@ struct SecondAppPicker: NSViewRepresentable {
 
     func update(_ view: SecondSlotView, coordinator: AppPicker.Coordinator) {
         view.remove = remove
-        view.popUp = popUp
         let shown: RowApp
         switch slot {
         case .add:
@@ -74,28 +71,29 @@ final class SecondSlotView: NSView {
     enum Mode { case add, app }
 
     /// The plus and minus buttons' side.
-    static let buttonSide: CGFloat = 16
+    static let buttonSide = CircleSymbol.side
     /// From the minus button to the picker's frame, whose own 12 pt of leading inset make the design's 12 pt gap.
     static let gapBeforePicker = 12 - AppPicker.contentInsets.leading
 
-    let plusButton: NSButton
+    let plusButton = AddAppButton()
     let minusButton: NSButton
     let picker = PickerButton()
     var remove: () -> Void = {}
-    var popUp: @MainActor (NSMenu, NSView) -> Void = { _, _ in }
     private(set) var mode = Mode.add
     /// The slot the last update showed, so an update that changes nothing leaves the layout alone.
     var shownSlot: SecondSlot?
-    private let coordinator: AppPicker.Coordinator
 
     init(coordinator: AppPicker.Coordinator) {
-        self.coordinator = coordinator
-        plusButton = Self.button(symbol: "plus.circle.fill", label: Copy.addSecondApp)
-        minusButton = Self.button(symbol: "minus.circle.fill", label: Copy.removeSecondApp)
+        minusButton = NSButton(frame: NSRect(x: 0, y: 0, width: Self.buttonSide, height: Self.buttonSide))
         super.init(frame: .zero)
         coordinator.attach(to: picker)
-        plusButton.target = self
-        plusButton.action = #selector(plusPressed)
+        coordinator.attachAdd(plusButton)
+        minusButton.image = CircleSymbol.image("minus.circle.fill", label: Copy.removeSecondApp)
+        minusButton.imagePosition = .imageOnly
+        minusButton.imageScaling = .scaleNone
+        minusButton.isBordered = false
+        minusButton.toolTip = Copy.removeSecondApp
+        minusButton.setAccessibilityLabel(Copy.removeSecondApp)
         minusButton.target = self
         minusButton.action = #selector(minusPressed)
         for subview in [plusButton, minusButton, picker] { addSubview(subview) }
@@ -103,21 +101,6 @@ final class SecondSlotView: NSView {
     }
 
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
-
-    private static func button(symbol: String, label: String) -> NSButton {
-        let configuration = NSImage.SymbolConfiguration(pointSize: buttonSide, weight: .regular)
-            .applying(.init(paletteColors: [.secondaryLabelColor, .quaternaryLabelColor]))
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)?
-            .withSymbolConfiguration(configuration)
-        let button = NSButton(frame: NSRect(x: 0, y: 0, width: buttonSide, height: buttonSide))
-        button.image = image
-        button.imagePosition = .imageOnly
-        button.imageScaling = .scaleProportionallyUpOrDown
-        button.isBordered = false
-        button.toolTip = label
-        button.setAccessibilityLabel(label)
-        return button
-    }
 
     /// Switches what shows; the picker's pick animation stops when it hides.
     func show(_ mode: Mode) {
@@ -161,10 +144,70 @@ final class SecondSlotView: NSView {
             height: size.height)
     }
 
-    @objc private func plusPressed() { popUp(coordinator.standaloneMenu(), plusButton) }
-
     @objc private func minusPressed() {
         remove()
         show(.add)
+    }
+}
+
+/// The plus button: a borderless pop-up button that draws only the plus symbol, no bezel and no chevrons. Being the
+/// system's pop-up button, its menu draws, places and tracks as the picker's does; its coordinator fills the menu.
+final class AddAppButton: NSPopUpButton {
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: CircleSymbol.side, height: CircleSymbol.side), pullsDown: false)
+        guard let cell = cell as? NSPopUpButtonCell else { preconditionFailure("NSPopUpButton without its cell") }
+        cell.usesItemFromMenu = false
+        // Nothing is ever checked: the second slot holds no app while the plus shows.
+        cell.altersStateOfSelectedItem = false
+        cell.arrowPosition = .noArrow
+        cell.imagePosition = .imageOnly
+        cell.imageScaling = .scaleNone
+        isBordered = false
+        menu?.autoenablesItems = false
+        let display = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        display.image = CircleSymbol.image("plus.circle.fill", label: Copy.addSecondApp)
+        cell.menuItem = display
+        toolTip = Copy.addSecondApp
+        setAccessibilityLabel(Copy.addSecondApp)
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
+
+    override class var cellClass: AnyClass? {
+        get { Cell.self }
+        set {}
+    }
+
+    override var intrinsicContentSize: NSSize { NSSize(width: CircleSymbol.side, height: CircleSymbol.side) }
+
+    /// Draws the display item's image alone, unscaled and centred in the button, as a plain image button does. A pop-up
+    /// cell lays its item's image out as a menu item, after a leading inset and off the button's centre, which would
+    /// draw the circle off its 16 pt frame. The button has no title, arrow or border to draw.
+    private final class Cell: NSPopUpButtonCell {
+        override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
+            guard let image = menuItem?.image else { return }
+            let size = image.size
+            image.draw(
+                in: NSRect(
+                    x: cellFrame.midX - size.width / 2, y: cellFrame.midY - size.height / 2, width: size.width,
+                    height: size.height),
+                from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        }
+    }
+}
+
+/// The plus and minus buttons' symbols, drawn as the design draws them: a 16 pt circle in the fill of the picker's
+/// chevron badge, its sign in the chevrons' colour.
+enum CircleSymbol {
+    /// The circle's diameter, and the buttons' side.
+    static let side: CGFloat = 16
+
+    /// `name` at 16 pt, medium scale, which draws its circle exactly 16 pt across inside a 19 pt image with 1.5 pt
+    /// of clear margin on each side (measured on macOS 26). A button shows it unscaled and centred in its 16 pt
+    /// frame, so the circle fills the frame. Palette colours are the system's own, so both appearances follow.
+    static func image(_ name: String, label: String) -> NSImage? {
+        let configuration = NSImage.SymbolConfiguration(pointSize: side, weight: .regular, scale: .medium)
+            .applying(.init(paletteColors: [.labelColor, .secondarySystemFill]))
+        return NSImage(systemSymbolName: name, accessibilityDescription: label)?.withSymbolConfiguration(configuration)
     }
 }

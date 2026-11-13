@@ -4,8 +4,7 @@ import Testing
 @testable import LauncherUI
 
 /// A `SecondAppPicker` driven the way SwiftUI drives it: the same make and update functions, a coordinator the test
-/// holds, and picks sent through the real menus. A press of the plus button hands the bench the menu instead of
-/// running a modal pop-up.
+/// holds, and picks sent through the real menus. A menu is read as it is about to open, without its modal tracking.
 final class SecondPickerBench {
     let entries: [String: AppEntry]
     let installed: InstalledApps
@@ -19,8 +18,6 @@ final class SecondPickerBench {
     var otherCompletion: ((AppEntry?) -> Void)?
     var removed = 0
     var animation: PickAnimation? = .shipped
-    /// What each press of the plus button handed over.
-    var poppedUp: [(menu: NSMenu, button: NSView)] = []
     private var slot: SecondSlot
     private let unavailable: BundleID?
 
@@ -54,8 +51,7 @@ final class SecondPickerBench {
                 otherCompletion = completion
             },
             remove: { [unowned self] in removed += 1 },
-            pickAnimation: { [unowned self] in animation },
-            popUp: { [unowned self] menu, button in poppedUp.append((menu, button)) })
+            pickAnimation: { [unowned self] in animation })
     }
 
     func render(_ slot: SecondSlot) {
@@ -69,9 +65,11 @@ final class SecondPickerBench {
         view.layoutSubtreeIfNeeded()
     }
 
-    func pressPlus() {
-        view.plusButton.performClick(nil)
-        layOut()
+    /// The plus button's menu as it opens: AppKit has placed it from the selection, then asks for the items.
+    func plusMenu() throws -> NSMenu {
+        let menu = try #require(view.plusButton.menu)
+        coordinator.menuNeedsUpdate(menu)
+        return menu
     }
 
     func pressMinus() {
