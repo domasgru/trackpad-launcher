@@ -138,14 +138,14 @@ public struct GestureRow: Identifiable, Equatable, Sendable {
         case present(AppEntry)
         case missing(name: String, bundleID: BundleID)
 
-        var rowApp: RowApp {
+        public var rowApp: RowApp {
             switch self {
             case .present(let entry): .present(entry)
             case .missing(let name, _): .missing(name: name)
             }
         }
 
-        var bundleID: BundleID {
+        public var bundleID: BundleID {
             switch self {
             case .present(let entry): entry.bundleID
             case .missing(_, let bundleID): bundleID
@@ -156,6 +156,15 @@ public struct GestureRow: Identifiable, Equatable, Sendable {
     public init(gesture: Gesture, apps: Apps) {
         self.gesture = gesture
         self.apps = apps
+    }
+
+    /// The apps the row holds, the first then the second; empty while unassigned.
+    public var held: [Held] {
+        switch apps {
+        case .unassigned: []
+        case .one(let first): [first]
+        case .two(let first, let second): [first, second]
+        }
     }
 
     /// The first picker's app.

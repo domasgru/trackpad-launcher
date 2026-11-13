@@ -557,13 +557,7 @@ public final class Launcher {
     private func resolveRows() {
         rows = makeRows()
         var seen = Set<URL>()
-        let present = rows.flatMap { row -> [GestureRow.Held] in
-            switch row.apps {
-            case .unassigned: []
-            case .one(let first): [first]
-            case .two(let first, let second): [first, second]
-            }
-        }.compactMap { held -> AppEntry? in
+        let present = rows.flatMap(\.held).compactMap { held -> AppEntry? in
             guard case .present(let app) = held, seen.insert(app.url).inserted else { return nil }
             return app
         }

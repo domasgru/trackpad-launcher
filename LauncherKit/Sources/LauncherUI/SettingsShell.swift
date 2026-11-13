@@ -178,14 +178,8 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
 
     /// The picker's apps plus the present apps of the gesture rows, which may sit outside it.
     private static func iconTargets(_ launcher: Launcher) -> [AppEntry] {
-        let rowApps = launcher.rows.flatMap { row -> [AppEntry] in
-            let held: [GestureRow.Held]
-            switch row.apps {
-            case .unassigned: held = []
-            case .one(let first): held = [first]
-            case .two(let first, let second): held = [first, second]
-            }
-            return held.compactMap { if case .present(let entry) = $0 { entry } else { nil } }
+        let rowApps = launcher.rows.flatMap(\.held).compactMap { held -> AppEntry? in
+            if case .present(let entry) = held { entry } else { nil }
         }
         return launcher.installedApps.all + rowApps
     }
@@ -229,12 +223,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         public var canPreviewPickAnimation: Bool {
             guard case .open = launcher.window else { return false }
             return launcher.rows.contains { row in
-                switch row.apps {
-                case .unassigned: false
-                case .one(let first): if case .present = first { true } else { false }
-                case .two(let first, let second):
-                    [first, second].contains { if case .present = $0 { true } else { false } }
-                }
+                row.held.contains { if case .present = $0 { true } else { false } }
             }
         }
 

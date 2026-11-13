@@ -6,11 +6,15 @@ import Testing
 @MainActor @Suite struct SecondAppPickerTests {
     private func bundleID(_ name: String) -> BundleID { BundleID(rawValue: "com.test.\(name.lowercased())") }
 
+    private func colour(of item: NSMenuItem) -> NSColor? {
+        item.attributedTitle?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+    }
+
     private func titles(_ menu: NSMenu) -> [String] { menu.items.map(\.title) }
 
-    private func firstPickerTitles() -> [String] {
+    private func firstPickerTitles() throws -> [String] {
         let bench = PickerBench(showing: nil)
-        let menu = bench.view.menu!
+        let menu = try #require(bench.view.menu)
         bench.coordinator.menuNeedsUpdate(menu)
         return titles(menu)
     }
@@ -28,14 +32,14 @@ import Testing
         let popped = try #require(bench.poppedUp.first)
         #expect(bench.poppedUp.count == 1)
         #expect(popped.button === plus)
-        #expect(titles(popped.menu) == firstPickerTitles())
+        #expect(titles(popped.menu) == (try firstPickerTitles()))
         #expect(popped.menu.items.allSatisfy { $0.state != .on })
         #expect(popped.menu.autoenablesItems == false)
         for item in popped.menu.items where !item.isSeparatorItem {
             #expect(item.isEnabled == (item.title != "Notes"), "\(item.title)")
         }
 
-        bench.pick("Safari", from: popped.menu)
+        try bench.pick("Safari", from: popped.menu)
 
         #expect(bench.chosen == ["Safari"])
         #expect(bench.showsMinusAndPicker)
@@ -49,13 +53,13 @@ import Testing
     @Test func noneChangesNothingFromEitherMenu() throws {
         let add = SecondPickerBench(slot: .add)
         add.pressPlus()
-        add.pick("None", from: try #require(add.poppedUp.first).menu)
+        try add.pick("None", from: try #require(add.poppedUp.first).menu)
         #expect(add.chosen.isEmpty && add.removed == 0 && add.otherCalls == 0)
         #expect(add.showsPlus)
         #expect(add.noLayerAnimates)
 
         let split = SecondPickerBench(slot: .app(.present(PickerBenchEntries.safari)))
-        split.pickFromPicker("None")
+        try split.pickFromPicker("None")
         #expect(split.chosen.isEmpty && split.removed == 0 && split.otherCalls == 0)
         #expect(split.showsMinusAndPicker)
         #expect(split.displayItem.title == "Safari")
@@ -65,7 +69,7 @@ import Testing
     @Test func otherFromThePlusMenuShowsAndPlaysOnlyWhenTheModelAcceptsTheApp() throws {
         let accepted = SecondPickerBench(slot: .add)
         accepted.pressPlus()
-        accepted.pick("Other…", from: try #require(accepted.poppedUp.first).menu)
+        try accepted.pick("Other…", from: try #require(accepted.poppedUp.first).menu)
         #expect(accepted.otherCalls == 1)
         #expect(accepted.showsPlus)
         accepted.otherCompletion?(accepted.entry("Calendar"))
@@ -76,22 +80,22 @@ import Testing
 
         let ignored = SecondPickerBench(slot: .add)
         ignored.pressPlus()
-        ignored.pick("Other…", from: try #require(ignored.poppedUp.first).menu)
+        try ignored.pick("Other…", from: try #require(ignored.poppedUp.first).menu)
         ignored.otherCompletion?(nil)
         #expect(ignored.showsPlus)
         #expect(ignored.noLayerAnimates)
     }
 
-    @Test func theSecondPickerListsWhatTheFirstListsAndPicksReplaceTheSecondApp() {
+    @Test func theSecondPickerListsWhatTheFirstListsAndPicksReplaceTheSecondApp() throws {
         let bench = SecondPickerBench(slot: .app(.present(PickerBenchEntries.safari)), unavailable: bundleID("Notes"))
-        let menu = bench.pickerButton.menu!
+        let menu = try #require(bench.pickerButton.menu)
         bench.coordinator.menuNeedsUpdate(menu)
-        #expect(titles(menu) == firstPickerTitles())
+        #expect(titles(menu) == (try firstPickerTitles()))
         #expect(menu.items.first { $0.title == "Safari" }?.state == .on)
         #expect(menu.items.first { $0.title == "Notes" }?.isEnabled == false)
         #expect(menu.items.first { $0.title == "Mail" }?.isEnabled == true)
 
-        bench.pickFromPicker("Mail")
+        try bench.pickFromPicker("Mail")
 
         #expect(bench.chosen == ["Mail"])
         #expect(bench.displayItem.title == "Mail")
@@ -123,6 +127,14 @@ import Testing
         let bench = SecondPickerBench(slot: .add, longName: long)
         let safari = bench.entry("Safari")
         let missing = SecondSlot.app(.missing(name: "Safari", bundleID: bundleID("Safari")))
+        let first = PickerBench(showing: nil)
+        first.render(.missing(name: "Safari"))
+        let firstMissing = (
+            item: first.displayItem, colour: colour(of: first.displayItem), toolTip: first.view.toolTip,
+            iconHidden: first.view.iconLayer.isHidden
+        )
+        #expect(firstMissing.colour != nil)
+        #expect(firstMissing.iconHidden)
 
         for slot in [SecondSlot.add, .app(.present(safari)), missing, .app(.present(safari))] {
             bench.clearAnimations()
@@ -130,11 +142,10 @@ import Testing
             #expect(bench.noLayerAnimates)
             if case .app(.missing) = slot {
                 let item = bench.displayItem
-                #expect(item.title == "Safari")
-                let colour = item.attributedTitle?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
-                #expect(colour == .tertiaryLabelColor)
-                #expect(bench.pickerButton.toolTip == "Safari not found")
-                #expect(bench.pickerButton.iconLayer.isHidden)
+                #expect(item.title == firstMissing.item.title)
+                #expect(colour(of: item) == firstMissing.colour)
+                #expect(bench.pickerButton.toolTip == firstMissing.toolTip)
+                #expect(bench.pickerButton.iconLayer.isHidden == firstMissing.iconHidden)
             }
         }
 

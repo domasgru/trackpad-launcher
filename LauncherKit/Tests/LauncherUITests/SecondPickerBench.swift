@@ -12,7 +12,7 @@ final class SecondPickerBench {
     let buttonIcons: [URL: NSImage]
     let menuIcons: [URL: NSImage]
     let coordinator = AppPicker.Coordinator()
-    let view: SecondSlotView
+    private(set) lazy var view = picker(slot).makeView(coordinator: coordinator)
 
     var chosen: [String] = []
     var otherCalls = 0
@@ -37,9 +37,6 @@ final class SecondPickerBench {
         menuIcons = Dictionary(uniqueKeysWithValues: entries.values.map { ($0.url, PickerBench.solidIcon()) })
         self.slot = slot
         self.unavailable = unavailable
-        view = SecondSlotView(coordinator: coordinator)
-        coordinator.willShowPick = { [unowned view] in view.show(.app) }
-        view.popUp = { _, _ in }
         render(slot)
     }
 
@@ -83,17 +80,17 @@ final class SecondPickerBench {
     }
 
     /// Picks the item titled `title` in `menu`, as a click on it does.
-    func pick(_ title: String, from menu: NSMenu) {
-        let item = menu.items.first { $0.title == title }!
+    func pick(_ title: String, from menu: NSMenu) throws {
+        let item = try #require(menu.items.first { $0.title == title })
         _ = item.target?.perform(item.action, with: item)
         layOut()
     }
 
     /// Picks from the picker's own menu.
-    func pickFromPicker(_ title: String) {
-        let menu = view.picker.menu!
+    func pickFromPicker(_ title: String) throws {
+        let menu = try #require(view.picker.menu)
         coordinator.menuNeedsUpdate(menu)
-        pick(title, from: menu)
+        try pick(title, from: menu)
     }
 
     var pickerButton: PickerButton { view.picker }

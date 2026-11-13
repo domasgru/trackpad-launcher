@@ -39,6 +39,15 @@ import LauncherCore
         onLaunchProgress?(app, progress)
     }
 
+    /// A new watch for `app`, recorded as its launch, with no clock yet so the open can hand it the pid. Nil while the
+    /// app's launch is already watched: one watch per app.
+    private func makeWatch(for app: BundleID) -> LaunchWatch? {
+        guard launches[app] == nil else { return nil }
+        let watch = LaunchWatch(report: { [weak self] in self?.report($0, of: app) })
+        launches[app] = Launch(watch: watch)
+        return watch
+    }
+
     public func bringToFront(_ app: AppEntry) { open(app) }
 
     public func hideOtherApps(keeping kept: KeptApps) { hider.hideOthers(keeping: kept) }
@@ -48,11 +57,7 @@ import LauncherCore
     }
 
     public func bringToFrontWatching(_ app: AppEntry, cap: Duration, bouncing: Bool) {
-        let id = app.bundleID
-        guard launches[id] == nil else { return bringToFront(app) }
-        let report: @MainActor (LaunchProgress) -> Void = { [weak self] in self?.report($0, of: id) }
-        let watch = LaunchWatch(report: report)
-        launches[id] = Launch(watch: watch)
+        guard let watch = makeWatch(for: app.bundleID) else { return bringToFront(app) }
         // The app first: nothing below can delay it.
         open(app, then: watch.opened)
         watch.start(cap: cap)
@@ -64,16 +69,11 @@ import LauncherCore
         for step in SplitSteps(split).steps {
             switch step {
             case .open(let app, let activates, let watched):
-                let id = app.bundleID
-                guard watched, launches[id] == nil else {
+                guard watched, let watch = makeWatch(for: app.bundleID) else {
                     open(app, activates: activates)
                     continue
                 }
-                // Made before the open, with no clock yet, so the open can hand it the pid.
-                let report: @MainActor (LaunchProgress) -> Void = { [weak self] in self?.report($0, of: id) }
-                let watch = LaunchWatch(report: report)
-                launches[id] = Launch(watch: watch)
-                started.insert(id)
+                started.insert(app.bundleID)
                 open(app, activates: activates, then: watch.opened)
             case .startWatch(let id):
                 guard started.contains(id) else { continue }

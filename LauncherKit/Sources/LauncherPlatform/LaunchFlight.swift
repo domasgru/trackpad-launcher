@@ -51,25 +51,7 @@ struct ScreenRead {
 /// Draws launch flights, and remembers the sides of the last two moving ones so the same side never comes up three
 /// times in a row.
 struct LaunchFlights {
-    private var lastSides: [Side] = []
-
-    private enum Side {
-        case left, right
-
-        var opposite: Side {
-            switch self {
-            case .left: .right
-            case .right: .left
-            }
-        }
-
-        var sign: CGFloat {
-            switch self {
-            case .left: -1
-            case .right: 1
-            }
-        }
-    }
+    private var lastSides: [SplitSide] = []
 
     /// `draw` is a uniform random number in -1...1. Its sign picks the side (zero veers right) and its magnitude the
     /// size of the sway. A side that would be the third in a row is swapped for the other, with the same size.
@@ -77,15 +59,31 @@ struct LaunchFlights {
     /// sign: a directed flight neither reads nor feeds the streak.
     mutating func next(draw: Double, reduceMotion: Bool, toward directed: SplitSide? = nil) -> LaunchFlight {
         guard !reduceMotion else { return LaunchFlight(motion: .fadeInPlace) }
-        var side: Side = draw < 0 ? .left : .right
+        var side: SplitSide = draw < 0 ? .left : .right
         if let directed {
-            side = directed == .left ? .left : .right
+            side = directed
         } else {
             if lastSides.count == 2, lastSides.allSatisfy({ $0 == side }) { side = side.opposite }
             lastSides = Array((lastSides + [side]).suffix(2))
         }
         let size = LaunchFlight.minimumSway + (1 - LaunchFlight.minimumSway) * min(abs(draw), 1)
         return LaunchFlight(motion: .sway(side.sign * size * LaunchFlight.maximumSway))
+    }
+}
+
+private extension SplitSide {
+    var opposite: SplitSide {
+        switch self {
+        case .left: .right
+        case .right: .left
+        }
+    }
+
+    var sign: CGFloat {
+        switch self {
+        case .left: -1
+        case .right: 1
+        }
     }
 }
 

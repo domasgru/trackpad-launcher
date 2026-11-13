@@ -9,7 +9,7 @@ extension World {
         launcher.setSecondApp(.app(app(second)), for: gesture)
     }
 
-    func row(_ gesture: Gesture) -> GestureRow { launcher.rows.first { $0.gesture == gesture }! }
+    func row(_ gesture: Gesture) throws -> GestureRow { try #require(launcher.rows.first { $0.gesture == gesture }) }
 }
 
 @MainActor @Suite struct SplitAssignmentTests {
@@ -19,39 +19,25 @@ extension World {
         .two(first: .present(world.app(first)), second: .present(world.app(second)))
     }
 
-    private func bundleIDs(_ apps: GestureRow.Apps) -> [BundleID] {
-        func id(_ held: GestureRow.Held) -> BundleID {
-            switch held {
-            case .present(let entry): entry.bundleID
-            case .missing(_, let bundleID): bundleID
-            }
-        }
-        switch apps {
-        case .unassigned: return []
-        case .one(let first): return [id(first)]
-        case .two(let first, let second): return [id(first), id(second)]
-        }
-    }
-
-    @Test func aRowShowsItsAppsItsSecondSlotAndItsLines() {
+    @Test func aRowShowsItsAppsItsSecondSlotAndItsLines() throws {
         let world = World(apps: ["Music", "Notes", "Safari"])
         world.launcher.start()
         world.launcher.setAssignment(.app(world.app("Music")), for: .two)
         world.split("Notes", "Safari", on: .one)
 
-        let split = world.row(.one)
+        let split = try world.row(.one)
         #expect(split.apps == two(world, "Notes", "Safari"))
         #expect(split.app == .present(world.app("Notes")))
         #expect(split.second == .app(.present(world.app("Safari"))))
         #expect(split.firstBundleID == World.bundleID("Notes"))
         #expect(split.lineCount == 2)
 
-        let alone = world.row(.two)
+        let alone = try world.row(.two)
         #expect(alone.second == .add)
         #expect(alone.firstBundleID == World.bundleID("Music"))
         #expect(alone.lineCount == 1)
 
-        let unassigned = world.row(.three)
+        let unassigned = try world.row(.three)
         #expect(unassigned.app == .unassigned)
         #expect(unassigned.second == nil)
         #expect(unassigned.firstBundleID == nil)
@@ -61,13 +47,13 @@ extension World {
         world.trash("Safari")
         world.launcher.openedByHand()
 
-        let missingFirst = world.row(.two)
+        let missingFirst = try world.row(.two)
         #expect(missingFirst.apps == .one(.missing(name: "Music", bundleID: World.bundleID("Music"))))
         #expect(missingFirst.app == .missing(name: "Music"))
         #expect(missingFirst.second == .add)
         #expect(missingFirst.firstBundleID == World.bundleID("Music"))
         #expect(
-            world.row(.one).second == .app(.missing(name: "Safari", bundleID: World.bundleID("Safari"))))
+            try world.row(.one).second == .app(.missing(name: "Safari", bundleID: World.bundleID("Safari"))))
     }
 
     @Test func aSecondAppIsAcceptedOnlyWhenItIsAnotherAppThanTheFirstOne() throws {
@@ -84,12 +70,12 @@ extension World {
         world.launcher.openedByHand()
 
         #expect(world.launcher.setSecondApp(.app(world.app("Safari")), for: .one) == world.app("Safari"))
-        #expect(world.row(.one).apps == two(world, "Notes", "Safari"))
+        #expect(try world.row(.one).apps == two(world, "Notes", "Safari"))
         #expect(world.system.preparedLaunchAnimations.filter { $0 == world.app("Safari") }.count == 1)
 
         let tool = world.app("Tool", in: world.downloads)
         #expect(world.launcher.setSecondApp(.appBundle(at: tool.url), for: .two) == tool)
-        #expect(world.row(.two).apps == .two(first: .present(world.app("Mail")), second: .present(tool)))
+        #expect(try world.row(.two).apps == .two(first: .present(world.app("Mail")), second: .present(tool)))
 
         let rows = world.launcher.rows
         let bytes = world.settingsRecordBytes()
@@ -102,23 +88,23 @@ extension World {
         #expect(world.settingsRecordBytes() == bytes)
         #expect(world.launcher.rows == rows)
 
-        let music = world.row(.five).apps
+        let music = try world.row(.five).apps
         #expect(world.launcher.setSecondApp(.app(world.app("Safari")), for: .five) == world.app("Safari"))
         #expect(music == .one(.missing(name: "Music", bundleID: World.bundleID("Music"))))
         #expect(
-            world.row(.five).apps
+            try world.row(.five).apps
                 == .two(first: .missing(name: "Music", bundleID: World.bundleID("Music")), second: .present(world.app("Safari"))))
     }
 
-    @Test func aGestureNeverHoldsOneAppTwiceAndEveryChangeIsSavedAtOnce() {
+    @Test func aGestureNeverHoldsOneAppTwiceAndEveryChangeIsSavedAtOnce() throws {
         let world = World(apps: ["Notes", "Safari", "Mail"])
         world.launcher.start()
         let launcher = world.launcher
 
-        func check(_ apps: GestureRow.Apps, sourceLocation: SourceLocation = #_sourceLocation) {
-            let row = world.row(.one)
+        func check(_ apps: GestureRow.Apps, sourceLocation: SourceLocation = #_sourceLocation) throws {
+            let row = try world.row(.one)
             #expect(row.apps == apps, sourceLocation: sourceLocation)
-            let ids = bundleIDs(row.apps)
+            let ids = row.held.map(\.bundleID)
             #expect(Set(ids).count == ids.count, "no app on both lines", sourceLocation: sourceLocation)
             let saved = world.freshStore().load()?.assignments[.one]
             let savedIDs = saved.map { [$0.first.bundleID] + ($0.second.map { [$0.bundleID] } ?? []) } ?? []
@@ -126,34 +112,34 @@ extension World {
         }
 
         launcher.setAssignment(.app(world.app("Notes")), for: .one)
-        check(one(world, "Notes"))
+        try check(one(world, "Notes"))
         launcher.setSecondApp(.app(world.app("Safari")), for: .one)
-        check(two(world, "Notes", "Safari"))
+        try check(two(world, "Notes", "Safari"))
         #expect(launcher.setSecondApp(.app(world.app("Mail")), for: .one) == world.app("Mail"))
-        check(two(world, "Notes", "Mail"))
+        try check(two(world, "Notes", "Mail"))
         launcher.setAssignment(.app(world.app("Safari")), for: .one)
-        check(two(world, "Safari", "Mail"))
+        try check(two(world, "Safari", "Mail"))
         #expect(launcher.setAssignment(.app(world.app("Mail")), for: .one) == world.app("Mail"))
-        check(one(world, "Mail"))
-        #expect(world.row(.one).second == .add)
+        try check(one(world, "Mail"))
+        #expect(try world.row(.one).second == .add)
         launcher.setSecondApp(.app(world.app("Notes")), for: .one)
-        check(two(world, "Mail", "Notes"))
+        try check(two(world, "Mail", "Notes"))
         launcher.removeSecondApp(for: .one)
-        check(one(world, "Mail"))
-        #expect(world.row(.one).second == .add)
+        try check(one(world, "Mail"))
+        #expect(try world.row(.one).second == .add)
         let bytes = world.settingsRecordBytes()
         launcher.removeSecondApp(for: .one)
-        check(one(world, "Mail"))
+        try check(one(world, "Mail"))
         #expect(world.settingsRecordBytes() == bytes)
         launcher.setSecondApp(.app(world.app("Safari")), for: .one)
-        check(two(world, "Mail", "Safari"))
+        try check(two(world, "Mail", "Safari"))
         launcher.setAssignment(nil, for: .one)
-        check(.unassigned)
-        #expect(world.row(.one).second == nil)
+        try check(.unassigned)
+        #expect(try world.row(.one).second == nil)
         #expect(world.freshStore().load()?.assignments[.one] == nil)
 
         world.relaunch().start()
-        #expect(world.row(.one).apps == .unassigned)
+        #expect(try world.row(.one).apps == .unassigned)
     }
 
     private func entry(_ world: World, _ name: String) -> [String: Any] {
@@ -180,9 +166,9 @@ extension World {
         world.split("Notes", "Safari", on: .one)
 
         world.relaunch().start()
-        #expect(world.row(.one).apps == two(world, "Notes", "Safari"))
+        #expect(try world.row(.one).apps == two(world, "Notes", "Safari"))
         world.launcher.openedByHand()
-        #expect(world.row(.one).apps == two(world, "Notes", "Safari"))
+        #expect(try world.row(.one).apps == two(world, "Notes", "Safari"))
 
         let saved = try assignment(world, "1")
         #expect(Set(saved.keys) == ["bundleID", "name", "lastKnownURL", "secondApp"])
@@ -196,22 +182,22 @@ extension World {
         #expect(Set(try assignment(world, "1").keys) == ["bundleID", "name", "lastKnownURL"])
     }
 
-    @Test func aRecordHoldingTheFirstAppAsTheSecondLoadsAsOneApp() {
+    @Test func aRecordHoldingTheFirstAppAsTheSecondLoadsAsOneApp() throws {
         let world = World(apps: ["Notes"])
         var saved = entry(world, "Notes")
         saved["secondApp"] = entry(world, "Notes")
         world.seedSuite([
-            "settings": try! PropertyListSerialization.data(
+            "settings": try PropertyListSerialization.data(
                 fromPropertyList: ["assignments": ["1": saved]], format: .xml, options: 0)
         ])
 
         world.relaunch().start()
 
-        #expect(world.row(.one).apps == one(world, "Notes"))
-        #expect(world.row(.one).second == .add)
+        #expect(try world.row(.one).apps == one(world, "Notes"))
+        #expect(try world.row(.one).second == .add)
     }
 
-    @Test func aReleasedRecordLoadsWithoutSecondAppsAndFiresItsFirstAppAlone() {
+    @Test func aReleasedRecordLoadsWithoutSecondAppsAndFiresItsFirstAppAlone() throws {
         let world = World()
         for (name, bundleID) in [
             ("Arc", "company.thebrowser.Browser"), ("Figma", "com.figma.Desktop"), ("Spotify", "com.spotify.client"),
@@ -223,14 +209,14 @@ extension World {
         world.relaunch().start()
 
         for gesture in [Gesture.one, .two, .five] {
-            guard case .one = world.row(gesture).apps else {
+            guard case .one = try world.row(gesture).apps else {
                 Issue.record("gesture \(gesture) holds one app")
                 continue
             }
-            #expect(world.row(gesture).second == .add)
+            #expect(try world.row(gesture).second == .add)
         }
-        #expect(world.row(.three).apps == .unassigned)
-        #expect(world.row(.four).apps == .unassigned)
+        #expect(try world.row(.three).apps == .unassigned)
+        #expect(try world.row(.four).apps == .unassigned)
 
         world.tap(1, thumbIn: .topRight)
         #expect(world.system.broughtToFront == [world.app("Arc")])
@@ -248,7 +234,7 @@ extension World {
 
         world.relaunch().start()
 
-        #expect(world.row(.three).apps == one(world, "Notes"))
+        #expect(try world.row(.three).apps == one(world, "Notes"))
         #expect(world.launcher.isHideBackgroundAppsOn)
     }
 
@@ -268,11 +254,11 @@ extension World {
         try world.previousVersionSaves { $0.isSwipeOn = false }
         world.relaunch().start()
 
-        #expect(world.row(.one).apps == one(world, "Notes"))
-        #expect(world.row(.one).second == .add)
-        #expect(world.row(.two).apps == one(world, "Mail"))
+        #expect(try world.row(.one).apps == one(world, "Notes"))
+        #expect(try world.row(.one).second == .add)
+        #expect(try world.row(.two).apps == one(world, "Mail"))
         #expect(world.launcher.isHideBackgroundAppsOn)
-        #expect(!world.launcher.isSwipeOn)
+        #expect(world.launcher.isSwipeOn == false)
     }
     @Test(arguments: [(aloneToo: false, row: ["Music", "Safari", "Mail", "Notes"]), (true, ["Music", "Mail", "Notes"])])
     func theSwitcherLeavesOutOnlyTheAppsAGestureHoldsAlone(aloneToo: Bool, row: [String]) {

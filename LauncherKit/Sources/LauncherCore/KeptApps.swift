@@ -11,6 +11,8 @@ public struct KeptApps: Hashable, Sendable {
         self.beside = beside == front ? nil : beside
     }
 
+    public func keeps(_ app: BundleID) -> Bool { app == front || app == beside }
+
     /// Whether `app`'s first window showing hides the others now: `front` must be frontmost, and when `app` is `beside`,
     /// `front`'s own launch must not still be waiting for its window (that window hides instead).
     func hides(onWindowOf app: BundleID, frontmost: BundleID?, frontStillWaits: Bool) -> Bool {

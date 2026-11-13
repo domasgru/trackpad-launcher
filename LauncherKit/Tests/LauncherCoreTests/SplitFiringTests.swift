@@ -178,8 +178,8 @@ import Testing
     }
 
     private func neitherHidden(_ world: World, _ step: String) {
-        #expect(!world.system.hiddenApps.contains(B("Notes")), "Notes stays after \(step)")
-        #expect(!world.system.hiddenApps.contains(B("Safari")), "Safari stays after \(step)")
+        #expect(world.system.hiddenApps.contains(B("Notes")) == false, "Notes stays after \(step)")
+        #expect(world.system.hiddenApps.contains(B("Safari")) == false, "Safari stays after \(step)")
     }
 
     @Test func aLaunchingSecondAppHidesTheOthersOnItsWindowOnlyWithTheFirstAppInFront() {

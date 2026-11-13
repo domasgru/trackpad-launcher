@@ -77,16 +77,19 @@ import Testing
     }
 
     @Test(arguments: [
-        (SplitApp.Entrance.launching(watch: .bouncing), SplitApp.Entrance.launching(watch: .bouncing)),
-        (.running(animates: true, followed: true), .launching(watch: .unseen)),
-        (.alreadyLaunching, .running(animates: true, followed: false)),
+        (SplitApp.Entrance.launching(watch: .bouncing), SplitApp.Entrance.launching(watch: .bouncing), true, true),
+        (.running(animates: true, followed: true), .launching(watch: .unseen), true, true),
+        (.alreadyLaunching, .running(animates: true, followed: false), false, false),
     ])
-    func bothOpensComeBeforeAnythingElseAndTheFirstAppsIsLast(first: SplitApp.Entrance, second: SplitApp.Entrance) {
+    func bothOpensComeBeforeAnythingElseAndTheFirstAppsIsLast(
+        first: SplitApp.Entrance, second: SplitApp.Entrance, firstWatched: Bool, secondWatched: Bool
+    ) {
         let steps = steps(first, second)
 
         #expect(steps.prefix(2).map(\.isOpen) == [true, true])
-        #expect(steps.dropFirst(2).allSatisfy { !$0.isOpen })
-        #expect(steps[1] == .open(notes, activates: true, watched: steps[1].isWatchedOpen))
+        #expect(steps.dropFirst(2).allSatisfy { $0.isOpen == false })
+        #expect(steps[0].isWatchedOpen == secondWatched)
+        #expect(steps[1] == .open(notes, activates: true, watched: firstWatched))
     }
 }
 

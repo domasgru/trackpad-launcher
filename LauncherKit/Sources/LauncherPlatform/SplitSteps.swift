@@ -15,21 +15,24 @@ struct SplitSteps: Equatable {
     /// only it takes the focus when the second app is not running. Bounces start first app first, so the first app's
     /// sits on the left of the row.
     init(_ split: SplitArrival) {
-        let rows = [(split.first, SplitSide.left), (split.second, SplitSide.right)]
+        let sides = [(member: split.first, side: SplitSide.left), (member: split.second, side: SplitSide.right)]
         var steps: [Step] = []
-        for (index, row) in rows.enumerated().reversed() {
-            let isRunning = if case .running = row.0.entrance { true } else { false }
-            steps.append(.open(row.0.app, activates: index == 0 || isRunning, watched: Self.isWatched(row.0.entrance)))
+        for (index, entry) in sides.enumerated().reversed() {
+            let isRunning = if case .running = entry.member.entrance { true } else { false }
+            let watched = Self.isWatched(entry.member.entrance)
+            steps.append(.open(entry.member.app, activates: index == 0 || isRunning, watched: watched))
         }
-        for row in rows where Self.isWatched(row.0.entrance) {
-            steps.append(.startWatch(row.0.app.bundleID))
+        for entry in sides where Self.isWatched(entry.member.entrance) {
+            steps.append(.startWatch(entry.member.app.bundleID))
         }
-        for row in rows {
-            if case .launching(watch: .bouncing?) = row.0.entrance { steps.append(.bounce(row.0.app, toward: row.1)) }
+        for entry in sides {
+            if case .launching(watch: .bouncing?) = entry.member.entrance {
+                steps.append(.bounce(entry.member.app, toward: entry.side))
+            }
         }
-        for row in rows {
-            if case .running(animates: true, _) = row.0.entrance {
-                steps.append(.launchAnimation(row.0.app, toward: row.1))
+        for entry in sides {
+            if case .running(animates: true, _) = entry.member.entrance {
+                steps.append(.launchAnimation(entry.member.app, toward: entry.side))
             }
         }
         self.steps = steps

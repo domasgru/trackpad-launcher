@@ -130,9 +130,9 @@ import Testing
         #expect(bench.noLayerAnimates)
     }
 
-    @Test func theUnavailableAppsItemIsDisabledAndTheCurrentOneIsOn() {
+    @Test func theUnavailableAppsItemIsDisabledAndTheCurrentOneIsOn() throws {
         let bench = PickerBench(showing: "Notes", unavailable: BundleID(rawValue: "com.test.mail"))
-        let menu = bench.view.menu!
+        let menu = try #require(bench.view.menu)
         bench.coordinator.menuNeedsUpdate(menu)
 
         #expect(menu.items.first { $0.title == "Mail" }?.isEnabled == false)

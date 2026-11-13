@@ -340,7 +340,7 @@ private func expectTimeouts(_ actual: [Float], _ expected: [Float], sourceLocati
     }
 }
 
-@MainActor @Suite struct FrontWindowPlacerInstanceTests {
+@MainActor @Suite(.timeLimit(.minutes(1))) struct FrontWindowPlacerInstanceTests {
     private static let d1 = DisplayID(rawValue: 1)
     private static let d2 = DisplayID(rawValue: 2)
     private static let screens = PlacingScreens(
@@ -421,9 +421,9 @@ private func expectTimeouts(_ actual: [Float], _ expected: [Float], sourceLocati
     @Test func aPlacingForADisplayThatIsGoneOrAnAppWithNoProcessOrThisProcessDispatchesNothing() {
         let calls = ScriptedPlacing(apps())
         let placer = placer(calls, Finishes())
-        #expect(!placer.place(Self.notes, in: L(DisplayID(rawValue: 3))))
-        #expect(!placer.place(Self.mail, in: L(Self.d1)))
-        #expect(!placer.place(Self.calendar, in: L(Self.d1)))
+        #expect(placer.place(Self.notes, in: L(DisplayID(rawValue: 3))) == false)
+        #expect(placer.place(Self.mail, in: L(Self.d1)) == false)
+        #expect(placer.place(Self.calendar, in: L(Self.d1)) == false)
         #expect(calls.calls.isEmpty)
     }
 

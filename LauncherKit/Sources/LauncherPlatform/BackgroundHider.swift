@@ -86,7 +86,7 @@ import LauncherCore
         let frontmost = apps.frontmost()
         if frontmost == kept.front.rawValue {
             apps.hideOthers(kept)
-        } else if frontmost == nil || frontmost != kept.beside?.rawValue {
+        } else if frontmost.map({ kept.keeps(BundleID(rawValue: $0)) }) != true {
             return end()
         }
         guard let wait = waits.first else { return end() }
@@ -119,7 +119,7 @@ extension BackgroundHider.Apps {
             hideOthers: { kept in
                 for app in NSWorkspace.shared.runningApplications
                 where app.activationPolicy == .regular && !app.isTerminated && !app.isHidden
-                    && app.bundleIdentifier != kept.front.rawValue && app.bundleIdentifier != kept.beside?.rawValue
+                    && app.bundleIdentifier.map({ kept.keeps(BundleID(rawValue: $0)) }) != true
                     && isInScope(app) {
                     hide(app)
                 }

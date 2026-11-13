@@ -49,3 +49,24 @@
   - the own-process check now lives in `place(_:in:)`;
   - the remembered frame is read back after the last write when time remains.
 - No runner dropped out.
+
+## Implement
+- No verification skill in the repo → step skipped; no verification outcome.
+- S1 built spacings from the design arithmetic, not a measurement (no GUI run) → left to M1.
+- S3: a screen without `NSScreenNumber` is dropped from `ScreenRead.displays` (`compactMap`) so every `LaunchDisplay` has an id.
+- Review, Standards:
+  - `!` inside `#expect` → `== false`.
+  - Force-unwraps and `try!` in the new tests → `try #require`.
+  - The placer tests' `finished` wait could hang → a suite time limit.
+  - `SplitStepsTests` built an expected value from the actual one → literals from T27.
+- Review, code smells:
+  - The row's held apps were flattened in four places → public `GestureRow.held`, `Held.rowApp` and `Held.bundleID`.
+  - Watch setup was duplicated in `WorkspaceActions` → one helper.
+  - `LaunchFlights` had a private copy of `SplitSide` → it uses `SplitSide`.
+  - `SplitSteps` used tuple indices → named fields.
+  - `BackgroundHider` checked kept apps by hand → `KeptApps.keeps(_:)`.
+  - `SplitPlacingTests` had its own pair type → it uses the fake's `WindowPlacement`.
+  - `SecondAppPicker.update` relaid out on every update → only when the shown slot changes.
+- Review, Plan:
+  - `SecondPickerBench` bypassed `SecondAppPicker.makeView` → the bench goes through the production make and update.
+  - T25 hard-coded the missing render → it compares against `PickerBench`'s render of `.missing`.

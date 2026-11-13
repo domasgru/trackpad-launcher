@@ -15,13 +15,8 @@ import Testing
         return world
     }
 
-    private func placements(_ world: World) -> [SplitPlacingPair] {
-        world.system.windowPlacements.map { SplitPlacingPair(app: $0.app, half: $0.half) }
-    }
-
-    private struct SplitPlacingPair: Equatable {
-        let app: BundleID
-        let half: ScreenHalf
+    private func placements(_ world: World) -> [RecordingSystemActions.WindowPlacement] {
+        world.system.windowPlacements
     }
 
     @Test func aSplitGesturePlacesBothWindowsOnTheDisplayUnderThePointerAtEveryFire() {

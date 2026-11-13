@@ -58,8 +58,11 @@ struct SecondAppPicker: NSViewRepresentable {
             current: shown, unavailable: unavailable, installedApps: installedApps, cachedIcon: cachedIcon,
             icon: icon, choose: choose, chooseNone: nil, chooseOther: chooseOther, pickAnimation: pickAnimation
         ).update(view.picker, coordinator: coordinator)
-        view.needsLayout = true
-        view.invalidateIntrinsicContentSize()
+        if view.shownSlot != slot {
+            view.shownSlot = slot
+            view.needsLayout = true
+            view.invalidateIntrinsicContentSize()
+        }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView view: SecondSlotView, context: Context) -> CGSize? {
@@ -81,6 +84,8 @@ final class SecondSlotView: NSView {
     var remove: () -> Void = {}
     var popUp: @MainActor (NSMenu, NSView) -> Void = { _, _ in }
     private(set) var mode = Mode.add
+    /// The slot the last update showed, so an update that changes nothing leaves the layout alone.
+    var shownSlot: SecondSlot?
     private let coordinator: AppPicker.Coordinator
 
     init(coordinator: AppPicker.Coordinator) {
