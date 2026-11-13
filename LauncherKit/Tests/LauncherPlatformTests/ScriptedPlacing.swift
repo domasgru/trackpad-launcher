@@ -70,7 +70,6 @@ final class ScriptedPlacing: PlacingCalls {
         var intoApp: [pid_t: [String]] = [:]
         var touches: [pid_t: [Touch]] = [:]
         var frames: [pid_t: [CGRect]] = [:]
-        var raised: [pid_t: [Int]] = [:]
         var calls: [String] = []
         var drifted = false
         var holds: [String: Hold] = [:]
@@ -95,8 +94,6 @@ final class ScriptedPlacing: PlacingCalls {
     func writes(_ pid: pid_t = 1) -> [Write] { record.withLock { ($0.touches[pid] ?? []).map(\.write) } }
     func touched(_ pid: pid_t = 1) -> Set<Int> { record.withLock { Set(($0.touches[pid] ?? []).map(\.window)) } }
     func frames(_ pid: pid_t = 1) -> [CGRect] { record.withLock { $0.frames[pid] ?? [] } }
-    /// The windows raised, in order.
-    func raised(_ pid: pid_t = 1) -> [Int] { record.withLock { $0.raised[pid] ?? [] } }
     /// Every call into any app, as "pid name", in the order they began.
     var calls: [String] { record.withLock { $0.calls } }
 
@@ -197,12 +194,6 @@ final class ScriptedPlacing: PlacingCalls {
             $0.frame.origin = origin
             return nil
         }
-    }
-
-    func raise(_ window: Ref) -> WindowCallError? {
-        let error = enter(window, "raise")
-        if error == nil { record.withLock { $0.raised[window.pid, default: []].append(window.window) } }
-        return error
     }
 
     func setSize(_ size: CGSize, of window: Ref) -> WindowCallError? {

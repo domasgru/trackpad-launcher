@@ -64,13 +64,14 @@ import LauncherCore
     func aSplitsTwoIconsStartSideBySideAndPartWithoutEverTouching(draw: Double) throws {
         let left = try splitKeyframes(.left, draw: draw)
         let right = try splitKeyframes(.right, draw: draw)
-        let spacing = CGFloat(LaunchTuning.current.bounce.spacing)
-
-        // Side by side about the pointer at its height, one bounce row's spacing apart at the pop's peak.
+        // Side by side about the pointer at its height, 16 points apart as they start.
         let leftStart = try #require(left.first).screenPosition, rightStart = try #require(right.first).screenPosition
-        let shift = (LaunchFlight.peakSide + spacing) / 2
+        #expect(LaunchFlight.splitGap == 16)
+        let shift = (LaunchFlight.iconSide + 16) / 2
         #expect(leftStart == CGPoint(x: middle.x - shift, y: middle.y))
         #expect(rightStart == CGPoint(x: middle.x + shift, y: middle.y))
+        let first = try #require(left.first), firstRight = try #require(right.first)
+        #expect(box(firstRight).minX - box(first).maxX == 16)
 
         #expect(left.count == right.count)
         for (l, r) in zip(left, right) {
@@ -85,12 +86,13 @@ import LauncherCore
     func atTheDisplaysEdgeASplitsPairSlidesInwardJustEnoughToStartWholeOnIt(pointerX: CGFloat) throws {
         let display = LaunchDisplay.builtIn
         let pointer = CGPoint(x: pointerX, y: 400)
-        let peak = LaunchFlight.peakSide, spacing = CGFloat(LaunchTuning.current.bounce.spacing)
+        let peak = LaunchFlight.peakSide, centres = LaunchFlight.iconSide + LaunchFlight.splitGap
         let left = LaunchFlight.start(at: pointer, toward: .left, on: display)
         let right = LaunchFlight.start(at: pointer, toward: .right, on: display)
 
-        #expect(right.x - left.x == peak + spacing, "still side by side")
-        let pair = CGRect(x: left.x - peak / 2, y: pointer.y - peak / 2, width: 2 * peak + spacing, height: peak)
+        #expect(right.x - left.x == centres, "still side by side")
+        // The pair at its largest, the pop's peak.
+        let pair = CGRect(x: left.x - peak / 2, y: pointer.y - peak / 2, width: centres + peak, height: peak)
         #expect(pair.minX >= display.frame.minX && pair.maxX <= display.frame.maxX)
         #expect(pair.minX == display.frame.minX || pair.maxX == display.frame.maxX, "slid no further than needed")
 

@@ -69,9 +69,12 @@ import LauncherCore
         for step in SplitSteps(split).steps {
             switch step {
             case .open(let app, let activates, let watched):
-                opening(app, activates: activates, watched: watched, started: &started)()
-            case .raiseThenOpen(let raised, let first, let watched):
-                placer.raise(raised.bundleID, then: opening(first, activates: true, watched: watched, started: &started))
+                guard watched, let watch = makeWatch(for: app.bundleID) else {
+                    open(app, activates: activates)
+                    continue
+                }
+                started.insert(app.bundleID)
+                open(app, activates: activates, then: watch.opened)
             case .startWatch(let id):
                 guard started.contains(id) else { continue }
                 launches[id]?.watch.start(cap: cap)
@@ -81,18 +84,6 @@ import LauncherCore
                 overlay.play(for: app, toward: side)
             }
         }
-    }
-
-    /// The open of `app`, with a new watch when `watched` and the app's launch has none yet. The watch is recorded now,
-    /// so its clock starts with the gesture's even when the open itself runs later.
-    private func opening(
-        _ app: AppEntry, activates: Bool, watched: Bool, started: inout Set<BundleID>
-    ) -> @MainActor @Sendable () -> Void {
-        guard watched, let watch = makeWatch(for: app.bundleID) else {
-            return { [weak self] in self?.open(app, activates: activates) }
-        }
-        started.insert(app.bundleID)
-        return { [weak self] in self?.open(app, activates: activates, then: watch.opened) }
     }
 
     public func pointerDisplay() -> DisplayID? {

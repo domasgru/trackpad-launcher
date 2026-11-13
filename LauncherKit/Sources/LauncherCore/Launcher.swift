@@ -406,7 +406,7 @@ public final class Launcher {
         }
         let arrival = SplitArrival(
             first: entrance(first), second: entrance(second),
-            secondEntry: kept == nil ? .focused : .unfocused(raised: isAccessibilityGranted))
+            secondEntry: kept == nil ? .focused : .unfocused)
         placing = display.map { SplitPlacing(first: first.bundleID, second: second.bundleID, display: $0) }
         system.bringToFront(arrival, cap: WatchedLaunch.cap)
         for part in [arrival.first, arrival.second] {

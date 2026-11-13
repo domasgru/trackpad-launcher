@@ -64,8 +64,8 @@ public struct SplitArrival: Equatable, Sendable {
         /// every other app's.
         case focused
         /// Never activated, so only the first app's menu bar shows: while the hide background apps setting is on,
-        /// every other app hides, so nothing else covers it. `raised`: its front window is first raised over the first
-        /// app's other windows, which takes the Accessibility permission.
-        case unfocused(raised: Bool)
+        /// every other app hides, so nothing else covers it. Raising its window instead was probed and refused: real
+        /// apps (Xcode, Electron apps) answer an Accessibility raise by activating themselves.
+        case unfocused
     }
 }

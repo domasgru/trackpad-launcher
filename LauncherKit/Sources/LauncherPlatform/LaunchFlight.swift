@@ -170,16 +170,20 @@ struct LaunchFlight {
         (0...Self.steps).map { pose(at: CGFloat($0) / CGFloat(Self.steps)) }
     }
 
-    /// Where a split gesture's icon starts for a pointer at `pointer`: beside it on its side, so the two icons start
-    /// side by side, then each sways further to its side. They are the bounce row's spacing apart at their largest,
-    /// the pop's peak, so they never touch while they swell and tilt. Like the bounce row, the pair slides sideways
-    /// just enough to start whole on the pointer's display.
+    /// The gap between a split's two icons as they start, at rest size. It is more than the pop's swell takes from it,
+    /// so they never touch while they swell and tilt.
+    static let splitGap: CGFloat = 16
+
+    /// Where a split gesture's icon starts for a pointer at `pointer`: beside it on its side, `splitGap` from the other,
+    /// so the two icons start side by side, then each sways further to its side. Like the bounce row, the pair slides
+    /// sideways just enough to start whole on the pointer's display, at its largest.
     static func start(at pointer: CGPoint, toward side: SplitSide, on display: LaunchDisplay) -> CGPoint {
-        let width = 2 * peakSide + CGFloat(LaunchTuning.current.bounce.spacing)
+        let centres = iconSide + splitGap
+        let width = centres + peakSide
         var left = pointer.x - width / 2
         left = min(left, display.frame.maxX - width)
         left = max(left, display.frame.minX)
-        let centre = side == .left ? left + peakSide / 2 : left + width - peakSide / 2
+        let centre = side == .left ? left + peakSide / 2 : left + peakSide / 2 + centres
         return CGPoint(x: centre, y: pointer.y)
     }
 

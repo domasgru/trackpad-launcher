@@ -3,9 +3,8 @@ import ApplicationServices
 import LauncherCore
 import Synchronization
 
-/// Places a split gesture's front windows in the halves of a display's usable area, and raises the second app's: the
-/// one file that sets a window's attributes (position, size, full screen) or raises it for a split, through the
-/// Accessibility element API.
+/// Places a split gesture's front windows in the halves of a display's usable area: the one file that sets a window's
+/// attributes (position, size, full screen), through the Accessibility element API.
 ///
 /// Each placing is one GCD work item, never the cooperative pool, so a call into an app that does not answer blocks
 /// only its own thread. One process's work items run in order on a serial queue of that process; different apps run in
@@ -24,7 +23,6 @@ import Synchronization
     private let process: @MainActor (BundleID) -> pid_t?
     private let now: @Sendable () -> Uptime
     private let perform: @Sendable (pid_t, SplitHalves, SplitSide, CGRect?, ReadBudget, () -> Bool) -> Outcome
-    private let raiseWindow: @Sendable (pid_t, ReadBudget) -> Outcome
     private let finished: @Sendable (BundleID, Outcome) -> Void
 
     /// The real placer: `AXPlacingCalls`, the screens from `NSScreen`, the running copy from `NSRunningApplication`.
@@ -59,7 +57,6 @@ import Synchronization
         perform = { pid, halves, side, previous, budget, isLatest in
             Self.place(pid, in: halves, side: side, previous: previous, budget: budget, calls: calls, isLatest: isLatest)
         }
-        raiseWindow = { pid, budget in Self.raise(pid, budget: budget, calls: calls) }
     }
 
     /// Main actor: the display by number (gone: nothing), `SplitHalves`, the app's running copy from `process` (none, or
@@ -67,51 +64,22 @@ import Synchronization
     /// answering whether it dispatched a work item; the port ignores the answer.
     @discardableResult func place(_ app: BundleID, in half: ScreenHalf) -> Bool {
         let read = screens()
-        guard let visible = read.visible[half.display], let pid = otherProcess(app) else { return false }
+        guard let visible = read.visible[half.display],
+            let pid = process(app), pid != ProcessInfo.processInfo.processIdentifier
+        else { return false }
         let halves = SplitHalves(visible: visible, primary: read.primary)
         let ticket = tickets.issue(for: pid)
         let budget = ReadBudget(from: now(), within: Self.budget)
+        let queue = queues[pid] ?? DispatchQueue(label: "launcher.window-placing.\(pid)", target: concurrent)
+        queues[pid] = queue
         let tickets = tickets, perform = perform, finished = finished
-        queue(for: pid).async {
+        queue.async {
             let previous = tickets.remembered(for: pid, in: half)
             let outcome = perform(pid, halves, half.side, previous, budget) { tickets.isLatest(ticket, for: pid) }
             if case .placed(let frame) = outcome { tickets.remember(frame, in: half, for: pid) }
             finished(app, outcome)
         }
         return true
-    }
-
-    /// Raises the app's front window, the one `place` would place, over every other app's windows but the active
-    /// app's: a split's second app comes to front this way, without the focus, before the first app activates. One
-    /// work item on the process's serial queue, so it follows any placing already queued and never stops one: it takes
-    /// no ticket. `then` runs on the main actor once the raise is done, within the budget whatever the app does, or at
-    /// once when there is nothing to raise. Returns at once, answering whether it dispatched.
-    @discardableResult func raise(
-        _ app: BundleID, then: @escaping @MainActor @Sendable () -> Void = {}
-    ) -> Bool {
-        guard let pid = otherProcess(app) else {
-            then()
-            return false
-        }
-        let budget = ReadBudget(from: now(), within: Self.budget)
-        let raise = raiseWindow, finished = finished
-        queue(for: pid).async {
-            finished(app, raise(pid, budget))
-            DispatchQueue.main.async { then() }
-        }
-        return true
-    }
-
-    /// The app's running copy, unless it is none or this process.
-    private func otherProcess(_ app: BundleID) -> pid_t? {
-        guard let pid = process(app), pid != ProcessInfo.processInfo.processIdentifier else { return nil }
-        return pid
-    }
-
-    private func queue(for pid: pid_t) -> DispatchQueue {
-        let queue = queues[pid] ?? DispatchQueue(label: "launcher.window-placing.\(pid)", target: concurrent)
-        queues[pid] = queue
-        return queue
     }
 
     /// One window's whole placing, on the calling thread. Each call into the app gets what is left of `budget` as its
@@ -136,10 +104,34 @@ import Synchronization
             return nil
         }
 
+        let app = calls.appElement(pid)
+        if let ended = prepare(app) { return ended }
         let window: Calls.Element
-        switch frontWindow(of: pid, calls: calls, prepare: prepare) {
-        case .ended(let outcome): return outcome
-        case .found(let found): window = found
+        switch calls.mainWindow(of: app) {
+        case .failure(.cannotComplete): return .unanswered
+        case .success(let main?): window = main
+        case .success(nil), .failure:
+            if let ended = prepare(app) { return ended }
+            let listed: [Calls.Element]
+            switch calls.windows(of: app) {
+            case .failure(.cannotComplete): return .unanswered
+            case .failure: return .noWindow
+            case .success(let found): listed = found
+            }
+            var chosen: Calls.Element?
+            for candidate in listed {
+                if let ended = prepare(candidate) { return ended }
+                switch calls.state(of: candidate) {
+                case .failure(.cannotComplete): return .unanswered
+                case .failure: continue
+                case .success(let state):
+                    guard state.isStandard, !state.isMinimised else { continue }
+                    chosen = candidate
+                }
+                if chosen != nil { break }
+            }
+            guard let chosen else { return .noWindow }
+            window = chosen
         }
 
         if let ended = prepare(window) { return ended }
@@ -181,64 +173,8 @@ import Synchronization
         return .placed(CGRect(origin: origin, size: taken))
     }
 
-    /// The front window's raise, on the calling thread, under the same budget rule as `place`.
-    nonisolated static func raise<Calls: PlacingCalls>(_ pid: pid_t, budget: ReadBudget, calls: Calls) -> Outcome {
-        func prepare(_ element: Calls.Element) -> Outcome? {
-            guard let timeout = budget.timeout(at: calls.now()) else { return .unanswered }
-            calls.setTimeout(timeout, on: element)
-            return nil
-        }
-        let window: Calls.Element
-        switch frontWindow(of: pid, calls: calls, prepare: prepare) {
-        case .ended(let outcome): return outcome
-        case .found(let found): window = found
-        }
-        if let ended = prepare(window) { return ended }
-        switch calls.raise(window) {
-        case nil: return .raised
-        case .cannotComplete?: return .unanswered
-        case .some: return .refused
-        }
-    }
-
-    private enum FrontWindow<Element> {
-        case found(Element)
-        case ended(Outcome)
-    }
-
-    /// The window a placing or a raise acts on: the app's main window, else the first listed window that is standard
-    /// and not minimised. `prepare` runs before each call and may end the search.
-    nonisolated private static func frontWindow<Calls: PlacingCalls>(
-        of pid: pid_t, calls: Calls, prepare: (Calls.Element) -> Outcome?
-    ) -> FrontWindow<Calls.Element> {
-        let app = calls.appElement(pid)
-        if let ended = prepare(app) { return .ended(ended) }
-        switch calls.mainWindow(of: app) {
-        case .failure(.cannotComplete): return .ended(.unanswered)
-        case .success(let main?): return .found(main)
-        case .success(nil), .failure: break
-        }
-        if let ended = prepare(app) { return .ended(ended) }
-        let listed: [Calls.Element]
-        switch calls.windows(of: app) {
-        case .failure(.cannotComplete): return .ended(.unanswered)
-        case .failure: return .ended(.noWindow)
-        case .success(let found): listed = found
-        }
-        for candidate in listed {
-            if let ended = prepare(candidate) { return .ended(ended) }
-            switch calls.state(of: candidate) {
-            case .failure(.cannotComplete): return .ended(.unanswered)
-            case .failure: continue
-            case .success(let state):
-                if state.isStandard, !state.isMinimised { return .found(candidate) }
-            }
-        }
-        return .ended(.noWindow)
-    }
-
     /// For tests and the remembered frame; it never leaves the file's callers.
-    enum Outcome: Equatable { case placed(CGRect), alreadyThere, raised, noWindow, refused, unanswered, superseded }
+    enum Outcome: Equatable { case placed(CGRect), alreadyThere, noWindow, refused, unanswered, superseded }
 }
 
 /// What the placer reads of the displays: the primary display's frame and each display's `visibleFrame`, AppKit global.
@@ -284,8 +220,6 @@ protocol PlacingCalls: Sendable {
     func setFullScreen(_ on: Bool, of window: Element) -> WindowCallError?
     func setPosition(_ origin: CGPoint, of window: Element) -> WindowCallError?
     func setSize(_ size: CGSize, of window: Element) -> WindowCallError?
-    /// Brings the window in front of its app's other windows and of every other app's, but the active app's.
-    func raise(_ window: Element) -> WindowCallError?
 }
 
 /// One multiple-attribute read: frame, full screen, subrole and minimised.
@@ -401,10 +335,6 @@ struct AXPlacingCalls: PlacingCalls {
         var size = size
         guard let value = AXValueCreate(.cgSize, &size) else { return .other }
         return Self.failure(AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, value))
-    }
-
-    func raise(_ window: AXUIElement) -> WindowCallError? {
-        Self.failure(AXUIElementPerformAction(window, kAXRaiseAction as CFString))
     }
 
     private static func parse(_ error: AXError) -> WindowCallError {
