@@ -11,11 +11,14 @@ import Testing
         bundleID: BundleID(rawValue: "com.apple.Safari"), name: "Safari",
         url: URL(fileURLWithPath: "/Applications/Safari.app"))
 
+    /// Notes is the first app, on the left; Safari the second, on the right.
     private func steps(
-        _ first: SplitApp.Entrance, _ second: SplitApp.Entrance, secondEntry: SplitArrival.SecondEntry = .focused
+        _ first: SplitApp.Entrance, _ second: SplitApp.Entrance, focus: SplitSide = .left,
+        secondEntry: SplitArrival.SecondEntry = .focused
     ) -> [SplitSteps.Step] {
         SplitSteps(
-            SplitArrival(first: SplitApp(notes, first), second: SplitApp(safari, second), secondEntry: secondEntry)
+            SplitArrival(
+                first: SplitApp(notes, first), second: SplitApp(safari, second), focus: focus, secondEntry: secondEntry)
         ).steps
     }
 
@@ -29,34 +32,45 @@ import Testing
         #expect(
             steps(running(followed: true), running(followed: true)) == [
                 .open(safari, activates: true, watched: true), .open(notes, activates: true, watched: true),
+                .keepFocus(notes, against: safari.bundleID),
                 .startWatch(notes.bundleID), .startWatch(safari.bundleID),
                 .launchAnimation(notes, toward: .left), .launchAnimation(safari, toward: .right),
             ])
     }
 
-    @Test func unfocusedARunningSecondAppIsOpenedWithoutTheFocus() {
+    @Test func withThePointerOnTheRightTheSecondAppIsOpenedLastAndKeptInFrontAndTheSidesStay() {
+        #expect(
+            steps(running(), running(), focus: .right) == [
+                .open(notes, activates: true, watched: false), .open(safari, activates: true, watched: false),
+                .keepFocus(safari, against: notes.bundleID),
+                .launchAnimation(notes, toward: .left), .launchAnimation(safari, toward: .right),
+            ])
+        #expect(
+            steps(running(followed: true), .launching(watch: .bouncing), focus: .right, secondEntry: .unfocused) == [
+                .reveal(notes, watched: true), .open(safari, activates: true, watched: true),
+                .keepFocus(safari, against: notes.bundleID),
+                .startWatch(notes.bundleID), .startWatch(safari.bundleID),
+                .bounce(safari, toward: .right), .launchAnimation(notes, toward: .left),
+            ])
+    }
+
+    @Test func unfocusedARunningOtherAppIsRevealedRatherThanOpened() {
         #expect(
             steps(running(followed: true), running(followed: true), secondEntry: .unfocused) == [
-                .open(safari, activates: false, watched: true), .open(notes, activates: true, watched: true),
+                .reveal(safari, watched: true), .open(notes, activates: true, watched: true),
+                .keepFocus(notes, against: safari.bundleID),
                 .startWatch(notes.bundleID), .startWatch(safari.bundleID),
                 .launchAnimation(notes, toward: .left), .launchAnimation(safari, toward: .right),
             ])
     }
 
     @Test(arguments: entries)
-    func aLaunchingSecondAppOpensWithoutTheFocusAndBouncesOnTheRight(entry: SplitArrival.SecondEntry) {
+    func aLaunchingOtherAppOpensWithoutTheFocusAndBouncesOnItsSide(entry: SplitArrival.SecondEntry) {
         #expect(
             steps(running(), .launching(watch: .bouncing), secondEntry: entry) == [
                 .open(safari, activates: false, watched: true), .open(notes, activates: true, watched: false),
+                .keepFocus(notes, against: safari.bundleID),
                 .startWatch(safari.bundleID), .bounce(safari, toward: .right), .launchAnimation(notes, toward: .left),
-            ])
-    }
-
-    @Test func aLaunchingFirstAppBouncesOnTheLeftAndTheRunningSecondAppIsActivated() {
-        #expect(
-            steps(.launching(watch: .bouncing), running()) == [
-                .open(safari, activates: true, watched: false), .open(notes, activates: true, watched: true),
-                .startWatch(notes.bundleID), .bounce(notes, toward: .left), .launchAnimation(safari, toward: .right),
             ])
     }
 
@@ -64,16 +78,9 @@ import Testing
         #expect(
             steps(.launching(watch: .bouncing), .launching(watch: .bouncing)) == [
                 .open(safari, activates: false, watched: true), .open(notes, activates: true, watched: true),
+                .keepFocus(notes, against: safari.bundleID),
                 .startWatch(notes.bundleID), .startWatch(safari.bundleID),
                 .bounce(notes, toward: .left), .bounce(safari, toward: .right),
-            ])
-    }
-
-    @Test func unseenWatchesBounceNothing() {
-        #expect(
-            steps(.launching(watch: .unseen), .launching(watch: .unseen)) == [
-                .open(safari, activates: false, watched: true), .open(notes, activates: true, watched: true),
-                .startWatch(notes.bundleID), .startWatch(safari.bundleID),
             ])
     }
 
@@ -81,59 +88,50 @@ import Testing
         #expect(
             steps(running(animates: false), .launching(watch: nil)) == [
                 .open(safari, activates: false, watched: false), .open(notes, activates: true, watched: false),
+                .keepFocus(notes, against: safari.bundleID),
             ])
     }
 
-    @Test func anAlreadyLaunchingAppIsOnlyOpenedWithoutTheFocus() {
+    @Test func anAlreadyLaunchingOtherAppIsOnlyOpenedWithoutTheFocus() {
         #expect(
             steps(running(), .alreadyLaunching) == [
                 .open(safari, activates: false, watched: false), .open(notes, activates: true, watched: false),
-                .launchAnimation(notes, toward: .left),
+                .keepFocus(notes, against: safari.bundleID), .launchAnimation(notes, toward: .left),
             ])
     }
 
-    @Test(arguments: [
-        (SplitApp.Entrance.launching(watch: .bouncing), SplitApp.Entrance.launching(watch: .bouncing), true, true),
-        (.running(animates: true, followed: true), .launching(watch: .unseen), true, true),
-        (.alreadyLaunching, .running(animates: true, followed: false), false, false),
-    ])
-    func bothOpensComeBeforeAnythingElseAndTheFirstAppsIsLast(
-        first: SplitApp.Entrance, second: SplitApp.Entrance, firstWatched: Bool, secondWatched: Bool
-    ) {
-        for entry in Self.entries {
-            let steps = steps(first, second, secondEntry: entry)
-
-            #expect(steps.prefix(2).map(\.isOpen) == [true, true])
-            #expect(steps.dropFirst(2).allSatisfy { $0.isOpen == false })
-            #expect(steps[0].isWatchedOpen == secondWatched)
-            #expect(steps[1].opensFirst(notes, watched: firstWatched))
-        }
-    }
-
-    @Test(arguments: [
-        SplitApp.Entrance.running(animates: true, followed: true), .running(animates: false, followed: false),
-        .launching(watch: .bouncing), .launching(watch: .unseen), .launching(watch: nil), .alreadyLaunching,
-    ])
-    func unfocusedOnlyTheFirstAppIsEverActivated(second: SplitApp.Entrance) {
-        for first in [running(), .launching(watch: .bouncing), .alreadyLaunching] {
-            let activated = steps(first, second, secondEntry: .unfocused).compactMap { step -> BundleID? in
-                if case .open(let app, true, _) = step { app.bundleID } else { nil }
+    @Test(arguments: [SplitSide.left, .right])
+    func bothAppsComeToFrontBeforeAnythingElseTheFocusedOneLastAndKept(focus: SplitSide) {
+        let entrances: [SplitApp.Entrance] = [
+            running(), running(followed: true), .launching(watch: .bouncing), .launching(watch: nil), .alreadyLaunching,
+        ]
+        let (focused, other) = focus == .left ? (notes, safari) : (safari, notes)
+        for first in entrances {
+            for second in entrances {
+                for entry in Self.entries {
+                    let steps = steps(first, second, focus: focus, secondEntry: entry)
+                    #expect(steps[0].bringsToFront(other))
+                    #expect(steps[1].opensActivating(focused))
+                    #expect(steps[2] == .keepFocus(focused, against: other.bundleID))
+                    #expect(steps.dropFirst(3).allSatisfy { !$0.bringsToFront(notes) && !$0.bringsToFront(safari) })
+                    if entry == .unfocused {
+                        #expect(!steps[0].opensActivating(other), "only the focused app is activated")
+                    }
+                }
             }
-            #expect(activated == [notes.bundleID])
         }
     }
 }
 
 private extension SplitSteps.Step {
-    var isOpen: Bool {
-        if case .open = self { true } else { false }
+    func bringsToFront(_ app: AppEntry) -> Bool {
+        switch self {
+        case .open(let opened, _, _), .reveal(let opened, _): opened == app
+        default: false
+        }
     }
 
-    var isWatchedOpen: Bool {
-        if case .open(_, _, let watched) = self { watched } else { false }
-    }
-
-    func opensFirst(_ app: AppEntry, watched: Bool) -> Bool {
-        if case .open(let opened, true, let isWatched) = self { opened == app && isWatched == watched } else { false }
+    func opensActivating(_ app: AppEntry) -> Bool {
+        if case .open(let opened, true, _) = self { opened == app } else { false }
     }
 }

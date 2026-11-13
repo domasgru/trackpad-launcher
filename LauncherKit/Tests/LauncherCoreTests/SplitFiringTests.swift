@@ -37,7 +37,7 @@ import Testing
         #expect(
             world.system.splits.first?.arrival
                 == SplitArrival(
-                    first: running(world.app("Notes")), second: running(world.app("Safari")), secondEntry: .focused))
+                    first: running(world.app("Notes")), second: running(world.app("Safari")), focus: .left, secondEntry: .focused))
         #expect(world.hardware.feedback == [Trackpad.macBook14.id])
         #expect(feedbackAtTheCall == [Trackpad.macBook14.id], "the pulse comes first")
         #expect(world.system.broughtToFront.isEmpty)

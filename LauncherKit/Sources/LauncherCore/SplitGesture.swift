@@ -50,20 +50,26 @@ public struct SplitApp: Equatable, Sendable {
 public struct SplitArrival: Equatable, Sendable {
     public let first: SplitApp
     public let second: SplitApp
-    /// How a running second app comes to front.
+    /// The side whose app ends active: the one the pointer is over.
+    public let focus: SplitSide
+    /// How the other app, when it runs, comes to front.
     public let secondEntry: SecondEntry
 
-    public init(first: SplitApp, second: SplitApp, secondEntry: SecondEntry) {
+    public init(first: SplitApp, second: SplitApp, focus: SplitSide, secondEntry: SecondEntry) {
         self.first = first
         self.second = second
+        self.focus = focus
         self.secondEntry = secondEntry
     }
 
+    public var focused: SplitApp { focus == .left ? first : second }
+    public var other: SplitApp { focus == .left ? second : first }
+
     public enum SecondEntry: Equatable, Sendable {
-        /// Activated just before the first app: its menu bar shows for a moment, and its windows come in front of
+        /// Activated just before the focused app: its menu bar shows for a moment, and its windows come in front of
         /// every other app's.
         case focused
-        /// Never activated, so only the first app's menu bar shows: while the hide background apps setting is on,
+        /// Never activated, so only the focused app's menu bar shows: while the hide background apps setting is on,
         /// every other app hides, so nothing else covers it. Raising its window instead was probed and refused: real
         /// apps (Xcode, Electron apps) answer an Accessibility raise by activating themselves.
         case unfocused

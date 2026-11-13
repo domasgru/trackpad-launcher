@@ -79,6 +79,31 @@ import Testing
         }
     }
 
+    @Test func theAppOnThePointersSideIsFocusedAndKeptInFrontByTheHide() throws {
+        let world = world(running: ["Notes", "Safari"], accessGranted: true)
+        world.launcher.setHideBackgroundApps(on: true)
+
+        world.tap(1)
+        #expect(try #require(world.system.splits.last).arrival.focus == .left)
+        #expect(world.system.kept.last == KeptApps(front: B("Notes"), beside: B("Safari")))
+
+        world.system.pointerSideAnswer = .right
+        world.tap(1)
+        let arrival = try #require(world.system.splits.last).arrival
+        #expect(arrival.focus == .right)
+        #expect(arrival.focused.app.bundleID == B("Safari") && arrival.other.app.bundleID == B("Notes"))
+        #expect(world.system.kept.last == KeptApps(front: B("Safari"), beside: B("Notes")))
+        #expect(world.system.pointerSideReads == [World.D1, World.D1], "the side of the display the split goes to")
+    }
+
+    @Test func withoutAccessibilityThePointerIsNotReadAndTheFirstAppIsFocused() throws {
+        let world = world(running: ["Notes", "Safari"], accessGranted: false)
+        world.system.pointerSideAnswer = .right
+        world.tap(1)
+        #expect(try #require(world.system.splits.last).arrival.focus == .left)
+        #expect(world.system.pointerSideReads.isEmpty)
+    }
+
     @Test func aLaunchingAppIsNotPlacedByTheGestureItself() {
         let world = world(running: ["Notes"], accessGranted: true)
         world.tap(1)

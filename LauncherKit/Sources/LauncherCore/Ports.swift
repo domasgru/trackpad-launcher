@@ -97,16 +97,22 @@ public enum Haptic: Sendable { case gesture, lightTick }
     // Time is the adapter's: `.ranOut` arrives at the cap, or at the limit set once the app finished launching,
     // whichever comes first. Tests push it like any other report.
 
-    /// A split gesture's bring to front, in one call so the order is the adapter's to keep: opens `second`, then
-    /// `first`, before anything else, each exactly as `bringToFront` opens an app, except that `second` is activated
-    /// only when `.running`. So the first app ends active with its front window on top, the second app's front window
-    /// lies above every other window of both, and a second app that finishes launching never takes the focus. Then
-    /// each watch asked for (`cap`; reports through `onLaunchProgress`; one watch per app), then the bounces, the
-    /// first app's first, then the launch animations; each app sways toward its side, a bounce's ending included.
+    /// A split gesture's bring to front, in one call so the order is the adapter's to keep: brings the app `focus` does
+    /// not name to front, then opens the one it names, activated, before anything else, each as `bringToFront` opens
+    /// an app, except that the other app is activated only when it is `.running` and `secondEntry` is `.focused`, and
+    /// when `.unfocused` is only unhidden while it has a window to show. So the focused app ends active with its front
+    /// window on top, and an app that finishes launching never takes the focus from it; for a moment afterwards, the
+    /// other app taking the focus by itself gives it back. Then each watch asked for (`cap`; reports through
+    /// `onLaunchProgress`; one watch per app), then the bounces, the first app's first, then the launch animations;
+    /// each app sways toward its side, a bounce's ending included.
     func bringToFront(_ split: SplitArrival, cap: Duration)
 
     /// The display under the pointer now; nil with none. Reads only.
     func pointerDisplay() -> DisplayID?
+
+    /// The half of the display's usable area the pointer is over now, by the line between a split's halves: `.left`
+    /// left of it or off the display. Reads only.
+    func pointerSide(on display: DisplayID) -> SplitSide
 
     /// Puts the app's front window in that half, if the app runs and has one, and returns at once: the work runs away
     /// from the main actor and answers nothing, ever. A full-screen window leaves full screen first; a window that

@@ -9,6 +9,7 @@ import LauncherCore
     private let promptsUser: Bool
     private let screen: @MainActor () -> ScreenRead
     private let placer = FrontWindowPlacer()
+    private lazy var focusKeeper = FocusKeeper { [weak self] app in self?.open(app) }
     /// One per watched launch, from `bringToFrontWatching` to `endLaunch`.
     private var launches: [BundleID: Launch] = [:]
     public var onLaunchProgress: (@MainActor (BundleID, LaunchProgress) -> Void)?
@@ -75,6 +76,12 @@ import LauncherCore
                 }
                 started.insert(app.bundleID)
                 open(app, activates: activates, then: watch.opened)
+            case .reveal(let app, let watched):
+                let watch = watched ? makeWatch(for: app.bundleID) : nil
+                if watch != nil { started.insert(app.bundleID) }
+                reveal(app, then: watch?.opened)
+            case .keepFocus(let app, let other):
+                focusKeeper.keep(app, against: other)
             case .startWatch(let id):
                 guard started.contains(id) else { continue }
                 launches[id]?.watch.start(cap: cap)
@@ -89,6 +96,31 @@ import LauncherCore
     public func pointerDisplay() -> DisplayID? {
         let read = screen()
         return LaunchDisplay.containing(read.pointer, among: read.displays)?.id
+    }
+
+    public func pointerSide(on display: DisplayID) -> SplitSide {
+        guard let visible = NSScreen.screens.first(where: { $0.displayID == display })?.visibleFrame else { return .left }
+        return SplitHalves.side(of: screen().pointer.x, visible: visible)
+    }
+
+    /// A running app to front without the focus and without the reopen an open sends, which some apps answer by
+    /// activating themselves. A hidden app is only unhidden: its windows come back. Otherwise its windows are read,
+    /// within the window reads' budget, and only an app with no window on screen (all minimised, or none) is opened
+    /// without activation, which restores or reopens as a Dock click would. `opened` hears the app's pid, as an open's
+    /// answer would give it.
+    private func reveal(_ app: AppEntry, then opened: (@Sendable (pid_t?) -> Void)?) {
+        guard let running = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID.rawValue)
+            .first(where: { !$0.isTerminated })
+        else { return open(app, activates: false, then: opened) }
+        opened?(running.processIdentifier)
+        if running.isHidden {
+            running.unhide()
+            return
+        }
+        windows.readEach([app], within: GestureRules.windowReadDeadline) { [weak self] _, read in
+            if case .windows(let shown) = read, !shown.visible.isEmpty { return }
+            self?.open(app, activates: false)
+        }
     }
 
     public func placeFrontWindow(of app: BundleID, in half: ScreenHalf) { placer.place(app, in: half) }

@@ -160,7 +160,7 @@ A second app MUST be saved at once and survive a quit, a force-quit, a Mac resta
 - **THEN** the 1-finger gesture holds Notes and no second app
 
 ### R10. A split gesture brings both apps to front
-When a split gesture fires and both apps are present, each app MUST be brought to front as a one-app gesture would bring it: launched if not running, otherwise unhidden, restored or given a new window as needed. The first app MUST be the active app after the gesture. A second app that is still launching MUST NOT take the focus from the first app when it finishes launching. A first app that is launching becomes active when it finishes launching, as a one-app launch does. One gesture haptic MUST play.
+When a split gesture fires and both apps are present, each app MUST be brought to front as a one-app gesture would bring it: launched if not running, otherwise unhidden, restored or given a new window as needed. The app on the half the pointer is over MUST be the active app after the gesture (the first app when no window is placed); call it the focused app. The other app MUST NOT keep the focus: one still launching does not take it when it finishes launching, and one that takes it by itself within a second of the gesture gives it back. A focused app that is launching becomes active when it finishes launching, as a one-app launch does. While the hide background apps setting is on, the other app MUST NOT be made active at all. (Changed during Finish, on the human's request: the focus follows the pointer's side.) One gesture haptic MUST play.
 
 #### Scenario: Both apps running
 - **GIVEN** the 1-finger gesture holds Notes and Safari, both running behind other apps

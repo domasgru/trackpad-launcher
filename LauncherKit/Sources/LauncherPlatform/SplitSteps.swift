@@ -5,6 +5,12 @@ struct SplitSteps: Equatable {
     enum Step: Equatable {
         /// Without `activates`, the adapter unhides a hidden app first: only activation unhides.
         case open(AppEntry, activates: Bool, watched: Bool)
+        /// A running app brought to front without the focus and without the reopen an open sends, which some apps
+        /// (Electron ones) answer by activating themselves: unhidden, and opened without activation only when it has
+        /// no window to show, such as all minimised.
+        case reveal(AppEntry, watched: Bool)
+        /// For a moment, the app gets the focus back when `other` takes it by itself.
+        case keepFocus(AppEntry, against: BundleID)
         case startWatch(BundleID)
         case bounce(AppEntry, toward: SplitSide)
         case launchAnimation(AppEntry, toward: SplitSide)
@@ -12,20 +18,23 @@ struct SplitSteps: Equatable {
 
     let steps: [Step]
 
-    /// Both opens come first, the second app's before the first's, so the first app's front window ends on top and
-    /// the first app ends active. A launching second app never takes the focus, and its windows open in front of every
-    /// app's but the active one. A running one takes it for a moment when `secondEntry` is `.focused`; when it is
-    /// `.unfocused`, it opens without it, unhidden, restored or reopened as a Dock click would. Bounces start first app
-    /// first, so the first app's sits on the left of the row.
+    /// Both apps come to front first, the focused one last, so it ends active with its front window on top. The other
+    /// app never takes the focus while launching. When it runs, it is activated just before the focused app when
+    /// `secondEntry` is `.focused`, and only revealed when `.unfocused`. Then the focused app is kept active against
+    /// the other. Bounces start first app first, so the first app's sits on the left of the row.
     init(_ split: SplitArrival) {
         let sides = [(member: split.first, side: SplitSide.left), (member: split.second, side: SplitSide.right)]
-        let isSecondRunning = if case .running = split.second.entrance { true } else { false }
+        let focused = split.focused, other = split.other
+        let isOtherRunning = if case .running = other.entrance { true } else { false }
+        let otherWatched = Self.isWatched(other.entrance)
         var steps: [Step] = []
-        steps.append(
-            .open(
-                split.second.app, activates: isSecondRunning && split.secondEntry == .focused,
-                watched: Self.isWatched(split.second.entrance)))
-        steps.append(.open(split.first.app, activates: true, watched: Self.isWatched(split.first.entrance)))
+        switch (split.secondEntry, isOtherRunning) {
+        case (.focused, true): steps.append(.open(other.app, activates: true, watched: otherWatched))
+        case (.unfocused, true): steps.append(.reveal(other.app, watched: otherWatched))
+        case (_, false): steps.append(.open(other.app, activates: false, watched: otherWatched))
+        }
+        steps.append(.open(focused.app, activates: true, watched: Self.isWatched(focused.entrance)))
+        steps.append(.keepFocus(focused.app, against: other.app.bundleID))
         for entry in sides where Self.isWatched(entry.member.entrance) {
             steps.append(.startWatch(entry.member.app.bundleID))
         }

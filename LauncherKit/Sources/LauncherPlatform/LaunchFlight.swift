@@ -184,8 +184,8 @@ struct LaunchFlight {
     /// icons themselves never touch.
     static let splitGap: CGFloat = 8
 
-    /// How much later a split's second icon starts than its first, the length of about one pop.
-    static let splitStagger: CFTimeInterval = 0.06
+    /// How much later a split's second icon starts than its first.
+    static let splitStagger: CFTimeInterval = 0.02
 
     /// Where a split gesture's icon starts for a pointer at `pointer`: beside it on its side, `splitGap` from the other,
     /// so the two icons start side by side, then each sways further to its side. Like the bounce row, the pair slides

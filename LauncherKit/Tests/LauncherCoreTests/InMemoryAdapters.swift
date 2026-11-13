@@ -487,6 +487,16 @@ import LauncherCore
         return pointerDisplayAnswer
     }
 
+    /// The half the next `pointerSide(on:)` answers.
+    var pointerSideAnswer = SplitSide.left
+    /// The display each `pointerSide(on:)` was asked about, in order.
+    private(set) var pointerSideReads: [DisplayID] = []
+
+    func pointerSide(on display: DisplayID) -> SplitSide {
+        pointerSideReads.append(display)
+        return pointerSideAnswer
+    }
+
     func placeFrontWindow(of app: BundleID, in half: ScreenHalf) {
         windowPlacements.append(WindowPlacement(app: app, half: half))
         onPlaceFrontWindow?()

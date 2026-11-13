@@ -202,6 +202,12 @@ struct SplitHalves: Equatable {
     }
 
     subscript(side: SplitSide) -> CGRect { side == .left ? left : right }
+
+    /// The half a point at `x` lies over, by the line between the halves of the display whose `visibleFrame` is
+    /// `visible`. Horizontal positions are the same in AppKit's and the Accessibility API's coordinates.
+    static func side(of x: CGFloat, visible: CGRect) -> SplitSide {
+        x < SplitHalves(visible: visible, primary: visible).left.maxX ? .left : .right
+    }
 }
 
 /// The placer's calls into one app: an internal seam with two adapters, the real `AXPlacingCalls` and a scripted double

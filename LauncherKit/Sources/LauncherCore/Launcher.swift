@@ -381,14 +381,17 @@ public final class Launcher {
         hideOtherApps(than: id)
     }
 
-    /// Both apps in one port call, so the adapter keeps the open order. The first app ends active; while the hide
-    /// background apps setting is on, it is the only one activated. A launching app hides the others once its window
-    /// shows, and never hides the other app of the gesture.
+    /// Both apps in one port call, so the adapter keeps the open order. The app on the side the pointer is over ends
+    /// active, the first app when no window is placed; while the hide background apps setting is on, it is the only
+    /// one activated. A launching app hides the others once its window shows, and never hides the other app of the
+    /// gesture.
     private func splitToFront(_ first: AppEntry, _ second: AppEntry) {
         // Without the permission no display is read and nothing is placed.
         let display = isAccessibilityGranted ? system.pointerDisplay() : nil
+        let focus = display.map { system.pointerSide(on: $0) } ?? .left
+        let (focused, other) = focus == .left ? (first, second) : (second, first)
         let animates = settings.isLaunchAnimationOn
-        let kept = settings.isHideBackgroundAppsOn ? KeptApps(front: first.bundleID, beside: second.bundleID) : nil
+        let kept = settings.isHideBackgroundAppsOn ? KeptApps(front: focused.bundleID, beside: other.bundleID) : nil
         func entrance(_ app: AppEntry) -> SplitApp {
             let id = app.bundleID
             if launches[id] != nil {
@@ -405,7 +408,7 @@ public final class Launcher {
             return SplitApp(app, .launching(watch: watched ? (animates ? .bouncing : .unseen) : nil))
         }
         let arrival = SplitArrival(
-            first: entrance(first), second: entrance(second),
+            first: entrance(first), second: entrance(second), focus: focus,
             secondEntry: kept == nil ? .focused : .unfocused)
         placing = display.map { SplitPlacing(first: first.bundleID, second: second.bundleID, display: $0) }
         system.bringToFront(arrival, cap: WatchedLaunch.cap)
