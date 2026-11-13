@@ -5,15 +5,6 @@ import LauncherCore
 import Testing
 @testable import LauncherUI
 
-@Suite struct ThumbCornerRuleTests {
-    @Test(arguments: [
-        (ThumbCorner.topLeft, true), (.topRight, false), (.bottomLeft, false), (.bottomRight, false),
-    ])
-    func theGuideShowsOnlyForTheTopLeftCorner(corner: ThumbCorner, shows: Bool) {
-        #expect(corner.showsGuide == shows)
-    }
-}
-
 @Suite struct CornerIllustrationFileTests {
     nonisolated static let smallNames = [
         "gesture-2", "gesture-3", "gesture-4", "gesture-5", "swipe", "window-swipe", "thumb-tap",

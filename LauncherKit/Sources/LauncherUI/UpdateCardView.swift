@@ -9,8 +9,9 @@ struct UpdateCardView: View {
     /// The arrow's drift, read whenever it starts.
     let arrowDrift: () -> ArrowDrift
 
-    /// The picture's place within the card's padded content.
-    private static let picture = (x: CGFloat(203), y: CGFloat(-8))
+    /// The picture's place within the card's padded content: the same distance from the card's trailing edge as when
+    /// the card was 294 pt wide.
+    private static let picture = (x: CGFloat(235), y: CGFloat(-8))
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
