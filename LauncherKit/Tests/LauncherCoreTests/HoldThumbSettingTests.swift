@@ -24,8 +24,69 @@ import LauncherCore
         return world
     }
 
+    /// The switcher world with Notes on gesture 2 and Hold thumb off.
+    private func thumblessSwitcherWorld(accessGranted: Bool = true) -> World {
+        let world = World.switcherWorld(accessGranted: accessGranted)
+        world.launcher.setAssignment(.app(world.app("Notes")), for: .two)
+        world.launcher.setHoldThumb(on: false)
+        return world
+    }
+
+    /// The window world with Mail on gesture 2 and Hold thumb off.
+    private func thumblessWindowWorld() -> World {
+        let world = World.windowWorld(visible: ["Docs", "Mail", "News"])
+        world.launcher.setAssignment(.app(world.app("Mail")), for: .two)
+        world.launcher.setHoldThumb(on: false)
+        return world
+    }
+
     private func fired(_ world: World) -> [AppEntry] { world.system.broughtToFront }
-    private func apps(_ world: World, _ names: String...) -> [AppEntry] { names.map { world.app($0) } }
+    private func apps(_ world: World, _ names: String...) -> [AppEntry] { apps(world, names) }
+    private func apps(_ world: World, _ names: [String]) -> [AppEntry] { names.map { world.app($0) } }
+
+    private struct Firing: Equatable {
+        let broughtToFront: [AppEntry]
+        let pulses: [InMemoryTrackpads.Pulse]
+        let launchAnimations: [AppEntry]
+        let bounces: [RecordingSystemActions.Bounce]
+    }
+
+    private func firing(of world: World) -> Firing {
+        Firing(
+            broughtToFront: world.system.broughtToFront, pulses: world.hardware.pulses,
+            launchAnimations: world.system.launchAnimations, bounces: world.system.bounces)
+    }
+
+    /// Nothing fires: no app brought to front, no pulse, no launch animation and no bounce.
+    private func expectNothingFires(
+        in world: World, sourceLocation: SourceLocation = #_sourceLocation, after action: () -> Void
+    ) {
+        let before = firing(of: world)
+        action()
+        #expect(firing(of: world) == before, "nothing fired", sourceLocation: sourceLocation)
+    }
+
+    /// `names` is empty when nothing should fire.
+    private func expectFiring(
+        _ names: [String], in world: World, sourceLocation: SourceLocation = #_sourceLocation, after action: () -> Void
+    ) {
+        if names.isEmpty {
+            expectNothingFires(in: world, sourceLocation: sourceLocation, after: action)
+        } else {
+            action()
+            #expect(fired(world) == apps(world, names), sourceLocation: sourceLocation)
+        }
+    }
+
+    private func expectClickPasses(in world: World, number: Int64) {
+        let press = PressID(button: 0, number: number)
+        #expect(world.hardware.offer(.pointer(.press(press))) == .decided(.pointer(.pass)))
+        #expect(world.hardware.offer(.pointer(.release(press))) == .decided(.pointer(.pass)))
+    }
+
+    private func everyRowIsPresent(_ launcher: Launcher) -> Bool {
+        launcher.rows.allSatisfy { if case .present = $0.app { true } else { false } }
+    }
 
     @Test func holdThumbIsOnForAFreshWorld() {
         let world = World()
@@ -37,13 +98,10 @@ import LauncherCore
 
     @Test(arguments: 1...5) func withHoldThumbOnATapWithNoThumbFiresNothingAndBlocksNothing(fingers: Int) {
         let world = thumblessWorld(access: true, holdThumb: true)
-        world.tapWithoutThumb(fingers)
+        expectNothingFires(in: world) { world.tapWithoutThumb(fingers) }
 
-        #expect(fired(world).isEmpty)
-        #expect(!world.hardware.isGatedPortOn)
-        let press = PressID(button: 0, number: 90)
-        #expect(world.hardware.offer(.pointer(.press(press))) == .decided(.pointer(.pass)))
-        #expect(world.hardware.offer(.pointer(.release(press))) == .decided(.pointer(.pass)))
+        #expect(world.hardware.isGatedPortOn == false)
+        expectClickPasses(in: world, number: 90)
     }
 
     @Test(arguments: 1...5) func aThumblessTapFiresTheGestureOfItsFingerCount(fingers: Int) {
@@ -56,12 +114,12 @@ import LauncherCore
         #expect(world.system.launchAnimations == [app])
     }
 
-    enum Case: CaseIterable { case running, notRunning, hidesOthers, noAnimation }
+    enum LaunchCase: CaseIterable { case running, notRunning, hidesOthers, noAnimation }
 
-    @Test(arguments: Case.allCases) func aThumblessTapLaunchesLikeATapUnderTheThumb(kind: Case) {
+    @Test(arguments: LaunchCase.allCases) func aThumblessTapLaunchesLikeATapUnderTheThumb(launch: LaunchCase) {
         func world() -> World {
             let world = thumblessWorld()
-            switch kind {
+            switch launch {
             case .running: break
             case .notRunning: world.makeRunning([String]())
             case .hidesOthers: world.launcher.setHideBackgroundApps(on: true)
@@ -74,7 +132,7 @@ import LauncherCore
         let held = world()
         held.tap(1)
 
-        #expect(!thumbless.system.broughtToFront.isEmpty)
+        #expect(thumbless.system.broughtToFront.isEmpty == false)
         #expect(thumbless.system.broughtToFront.map(\.bundleID) == held.system.broughtToFront.map(\.bundleID))
         #expect(thumbless.hardware.pulses == held.hardware.pulses)
         #expect(thumbless.system.launchAnimations.map(\.bundleID) == held.system.launchAnimations.map(\.bundleID))
@@ -82,36 +140,37 @@ import LauncherCore
             thumbless.system.bounces.map { [$0.app.bundleID.rawValue, "\($0.cap)", "\($0.limits)"] }
                 == held.system.bounces.map { [$0.app.bundleID.rawValue, "\($0.cap)", "\($0.limits)"] })
         #expect(thumbless.system.hidesOthers == held.system.hidesOthers)
-        if kind == .hidesOthers { #expect(thumbless.system.hidesOthers == [World.bundleID("Arc")]) }
+        if launch == .hidesOthers { #expect(thumbless.system.hidesOthers == [World.bundleID("Arc")]) }
     }
 
     @Test func anUnassignedCountFiresNothing() {
         let world = thumblessWorld()
         world.launcher.setAssignment(.none, for: .three)
-        world.tapWithoutThumb(3)
-        #expect(fired(world).isEmpty)
-        #expect(world.hardware.pulses.isEmpty)
+        expectNothingFires(in: world) { world.tapWithoutThumb(3) }
     }
 
     @Test(arguments: [(390, true), (410, false)]) func aSingleFingerHasTheTapWindow(heldMS: Int, fires: Bool) {
         let world = thumblessWorld()
-        world.hardware.touch(plain.tap(fingers: 1, hold: .milliseconds(heldMS)).frames, on: pad)
-        #expect(fired(world) == (fires ? apps(world, "Arc") : []))
+        expectFiring(fires ? ["Arc"] : [], in: world) {
+            world.hardware.touch(plain.tap(fingers: 1, hold: .milliseconds(heldMS)).frames, on: pad)
+        }
     }
 
     @Test(arguments: [(200, true), (300, false)]) func theTapWindowRunsFromTheFirstLanding(downMS: Int, fires: Bool) {
         let world = thumblessWorld()
-        world.hardware.touch(
-            plain.tap(fingers: 3, stagger: .milliseconds(75), hold: .milliseconds(downMS)).frames, on: pad)
-        #expect(fired(world) == (fires ? apps(world, "Notion") : []))
+        expectFiring(fires ? ["Notion"] : [], in: world) {
+            world.hardware.touch(
+                plain.tap(fingers: 3, stagger: .milliseconds(75), hold: .milliseconds(downMS)).frames, on: pad)
+        }
     }
 
     @Test(arguments: [(2.5, true), (3.5, false)]) func aFingerDraggingMoreThanThreeMillimetresIsNoTap(
         dragMM: Double, fires: Bool
     ) {
         let world = thumblessWorld()
-        world.hardware.touch(plain.tap(fingers: 1, dragMM: (dragMM, 0)).frames, on: pad)
-        #expect(fired(world) == (fires ? apps(world, "Arc") : []))
+        expectFiring(fires ? ["Arc"] : [], in: world) {
+            world.hardware.touch(plain.tap(fingers: 1, dragMM: (dragMM, 0)).frames, on: pad)
+        }
     }
 
     @Test func oneDraggingFingerSpoilsAPairsTap() {
@@ -121,21 +180,20 @@ import LauncherCore
             hand.frame(atMS: 60, [hand.contact(1, atMM: 63.5, 40), hand.contact(2, atMM: 68, 40)]),
             hand.frame(atMS: 120),
         ]
-        world.hardware.touch(frames, on: pad)
-        #expect(fired(world).isEmpty)
+        expectNothingFires(in: world) { world.hardware.touch(frames, on: pad) }
     }
 
     @Test func aFingerThatSlidAwayOrRestsKeepsASecondFingersTapFromFiring() {
         let sliding = thumblessWorld()
         let slid = plain.land(fingers: 1).slide(byMM: (10, 0), over: .milliseconds(300))
             .tap(fingers: 1, atMM: (90, 45)).lift()
-        sliding.hardware.touch(slid.frames, on: pad)
-        #expect(fired(sliding).isEmpty)
+        expectNothingFires(in: sliding) { sliding.hardware.touch(slid.frames, on: pad) }
 
         let resting = thumblessWorld()
-        resting.hardware.touch(
-            plain.land(fingers: 1).wait(.milliseconds(500)).tap(fingers: 1, atMM: (90, 45)).lift().frames, on: pad)
-        #expect(fired(resting).isEmpty)
+        expectNothingFires(in: resting) {
+            resting.hardware.touch(
+                plain.land(fingers: 1).wait(.milliseconds(500)).tap(fingers: 1, atMM: (90, 45)).lift().frames, on: pad)
+        }
     }
 
     @Test(arguments: [TouchScript.ClickTiming.onLanding, .firm, .midway])
@@ -146,10 +204,10 @@ import LauncherCore
         #expect(fired(world) == apps(world, "Arc"))
     }
 
-    @Test func aPressedTapWithoutAccessibilityFiresNothing() {
+    @Test(arguments: [TouchScript.ClickTiming.onLanding, .firm, .midway])
+    func aPressedTapWithoutAccessibilityFiresNothing(click: TouchScript.ClickTiming) {
         let world = thumblessWorld()
-        world.hardware.touch(plain.tap(fingers: 1, click: .firm).frames, on: pad)
-        #expect(fired(world).isEmpty)
+        expectNothingFires(in: world) { world.hardware.touch(plain.tap(fingers: 1, click: click).frames, on: pad) }
     }
 
     @Test(arguments: [true, false]) func aClickAfterTheLiftFrameDoesNotCancelTheGesture(access: Bool) {
@@ -171,8 +229,7 @@ import LauncherCore
         #expect(fired(world) == apps(world, "Figma", "Arc"))
 
         let lone = thumblessWorld()
-        lone.hardware.touch(plain.tap(fingers: 1, atMM: (60, 75.5)).frames, on: pad)
-        #expect(fired(lone).isEmpty)
+        expectNothingFires(in: lone) { lone.hardware.touch(plain.tap(fingers: 1, atMM: (60, 75.5)).frames, on: pad) }
     }
 
     @Test func fingersLandingAndLiftingOneByOneCountOnceEach() {
@@ -200,8 +257,7 @@ import LauncherCore
 
     @Test func sixFingersFireNothing() {
         let world = thumblessWorld()
-        world.tapWithoutThumb(6)
-        #expect(fired(world).isEmpty)
+        expectNothingFires(in: world) { world.tapWithoutThumb(6) }
     }
 
     @Test func aThumbLandingFirstMakesTheTapAThumbHeldOne() {
@@ -225,8 +281,9 @@ import LauncherCore
             hand.contact(100, .landing, atMM: 10, 10), hand.contact(1, .landing, atMM: 60, 40),
             hand.contact(2, .landing, atMM: 68, 40),
         ]
-        world.hardware.touch([hand.frame(atMS: 0, touches), hand.frame(atMS: 120)], on: pad)
-        #expect(fired(world).isEmpty)
+        expectNothingFires(in: world) {
+            world.hardware.touch([hand.frame(atMS: 0, touches), hand.frame(atMS: 120)], on: pad)
+        }
     }
 
     @Test(arguments: [true, false]) func aThumbLandingUnderLandedFingersFiresNothing(swaps: Bool) {
@@ -239,51 +296,42 @@ import LauncherCore
             ]),
             hand.frame(atMS: 120),
         ]
-        world.hardware.touch(frames, on: pad)
-        #expect(fired(world).isEmpty)
+        expectNothingFires(in: world) { world.hardware.touch(frames, on: pad) }
     }
 
     @Test func aTapInTheAnchorCornerFiresNothingAndTheCornerFollowsTheSettingAndTheTrackpad() {
         let corner = thumblessWorld()
-        corner.tapWithoutThumb(1, atMM: (10, 10))
-        #expect(fired(corner).isEmpty)
+        expectNothingFires(in: corner) { corner.tapWithoutThumb(1, atMM: (10, 10)) }
 
         let bottom = thumblessWorld()
         bottom.launcher.setThumbCorner(.bottomLeft)
-        bottom.tapWithoutThumb(1, atMM: (10, 66.8))
-        #expect(fired(bottom).isEmpty)
+        expectNothingFires(in: bottom) { bottom.tapWithoutThumb(1, atMM: (10, 66.8)) }
         bottom.tapWithoutThumb(1, atMM: (10, 10))
         #expect(fired(bottom) == apps(bottom, "Arc"))
 
         let mixed = thumblessWorld(attached: [.macBook14, .magicTrackpad])
-        mixed.tapWithoutThumb(1, on: .magicTrackpad, atMM: (10, 105))
-        #expect(fired(mixed).isEmpty)
+        expectNothingFires(in: mixed) { mixed.tapWithoutThumb(1, on: .magicTrackpad, atMM: (10, 105)) }
         mixed.tapWithoutThumb(1, on: .magicTrackpad, atMM: (10, 10))
         #expect(fired(mixed) == apps(mixed, "Arc"))
         #expect(mixed.hardware.feedback == [Trackpad.magicTrackpad.id])
     }
 
     @Test func aQuickSwapStillSwapsAndNeverFiresATap() {
-        let script = plain.land(fingers: 2).wait(.milliseconds(50)).thumbTap().wait(.milliseconds(50)).lift()
-        let world = World.switcherWorld()
-        world.launcher.setAssignment(.app(world.app("Notes")), for: .two)
-        world.launcher.setHoldThumb(on: false)
+        let script = plain.land(fingers: 2).wait(.milliseconds(50)).thumbTap().lift()
+        let world = thumblessSwitcherWorld(accessGranted: false)
         world.play(script)
         #expect(world.system.broughtToFront == [world.app("Mail")])
-        #expect(world.hardware.pulses.count == 1)
+        #expect(world.hardware.pulses.map(\.haptic) == [.gesture])
         #expect(world.system.launchAnimations.isEmpty)
 
-        let off = World.switcherWorld()
-        off.launcher.setAssignment(.app(off.app("Notes")), for: .two)
-        off.launcher.setHoldThumb(on: false)
+        let off = thumblessSwitcherWorld(accessGranted: false)
         off.launcher.setSwap(on: false)
-        off.play(script)
-        #expect(off.system.broughtToFront.isEmpty)
+        expectNothingFires(in: off) { off.play(script) }
     }
 
     @Test func aDoubleTapFiresTheOneFingerGestureTwice() {
         let world = thumblessWorld()
-        world.hardware.touch(plain.tap(fingers: 1).tap(fingers: 1).frames, on: pad)
+        world.hardware.touch(plain.tap(fingers: 1, hold: .milliseconds(100)).tap(fingers: 1, hold: .milliseconds(100)).frames, on: pad)
         #expect(fired(world) == apps(world, "Arc", "Arc"))
         #expect(world.hardware.feedback.count == 2)
     }
@@ -325,12 +373,10 @@ import LauncherCore
         let world = thumblessWorld(access: true)
         for frame in plain.tap(fingers: 1).frames {
             world.hardware.touch([frame], on: pad)
-            #expect(!world.hardware.isGatedPortOn)
+            #expect(world.hardware.isGatedPortOn == false)
         }
         #expect(fired(world) == apps(world, "Arc"))
-        let press = PressID(button: 0, number: 91)
-        #expect(world.hardware.offer(.pointer(.press(press))) == .decided(.pointer(.pass)))
-        #expect(world.hardware.offer(.pointer(.release(press))) == .decided(.pointer(.pass)))
+        expectClickPasses(in: world, number: 91)
     }
 
     @Test func rightClickLookUpScrollDockSwipeAndSmartZoomAreNotBlockedAfterAThumblessTap() {
@@ -350,9 +396,19 @@ import LauncherCore
         other.tapWithoutThumb(1)
         #expect(other.hardware.scroll(.fingers(.began)) == .pass)
         #expect(other.hardware.offer(.dockSwipe(.began, .gesture)) == .notSent)
+        other.hardware.touch(plain.tap(fingers: 1, click: .firm).frames, on: pad)
+        #expect(other.hardware.pressVerdicts == [.pass, .pass])
 
         let zoom = thumblessWorld(access: true)
-        zoom.hardware.touch(plain.tap(fingers: 2).wait(.milliseconds(80)).tap(fingers: 2).frames, on: pad)
+        let secondTap = [
+            hand.frame(atMS: 200, [hand.contact(3, .landing, atMM: 62, 45), hand.contact(4, .landing, atMM: 70, 45)]),
+            hand.frame(atMS: 320),
+        ]
+        let firstTap = [
+            hand.frame(atMS: 0, [hand.contact(1, .landing, atMM: 62, 45), hand.contact(2, .landing, atMM: 70, 45)]),
+            hand.frame(atMS: 120),
+        ]
+        zoom.hardware.touch(firstTap + secondTap, on: pad)
         #expect(fired(zoom) == apps(zoom, "Figma", "Figma"))
         #expect(zoom.hardware.offer(.tapAction(.smartZoom)) == .notSent)
     }
@@ -378,49 +434,39 @@ import LauncherCore
     }
 
     @Test func twoFingersSlidingWithNoThumbNeverSwipeAndAThumbFirstSwipeStillDoes() {
-        let thumbless = World.switcherWorld(accessGranted: true)
-        thumbless.launcher.setAssignment(.app(thumbless.app("Notes")), for: .two)
-        thumbless.launcher.setHoldThumb(on: false)
+        let thumbless = thumblessSwitcherWorld()
         let slide = plain.land(fingers: 2).slide(byMM: (3.5, 0)).settle().slide(byMM: (12, 0)).settle()
-        thumbless.play(slide)
+        expectNothingFires(in: thumbless) { thumbless.play(slide) }
         #expect(thumbless.launcher.switcher == nil)
         #expect(thumbless.hardware.scroll(.fingers(.began)) == .pass)
-        thumbless.play(slide.lift())
-        #expect(thumbless.system.broughtToFront.isEmpty)
+        expectNothingFires(in: thumbless) { thumbless.play(slide.lift()) }
 
-        let held = World.switcherWorld(accessGranted: true)
-        held.launcher.setHoldThumb(on: false)
+        let held = thumblessSwitcherWorld()
         let script = held.swipe(3.5, 12, lift: false)
         #expect(held.launcher.switcher != nil)
         held.play(script.lift())
         #expect(held.system.broughtToFront == [held.app("Mail")])
         #expect(held.hardware.pulses.map(\.haptic) == [.lightTick, .gesture])
 
-        let rest = World.switcherWorld(accessGranted: true)
-        rest.launcher.setHoldThumb(on: false)
-        rest.play(plain.land(fingers: 2).wait(.milliseconds(500)).lift())
-        #expect(rest.system.broughtToFront.isEmpty)
+        let rest = thumblessSwitcherWorld()
+        expectNothingFires(in: rest) { rest.play(plain.land(fingers: 2).wait(.milliseconds(500)).lift()) }
     }
 
     @Test func aWindowSwipeStillNeedsTheThumb() {
-        let thumbless = World.windowWorld(visible: ["Docs", "Mail", "News"])
-        thumbless.launcher.setAssignment(.app(thumbless.app("Mail")), for: .two)
-        thumbless.launcher.setHoldThumb(on: false)
-        thumbless.play(
-            plain.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 3.5)).settle().slide(byMM: (0, 12)).settle())
+        let thumbless = thumblessWindowWorld()
+        let slide = plain.land(fingers: 2, atMM: (62, 30)).slide(byMM: (0, 3.5)).settle().slide(byMM: (0, 12)).settle()
+        expectNothingFires(in: thumbless) { thumbless.play(slide) }
         #expect(thumbless.launcher.windowSwitcher == nil)
-        #expect(thumbless.system.broughtToFront.isEmpty)
+        expectNothingFires(in: thumbless) { thumbless.play(slide.lift()) }
 
-        let held = World.windowWorld(visible: ["Docs", "Mail", "News"])
-        held.launcher.setHoldThumb(on: false)
+        let held = thumblessWindowWorld()
         held.windowSwipe(3.5, 12, lift: false)
         #expect(held.launcher.windowSwitcher != nil)
     }
 
     @Test func theSettingAppliesToTheNextTapInBothDirectionsOnOneLauncher() {
         let world = thumblessWorld(holdThumb: true)
-        world.tapWithoutThumb(1)
-        #expect(fired(world).isEmpty)
+        expectNothingFires(in: world) { world.tapWithoutThumb(1) }
         world.launcher.setHoldThumb(on: false)
         world.tapWithoutThumb(1)
         #expect(fired(world) == apps(world, "Arc"))
@@ -434,8 +480,7 @@ import LauncherCore
         let down = plain.land(fingers: 1).wait(.milliseconds(50))
         world.play(down)
         world.launcher.setHoldThumb(on: false)
-        world.play(down.wait(.milliseconds(30)).lift())
-        #expect(fired(world).isEmpty)
+        expectNothingFires(in: world) { world.play(down.wait(.milliseconds(30)).lift()) }
         world.tapWithoutThumb(1)
         #expect(fired(world) == apps(world, "Arc"))
     }
@@ -446,11 +491,11 @@ import LauncherCore
 
         world.relaunch()
         world.launcher.start()
-        #expect(!world.launcher.isHoldThumbOn)
+        #expect(world.launcher.isHoldThumbOn == false)
         world.tapWithoutThumb(1)
         #expect(fired(world) == apps(world, "Arc"))
         world.launcher.openedByHand()
-        #expect(!world.launcher.isHoldThumbOn)
+        #expect(world.launcher.isHoldThumbOn == false)
     }
 
     @Test func aReleasedRecordWithoutTheKeyLoadsWithHoldThumbOnAndEverythingElseKept() {
@@ -464,7 +509,7 @@ import LauncherCore
         let relaunched = world.relaunch()
         relaunched.start()
         #expect(relaunched.isHoldThumbOn)
-        #expect(!relaunched.isLaunchAnimationOn)
+        #expect(relaunched.isLaunchAnimationOn == false)
         #expect(
             relaunched.rows.map(\.app) == [
                 .present(world.app("Arc")), .present(world.app("Figma")), .unassigned, .unassigned,
@@ -485,10 +530,9 @@ import LauncherCore
         relaunched.start()
         world.makeRunning(Self.apps)
         #expect(relaunched.isHoldThumbOn)
-        #expect(!relaunched.isLaunchAnimationOn)
-        #expect(relaunched.rows.allSatisfy { if case .present = $0.app { true } else { false } })
-        world.tapWithoutThumb(1)
-        #expect(fired(world).isEmpty)
+        #expect(relaunched.isLaunchAnimationOn == false)
+        #expect(everyRowIsPresent(relaunched))
+        expectNothingFires(in: world) { world.tapWithoutThumb(1) }
         world.tap(1)
         #expect(fired(world) == apps(world, "Arc"))
     }
@@ -502,13 +546,15 @@ import LauncherCore
 
         let decoded = try PropertyListDecoder().decode(PersistenceTests.Build1018Settings.self, from: bytes)
         #expect(decoded.assignments.count == 5)
-        #expect(decoded.assignments[.one]?.bundleID == World.bundleID("Arc"))
-        #expect(!decoded.isLaunchAnimationOn)
+        for (gesture, name) in zip(Gesture.allCases, Self.apps) {
+            #expect(decoded.assignments[gesture]?.bundleID == World.bundleID(name), "gesture \(gesture)")
+        }
+        #expect(decoded.isLaunchAnimationOn == false)
 
         try world.previousVersionSaves { _ in }
         let relaunched = world.relaunch()
         relaunched.start()
-        #expect(relaunched.rows.allSatisfy { if case .present = $0.app { true } else { false } })
+        #expect(everyRowIsPresent(relaunched))
         #expect(relaunched.isHoldThumbOn)
     }
 

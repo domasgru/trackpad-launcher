@@ -25,3 +25,16 @@
 - The recognizer helpers in `Fixtures.swift` were to gain an argument nothing used → dropped; T19 builds its recognizers through the test-side convenience.
 - Docs: *Hold thumb setting* did not say that an older version which saves drops the choice → one sentence added. S2's doc-comment list named the gesture type's comment, which never mentions the thumb, and missed the settings view's → corrected.
 - Planner found that R4's "Thumb and fingers land together" conflicted with today's thumb rules (R9): fingers landing on the same frame as the thumb fire nothing → the scenario now has the thumb land first, and a new scenario pins that a same-frame landing fires nothing, as today.
+
+## Implement
+- S1 (`fb755fe`): `RecognizerOptions` carries the slide kinds and the swap flag from the model's run record through the port and both adapters into each recognizer, as planned. One `make test` run had a `LauncherPlatformTests` failure that did not recur in the next two runs: likely a flaky test unrelated to this change.
+- S2 (`445ca6d`): the Hold thumb setting, its intent, the `thumblessTaps` option and the candidate inside the rest, as planned. A six-finger tap fires nothing, so it starts no new candidate on its lift frame (the plan's "after a tap that fired" read literally).
+- No verification skill exists in the repo, so none was run.
+- Plan text: Further Notes still called R4's "Thumb and fingers land together" an open question, and T12 pointed at it, although the requirements were resolved → the note now records the resolution, and T12 cites both R4 scenarios.
+- Review: T20(d) could not fail (its world assigned no app to gesture 2), and T20(b)/(c)'s fresh worlds lacked the assignment → every T20 world assigns the gesture, and (a) also checks nothing fires before the lift.
+- Review: T19 lacked "a window swipe answered no" and ran its touches in one loop → added, and T19 is parameterised over the touches.
+- Review: T16(d) lacked the firm-pressed tap after a thumbless tap (R7 "Press right after") → added, `pressVerdicts == [.pass, .pass]`.
+- Review: "nothing fires" was checked through `broughtToFront` alone → one helper checks `broughtToFront`, `pulses`, `launchAnimations` and `bounces`; the repeated click-passes and rows-present checks are helpers too.
+- Review: T9(b) ran one press timing, T14 did not check the pulse kind, and T24 checked one of five bundle identifiers → all three now match their plan rows.
+- Review: T14, T15(a) and T16(e) used other timings than the plan → brought to the plan's 280 ms, 0–100/200–300 ms and 80 ms gap.
+- Review: `#expect(!…)` and a vague `enum Case` in the new suites → `== false` and a descriptive name.
