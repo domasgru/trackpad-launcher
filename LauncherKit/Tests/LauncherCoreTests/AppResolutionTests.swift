@@ -121,7 +121,7 @@ import LauncherCore
         world.launcher.openedByHand()
         #expect(world.launcher.app(for: .two) == .present(entry))
 
-        #expect(world.store.load()?.assignments[.two]?.lastKnownURL == original)
+        #expect(world.store.load()?.assignments[.two]?.first.lastKnownURL == original)
     }
 
     @Test func reinstalledAppRecoversWithoutRepicking() {

@@ -22,8 +22,8 @@ public struct Settings: Codable, Equatable, Sendable {
         }
     }
 
-    /// Absent = unassigned.
-    public var assignments: [Gesture: AssignedApp] = [:]
+    /// Absent = unassigned. The key and each entry's first-app keys are permanent (see `Assignment`'s wire form).
+    public var assignments: [Gesture: Assignment] = [:]
     /// Whether a gesture plays the launch animation. The key is this field's name, permanently.
     public var isLaunchAnimationOn = true
     /// Whether two fingers sliding under the thumb switch apps. The key is this field's name, permanently.
@@ -41,8 +41,11 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Whether a gesture needs the thumb held in the anchor corner. The key is this field's name, permanently.
     public var isHoldThumbOn = true
 
-    /// The bundle identifiers of every assigned app, missing ones included. Derived, never stored.
-    public var assignedBundleIDs: Set<BundleID> { Set(assignments.values.map(\.bundleID)) }
+    /// The apps some gesture holds alone, missing ones included: one tap away, so the switcher leaves them out.
+    /// Derived, never stored.
+    public var oneAppBundleIDs: Set<BundleID> {
+        Set(assignments.values.filter { $0.second == nil }.map(\.first.bundleID))
+    }
 
     /// The slide kinds whose setting is on. Derived, never stored.
     public var slides: Set<SlideKind> {
@@ -59,7 +62,7 @@ public struct Settings: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         handMode = try container.decodeIfPresent(HandMode.self, forKey: .handMode) ?? handMode
         isThumbAtBottom = try container.decodeIfPresent(Bool.self, forKey: .isThumbAtBottom) ?? isThumbAtBottom
-        assignments = try container.decodeIfPresent([Gesture: AssignedApp].self, forKey: .assignments) ?? assignments
+        assignments = try container.decodeIfPresent([Gesture: Assignment].self, forKey: .assignments) ?? assignments
         isLaunchAnimationOn =
             try container.decodeIfPresent(Bool.self, forKey: .isLaunchAnimationOn) ?? isLaunchAnimationOn
         isSwipeOn = try container.decodeIfPresent(Bool.self, forKey: .isSwipeOn) ?? isSwipeOn

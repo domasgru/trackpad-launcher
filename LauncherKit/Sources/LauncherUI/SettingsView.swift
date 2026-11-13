@@ -135,6 +135,13 @@ struct GestureRowView: View {
     let launcher: Launcher
     let actions: LauncherActions
 
+    /// A line of the trailing group, and the gap between two lines: their centres are 32 pt apart.
+    private static let lineHeight: CGFloat = 16
+    private static let lineSpacing: CGFloat = 16
+    /// The design's 12 pt from the picker's chevrons to the plus button; the picker's frame reaches past them by its
+    /// trailing inset.
+    private static let itemSpacing = 12 - AppPicker.contentInsets.trailing
+
     var body: some View {
         HStack(spacing: 0) {
             GestureIllustration(gesture: row.gesture, corner: corner)
@@ -145,18 +152,47 @@ struct GestureRowView: View {
                     }
                 }
             Spacer(minLength: 12)
-            AppPicker(
-                current: row.app,
-                installedApps: launcher.installedApps,
-                cachedIcon: actions.cachedIcon,
-                icon: actions.icon,
-                choose: { launcher.setAssignment($0, for: row.gesture) },
-                chooseOther: { completion in
-                    actions.chooseOtherApp { completion(launcher.setAssignment(.appBundle(at: $0), for: row.gesture)) }
-                },
-                pickAnimation: actions.pickAnimation)
+            let layout = row.lineCount == 2
+                ? AnyLayout(VStackLayout(alignment: .trailing, spacing: Self.lineSpacing))
+                : AnyLayout(HStackLayout(spacing: Self.itemSpacing))
+            layout {
+                AppPicker(
+                    current: row.app,
+                    unavailable: nil,
+                    installedApps: launcher.installedApps,
+                    cachedIcon: actions.cachedIcon,
+                    icon: actions.icon,
+                    choose: { launcher.setAssignment($0, for: row.gesture) },
+                    chooseNone: { launcher.setAssignment(nil, for: row.gesture) },
+                    chooseOther: { completion in
+                        actions.chooseOtherApp {
+                            completion(launcher.setAssignment(.appBundle(at: $0), for: row.gesture))
+                        }
+                    },
+                    pickAnimation: actions.pickAnimation
+                )
+                .frame(height: Self.lineHeight)
+                if let slot = row.second {
+                    SecondAppPicker(
+                        slot: slot,
+                        unavailable: row.firstBundleID,
+                        installedApps: launcher.installedApps,
+                        cachedIcon: actions.cachedIcon,
+                        icon: actions.icon,
+                        choose: { launcher.setSecondApp($0, for: row.gesture) },
+                        chooseOther: { completion in
+                            actions.chooseOtherApp {
+                                completion(launcher.setSecondApp(.appBundle(at: $0), for: row.gesture))
+                            }
+                        },
+                        remove: { launcher.removeSecondApp(for: row.gesture) },
+                        pickAnimation: actions.pickAnimation
+                    )
+                    .frame(height: Self.lineHeight)
+                }
+            }
         }
-        .formRowContent()
+        .formRowContent(lines: row.lineCount)
         // Above the next row, so the guide's arrows draw over it.
         .zIndex(row.gesture == .one ? 1 : 0)
     }
@@ -191,7 +227,13 @@ extension View {
     /// illustration, which is taller, stays centred and reaches into that padding. The height is set here because a
     /// grouped Form ignores `listRowInsets` on macOS 26, measured offscreen in a one-row form.
     func formRowContent() -> some View {
-        frame(height: 26)
+        formRowContent(lines: 1)
+    }
+
+    /// A row of `lines` lines of 16 pt controls, 16 pt apart: 26 pt for one, 56 pt for two, which with the form's
+    /// own padding make rows of 46 and 76 pt.
+    func formRowContent(lines: Int) -> some View {
+        frame(height: lines == 1 ? 26 : 56)
     }
 
     /// The message of a hint: 11 pt, wrapping at `maxWidth` to as many lines as it needs.

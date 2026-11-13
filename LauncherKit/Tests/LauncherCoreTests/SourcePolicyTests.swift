@@ -77,7 +77,6 @@ import Testing
         Entry(
             token: "perform: {",
             rule: "a run-loop source's perform is a file-scope constant: written inside main-actor code it traps off main"),
-        Entry(token: "AXUIElementSetAttributeValue", rule: "the window switcher only raises a window"),
         Entry(token: "kAXPressAction", rule: "the window switcher only raises a window"),
         Entry(token: "SCStream(", rule: "previews are pictures, never a stream"),
         Entry(token: "SCRecordingOutput", rule: "previews are pictures, never a recording"),
@@ -169,7 +168,12 @@ import Testing
         Confined(
             token: "_LSCopyApplicationInformation", onlyIn: ["LaunchServicesOrder.swift"],
             rule: "the private ⌘-Tab order has one reader"),
-        Confined(token: "AXUIElement", onlyIn: ["AppWindowReader.swift", "LaunchWatch.swift"], rule: "the window reads have two readers"),
+        Confined(
+            token: "AXUIElementSetAttributeValue", onlyIn: ["FrontWindowPlacer.swift"],
+            rule: "only a split gesture moves, resizes or takes a window out of full screen"),
+        Confined(
+            token: "AXUIElement", onlyIn: ["AppWindowReader.swift", "LaunchWatch.swift", "FrontWindowPlacer.swift"],
+            rule: "the Accessibility element API has three users"),
         Confined(token: "CGWindowList", onlyIn: ["AppWindowReader.swift", "LaunchWatch.swift"], rule: "the window reads have two readers"),
         Confined(token: ".hide(", onlyIn: ["BackgroundHider.swift"], rule: "apps are hidden in one place"),
         Confined(token: "SecCode", onlyIn: ["CodeSignature.swift", "CardContract.swift"], rule: "the code signature is read in one place"),

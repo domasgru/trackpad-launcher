@@ -66,6 +66,45 @@ public struct AssignedApp: Codable, Hashable, Sendable {
     }
 }
 
+/// What a gesture holds: a first app and, for a split gesture, a second app that is never the first app.
+///
+/// Wire: the first app's `bundleID`, `name` and `lastKnownURL` at the entry's top level, as every version wrote them,
+/// plus `secondApp`, holding the same three keys. A version without second apps ignores `secondApp`.
+public struct Assignment: Codable, Equatable, Sendable {
+    public let first: AssignedApp
+    public let second: AssignedApp?
+
+    private enum SecondKey: String, CodingKey { case secondApp }
+
+    /// The only initializer, decoding included: a second app with the first app's bundle identifier is dropped.
+    public init(first: AssignedApp, second: AssignedApp? = nil) {
+        self.first = first
+        self.second = second?.bundleID == first.bundleID ? nil : second
+    }
+
+    /// A new first app keeps the second app, unless it is that app, which then is the only app.
+    public func settingFirst(_ app: AssignedApp) -> Assignment { Assignment(first: app, second: second) }
+
+    /// nil when `app` is the first app, so nothing changes.
+    public func settingSecond(_ app: AssignedApp) -> Assignment? {
+        app.bundleID == first.bundleID ? nil : Assignment(first: first, second: app)
+    }
+
+    public var removingSecond: Assignment { Assignment(first: first) }
+
+    public init(from decoder: any Decoder) throws {
+        let first = try AssignedApp(from: decoder)
+        let second = try decoder.container(keyedBy: SecondKey.self).decodeIfPresent(AssignedApp.self, forKey: .secondApp)
+        self.init(first: first, second: second)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        try first.encode(to: encoder)
+        var container = encoder.container(keyedBy: SecondKey.self)
+        try container.encodeIfPresent(second, forKey: .secondApp)
+    }
+}
+
 /// An app the user chose: from a menu, or any bundle on disk through Other…. None is `nil` where one is taken.
 public enum AppChoice: Sendable {
     case app(AppEntry)
@@ -82,13 +121,83 @@ public enum RowApp: Equatable, Sendable {
 /// A gesture row as the launcher window shows it.
 public struct GestureRow: Identifiable, Equatable, Sendable {
     public let gesture: Gesture
-    public let app: RowApp
+    public let apps: Apps
     public var id: Gesture { gesture }
 
-    public init(gesture: Gesture, app: RowApp) {
-        self.gesture = gesture
-        self.app = app
+    public enum Apps: Equatable, Sendable {
+        /// "Choose app…", no plus button.
+        case unassigned
+        /// One line: the picker, then the plus button, missing app included.
+        case one(Held)
+        /// Line 1: the picker; line 2: the minus button, then the second picker.
+        case two(first: Held, second: Held)
     }
+
+    /// An app a gesture holds: on disk, or missing and shown by its saved name, greyed.
+    public enum Held: Equatable, Sendable {
+        case present(AppEntry)
+        case missing(name: String, bundleID: BundleID)
+
+        public var rowApp: RowApp {
+            switch self {
+            case .present(let entry): .present(entry)
+            case .missing(let name, _): .missing(name: name)
+            }
+        }
+
+        public var bundleID: BundleID {
+            switch self {
+            case .present(let entry): entry.bundleID
+            case .missing(_, let bundleID): bundleID
+            }
+        }
+    }
+
+    public init(gesture: Gesture, apps: Apps) {
+        self.gesture = gesture
+        self.apps = apps
+    }
+
+    /// The apps the row holds, the first then the second; empty while unassigned.
+    public var held: [Held] {
+        switch apps {
+        case .unassigned: []
+        case .one(let first): [first]
+        case .two(let first, let second): [first, second]
+        }
+    }
+
+    /// The first picker's app.
+    public var app: RowApp {
+        switch apps {
+        case .unassigned: .unassigned
+        case .one(let first), .two(let first, _): first.rowApp
+        }
+    }
+
+    /// nil while unassigned; `.add` for one app; `.app` for the second app.
+    public var second: SecondSlot? {
+        switch apps {
+        case .unassigned: nil
+        case .one: .add
+        case .two(_, let second): .app(second)
+        }
+    }
+
+    /// The first app, present or missing: shown disabled in the second app's menu.
+    public var firstBundleID: BundleID? {
+        switch apps {
+        case .unassigned: nil
+        case .one(let first), .two(let first, _): first.bundleID
+        }
+    }
+
+    public var lineCount: Int { if case .two = apps { 2 } else { 1 } }
+}
+
+public enum SecondSlot: Equatable, Sendable {
+    case add
+    case app(GestureRow.Held)
 }
 
 /// The apps an app picker lists: the most recently launched first, then the rest.
@@ -120,11 +229,14 @@ public struct InstalledApps: Equatable, Sendable {
         self.init(recent: recent.map(\.entry), others: entries.filter { !recentIDs.contains($0.bundleID) })
     }
 
-    /// An app picker's menu, top to bottom. The row's present app is `.current` wherever it sits.
-    public func pickerMenu(checking app: RowApp) -> [PickerItem] {
+    /// An app picker's menu, top to bottom. The row's present app is `.current` wherever it sits; `unavailable`'s item,
+    /// when listed, is `.unavailable`. They never coincide: the second picker's current app is never the first app.
+    public func pickerMenu(checking app: RowApp, unavailable: BundleID? = nil) -> [PickerItem] {
         var currentID: BundleID?
         if case .present(let entry) = app { currentID = entry.bundleID }
-        return menu { $0.bundleID == currentID ? .current : .plain } + [.unassigned]
+        return menu {
+            if $0.bundleID == unavailable { .unavailable } else if $0.bundleID == currentID { .current } else { .plain }
+        } + [.unassigned]
     }
 
     private func menu(state: (AppEntry) -> AppItemState) -> [PickerItem] {
@@ -149,6 +261,8 @@ public enum AppItemState: Equatable, Sendable {
     case plain
     /// Checked: the picker's current app.
     case current
+    /// Shown disabled.
+    case unavailable
 }
 
 /// Apps on disk. Local-substitutable: tests point it at a temp directory of fake bundles and inject what

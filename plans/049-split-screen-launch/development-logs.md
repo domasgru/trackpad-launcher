@@ -1,0 +1,87 @@
+# Development logs: Split gesture: two apps side by side
+
+## Specify
+- An app's other windows could cover the placed windows → glossary defines *front window*; R12 keeps both placed windows fully visible.
+- Other desktops (Spaces) and Stage Manager were unspecified → listed as non-goals with the behaviour the user gets; restoring a window's earlier frame listed as a non-goal too.
+- Pending placement was ambiguous → R13 fixes the display at fire time, lets a later gesture cancel a pending placement, and adds scenarios for a late window, a windowless app and cancellation.
+- No scenario showed the Accessibility hint for the silent case → R17 gains a scenario showing the existing hint.
+- The best-effort placement rule was compound, and oversize windows were unspecified → split into R14–R16; the second app anchors at its half's top-right; the fixed-size example now uses Calculator.
+- Missing-app cases were incomplete → R18 gains scenarios for a missing first app, both apps missing, and a missing second app's picker.
+- Several MUSTs had no scenario → scenarios added to R1, R3 (row heights), R5, R9, R16, R19 and R21.
+- The plan contradicted the product overview → new "Product overview changes" section.
+- "The first app ends active" allowed two builds → R10 says a launching second app never takes the focus, with scenarios.
+- The launch effects requirement was compound → split into R19 (own effect, bounce order) and R20 (directional sway).
+- Odd usable widths and the design reference's gaps → R11 gives the extra point to the left half; the design reference gains dark-appearance colours, truncation and button labels, and a note that Notes-twice is filler.
+- Declined: making *None* in the second picker remove the second app (user decided it does nothing), and dropping the directional sway (user asked for it).
+
+## Plan
+- Grounding probes on this Mac:
+  - setting size before position clamps a window to the screen from its current origin → the design places position, then size;
+  - an app launched without activation stayed out of the focus, even when it asked for it → the second app launches without activation;
+  - the last-opened of two apps ends active, with only its front window lifted → the second app opens first;
+  - an Accessibility raise does not cross the active app → no raise in the placer;
+  - 1.0.19 reads a nested new key and drops it on save → the second app nests in the assignment entry.
+- Red-flag screen:
+  - candidate 1 put Accessibility's coordinate system into core (`ScreenRect`) → rejected; `DisplayID` + `SplitSide` cross the port, and the halving stays in the platform;
+  - candidate 1 rewrote the one-app port path → rejected; the split gets its own call.
+- Cross-judge recommended candidate 1 (26 to 24); my rubric scores gave candidate 2 the edge (24 to 23) → base candidate 2. The judge's own grafts were most of its skeleton. Its two reasons for candidate 1 were grafted: the pure `SplitSteps` order test, and one watch-record type.
+- Cross-judge: candidate 2 cancelled placements from silent gestures, breaking `fire`'s silent contract → `stopPlacing()` moved after the silent guard (O9 left to the human).
+- Cross-judge: candidate 2's partner wait could suppress every hide when the second app's launch ran out (R21) → only a pending first app defers the hide. Candidate 1's rule, which could hide while the active first app showed no window (plan 032 root cause 1), was not taken either.
+- Cross-judge: AX calls on the main actor for followed running apps → `LaunchWatch.finished` reads the window list first; a hung windowless app remains a stated risk.
+- Cross-judge: *Front window* already existed in the domain model → the entry was widened, not duplicated.
+- Verify: the usage called initializers the sketch lacked → public initializers added to `SplitApp`, `SplitArrival` and `ScreenHalf`.
+- Test planner pass 1, fixed:
+  - the plus button's pop-up could not be driven by a bench → injectable `popUp`;
+  - the placer instance had no seam → a test initializer;
+  - placings of one process could interleave → one serial queue per process, with the ticket checked before every call;
+  - "already there" missed anchored or fixed windows → the frame the last placing left is remembered;
+  - the window choice was untestable → `mainWindow`/`windows` calls, with the choice made in `place`;
+  - `DisplayID` had no public initializer;
+  - a refused position or full-screen exit now ends the sequence;
+  - `Build1018Settings` is reused as 1.0.19's coding.
+- Test planner pass 1, rejected:
+  - the 46/76 pt rows against R3's 48/78 (left to the human as O1);
+  - silent gestures not cancelling (O9);
+  - a seam for a bounce's kept side, and for the activation flag (one stored value and one line, covered by read checks and M3).
+- Test planner pass 1, folded in: R12's window order for launching or unhiding apps with several windows became a stated risk.
+- Test planner pass 2, fixed:
+  - the placer's work items could not be awaited → a `finished` callback, with `place(_:in:)` answering whether it dispatched;
+  - the own-process check now lives in `place(_:in:)`;
+  - the remembered frame is read back after the last write when time remains.
+- No runner dropped out.
+
+## Implement
+- No verification skill in the repo → step skipped; no verification outcome.
+- S1 built spacings from the design arithmetic, not a measurement (no GUI run) → left to M1.
+- S3: a screen without `NSScreenNumber` is dropped from `ScreenRead.displays` (`compactMap`) so every `LaunchDisplay` has an id.
+- Review, Standards:
+  - `!` inside `#expect` → `== false`.
+  - Force-unwraps and `try!` in the new tests → `try #require`.
+  - The placer tests' `finished` wait could hang → a suite time limit.
+  - `SplitStepsTests` built an expected value from the actual one → literals from T27.
+- Review, code smells:
+  - The row's held apps were flattened in four places → public `GestureRow.held`, `Held.rowApp` and `Held.bundleID`.
+  - Watch setup was duplicated in `WorkspaceActions` → one helper.
+  - `LaunchFlights` had a private copy of `SplitSide` → it uses `SplitSide`.
+  - `SplitSteps` used tuple indices → named fields.
+  - `BackgroundHider` checked kept apps by hand → `KeptApps.keeps(_:)`.
+  - `SplitPlacingTests` had its own pair type → it uses the fake's `WindowPlacement`.
+  - `SecondAppPicker.update` relaid out on every update → only when the shown slot changes.
+- Review, Plan:
+  - `SecondPickerBench` bypassed `SecondAppPicker.makeView` → the bench goes through the production make and update.
+  - T25 hard-coded the missing render → it compares against `PickerBench`'s render of `.missing`.
+- Human review of the build (requested changes):
+  - the plus button opened a standalone menu, which macOS draws without item icons and places below the button → the plus button is a borderless pop-up button (`AddAppButton`) whose menu the picker's coordinator fills, so it opens over the button with the same items, icons and style;
+  - the plus and minus circles drew 13 pt, scaled down from the 19 pt symbol image → `CircleSymbol` draws them at 16 pt, medium scale, unscaled, which makes the circle exactly 16 pt (measured);
+  - their colours differed from the chevron badge → the sign is `labelColor` and the circle `secondarySystemFill`, the badge's measured 8 % black;
+  - a pop-up cell draws its item's image off centre → `AddAppButton`'s cell draws the image alone, centred;
+  - a new test draws both buttons and checks the 16 pt circle, its fill and the sign's colour.
+  - the human measured the picker's chevron badge at 20 pt as the system draws it → plus and minus are 20 pt: `CircleSymbol` at 20 pt, medium scale, draws a circle exactly 20 pt across (measured), and the drawing test checks 20 pt.
+  - the split's two launch animations started on the same spot and overlapped → each starts on its side of the pointer, one bounce row's spacing apart at the pop's peak (they touched by up to 0.32 pt at the peak with the spacing measured at rest), and the pair slides inward to start whole on the pointer's display; tests check no keyframe of the shipped flight lets them touch.
+  - the second app's menu bar blinked: a running second app is activated before the first. Probed with throwaway apps: an open without activation never activates (8 of 8) but does not lift the window over other apps; an Accessibility raise sent while the first app's activation is under way got the second app activated, and ended it frontmost in 4 of 4 real-path runs; a raise sent before the first app's activation never did (12 of 12), leaving only the previously active app's front window above it. The human chose to keep the brief focus except while hide background apps is on → `SplitArrival.secondEntry`: `.focused` as before, or `.unfocused(raised:)` while the setting is on: opened without activation (unhidden first), its front window raised, and only then the first app opened (`raiseThenOpen`). Real-path runs: only the first app activated, 6 of 6.
+  - the human still saw the second app's menu bar blink with hide background apps on, pointer over the right half, any pair. A recorder of the workspace's activations during the human's real gestures showed the second app activated 25–45 ms before the first in every split (Xcode, Claude, Notion, Files App), sometimes ending in front: real apps answer the Accessibility raise by activating themselves, where the probes' plain AppKit helpers did not. Unhiding alone activated nothing (Calculator, 3 of 3) → the raise is gone (`SecondEntry.unfocused` has no `raised`; the placer is back to placing only). The second app is opened without the focus and unhidden; a back window of the first app may still cover part of the right half.
+  - the split's launch icons start 16 pt apart at rest (`LaunchFlight.splitGap`), 4 pt at the pop's peak; the no-touch test still holds on every keyframe.
+  - the human asked for an 8 pt gap and the right icon starting slightly after the left → `splitGap` 8 pt, `splitStagger` 0.06 s, made by a held first keyframe (`LaunchFlight.delayed(by:)`), so the icon shows at once. Sampled every millisecond, the two squares overlap by up to 2.91 pt between 0.074 and 0.165 s, inside the 100/1024 clear margin of a macOS app icon; the test now checks the icons' artwork stays more than 5 pt apart.
+  - the human saw the focus land on either app, and asked that the app on the pointer's side end focused; launch stagger to 0.02 s. The recorder showed Notion (Electron) activating itself ~30 ms after it was unhidden and opened without activation (the open's reopen), then Files App and Notion trading the focus for ~15 s; Xcode never did → `SplitArrival.focus` (the pointer's half, read through the new `pointerSide(on:)` port only while windows are placed, else the first app), the focused app opened last and kept in front by `KeptApps.front`; an unfocused running other app is `reveal`ed: unhidden when hidden, else its windows read and opened without activation only when none is on screen, so no reopen reaches an app that has a window; `FocusKeeper` (workspace observer and a 1 s `LaunchClock` deadline, only during a keep) re-opens the focused app when the other one takes the focus, and ends on any third app's activation. Real-path runs with helper apps: the pointer-side app ended active in 8 of 8, and with hide background apps on it was the only one activated, the hidden other app shown. A helper imitating Notion's self-activation was refused by macOS, so the keeper is proven by its unit tests only.
+  - the human asked that the icon moving first be the focused app's → the launch animation step carries `waits` (its side is not the focus), so the other app's icon holds its start for `splitStagger`; the no-touch test runs both orders.
+  - the human saw the plus and minus read bolder than the chevrons → measured effective stroke widths beside the real badge (2 px per point): chevrons 3.2, light 2.7, regular 3.4, medium 3.8, regular's longer arms reading bolder still → `CircleSymbol.weight` light, at 20.5 pt (measured: light at 20 pt draws a 19.5 pt circle, at 20.5 pt a 20 pt one). The drawing test samples the circle's edges 1 pt in, the glyph sitting a quarter point off centre in its image.

@@ -30,6 +30,8 @@ import QuartzCore
         /// `LaunchTuning.current` when it started: the tuner restores its override right after a preview.
         let tuning: LaunchTuning
         let reduceMotion: Bool
+        /// The side its launch animation ending sways to; nil: random.
+        let toward: SplitSide?
         /// Positioned at the icon's rest.
         let slot: CALayer
         /// Anchor at its bottom centre; plays `BounceMotion` forever.
@@ -42,7 +44,7 @@ import QuartzCore
     }
 
     /// Starts the bounce of `app`. When there is no display to bounce on, there is no bounce and nothing else happens.
-    func start(_ app: AppEntry) {
+    func start(_ app: AppEntry, toward: SplitSide? = nil) {
         guard !row.contains(where: { $0.app.bundleID == app.bundleID }) else { return }
         let tuning = LaunchTuning.current
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || tuning.forceReduceMotion
@@ -70,7 +72,8 @@ import QuartzCore
         }
         slot.addSublayer(icon)
 
-        let bouncing = Bouncing(app: app, tuning: tuning, reduceMotion: reduceMotion, slot: slot, icon: icon)
+        let bouncing = Bouncing(
+            app: app, tuning: tuning, reduceMotion: reduceMotion, toward: toward, slot: slot, icon: icon)
         stage.host.addSublayer(slot)
         let others = row
         row.append(bouncing)
@@ -103,7 +106,8 @@ import QuartzCore
             // icon's area, so it counts as 1.
             let size = (frame.width * frame.height).squareRoot() / side
             launchOverlay.play(
-                for: bouncing.app, from: CGPoint(x: frame.midX, y: frame.midY), among: read.displays, size: size)
+                for: bouncing.app, from: CGPoint(x: frame.midX, y: frame.midY), among: read.displays, size: size,
+                toward: bouncing.toward)
         case .quietFade:
             if let display {
                 fade(bouncing, from: frame, rest: rest, transform: icon.transform, opacity: opacity, on: display)
