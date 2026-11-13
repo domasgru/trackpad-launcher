@@ -41,18 +41,29 @@ struct SettingsView: View {
     static let formRowPadding: CGFloat = 20
     /// The group's width, which the first gesture's picture is clipped to.
     static let groupWidth: CGFloat = 326
+    /// The column's width: the groups and the inset on each side.
+    static let columnWidth: CGFloat = groupWidth + 2 * inset
+    /// The heights of the rows, `formRow(height:)`'s argument: a one-line row, the first gesture's row with one line,
+    /// and a two-line row.
+    static let oneLineRowHeight: CGFloat = 48
+    static let firstGestureRowHeight: CGFloat = 70
+    static let twoLineRowHeight: CGFloat = 86
 
     var body: some View {
         let drawn = launcher.drawnThumbCorner
         let gestureThumb = launcher.gestureThumbCorner
+        let updateCard = UpdateCardPreview.card(updater?.card)
         VStack(spacing: 0) {
-            if showsCards {
-                VStack(spacing: Self.cardSpacing) {
-                    if let card = UpdateCardPreview.card(updater?.card) {
-                        UpdateCardView(card: card, updateNow: { updater?.updateNow() }, arrowDrift: actions.arrowDrift)
-                    }
-                    if launcher.showsAccessibilityHint {
-                        AccessibilityHintCard(actions: actions)
+            if updateCard != nil || launcher.showsAccessibilityHint {
+                WholeHeight {
+                    VStack(spacing: Self.cardSpacing) {
+                        if let card = updateCard {
+                            UpdateCardView(
+                                card: card, updateNow: { updater?.updateNow() }, arrowDrift: actions.arrowDrift)
+                        }
+                        if launcher.showsAccessibilityHint {
+                            AccessibilityHintCard(actions: actions)
+                        }
                     }
                 }
                 .padding(.horizontal, Self.inset)
@@ -67,13 +78,13 @@ struct SettingsView: View {
                         isOn: Binding(
                             get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
                     ) {
-                        Text("Animate app launch").formRow(height: 48)
+                        Text("Animate app launch").formRow(height: Self.oneLineRowHeight)
                     }
                     .toggleStyle(.switch)
                     Toggle(
                         isOn: Binding(get: { launcher.isHoldThumbOn }, set: { launcher.setHoldThumb(on: $0) })
                     ) {
-                        Text("Hold thumb").formRow(height: 48)
+                        Text("Hold thumb").formRow(height: Self.oneLineRowHeight)
                     }
                     .toggleStyle(.switch)
                 }
@@ -84,7 +95,7 @@ struct SettingsView: View {
                         isOn: Binding(
                             get: { launcher.isHideBackgroundAppsOn }, set: { launcher.setHideBackgroundApps(on: $0) })
                     ) {
-                        Text("Hide background apps").formRow(height: 48)
+                        Text("Hide background apps").formRow(height: Self.oneLineRowHeight)
                     }
                     .toggleStyle(.switch)
                 }
@@ -119,11 +130,9 @@ struct SettingsView: View {
             .padding(.top, Self.buttonsSpacing)
         }
         .padding(.vertical, Self.inset)
-        .frame(width: 358)
+        .frame(width: Self.columnWidth)
         .fixedSize(horizontal: true, vertical: false)
     }
-
-    private var showsCards: Bool { UpdateCardPreview.card(updater?.card) != nil || launcher.showsAccessibilityHint }
 }
 
 /// What a rounded group looks like, shared by `FormGroup` and the Accessibility hint card.
@@ -215,7 +224,13 @@ struct GestureRowView: View {
 
     /// 48 pt with one line, 86 pt with two; the first gesture's row is 70 pt with one line.
     private var height: CGFloat {
-        if row.lineCount == 2 { 86 } else if row.gesture == .one { 70 } else { 48 }
+        if row.lineCount == 2 {
+            SettingsView.twoLineRowHeight
+        } else if row.gesture == .one {
+            SettingsView.firstGestureRowHeight
+        } else {
+            SettingsView.oneLineRowHeight
+        }
     }
 }
 
@@ -230,7 +245,7 @@ struct FirstGestureArt: View {
     /// The picture's top-left corner from the group's, and its width.
     private static let picture = (x: CGFloat(-12), y: CGFloat(-1), width: CGFloat(137))
     /// The first row with one line, which is as far as the picture reaches down.
-    private static let rowHeight: CGFloat = 70
+    private static let rowHeight = SettingsView.firstGestureRowHeight
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -261,9 +276,9 @@ struct HandGuide: View {
             BundleImage.view("right-hand", type: "png", width: 60)
                 .opacity(0.9)
                 .offset(x: 55, y: 24)
-            HandLabel(text: "Hold", dot: .filled)
+            HandLabel(text: "Hold", dot: .hold)
                 .offset(x: -11, y: 49)
-            HandLabel(text: "Tap", dot: .ringed)
+            HandLabel(text: "Tap", dot: .tap)
                 .offset(x: 92, y: 55)
         }
         .accessibilityElement(children: .ignore)
@@ -271,31 +286,48 @@ struct HandGuide: View {
     }
 }
 
-/// A small light tooltip: a dot, then the word.
+/// A small light tooltip: a dot, then the word, in the macOS tooltip's 11 pt medium. The shadows sit on the background
+/// shape alone, so the text and the dot are never rasterised through them.
 struct HandLabel: View {
-    enum Dot { case filled, ringed }
+    /// The name of the dot's SVG in the bundle.
+    enum Dot: String { case hold, tap }
 
     let text: String
     let dot: Dot
 
     var body: some View {
         HStack(spacing: 4) {
-            switch dot {
-            case .filled:
-                Circle().fill(.black).frame(width: 7.17, height: 7.17)
-            case .ringed:
-                Circle().fill(Color(white: 0.2)).frame(width: 6, height: 6)
-                    .overlay(Circle().strokeBorder(.black, lineWidth: 1).frame(width: 10.67, height: 10.67))
-                    .frame(width: 10.67, height: 10.67)
-            }
-            Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(.black)
+            BundleImage.view(dot.rawValue)
+            Text(text).font(.system(size: 11, weight: .medium)).foregroundStyle(.black)
         }
         .padding(.leading, 6).padding(.trailing, 6).padding(.top, 3).padding(.bottom, 2)
         .frame(height: 18)
         .fixedSize()
-        .background(Color(white: 0.93), in: .rect(cornerRadius: 3))
-        .shadow(color: .black.opacity(0.4), radius: 1)
-        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+        .background {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(.ultraThickMaterial)
+                .shadow(color: .black.opacity(0.4), radius: 1)
+                .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+        }
+    }
+}
+
+/// Lays out its one child as it is, at a height rounded up to a whole point, so what sits below it, the first gesture's
+/// art among it, starts on a pixel boundary whatever the child's text measures.
+private struct WholeHeight<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View { WholeHeightLayout { content } }
+}
+
+private struct WholeHeightLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = subviews.first?.sizeThatFits(proposal) ?? .zero
+        return CGSize(width: size.width, height: size.height.rounded(.up))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: nil))
     }
 }
 
@@ -379,7 +411,7 @@ enum BundleImage {
     }
 
     /// `width` pt wide at the image's own aspect ratio.
-    @ViewBuilder static func view(_ name: String, type: String = "svg", width: CGFloat) -> some View {
+    @ViewBuilder static func view(_ name: String, type: String, width: CGFloat) -> some View {
         if let image = nsImage(name, type: type) {
             Image(nsImage: image).resizable()
                 .aspectRatio(image.size, contentMode: .fit)
@@ -454,7 +486,7 @@ struct CornerPicker: View {
                 Text(Copy.thumbCornerTitle(corner)).tag(corner)
             }
         } label: {
-            if isFormRow { Text(title).formRow(height: 48) } else { Text(title) }
+            if isFormRow { Text(title).formRow(height: SettingsView.oneLineRowHeight) } else { Text(title) }
         }
         .pickerStyle(.menu)
     }

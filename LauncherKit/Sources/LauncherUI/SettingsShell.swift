@@ -111,6 +111,14 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             })
         observations.append(
             Task { [weak self] in
+                for await _ in NotificationCenter.default.notifications(
+                    named: NSScroller.preferredScrollerStyleDidChangeNotification)
+                {
+                    self?.refit()
+                }
+            })
+        observations.append(
+            Task { [weak self] in
                 for await _ in Observations({ launcher.installedApps }) {
                     self?.renderIcons()
                 }
@@ -207,8 +215,14 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
             height = SettingsWindowHeight.contentHeight(
                 fitting: size.height, titleBar: window.titleBarHeight, visible: visible)
         }
+        // The document keeps its own width, so a legacy scroller gets room beside it rather than taking from it.
+        let scrollerWidth =
+            NSScroller.preferredScrollerStyle == .legacy
+            ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
+        let width = SettingsWindowHeight.contentWidth(
+            fitting: size.width, isCapped: height < size.height, scrollerWidth: scrollerWidth)
         let top = window.frame.maxY
-        window.setContentSize(NSSize(width: size.width, height: height))
+        window.setContentSize(NSSize(width: width, height: height))
         window.setFrameTopLeftPoint(NSPoint(x: window.frame.minX, y: top))
     }
 

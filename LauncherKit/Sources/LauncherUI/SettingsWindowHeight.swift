@@ -9,4 +9,11 @@ enum SettingsWindowHeight {
     nonisolated static func contentHeight(fitting: CGFloat, titleBar: CGFloat, visible: CGFloat) -> CGFloat {
         min(fitting, visible * maxShare - titleBar)
     }
+
+    /// The content width to set: the content's own width, plus the room of a legacy scroller beside it while the window
+    /// is capped, so the scroller never takes from the content. `scrollerWidth` is the legacy scroller's width, and 0
+    /// for the overlay style, which takes none.
+    nonisolated static func contentWidth(fitting: CGFloat, isCapped: Bool, scrollerWidth: CGFloat) -> CGFloat {
+        isCapped ? fitting + scrollerWidth : fitting
+    }
 }

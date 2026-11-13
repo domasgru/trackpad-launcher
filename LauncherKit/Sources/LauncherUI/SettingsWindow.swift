@@ -38,7 +38,6 @@ final class SettingsWindow: NSWindow {
         NSLayoutConstraint.activate([
             hosting.topAnchor.constraint(equalTo: clip.topAnchor),
             hosting.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
-            hosting.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
         ])
         contentView = scroll
         self.hosting = hosting

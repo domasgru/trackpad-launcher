@@ -36,3 +36,11 @@
 
 ## Implement
 - The user added R8 (a tall window scrolls) after planning → folded in as S4 after S3, so it does not collide with S2's work in the settings view: a pure height cap rule with its test T12, the settings view hosted in a scroll view, the cap applied on every fit and on a display change, and a by-hand check for R8. The domain model's *Settings window* entry states the cap.
+- The user found the Hold and Tap labels slightly blurry → the dots are the user's `hold.svg` and `tap.svg` at their own size, the text is 11 pt medium, the fill and shadows sit on the background shape only, and the cards' block is rounded up to a whole point so the labels' anchor stays pixel-aligned.
+- The labels used a solid grey, not the design's light Ultra Thick material (R5) → they use the material.
+- A legacy scroller (scroll bars always shown, or a mouse) would take its width from the 358 pt content of a capped window (R8) → the document keeps its own width, and a capped window widens by the legacy scroller's width; the window refits when the preferred scroller style changes.
+- New tests negated Booleans with `!` inside `#expect` (swift-testing-pro core rules) → they compare with `false`.
+- The corner illustration script called no-thumb pictures "thumbless", a glossary word for a gesture → renamed to "no thumb"; its output is unchanged.
+- The 70 pt first row, the 48 pt one-line row, the 358 pt column and the update card lookup were each written in more than one place → each is one named constant or one lookup.
+- An unused `"svg"` default on the width-sized picture helper → removed.
+- The architecture's push list did not name the settings window's display, screen parameter and scroller style changes → it does.

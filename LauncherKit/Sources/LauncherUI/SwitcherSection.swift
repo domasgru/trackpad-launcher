@@ -73,7 +73,7 @@ struct SettingRow: View {
                     .accessibilityHidden(true)
                 Text(title)
             }
-            .formRow(height: 48)
+            .formRow(height: SettingsView.oneLineRowHeight)
         }
         .toggleStyle(.switch)
     }

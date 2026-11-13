@@ -18,7 +18,7 @@ import UniformTypeIdentifiers
 
 let names = ["gesture-2", "gesture-3", "gesture-4", "gesture-5", "swipe", "window-swipe", "thumb-tap"]
 /// The pictures that also get a copy without the thumb.
-let thumblessNames: Set<String> = ["gesture-2", "gesture-3", "gesture-4", "gesture-5"]
+let noThumbNames: Set<String> = ["gesture-2", "gesture-3", "gesture-4", "gesture-5"]
 /// The file suffix of each derived copy, and the directions its marks are mirrored in.
 let copies: [(suffix: String, mirrorX: Bool, mirrorY: Bool)] = [
     ("-inverse", true, false), ("-bottom", false, true), ("-bottom-inverse", true, true),
@@ -189,12 +189,12 @@ for name in names {
         copy.write(assets.appendingPathComponent("\(name)\(suffix).png"))
         print("assets/\(name)\(suffix).png")
     }
-    if thumblessNames.contains(name) {
-        var thumbless = image
+    if noThumbNames.contains(name) {
+        var noThumb = image
         for index in found.thumb.indices where found.thumb[index] {
-            for channel in 0..<3 { thumbless.pixels[index * 4 + channel] = card.pixels[index * 4 + channel] }
+            for channel in 0..<3 { noThumb.pixels[index * 4 + channel] = card.pixels[index * 4 + channel] }
         }
-        thumbless.write(assets.appendingPathComponent("\(name)-no-thumb.png"))
+        noThumb.write(assets.appendingPathComponent("\(name)-no-thumb.png"))
         print("assets/\(name)-no-thumb.png")
     }
 }

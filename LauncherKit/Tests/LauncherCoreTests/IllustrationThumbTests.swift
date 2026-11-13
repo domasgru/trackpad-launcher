@@ -78,7 +78,7 @@ import Testing
 
         for corner in [ThumbCorner.topRight, .bottomLeft, .bottomRight] {
             world.launcher.setThumbCorner(corner)
-            #expect(!world.launcher.showsHandGuide)
+            #expect(world.launcher.showsHandGuide == false)
         }
 
         world.launcher.setThumbCorner(.topLeft)
@@ -88,20 +88,20 @@ import Testing
     @Test func theHandGuideFollowsTheExternalTrackpadComingAndGoing() {
         let world = startedWorld(attached: [.macBook14, .magicTrackpad])
         world.launcher.setExternalThumbCorner(.bottomLeft)
-        #expect(!world.launcher.showsHandGuide)
+        #expect(world.launcher.showsHandGuide == false)
 
         world.hardware.detach(Trackpad.magicTrackpad.id)
         #expect(world.launcher.showsHandGuide)
 
         world.hardware.attach(.magicTrackpad)
-        #expect(!world.launcher.showsHandGuide)
+        #expect(world.launcher.showsHandGuide == false)
     }
 
     @Test func theHandGuideGoesWithHoldThumbAndReturnsWithIt() {
         let world = startedWorld()
 
         world.launcher.setHoldThumb(on: false)
-        #expect(!world.launcher.showsHandGuide)
+        #expect(world.launcher.showsHandGuide == false)
 
         world.launcher.setHoldThumb(on: true)
         #expect(world.launcher.showsHandGuide)
@@ -113,7 +113,7 @@ import Testing
         world.launcher.setThumbCorner(corner)
         world.launcher.setHoldThumb(on: holdThumb)
 
-        #expect(!world.launcher.showsHandGuide)
+        #expect(world.launcher.showsHandGuide == false)
     }
 
     @Test func theHandGuideStaysOffAfterARelaunchWithHoldThumbOff() {
@@ -123,6 +123,6 @@ import Testing
         world.relaunch().start()
         world.launcher.openedByHand()
 
-        #expect(!world.launcher.showsHandGuide)
+        #expect(world.launcher.showsHandGuide == false)
     }
 }

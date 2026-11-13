@@ -24,4 +24,16 @@ import Testing
     @Test func aContentExactlyAtTheCapIsReturnedAsIs() {
         #expect(SettingsWindowHeight.contentHeight(fitting: 872, titleBar: titleBar, visible: 1_000) == 872)
     }
+
+    @Test func aCappedWindowWidensByALegacyScrollersWidth() {
+        #expect(SettingsWindowHeight.contentWidth(fitting: 358, isCapped: true, scrollerWidth: 15) == 373)
+    }
+
+    @Test func aCappedWindowWithAnOverlayScrollerKeepsTheContentsWidth() {
+        #expect(SettingsWindowHeight.contentWidth(fitting: 358, isCapped: true, scrollerWidth: 0) == 358)
+    }
+
+    @Test func aWindowThatFitsKeepsTheContentsWidthWhateverTheScroller() {
+        #expect(SettingsWindowHeight.contentWidth(fitting: 358, isCapped: false, scrollerWidth: 15) == 358)
+    }
 }
