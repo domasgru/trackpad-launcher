@@ -244,3 +244,305 @@ The swipe, window swipe and thumb tap pictures MUST keep showing the thumb in th
 - **No-thumb pictures for the swipe, window swipe and thumb tap.** Those actions need the thumb whatever the setting.
 - **A no-thumb picture for each corner.** Without the thumb, the corner has nothing to show.
 - **Changes to copy, controls or behaviour** beyond the above. The pickers, switches, hints, cards and buttons keep their wording and what they do.
+
+## Implementation Decisions
+
+### What the pictures draw
+
+- **The launcher model decides, through two new reads beside the corner drawn.**
+  - `gestureThumbCorner`: the corner the five gesture pictures draw the thumb in. It is the corner drawn while Hold thumb is on, and no corner while it is off.
+  - `showsHandGuide`: true exactly while `gestureThumbCorner` is *Top left*.
+
+  Both are worked out on each read from the saved settings and the connected trackpads, as the corner drawn is. Nothing new is stored, saved or reconciled. So both follow the Hold thumb switch, a corner pick, and a trackpad connecting or disconnecting, at once (R5, R7).
+- **The swipe, window swipe and thumb tap pictures keep reading the corner drawn**, whatever Hold thumb is (R7).
+- **One rule in the UI names a picture's file.** It takes the picture's base name and the thumb to draw: a corner, or none. *Top left* gives the base name. The other corners keep today's suffixes: `-inverse` for top right, `-bottom` for bottom left, `-bottom-inverse` for bottom right. No thumb gives `-no-thumb`. It replaces today's corner-to-suffix rule. The gesture rows pass the model's `gestureThumbCorner`. The switcher rows pass the corner drawn, so they can never ask for a no-thumb file (R6, R7).
+- The rule that showed the handwritten guide for *Top left* is removed. The model's `showsHandGuide` takes its place.
+
+### The picture files
+
+- **Three kinds of file are drawn by hand, and the script never writes them:**
+  - the top-left version of the seven small pictures: gestures 2 to 5, swipe, window swipe, thumb tap
+  - the first gesture's five versions: four corners and no thumb
+  - the two hands
+- **The corner illustration script derives the rest:** the three other corners of each small picture, and the no-thumb version of gestures 2 to 5. That is 25 files. The script no longer lists the first gesture.
+- **The script measures in points.** Its rim width and its mark edge are pixel counts tuned for 2× art. They become points, multiplied by the file's pixels per point, which the script reads from the file's resolution (4 for the new art).
+- **Its values are set again for the new drawing.** Measured on the committed top-left files:
+  - the card's shaded rim is 5 px wide (1.25 pt)
+  - the marks come within 10 px (2.5 pt) of the card's top and bottom edges
+  - the card's face is never darker than 213 of 255
+  - the inside of a ring is about 170 to 200
+
+  So the rim is at least 1.5 pt and less than 2.5 pt, and the mark threshold lies between a ring's inside and the card's face. At 1.25 pt the card's rounded corners leave pixels as dark as 203 inside the rim, which a threshold in that band would take for marks nearer the corner than the thumb. From 1.5 pt on none is left.
+- **A mark is carried as a darkening of the card**, as today. The share of the card's light that a mark pixel takes is moved to its mirrored place on the filled-in card. The new marks are dark grey with a translucent ring, not pure black. The same rule carries them.
+- **The thumb is the mark nearest the top-left corner:** the connected part of the mark mask closest to that corner. In all seven small pictures it is a part of its own, apart from the fingers (checked on the committed files). The no-thumb version is the top-left file with that part replaced by the filled-in card. Every other pixel stays the original's.
+- **The card fill runs until it settles**, not for a fixed number of passes. At 4× a mark covers four times the pixels, and the fixed count was tuned for 2×.
+- **The derived files are committed** at the originals' pixel size and resolution. Running the script on a clean tree changes no file.
+- The handwritten guide's SVG is deleted from the assets, so the bundle no longer carries it (R5).
+
+### The large pictures' size
+
+- **A picture can be sized by its width alone**, at the file's own aspect ratio: 137 pt for the first gesture's picture (R4), 52.48 pt and 60 pt for the hands (R5). The small pictures keep their fixed 45 × 28 pt.
+- **The large files are stored at 4 pixels per point of the width they show at**, as the small pictures are: 548 px wide for the first gesture's five files, 210 px and 240 px for the hands, at 288 dpi.
+  - The committed exports are 1270, 978 and 1118 px wide: 9 to 19 pixels per point.
+  - Kept so, they would hold about 11 MB of decoded pixels for as long as the app runs. The settings view is built once and kept, and the image loader never drops what it loaded. They would also add 3.8 MB to the bundle.
+  - At 4 pixels per point they take under 1 MB decoded and about 0.6 MB in the bundle. The product overview asks for the least resources possible.
+- **S1 resizes the seven committed exports once**, with the system's `sips`, and commits the result (the command is under Further Notes). No code reduces a picture at run time, and the script still never writes these files. This changes files the user exported: see Further Notes.
+
+### The column's spacing (R3)
+
+- The column's one 20 pt spacing becomes the design's gaps:
+  - The update card and the Accessibility hint card form one block, 10 pt apart.
+  - That block sits 16 pt above the form.
+  - The no trackpad notice sits 10 pt below the form. R3 does not name this gap (see Further Notes).
+  - The buttons carry a 20 pt gap above them, whatever is above: the form or the notice. No condition picks it.
+- A block that shows nothing takes no room and adds no gap. With no card, the gesture group starts at the window's 16 pt inset.
+- The 10 pt between the form's groups is the grouped form's own spacing. No public API sets it on macOS. The probe measured it at 10 pt (see Further Notes). The form stays one form.
+- The form stays under its neighbours in drawing order, as today, so the margins it lays over them never take their clicks.
+- The 16 pt inset does not change. The window widens from 326 pt to the mockup's 358 pt, so the groups are 326 pt wide, as in the mockup (the user's decision). The update card's and the Accessibility hint card's pictures, clipped at the card's trailing side, get a second look at the new width.
+
+### Row heights (R1, R2, R4)
+
+- **A row states its full height, and one helper takes off the form's own padding.** The grouped form pads every row by 10 pt above and below. Today that number lives in comments, and each row sets a content height (26 or 56 pt) that adds up to the row. It becomes one named, measured constant beside the form's margins. A row then asks for 48, 70 or 86 pt.
+- One-line rows ask for 48 pt: gesture rows 2 to 5 with one app or none, the six switch rows (the *Switch windows* row while its hint is hidden), and the single *Thumb corner* row.
+- Two-line gesture rows ask for 86 pt. The two lines keep today's layout: 56 pt, their centres 32 pt apart. So 15 pt stands above and below them.
+- The first gesture row asks for 70 pt with one line and 86 pt with two.
+- The *Switch windows* row with the screen recording hint keeps its stack: the switch line, now 48 pt, then the hint. The two-trackpad *Thumb corner* block keeps its own paddings.
+- The form draws its 1 pt separator between rows, outside the rows' heights, as today.
+- The shell's refit already follows the number of two-line rows, the hints, the card and the notice. Nothing new feeds it.
+
+### The first gesture's art (R4, R5)
+
+- **One view draws everything the first gesture shows at its leading side:** the large picture, the hands and the labels. It is an overlay on the form, not content of the first row. Its origin is the gesture group's top-leading corner: the form's top edge, at the column's inset. So every position in R4 and R5 is written as the requirement gives it, as an offset from that corner. None depends on the form's row padding.
+- **Why an overlay.** The grouped form clips a row's content to its group (probe, Further Notes). The hands and labels reach past the group, so they cannot be row content. An overlay also stays where it is when the first row grows from 70 to 86 pt.
+- **The picture** sits at (−12, −1), 137 pt wide. It shows the file the picture rule names for the first gesture and the model's `gestureThumbCorner`. It is clipped to a shape of our own: the group's width, the first row's 70 pt, and the group's 12 pt radius at the top-leading corner. So the group's corner and edges cut it, and it can never draw into the 2-finger row.
+- **The hand guide** shows while the model's `showsHandGuide` is true. It is not clipped.
+  - The left hand sits at (−11.5, 10.5), 52.48 pt wide. The right hand sits at (55, 24), 60 pt wide. Both draw at 90% opacity.
+  - The *Hold* label sits at (−11, 49) and the *Tap* label at (92, 55), over the hands.
+- **A label** is 18 pt tall and as wide as its content: a dot, 4 pt, then the word. Its padding is 6 pt left and right, 3 pt above and 2 pt below.
+  - *Hold* has a filled black dot, 7.17 pt across. *Tap* has a ringed dot, 10.67 pt across.
+  - The fill is the design's light Ultra Thick material.
+  - It has two shadows, from the JSON: black at 20% with blur 8, 2 pt down; black at 40% with blur 2.
+  - The JSON does not carry the corner radius or the text's size and weight. They are matched by eye to the mockup.
+- The whole overlay takes no clicks, so the pickers under it work (probe, Further Notes).
+- The hand guide appears and disappears with no animation.
+- The first row itself holds only its pickers, at the trailing edge, centred vertically. It keeps the accessibility label "1-finger gesture". The hand guide carries, for VoiceOver, the sentence the handwritten guide carried.
+- **The handwritten guide is removed:** its view, its rule, its test and its SVG.
+- Gesture rows 2 to 5 keep their 45 × 28 pt picture at the leading edge, centred vertically.
+
+### Docs
+
+- `docs/domain-model.md` is updated with this plan: the settings window's spacing and row heights, the gesture row, the hold thumb setting's effect on the pictures, and two new entries, *Illustration* and *Hand guide*.
+- `docs/architecture.md` does not change. No core decision moves.
+- The doc comments that state 46 pt rows, the 20 pt spacing, @2x pictures and the handwritten guide are brought up to date with the code they describe.
+
+## Testing Decisions
+
+### Strategy
+
+Two existing seams prove what a test can prove. No new seam is added.
+
+- **`World`** (`LauncherKit/Tests/LauncherCoreTests/World.swift`): the real `Launcher` and the real settings store, over the in-memory trackpads.
+  - A test flips Hold thumb, picks corners, attaches and detaches trackpads, and relaunches. Then it reads `gestureThumbCorner` and `showsHandGuide` beside `drawnThumbCorner`.
+  - It observes the decisions: what the gesture pictures draw, and whether the hand guide shows.
+  - It misses what the window draws with them.
+  - The new tests resemble `LauncherKit/Tests/LauncherCoreTests/CornerChoiceTests.swift` and `HoldThumbSettingTests.swift`.
+- **The picture files the rule names** (`LauncherKit/Tests/LauncherUITests/ThumbCornerRuleTests.swift`, the suite `CornerIllustrationFileTests`).
+  - A test asks the picture rule for a file name, reads that file from the repository's assets folder, and compares pixels.
+  - It observes that every state the model can report has a file, and that the file shows what the requirement says.
+  - It misses whether the bundle carries the file, which the project's unchanged resource rule does, and how the window draws it.
+  - The mark mask in these tests is the tests' own, apart from the script's. Its measures become points, as the script's do.
+  - The existing corner-suffix test goes: the file tests call the rule for every name. The guide-rule test goes with the rule.
+
+Nothing is faked beyond the `World`'s existing in-memory adapters. The asset files are read for real.
+
+R1 to R4 are not proved by a test. They are measures of the real window: our constants added to the grouped form's own, unexposed metrics, laid out by SwiftUI. No test in this repository renders SwiftUI, and earlier settings window plans measured the window by hand. So R1 to R4 are measured by hand on the running window. A seam that could measure part of it exists in principle: the settings view hosted over a real model. Adding it is a decision for the user, set out under Further Notes.
+
+R5, R6 and R7 each join a rule a test can prove with a look only eyes can judge. The rule allows one proof per requirement. Their test scenarios are the proof of record. The by-eye checks are acceptance criteria of S1, S2 and S3. Their steps are under Further Notes for S1 and S3, and in the criterion itself for S2.
+
+### Test scenarios
+
+"T1's world" is a `World` with the built-in trackpad, started and opened by hand, with default settings: Hold thumb on, thumb corner *Top left*. "The mixed world" is a `World` with the built-in trackpad and a Magic Trackpad attached, started and opened by hand: MacBook trackpad *Top left*, External trackpad *Bottom left*.
+
+| ID | Requirements | Seam | Given / When / Then | Source of truth for the expected value |
+|----|--------------|------|---------------------|----------------------------------------|
+| T1 | R6 | World | Given T1's world. When `setThumbCorner` picks each of the four corners in turn. Then after each pick `gestureThumbCorner` and `drawnThumbCorner` both equal that corner. | R6 "Top right corner", for every corner |
+| T2 | R7 | World | Given T1's world at each of the four corners, one case per corner. When `setHoldThumb(on: false)`. Then `gestureThumbCorner` is nil on the next read, and `drawnThumbCorner` is still the corner. When `setHoldThumb(on: true)`. Then `gestureThumbCorner` is the corner again. | R7 "Turning Hold thumb off" and "Turning Hold thumb back on" |
+| T3 | R7 | World | (a) Given T1's world with Hold thumb off. When the corner changes from *Top left* to *Bottom right*. Then `gestureThumbCorner` stays nil and `drawnThumbCorner` is *Bottom right*. (b) Given the mixed world with Hold thumb off. When the Magic Trackpad detaches, then attaches again. Then `gestureThumbCorner` stays nil throughout, while `drawnThumbCorner` reads *Bottom left*, then *Top left*, then *Bottom left*. | R7 "Corner change while Hold thumb is off"; the corner drawn's definition |
+| T4 | R7 | World | Given T1's world with Hold thumb turned off, which saves. When the process relaunches, starts and is opened by hand. Then `gestureThumbCorner` is nil. | R7 "Opening with Hold thumb off" |
+| T5 | R6 | Picture files | For each of the seven small pictures and each of *Top right*, *Bottom left* and *Bottom right* (21 cases). Given the top-left file and the file the rule names for that corner. Then: (a) both have one pixel size; (b) outside the marks, meaning the top-left file's marks and their mirrored places, every pixel equals the top-left file's within 1 level per channel; (c) the file's mark mask is the top-left file's mask mirrored left to right for *Top right*, top to bottom for *Bottom left*, and both ways for *Bottom right*, with under 2% of the mark pixels differing. | R6's table; the committed top-left file as the fixture |
+| T6 | R6 | Picture files | For each of the seven small pictures' top-left file. Then its pixel size is 45k × 28k for one whole number k of at least 2. | R6: 45 × 28 pt, at least two pixels per point |
+| T7 | R6, R7 | Picture files | Given the five files the rule names for the first gesture: four corners and no thumb. Then: (a) all five have one pixel size; (b) each corner's file differs from the no-thumb file, in any channel by more than 1, in one patch no wider or taller than a tenth of the picture's width; (c) at the patch's centre the corner's file is dark and the no-thumb file is light; (d) the *Top left* and *Bottom left* patches share a centre x, left of the *Top right* and *Bottom right* patches' x; (e) the *Top left* and *Top right* patches share a centre y, above the *Bottom left* and *Bottom right* patches' y. | R6: four versions, one for each corner. R7: the no-thumb picture is the top-left version without its thumb. The patch bound: the thumb dot is a sixteenth of the picture's width |
+| T8 | R7 | Picture files | For each of gestures 2 to 5. Given the top-left file and the file the rule names for no thumb. Then: (a) both have one pixel size; (b) the two differ, in any channel by more than 1, only within 6 pt of the thumb's centre, which lies 7.6 pt from the card's left edge and 7.6 pt from its top edge; (c) the differing pixels include that centre and span at least 6 pt across and 6 pt down; (d) within those 6 pt, no pixel of the no-thumb file is darker than 205 of 255. | R7: the same fingers, in the same place, on the same card, without a thumb. The thumb's place, read from the committed art and not from the script's rule: in all four top-left files its dot is centred 30.5 px from the left and top edges of the 180 px width and is 31 px across, and the nearest finger mark is 38 px from that centre. The card's face is never darker than 213, and no mark is lighter than 200 |
+| T9 | R5 | World | Given T1's world. Then `showsHandGuide` is true. When each of the other three corners is picked in turn. Then it is false after each pick. When *Top left* is picked again. Then it is true. | R5 "Default settings" and "Another corner" |
+| T10 | R5 | World | Given the mixed world. Then `showsHandGuide` is false. When the Magic Trackpad detaches. Then it is true. When the Magic Trackpad attaches again. Then it is false. | R5 "Mixed trackpads with the external one connected" |
+| T11 | R5 | World | (a) Given T1's world. When Hold thumb turns off. Then `showsHandGuide` is false on the next read. When it turns on. Then true. (b) For each of the other three corners, with Hold thumb on and with it off. Then false. (c) Given T1's world with Hold thumb turned off, which saves. When the process relaunches, starts and is opened by hand. Then false. | R5 "Hold thumb off"; R5's rule "in every other state it MUST show neither"; R7 "Opening with Hold thumb off" |
+
+### Verified without a test
+
+All four are checked by hand on a Debug build, in one sitting at the end of S2. A test is not the right proof for the reason under Strategy: the measures exist only in the real window.
+
+The method, shared by all four:
+
+- Build and open with `make run`. The Debug build keeps its own settings and permissions, under `com.domasgru.TrackpadLauncherApp.debug`.
+- Capture the settings window on a Retina display, where one point is two pixels: ⇧⌘4, Space, then ⌥-click the window.
+- Measure in the capture. A row runs from the group's edge or the separator above it to the separator below it or the group's edge. The 1 pt separator is not counted. Every measure must be within half a point of its expected value.
+- Then lay the capture beside `Utility Panel.png`. The mockup's groups are 32 pt wider (see Further Notes). Heights, gaps and offsets from a group's leading edge must match within 1 pt, except where the requirements differ from the mockup.
+
+**R1. One-line rows are 48 pt tall.**
+
+1. Open the window with Accessibility allowed and *Switch windows* off. Expected: the *Animate app launch*, *Hold thumb*, *Switch recent*, *Switch windows*, *Toggle recent* and *Hide background apps* rows are each 48 pt tall. Each title and each switch is centred between its row's edges within 1 pt.
+2. Give the 2-finger gesture one app and the 4-finger gesture none. Expected: both rows are 48 pt tall, and so are the 3-finger and 5-finger rows with one app.
+3. Quit the app. Run `defaults delete com.domasgru.TrackpadLauncherApp.debug externalThumbCorner`, which reports a missing key on a Mac that never had mixed trackpads. With no Magic Trackpad connected, run `make run`. Expected: one *Thumb corner* row, 48 pt tall.
+4. Run `tccutil reset ScreenCapture com.domasgru.TrackpadLauncherApp.debug`, then turn *Switch windows* on. Expected: the row holds the hint and its button under the switch line and is taller than 48 pt. Against a capture of the same state from a build of `main`: the hint and the button sit where they sat, measured from the switch line, and the row is 2 pt taller.
+5. Quit the app. Run `defaults write com.domasgru.TrackpadLauncherApp.debug externalThumbCorner -string bottomLeft`, then `make run`. Expected: "Thumb corner:" with the indented *MacBook trackpad* and *External trackpad* lines. Against a capture of the same state from a build of `main`: the block is the same height, and its lines sit where they sat.
+
+**R2. Two-line gesture rows are 86 pt tall.**
+
+1. Give the 3-finger gesture Notes, then Mail as its second app. Expected: the row is 86 pt tall. The two app icons' centres are 32 pt apart, the first 27 pt below the row's top and the second 27 pt above its bottom. That is 15 pt, then two 24 pt lines 8 pt apart, then 15 pt.
+2. Remove the second app. Expected: the row is 48 pt tall again, and the window is 38 pt shorter, with no empty band at its bottom.
+
+**R3. The window's parts sit at the design's spacing.**
+
+1. Open the window with Accessibility allowed and no update card. Expected: the gesture group's top edge is 16 pt below the content's top. No card shows, and no gap stands where the cards would be.
+2. Run `tccutil reset Accessibility com.domasgru.TrackpadLauncherApp.debug`, then `make run`. Expected: the gesture group's top edge is 16 pt below the Accessibility hint card's bottom edge.
+3. Allow Accessibility in System Settings. Quit the app. Run `open "build/dev/Build/Products/Debug/Trackpad Launcher.app" --args -PreviewUpdateCard YES`. Expected: the gesture group's top edge is 16 pt below the update card's bottom edge.
+4. Reset Accessibility again, quit, and open with the same argument. Expected: the hint card's top edge is 10 pt below the update card's bottom edge, and the gesture group's top edge is 16 pt below the hint card's bottom edge.
+5. In each of these four states. Expected: the gesture group, the switcher group and the thumb corner group are 10 pt apart. The buttons' top edge is 20 pt below the thumb corner group's bottom edge. The first part starts 16 pt below the content's top, the buttons end 16 pt above its bottom, and every part is 16 pt from its sides.
+6. The no trackpad notice, which shows only with no trackpad connected. Try these routes in order, and note which one was taken:
+   - Close the MacBook's lid with an external display and a mouse connected and no Magic Trackpad. The model counts a closed lid as the built-in trackpad disconnecting, but whether macOS then stops listing the trackpad is not known.
+   - Use a Mac with no trackpad connected.
+   - Expected on either route: the notice shows, and the buttons' top edge is 20 pt below its bottom edge.
+   - If neither route shows the notice, read the diff instead. Expected: one 20 pt gap stands above the buttons, with no condition on what is above them, so the gap measured in step 5 is the gap under the notice.
+
+**R4. The first gesture row shows the large keyboard and trackpad picture.**
+
+1. Give the 1-finger gesture Notes, with Hold thumb on and the thumb corner *Top left*. Expected:
+   - The row is 70 pt tall. Notes's picker is at the trailing edge, its icon's centre 35 pt below the row's top.
+   - Measured from the gesture group's top-leading corner, the thumb dot's centre is at (36.3, 31.6) and the ringed dot's centre at (56.4, 41.3), each within 1 pt. These come from the drawing: in the 1270 px export the thumb dot's centre lies 448 px from the left edge and 302 px from the top, and the ringed dot's 634 px and 392 px. Drawn 137 pt wide, less the (12, 1) offset, that gives the two points.
+   - The group's rounded top-left corner, its top edge and its leading edge cut the picture. No part of the picture shows outside the group or in the 2-finger row.
+2. Set the 1-finger gesture to *None*. Expected: the same, with *Choose app…* at the trailing edge.
+3. Give it Notes, then Mail as its second app. Expected: the row is 86 pt tall. The two dots have not moved. Below the picture only the group's fill shows, down to the separator. The pickers' two lines are centred in the row.
+4. Remove Mail. Expected: the row is 70 pt tall again.
+5. Lay the first row beside the mockup's. Expected: the keyboard, the trackpad and the two dots sit where the mockup has them, within 1 pt, measured from the group's top-leading corner.
+
+## Further Notes
+
+**Decisions for the user to confirm.** The requirements leave each of these open. The plan picks one reading and says what the other would change.
+
+- **The window's width (decided by the user).** The window is 358 pt wide, as in the mockup, with groups 326 pt wide. Every control is then clear of the hands and labels, as the mockup shows.
+- **The large files are resized.** The first gesture's five files and the two hands were exported at 9 to 19 pixels per point. S1 resizes them to 4 pixels per point, in place. The exports stay in git history, and Figma stays their source. The user can instead export them again at 548, 210 and 240 px wide: the result is the same. If the user wants the large files kept as they are, the other reading is to reduce each picture when the app loads it, which adds code and a test seam and leaves 3.8 MB in the bundle.
+- **A test seam for the window's measures.** The plan measures R1 to R4 by hand, as plans 037, 048, 049 and 050 measured this window. A higher seam is possible: the settings view hosted over a real `Launcher`. The user decides whether this change should add it.
+  - What it would prove: R1, R2 and R3. The probe shows the hosting view's fitting size is right in the same turn, and the pickers and switches are AppKit views whose frames give each row's centre.
+  - What it would not prove: where R4's picture and R5's hands and labels are drawn. They are SwiftUI drawing with no view of their own, so a test could see them only by rendering pixels and searching them. The by-hand sitting stays for them either way.
+  - What it needs: the `World` and its in-memory adapters, which live in the core test target, moved to a support target that both test targets use. That touches most of the core test files.
+  - What it brings with it: the quick gate, and the release that runs it, would then depend on the grouped form's own metrics on the Mac that runs them. A macOS update that moves those metrics turns the gate red until they are measured again. That is also the moment the window has drifted from the design.
+  - If the user wants it, it becomes a slice before S2, and R1 to R3 move from Verified without a test to test scenarios.
+- **The gap between the last group and the no trackpad notice.** R3 names the gap under the notice, not the one above it. The plan uses 10 pt, as between groups: the notice is a rounded group like the others. Today it is 20 pt.
+- **The 10 pt between the form's groups is macOS's.** The grouped form sets it, and no public API changes it. The probe measured 10 pt on macOS 27.2. The app also runs on macOS 26, where it was not measured. If it differs there, each group would have to become a form of its own to carry our gap.
+- **Row heights and separators.** The mockup counts each 1 pt separator inside its row. The form draws separators between rows, as today, so a group of n rows is n − 1 pt taller than the mockup's. Each row is the height R1, R2 and R4 give.
+- **The *Hide background apps* row.** It is 52 pt in the mockup. R1 says 48 pt. The plan follows R1.
+- **R5 could be two requirements.** R5 holds a rule (when the hands and labels show) and a drawing (where and how). The tests prove the rule. Only eyes judge the drawing. Splitting R5 would give each part its own proof of record. The plan does not split it, since the requirements are confirmed.
+
+**One proof per requirement.** R5, R6 and R7 mix what a test can prove with what only eyes can judge. Their test scenarios are the proof of record. The by-eye checks below, and the one in S2's criteria, are acceptance criteria, not a second proof of record. Plan 037 handled its gear the same way.
+
+**By-eye checks for S1** (R6, R7), on a Debug build opened with `make run`:
+
+1. Open each of the 25 derived files at 800%. Expected: the card's light and rim are the top-left file's. The marks are crisp. No ghost shows where a mark was. In a no-thumb file, a clean card shows where the thumb was.
+2. Open the seven resized files at 400%. Expected: smooth edges, no jagged steps, and nothing cut off at a file's edge.
+3. Pick each thumb corner in turn. Expected: the 2- to 5-finger pictures and the *Switch recent*, *Switch windows* and *Toggle recent* pictures show the thumb in that corner, as sharp as on a build of `main`.
+4. At *Top right*, turn *Hold thumb* off. Expected: the 2- to 5-finger pictures change at once to the fingers without a thumb, in their top-left places. The three switcher pictures keep the thumb top right.
+5. With *Hold thumb* off, pick another corner. Expected: the gesture pictures stay the same. The three switcher pictures move the thumb.
+6. Turn *Hold thumb* on. Expected: the gesture pictures show the thumb in the corner again.
+
+In S1 the 1-finger row keeps today's layout, so its new picture shows squeezed into 45 × 28 pt under the handwritten guide. It does so on this branch already. S2 gives the row its design.
+
+**By-eye checks for S3** (R5), on a Debug build opened with `make run`, with Hold thumb on and the thumb corner *Top left*:
+
+1. Capture the window. Expected, measured from the gesture group's top-leading corner, within 1 pt: the left hand's box starts at (−11.5, 10.5) and is 52.5 pt wide; the right hand's starts at (55, 24) and is 60 pt wide; the *Hold* label starts at (−11, 49) and the *Tap* label at (92, 55); each label is 18 pt tall.
+2. Lay it beside the mockup. Expected: the left hand rests on the trackpad's top-left corner with *Hold* below it, and the right hand taps the trackpad's centre with *Tap* below it. The keyboard shows faintly through the hands. The labels cover the hands. Each label looks like the mockup's: a small light tooltip with a soft shadow, a filled dot for *Hold* and a ringed dot for *Tap*. The hands' edges are smooth.
+3. Look at the group's leading edge and the first row's separator. Expected: neither cuts a hand or a label. No handwritten guide shows.
+4. Pick *Bottom left*. Expected: the hands and labels go at once, and the picture shows the thumb bottom left. Pick *Top left*. Expected: they return.
+5. Turn *Hold thumb* off. Expected: they go at once, and the picture shows no thumb. Turn it on. Expected: they return.
+6. Add a second app to the 1-finger gesture. Expected: the hands and labels have not moved.
+7. Compare a capture with the Accessibility hint card showing and one without it. Expected: the same offsets from the gesture group.
+8. Click the 1-finger picker, then the 2-finger picker. Expected: each menu opens.
+9. Give the 1-finger gesture a second app with a long name, so the second line's minus button sits under the *Tap* label. Click the second picker. Expected: its menu opens. Click the minus button through the label. Expected: the second app is removed.
+10. With a Magic Trackpad connected, *MacBook trackpad* *Top left* and *External trackpad* *Bottom left*. Expected: no hands or labels. Switch the Magic Trackpad off. Expected: they appear.
+
+**Commands the slices use.**
+
+- S1's resize, run once on each file, in place: `sips --resampleWidth 548 -s dpiWidth 288 -s dpiHeight 288 <file>` for the first gesture's five files, with 210 for the left hand and 240 for the right. A trial into the `.temp` folder gave 548 × 272, 210 × 208 and 240 × 186 px, 0.63 MB in all, with smooth edges. After it, each first-gesture corner file still differs from the no-thumb file in one patch of about 38 px, as T7 expects.
+- S2's check that no code of the handwritten guide remains: `git grep -n -e showsGuide -e "struct Guide" -e '"guide"' -- LauncherKit` prints nothing, and the assets folder holds no `guide.svg`.
+
+**What the probes measured.** Two throwaway probes sit in this plan's `.temp` folder, which git ignores: `form-probe.swift` and `overlay-probe.swift`. Each is built with `swiftc`, renders a grouped form offscreen in the light appearance, and reads the result off the pixels. On macOS 27.2:
+
+- The form's margins are 20 pt on every side, and a row's padding is 10 pt on every side. Both are what the code assumes today.
+- Rows of 28, 50 and 66 pt content come out 48, 70 and 86 pt tall, with a 1 pt separator between rows.
+- Two sections sit 10 pt apart. This is the system's value. `listSectionSpacing` and `listSectionMargins` are unavailable on macOS.
+- A section's corner radius is 12 pt, the value the group style already holds.
+- The form clips a row's content to its section's rounded shape. A picture offset past the section's leading and top edges is cut there.
+- An overlay on the form reaches past the group's edge uncut, draws over a pop-up button in a row, and with hit testing off lets a click through: a hit test at the covered button's centre returns the button.
+
+The app's deployment target is macOS 26. These values were not measured there. The by-hand checks run on the developer's Mac.
+
+**The branch starts red.** The commit that brought the new art replaced the seven top-left files with 4× versions and the first gesture's files with the large picture. The derived copies beside them are still the old 2× ones. So `CornerIllustrationFileTests` fails today, with 26 issues. S1 turns it green.
+
+## Slices
+
+### S1: Every picture in the new drawing, and no thumb while Hold thumb is off
+
+**What to build:** Every small picture shows the new drawing, with its thumb in the thumb corner the user picked. When the user turns *Hold thumb* off, the 2- to 5-finger pictures change at once to the fingers without a thumb, while the *Switch recent*, *Switch windows* and *Toggle recent* pictures keep theirs. Turning it on brings the thumb back. The corner illustration script produces every derived file from the hand-drawn ones, the large hand-drawn files are stored at their display size, and the quick gate, red on this branch today, is green again.
+
+**Blocked by:** None (can start immediately).
+
+**Requirements:** R6, R7.
+
+**Test scenarios:** T1, T2, T3, T4, T5, T6, T7, T8.
+
+**Skills:** `macos-dev-workflow:swift-testing-pro`, `macos-dev-workflow:axiom-swiftui`.
+
+- [ ] The script derives three corner copies of each of the seven small pictures and a no-thumb copy of gestures 2 to 5, at 180 × 112 px, and writes no first-gesture file. Run on a clean tree, it changes no tracked file.
+- [ ] The first gesture's five files are 548 px wide and the hands 210 and 240 px wide, at 288 dpi: 4 pixels per point of 137, 52.48 and 60 pt.
+- [ ] T5, T6, T7 and T8 are green. The stale-size failures of the corner illustration file tests are gone.
+- [ ] T1, T2, T3 and T4 are green.
+- [ ] The gesture rows show the picture for the model's gesture thumb. The switcher rows show the picture for the corner drawn.
+- [ ] The by-eye checks for S1 under Further Notes, all six, each with its stated result.
+- [ ] `make test` is green. The tests this slice can break: the corner illustration and thumb corner rule tests it rewrites; the gear and update picture asset tests, which share the assets path; the Hold thumb, corner choice and mixed trackpads suites, which read the same model; the source-scan test.
+
+### S2: The window at the design's measures, with the large first picture
+
+**What to build:** The settings window opens at the design's measures: 358 pt wide, with 326 pt groups. Every one-line row is 48 pt tall and a row with a second app is 86 pt. The update card, the Accessibility hint card, the groups and the buttons sit at the design's gaps. The 1-finger row is 70 pt tall and shows the large keyboard and trackpad picture, fixed to the group's top-leading corner and cut by it, with its thumb in the corner drawn, or without one while *Hold thumb* is off. The handwritten guide is gone.
+
+**Blocked by:** S1 (the picture rule, the model's gesture thumb, the resized files, and a green gate).
+
+**Requirements:** R1, R2, R3 and R4; R5 in the part that removes the handwritten guide; R6 and R7 in the part that shows the first gesture's picture in its row.
+
+**Test scenarios:** None.
+
+**Skills:** `macos-dev-workflow:axiom-swiftui`, `macos-dev-workflow:axiom-macos`.
+
+- [ ] The manual check for R1 as under Verified without a test, all five steps, each with its expected result.
+- [ ] The window's content is 358 pt wide and every group 326 pt wide; the update card's and Accessibility hint card's pictures still sit clipped at the card's trailing side, as in the mockup.
+- [ ] The manual check for R2, both steps.
+- [ ] The manual check for R3, all six steps. Step 6 says which route was taken.
+- [ ] The manual check for R4, all five steps.
+- [ ] By eye, for the first gesture's picture in its row: at *Top right*, *Bottom left* and *Bottom right* the thumb dot's centre is at (76.5, 31.6), (36.3, 51.0) and (76.5, 51.0) from the group's top-leading corner, within 1 pt; with *Hold thumb* off no thumb dot shows; the picture's edges are smooth on the Retina display.
+- [ ] No view, rule, test or asset of the handwritten guide remains (the check is under Further Notes).
+- [ ] `make test` is green. No test measures the window, so the tests this slice can break are the corner illustration tests, through the picture rule and the assets folder, and the source-scan test.
+
+### S3: Hands and labels show how to make the first gesture
+
+**What to build:** While *Hold thumb* is on and the thumb is drawn top left, two hands and the *Hold* and *Tap* labels sit over the first gesture's picture, where the design puts them. They go at once when the user picks another corner, turns *Hold thumb* off, or connects an external trackpad with another corner, and return when the state returns. They never take a click.
+
+**Blocked by:** S2 (the first gesture's overlay and its large picture).
+
+**Requirements:** R5.
+
+**Test scenarios:** T9, T10, T11.
+
+**Skills:** `macos-dev-workflow:axiom-swiftui`, `macos-dev-workflow:swift-testing-pro`.
+
+- [ ] T9, T10 and T11 are green.
+- [ ] The hands and labels show exactly while the model says the hand guide shows. Nothing else in the view decides it.
+- [ ] The by-eye checks for S3 under Further Notes, all ten, each with its stated result.
+- [ ] `make test` is green. The tests this slice can break: the Hold thumb, corner choice and mixed trackpads suites, which read the same model, and the source-scan test.

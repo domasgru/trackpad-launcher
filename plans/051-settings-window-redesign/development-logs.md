@@ -20,3 +20,16 @@
 - Readers would expect the hands to mirror for other corners, and mockup details could conflict with the requirements → a Non-goal and a precedence rule added.
 - Declined: putting Hold thumb into the product overview. The domain model's *Hold thumb setting* entry already defines which gestures fire without the thumb.
 - Declined: moving the design's coordinates out of the requirements. They are the user's stated design and are observable.
+
+## Plan
+- R3's manual steps all showed a card, so the window with no card was never measured, and an empty block could have added a gap unseen → a step measures the gesture group 16 pt below the content's top with no card showing.
+- T8 found the thumb with the script's own rule, the mark nearest the top-left corner, so it could not catch the script removing the wrong mark → T8 takes the thumb's place from the committed art: 7.6 pt from the card's left and top edges, with the change confined to 6 pt around it.
+- The script's rim could be as narrow as 1.25 pt, where the card's rounded corners leave pixels a mark threshold would catch, nearer the corner than the thumb → the rim is at least 1.5 pt.
+- The pictures were to be reduced when the app loads them, with a new test seam and T12, only because the exports are 9 to 19 pixels per point; T12 also checked the width it passed in → S1 resizes the seven large files to 4 pixels per point instead. The runtime reduction, its seam and T12 are gone, and S2 no longer claims R5's hand sizes. Listed for the user, since it changes files they exported.
+- The width note said a long picker name would sit under the *Tap* label in a one-line row; the label is lower than that picker → corrected: only the minus button of a two-line first row with a long second app sits under it. S3's check 9 clicks that button through the label.
+- The plan turned down a test seam for the window's measures on development cost → by hand stays the default, as in earlier settings window plans, but the seam is set out as a decision for the user: what it would prove (R1 to R3), what it would not (R4's and R5's drawing), and what it needs.
+- The 10 pt between the form's groups is macOS's own and was measured only on macOS 27.2 → listed for the user, with what a different value on macOS 26 would require.
+- S2's by-eye check of the first gesture's picture belongs to R6 and R7, which S2 did not list → S2 lists them for that part, and Strategy names S2 among the slices with by-eye checks.
+- The one-proof-per-requirement note copied plan 037 without its offer to split the mixed requirement → the offer to split R5 into its rule and its drawing is listed for the user.
+- R3's notice step said a MacBook can never show the notice, though the model treats a closed lid as the trackpad disconnecting → the step tries the closed lid first, then a Mac with no trackpad, then reading the diff.
+- S2's criterion for the handwritten guide's removal named code identifiers → it states the result, and the command sits under Further Notes.
