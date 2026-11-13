@@ -72,7 +72,7 @@ Fingers that touch down and lift again within a short window, without dragging. 
 A tap with no thumb that fires its finger count's gesture while the hold thumb setting is off. It is a touch that meets all of these:
 - one to five fingers touch one trackpad;
 - the first finger lands while no other contact is on that trackpad, edge contacts aside;
-- every finger lifts within the tap window (400 ms from the first landing) without dragging more than 3 mm;
+- every finger lifts within the thumbless tap window (70 ms from the first landing, against the 400 ms a thumb-held tap allows) without dragging more than 3 mm;
 - no contact lands inside the anchor corner;
 - the trackpad is not pressed to a click, a press that click blocking withholds included.
 

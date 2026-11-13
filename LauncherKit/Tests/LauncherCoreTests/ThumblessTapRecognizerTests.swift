@@ -81,7 +81,7 @@ import LauncherCore
     @Test func aThumblessTapFiresOnTheLastLiftAndBlocksNothing() {
         var recognizer = GestureRecognizer(
             corner: .topLeft, surface: .macBook14, slides: [], swaps: true, thumblessTaps: true, travel: .linear)
-        let results = plain.tap(fingers: 2).frames.map { recognizer.step($0) }
+        let results = plain.tap(fingers: 2, hold: .milliseconds(50)).frames.map { recognizer.step($0) }
         #expect(results.compactMap(\.fired) == [.two])
         #expect(results.allSatisfy { $0.blocking == .none && $0.opensLiftWindow == false })
     }
@@ -89,6 +89,6 @@ import LauncherCore
     @Test func withTheOptionOffTheSameTapFiresNothing() {
         var recognizer = GestureRecognizer(
             corner: .topLeft, surface: .macBook14, slides: [], swaps: true, travel: .linear)
-        #expect(plain.tap(fingers: 2).frames.compactMap { recognizer.step($0).fired }.isEmpty)
+        #expect(plain.tap(fingers: 2, hold: .milliseconds(50)).frames.compactMap { recognizer.step($0).fired }.isEmpty)
     }
 }

@@ -310,14 +310,14 @@ public struct GestureRecognizer: Sendable {
             let landsInCorner = landed.contains { corner.admits($0.position) }
             if tap.down.isEmpty {
                 // Only the time is judged on the lift frame: a press first seen there is the tap's own click.
-                let fires = frame.time - tap.start <= GestureRules.maxTapDuration
+                let fires = frame.time - tap.start <= GestureRules.maxThumblessTapDuration
                     ? Gesture(fingerCount: tap.touched.count) : nil
                 event = fires.map(Recognition.Event.fired)
                 let startsNext = fires != nil && frame.press == nil && !landsInCorner && !landed.isEmpty
                 rest.tap = startsNext ? Tap(start: frame.time, landing: landed) : nil
             } else if landsInCorner || frame.press != nil
                         || Self.drag(of: tap.fingers, in: down, book: book, on: surface) != nil
-                        || frame.time - tap.start > GestureRules.maxTapDuration {
+                        || frame.time - tap.start > GestureRules.maxThumblessTapDuration {
                 rest.tap = nil
             } else {
                 for touch in landed { tap.land(touch.id) }

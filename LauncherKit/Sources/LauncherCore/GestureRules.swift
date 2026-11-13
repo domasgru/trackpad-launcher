@@ -17,6 +17,10 @@ package enum GestureRules {
     static let edgeBandTop = 0.40
     /// First finger down to last finger up.
     static let maxTapDuration = Duration.milliseconds(400)
+    /// First finger down to last finger up, for a tap with no thumb (Hold thumb off). Much shorter than
+    /// `maxTapDuration`: with no thumb to say the touch is meant, only a brisk tap can be told from ordinary use. The
+    /// deliberate taps recorded on a real trackpad ran at most 64 ms, while a still tap to click ran 104 ms. Inclusive.
+    static let maxThumblessTapDuration = Duration.milliseconds(70)
     /// A finger farther than this from its landing point is dragging, not tapping.
     static let dragThresholdMM = 3.0
     /// Clicks are blocked for this long after a thumb anchors. Strictly less blocks.
