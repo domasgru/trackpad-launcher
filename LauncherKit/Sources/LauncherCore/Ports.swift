@@ -105,6 +105,16 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// first app's first, then the launch animations; each app sways toward its side, a bounce's ending included.
     func bringToFront(_ split: SplitArrival, cap: Duration)
 
+    /// The display under the pointer now; nil with none. Reads only.
+    func pointerDisplay() -> DisplayID?
+
+    /// Puts the app's front window in that half, if the app runs and has one, and returns at once: the work runs away
+    /// from the main actor and answers nothing, ever. A full-screen window leaves full screen first; a window that
+    /// cannot take the half's size keeps the closest it allows, at the half's top-left corner (`.left`) or top-right
+    /// corner (`.right`). A window already there is left alone; a later call for the same app wins. Needs
+    /// Accessibility: the caller checks it.
+    func placeFrontWindow(of app: BundleID, in half: ScreenHalf)
+
     /// Whether macOS reports a process for the app now, still launching or finished, menu bar apps included; unlike
     /// `runningApps()`, not the ⌘-Tab list. Under 0.1 ms; reads only.
     func hasProcess(_ app: BundleID) -> Bool

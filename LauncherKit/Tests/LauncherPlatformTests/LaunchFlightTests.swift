@@ -1,4 +1,5 @@
 import AppKit
+import LauncherCore
 import Testing
 
 @testable import LauncherPlatform
@@ -55,9 +56,9 @@ extension LaunchStage {
 
 extension LaunchDisplay {
     /// This 14" MacBook Pro's display, as read in the planning probe.
-    static let builtIn = LaunchDisplay(frame: CGRect(x: 0, y: 0, width: 1512, height: 982), scale: 2)
+    static let builtIn = LaunchDisplay(id: DisplayID(rawValue: 1), frame: CGRect(x: 0, y: 0, width: 1512, height: 982), scale: 2)
     /// A 1x display arranged above the built-in one.
-    static let external = LaunchDisplay(frame: CGRect(x: -524, y: 982, width: 2560, height: 1440), scale: 1)
+    static let external = LaunchDisplay(id: DisplayID(rawValue: 2), frame: CGRect(x: -524, y: 982, width: 2560, height: 1440), scale: 1)
 }
 
 @Suite struct LaunchFlightTests {

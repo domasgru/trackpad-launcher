@@ -469,6 +469,29 @@ import LauncherCore
     /// Runs inside the split bring to front, after recording, like `onBringToFrontWatching`.
     var onBringToFrontSplit: (() -> Void)?
 
+    struct WindowPlacement: Equatable {
+        let app: BundleID
+        let half: ScreenHalf
+    }
+
+    /// The display under the pointer the next `pointerDisplay()` answers; nil models none.
+    var pointerDisplayAnswer: DisplayID? = World.D1
+    private(set) var pointerDisplayReads = 0
+    /// Every `placeFrontWindow`, in order.
+    private(set) var windowPlacements: [WindowPlacement] = []
+    /// Runs inside `placeFrontWindow`, after recording.
+    var onPlaceFrontWindow: (() -> Void)?
+
+    func pointerDisplay() -> DisplayID? {
+        pointerDisplayReads += 1
+        return pointerDisplayAnswer
+    }
+
+    func placeFrontWindow(of app: BundleID, in half: ScreenHalf) {
+        windowPlacements.append(WindowPlacement(app: app, half: half))
+        onPlaceFrontWindow?()
+    }
+
     /// Shows both apps again, then appends the watch each entrance starts, first app first: a watch for
     /// `.running(followed: true)` and `.launching(watch:)`, bouncing for `.bouncing` only.
     func bringToFront(_ split: SplitArrival, cap: Duration) {

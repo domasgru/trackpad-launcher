@@ -5,6 +5,7 @@ import QuartzCore
 /// A connected display as the launch animation sees it: its frame in global screen coordinates (y up) and its
 /// backing scale.
 struct LaunchDisplay: Equatable {
+    let id: DisplayID
     let frame: CGRect
     let scale: CGFloat
 }
@@ -23,6 +24,15 @@ extension LaunchDisplay {
     }
 }
 
+extension NSScreen {
+    /// The window server's number for this display, from the device description.
+    var displayID: DisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber).map {
+            DisplayID(rawValue: $0.uint32Value)
+        }
+    }
+}
+
 /// Where the pointer is and which displays exist, read now: what a bounce reads when it starts and on every move.
 struct ScreenRead {
     let pointer: CGPoint
@@ -32,7 +42,9 @@ struct ScreenRead {
     @MainActor static func now() -> ScreenRead {
         ScreenRead(
             pointer: NSEvent.mouseLocation,
-            displays: NSScreen.screens.map { LaunchDisplay(frame: $0.frame, scale: $0.backingScaleFactor) })
+            displays: NSScreen.screens.compactMap { screen in
+                screen.displayID.map { LaunchDisplay(id: $0, frame: screen.frame, scale: screen.backingScaleFactor) }
+            })
     }
 }
 

@@ -155,6 +155,8 @@ import Testing
             }
             #expect(record(split) == record(twin), "\(kind)")
             #expect(split.system.splits.isEmpty, "\(kind)")
+            #expect(split.system.windowPlacements.isEmpty, "\(kind)")
+            #expect(split.system.pointerDisplayReads == 0, "\(kind)")
             if kind == .bothTrashed {
                 #expect(record(split) == ["[]", "[]", "[]", "[]", "[]"])
             }

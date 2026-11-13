@@ -7,6 +7,8 @@ import LauncherCore
     private let reader = RunningAppsReader()
     private let windows = AppWindowReader()
     private let promptsUser: Bool
+    private let screen: @MainActor () -> ScreenRead
+    private let placer = FrontWindowPlacer()
     /// One per watched launch, from `bringToFrontWatching` to `endLaunch`.
     private var launches: [BundleID: Launch] = [:]
     public var onLaunchProgress: (@MainActor (BundleID, LaunchProgress) -> Void)?
@@ -25,6 +27,7 @@ import LauncherCore
         overlay = LaunchOverlay()
         bounces = BounceOverlay(launchOverlay: overlay, screen: screen)
         self.promptsUser = promptsUser
+        self.screen = screen
         // The first lookup in a process costs 1.65 ms, later ones under 0.1 ms: pay it now, not at a gesture.
         _ = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder")
     }
@@ -82,6 +85,13 @@ import LauncherCore
             }
         }
     }
+
+    public func pointerDisplay() -> DisplayID? {
+        let read = screen()
+        return LaunchDisplay.containing(read.pointer, among: read.displays)?.id
+    }
+
+    public func placeFrontWindow(of app: BundleID, in half: ScreenHalf) { placer.place(app, in: half) }
 
     public func limitLaunch(of app: BundleID, to limit: Duration) { launches[app]?.watch.limit(to: limit) }
 

@@ -177,6 +177,9 @@ final class LaunchRecord: Sendable {
     /// Mac's LaunchServices database; `AppCatalogSystemTests` covers the real names.
     static let displayName: @Sendable (URL) -> String = { $0.lastPathComponent }
 
+    static let D1 = DisplayID(rawValue: 1)
+    static let D2 = DisplayID(rawValue: 2)
+
     static func bundleID(_ name: String) -> BundleID {
         BundleID(rawValue: "com.test." + name.lowercased().replacingOccurrences(of: " ", with: "-"))
     }

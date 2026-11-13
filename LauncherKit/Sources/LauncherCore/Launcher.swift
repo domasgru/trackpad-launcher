@@ -79,6 +79,8 @@ public final class Launcher {
     /// The launches being watched, one record per launched bundle. Written only by `fire` and `progress(_:of:)`: the one
     /// record of which launches are live; the adapter's watches and bounces follow its commands.
     @ObservationIgnored private var launches: [BundleID: WatchedLaunch] = [:]
+    /// The latest split gesture's windows that may still be placed. Written only by `fire`.
+    @ObservationIgnored private var placing: SplitPlacing?
     private var settings: Settings
     private var connected: [Trackpad] = []
     private var preferenceValues: [TrackpadKind: TrackpadPreferenceValues] = [:]
@@ -345,6 +347,7 @@ public final class Launcher {
         let target = assignment.target(locate: catalog.locate)
         guard target != .nothing else { return }
         hardware.playFeedback(.gesture, on: event.trackpad)
+        placing = nil
         switch target {
         case .nothing: break
         case .one(let app): bringOneToFront(app)
@@ -381,6 +384,8 @@ public final class Launcher {
     /// Both apps in one port call, so the adapter keeps the open order. The first app ends active; a launching app
     /// hides the others once its window shows, and never hides the other app of the gesture.
     private func splitToFront(_ first: AppEntry, _ second: AppEntry) {
+        // Without the permission no display is read and nothing is placed.
+        let display = isAccessibilityGranted ? system.pointerDisplay() : nil
         let animates = settings.isLaunchAnimationOn
         let kept = settings.isHideBackgroundAppsOn ? KeptApps(front: first.bundleID, beside: second.bundleID) : nil
         func entrance(_ app: AppEntry) -> SplitApp {
@@ -395,7 +400,12 @@ public final class Launcher {
             return SplitApp(app, .launching(watch: watched ? (animates ? .bouncing : .unseen) : nil))
         }
         let arrival = SplitArrival(first: entrance(first), second: entrance(second))
+        placing = display.map { SplitPlacing(first: first.bundleID, second: second.bundleID, display: $0) }
         system.bringToFront(arrival, cap: WatchedLaunch.cap)
+        for part in [arrival.first, arrival.second] {
+            guard case .running = part.entrance, let half = placing?.half(of: part.app.bundleID) else { continue }
+            system.placeFrontWindow(of: part.app.bundleID, in: half)
+        }
         if let kept, launches[first.bundleID] == nil, launches[second.bundleID] == nil {
             system.hideOtherApps(keeping: kept)
         }
