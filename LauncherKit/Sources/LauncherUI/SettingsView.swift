@@ -108,7 +108,8 @@ struct SettingsView: View {
             .padding(.bottom, -Self.formMargins.bottom)
             .padding(.horizontal, Self.inset - Self.formMargins.side)
             .overlay(alignment: .topLeading) {
-                FirstGestureArt(thumb: gestureThumb, showsHandGuide: launcher.showsHandGuide)
+                FirstGestureArt(
+                    thumb: gestureThumb, showsTapHand: launcher.showsTapHand, showsHoldHand: launcher.showsHoldHand)
                     .padding(.leading, Self.inset)
             }
             // Under its neighbours, so the margins it lays over them never cover or take their clicks.
@@ -240,7 +241,9 @@ struct GestureRowView: View {
 /// and the group. It takes no clicks.
 struct FirstGestureArt: View {
     let thumb: ThumbCorner?
-    let showsHandGuide: Bool
+    let showsTapHand: Bool
+    /// Only ever true together with `showsTapHand`.
+    let showsHoldHand: Bool
 
     /// The picture's top-left corner from the group's, and its width.
     private static let picture = (x: CGFloat(-12), y: CGFloat(-1), width: CGFloat(137))
@@ -256,8 +259,8 @@ struct FirstGestureArt: View {
             .frame(width: SettingsView.groupWidth, height: Self.rowHeight, alignment: .topLeading)
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: GroupStyle.cornerRadius))
             .accessibilityHidden(true)
-            if showsHandGuide {
-                HandGuide()
+            if showsTapHand {
+                HandGuide(showsHoldHand: showsHoldHand)
             }
         }
         .frame(width: SettingsView.groupWidth, height: Self.rowHeight, alignment: .topLeading)
@@ -265,24 +268,33 @@ struct FirstGestureArt: View {
     }
 }
 
-/// Two hands and two labels over the first picture: the left hand holds the trackpad's top-left corner, the right
-/// hand taps its centre.
+/// The hands and labels over the first picture: the right hand taps the trackpad's centre, and, while the thumb is
+/// held, the left hand holds its top-left corner.
 struct HandGuide: View {
+    let showsHoldHand: Bool
+
     var body: some View {
         ZStack(alignment: .topLeading) {
-            BundleImage.view("left-hand", type: "png", width: 52.48)
-                .opacity(0.9)
-                .offset(x: -11.5, y: 10.5)
+            if showsHoldHand {
+                BundleImage.view("left-hand", type: "png", width: 52.48)
+                    .opacity(0.9)
+                    .offset(x: -11.5, y: 10.5)
+            }
             BundleImage.view("right-hand", type: "png", width: 60)
                 .opacity(0.9)
                 .offset(x: 55, y: 24)
-            HandLabel(text: "Hold", dot: .hold)
-                .offset(x: -11, y: 49)
+            if showsHoldHand {
+                HandLabel(text: "Hold", dot: .hold)
+                    .offset(x: -11, y: 49)
+            }
             HandLabel(text: "Tap", dot: .tap)
                 .offset(x: 92, y: 55)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("The filled dot is the thumb you hold, the ringed dots are fingers that tap")
+        .accessibilityLabel(
+            showsHoldHand
+                ? "The filled dot is the thumb you hold, the ringed dots are fingers that tap"
+                : "The ringed dots are fingers that tap")
     }
 }
 

@@ -74,37 +74,38 @@ import Testing
 
     @Test func theHandGuideShowsOnlyWhileTheCornerDrawnIsTopLeft() {
         let world = startedWorld()
-        #expect(world.launcher.showsHandGuide)
+        #expect(world.launcher.showsTapHand && world.launcher.showsHoldHand)
 
         for corner in [ThumbCorner.topRight, .bottomLeft, .bottomRight] {
             world.launcher.setThumbCorner(corner)
-            #expect(world.launcher.showsHandGuide == false)
+            #expect(world.launcher.showsTapHand == false && world.launcher.showsHoldHand == false)
         }
 
         world.launcher.setThumbCorner(.topLeft)
-        #expect(world.launcher.showsHandGuide)
+        #expect(world.launcher.showsTapHand && world.launcher.showsHoldHand)
     }
 
     @Test func theHandGuideFollowsTheExternalTrackpadComingAndGoing() {
         let world = startedWorld(attached: [.macBook14, .magicTrackpad])
         world.launcher.setExternalThumbCorner(.bottomLeft)
-        #expect(world.launcher.showsHandGuide == false)
+        #expect(world.launcher.showsTapHand == false)
 
         world.hardware.detach(Trackpad.magicTrackpad.id)
-        #expect(world.launcher.showsHandGuide)
+        #expect(world.launcher.showsTapHand && world.launcher.showsHoldHand)
 
         world.hardware.attach(.magicTrackpad)
-        #expect(world.launcher.showsHandGuide == false)
+        #expect(world.launcher.showsTapHand == false)
     }
 
-    @Test func theHandGuideGoesWithHoldThumbAndReturnsWithIt() {
+    @Test func holdThumbOffHidesOnlyTheHoldingHandAndBringsItBack() {
         let world = startedWorld()
 
         world.launcher.setHoldThumb(on: false)
-        #expect(world.launcher.showsHandGuide == false)
+        #expect(world.launcher.showsTapHand)
+        #expect(world.launcher.showsHoldHand == false)
 
         world.launcher.setHoldThumb(on: true)
-        #expect(world.launcher.showsHandGuide)
+        #expect(world.launcher.showsTapHand && world.launcher.showsHoldHand)
     }
 
     @Test(arguments: [ThumbCorner.topRight, .bottomLeft, .bottomRight], [true, false])
@@ -113,16 +114,18 @@ import Testing
         world.launcher.setThumbCorner(corner)
         world.launcher.setHoldThumb(on: holdThumb)
 
-        #expect(world.launcher.showsHandGuide == false)
+        #expect(world.launcher.showsTapHand == false)
+        #expect(world.launcher.showsHoldHand == false)
     }
 
-    @Test func theHandGuideStaysOffAfterARelaunchWithHoldThumbOff() {
+    @Test func onlyTheTappingHandShowsAfterARelaunchWithHoldThumbOff() {
         let world = startedWorld()
         world.launcher.setHoldThumb(on: false)
 
         world.relaunch().start()
         world.launcher.openedByHand()
 
-        #expect(world.launcher.showsHandGuide == false)
+        #expect(world.launcher.showsTapHand)
+        #expect(world.launcher.showsHoldHand == false)
     }
 }

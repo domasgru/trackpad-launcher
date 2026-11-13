@@ -44,3 +44,4 @@
 - The 70 pt first row, the 48 pt one-line row, the 358 pt column and the update card lookup were each written in more than one place → each is one named constant or one lookup.
 - An unused `"svg"` default on the width-sized picture helper → removed.
 - The architecture's push list did not name the settings window's display, screen parameter and scroller style changes → it does.
+- User feedback after implementation: with the corner drawn *Top left* and Hold thumb off, hide only the left hand and the *Hold* label, and keep the right hand and the *Tap* label → R5 and the domain model changed; the model's one `showsHandGuide` became `showsTapHand` and `showsHoldHand`, and the hand guide tests cover each part.

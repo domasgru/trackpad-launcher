@@ -135,7 +135,7 @@ The app picker or pickers MUST stay at the trailing edge, centred vertically in 
 
 ### R5. Hands and labels show how to make the first gesture
 
-While *Hold thumb* is on and the corner drawn is *Top left*, the first gesture row MUST show two hands and two labels over the picture. In every other state it MUST show neither.
+While the corner drawn is *Top left*, the first gesture row MUST show the right hand and the *Tap* label over the picture. While *Hold thumb* is also on, it MUST show the left hand and the *Hold* label too. While *Hold thumb* is off, it MUST NOT show the left hand or the *Hold* label. At any other corner it MUST show no hand and no label. (Changed at the user's request after implementation: *Hold thumb* off used to hide both hands.)
 
 Each element sits at a fixed offset from the gesture group's top-leading corner, which is also the first row's top-leading corner. These are the mockup's positions, measured from the top-left of the window content, minus the group's own position there of (16, 108):
 
@@ -171,9 +171,9 @@ The handwritten *Hold* / *Tap* guide with arrows MUST NOT show in any state.
 #### Scenario: Hold thumb off
 - **GIVEN** the corner drawn is *Top left*
 - **WHEN** the user turns *Hold thumb* off
-- **THEN** the hands and labels disappear at once, and the picture shows no thumb
+- **THEN** the left hand and the *Hold* label disappear at once, the right hand and the *Tap* label stay, and the picture shows no thumb
 - **AND WHEN** the user turns it back on
-- **THEN** the hands and labels return
+- **THEN** the left hand and the *Hold* label return
 
 #### Scenario: No cards above the gestures
 - **GIVEN** the Accessibility permission is granted and no update has been found
@@ -334,7 +334,7 @@ The settings window MUST be at most 90% as tall as the visible area of the displ
 - **One view draws everything the first gesture shows at its leading side:** the large picture, the hands and the labels. It is an overlay on the form, not content of the first row. Its origin is the gesture group's top-leading corner: the form's top edge, at the column's inset. So every position in R4 and R5 is written as the requirement gives it, as an offset from that corner. None depends on the form's row padding.
 - **Why an overlay.** The grouped form clips a row's content to its group (probe, Further Notes). The hands and labels reach past the group, so they cannot be row content. An overlay also stays where it is when the first row grows from 70 to 86 pt.
 - **The picture** sits at (−12, −1), 137 pt wide. It shows the file the picture rule names for the first gesture and the model's `gestureThumbCorner`. It is clipped to a shape of our own: the group's width, the first row's 70 pt, and the group's 12 pt radius at the top-leading corner. So the group's corner and edges cut it, and it can never draw into the 2-finger row.
-- **The hand guide** shows while the model's `showsHandGuide` is true. It is not clipped.
+- **The hand guide** shows its tapping hand and *Tap* label while the model's `showsTapHand` is true, and its holding hand and *Hold* label while `showsHoldHand` is true (only ever with the first). It is not clipped.
   - The left hand sits at (−11.5, 10.5), 52.48 pt wide. The right hand sits at (55, 24), 60 pt wide. Both draw at 90% opacity.
   - The *Hold* label sits at (−11, 49) and the *Tap* label at (92, 55), over the hands.
 - **A label** is 18 pt tall and as wide as its content: a dot, 4 pt, then the word. Its padding is 6 pt left and right, 3 pt above and 2 pt below.
