@@ -13,8 +13,12 @@ final class PickerBench {
     let coordinator: AppPicker.Coordinator
     let view: PickerButton
 
-    /// The app each `choose` call named; nil for None.
+    /// The app each `choose` call named, and nil for each `chooseNone` call.
     var chosen: [String?] = []
+    var chooseCalls = 0
+    var noneCalls = 0
+    private let hasNone: Bool
+    private let unavailable: BundleID?
     var otherCalls = 0
     var otherCompletion: ((AppEntry?) -> Void)?
     var animation: PickAnimation? = .shipped
@@ -22,7 +26,12 @@ final class PickerBench {
 
     static let names = ["Safari", "Mail", "Music", "Calendar", "Finder", "Notes"]
 
-    init(showing name: String?, animation: PickAnimation? = .shipped, installed: [String] = PickerBench.names) {
+    init(
+        showing name: String?, animation: PickAnimation? = .shipped, installed: [String] = PickerBench.names,
+        unavailable: BundleID? = nil, hasNone: Bool = true
+    ) {
+        self.hasNone = hasNone
+        self.unavailable = unavailable
         var entries: [String: AppEntry] = [:]
         for name in Set(Self.names + installed) {
             entries[name] = AppEntry(
@@ -38,8 +47,9 @@ final class PickerBench {
         let coordinator = AppPicker.Coordinator()
         self.coordinator = coordinator
         view = AppPicker(
-            current: .unassigned, installedApps: .empty, cachedIcon: { _ in NSImage() }, icon: { _ in NSImage() },
-            choose: { _ in nil }, chooseOther: { _ in }, pickAnimation: { nil }
+            current: .unassigned, unavailable: nil, installedApps: .empty, cachedIcon: { _ in NSImage() },
+            icon: { _ in NSImage() },
+            choose: { _ in nil }, chooseNone: nil, chooseOther: { _ in }, pickAnimation: { nil }
         ).makeView(coordinator: coordinator)
         render(current)
     }
@@ -55,18 +65,19 @@ final class PickerBench {
 
     private func picker() -> AppPicker {
         AppPicker(
-            current: current, installedApps: installed,
+            current: current, unavailable: unavailable, installedApps: installed,
             cachedIcon: { [menuIcons] in menuIcons[$0]! }, icon: { [buttonIcons] in buttonIcons[$0]! },
             choose: { [unowned self] choice in
-                switch choice {
-                case .app(let entry):
-                    chosen.append(entry.name)
-                    return entry
-                default:
-                    chosen.append(nil)
-                    return nil
-                }
+                chooseCalls += 1
+                guard case .app(let entry) = choice else { return nil }
+                chosen.append(entry.name)
+                return entry
             },
+            chooseNone: hasNone
+                ? { [unowned self] in
+                    noneCalls += 1
+                    chosen.append(nil)
+                } : nil,
             chooseOther: { [unowned self] completion in
                 otherCalls += 1
                 otherCompletion = completion
@@ -79,8 +90,10 @@ final class PickerBench {
         var picker = picker()
         if let installed {
             picker = AppPicker(
-                current: app, installedApps: installed, cachedIcon: picker.cachedIcon, icon: picker.icon,
-                choose: picker.choose, chooseOther: picker.chooseOther, pickAnimation: picker.pickAnimation)
+                current: app, unavailable: picker.unavailable, installedApps: installed, cachedIcon: picker.cachedIcon,
+                icon: picker.icon,
+                choose: picker.choose, chooseNone: picker.chooseNone, chooseOther: picker.chooseOther,
+                pickAnimation: picker.pickAnimation)
         }
         picker.update(view, coordinator: coordinator)
         layOut()
@@ -122,9 +135,18 @@ final class PickerBench {
 
     /// The icon layer shows `name`'s icon, unhidden, and plays the shipped pick animation from its start.
     func expectPlaysPickAnimation(of name: String, sourceLocation: SourceLocation = #_sourceLocation) {
-        let layer = view.iconLayer
+        Self.expectPlaysPickAnimation(on: view, icon: icon(name), sourceLocation: sourceLocation)
+    }
+
+    /// `button`'s icon layer shows `icon`, unhidden, and plays the shipped pick animation from its start.
+    static func expectPlaysPickAnimation(
+        on button: PickerButton, icon: NSImage, sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        let layer = button.iconLayer
+        let iconLayerAnimationKeys = layer.animationKeys() ?? []
+        let otherLayersAreStill = [button.layer, layer.superlayer].allSatisfy { ($0?.animationKeys() ?? []).isEmpty }
         #expect(!layer.isHidden, sourceLocation: sourceLocation)
-        #expect(layer.contents as AnyObject? === icon(name), sourceLocation: sourceLocation)
+        #expect(layer.contents as AnyObject? === icon, sourceLocation: sourceLocation)
         #expect(layer.anchorPoint == CGPoint(x: 0.5, y: 0.5), sourceLocation: sourceLocation)
         #expect(layer.opacity == 1, sourceLocation: sourceLocation)
         #expect(CATransform3DIsIdentity(layer.transform), sourceLocation: sourceLocation)

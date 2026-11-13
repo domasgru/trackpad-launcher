@@ -217,6 +217,6 @@ import Testing
         #expect(relaunched.thumbCorners == .perKind(macBook: expectedCorner, external: .topLeft))
         let reloaded = try #require(world.freshStore().load())
         #expect(reloaded.isSwipeOn == (change != .switchRecentOff))
-        #expect(reloaded.assignments[.three] == (change == .notesOnGestureThree ? notes : nil))
+        #expect(reloaded.assignments[.three] == (change == .notesOnGestureThree ? Assignment(first: notes) : nil))
     }
 }

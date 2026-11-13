@@ -181,7 +181,7 @@ extension Launcher {
     @Test func creatingTheLauncherPreparesNothingAndStartingItPreparesTheAssignedApps() {
         let world = World(apps: ["Arc"])
         var earlierRun = Settings()
-        earlierRun.assignments[.one] = AssignedApp(world.app("Arc"))
+        earlierRun.assignments[.one] = Assignment(first: AssignedApp(world.app("Arc")))
         world.store.save(earlierRun)
 
         world.relaunch()

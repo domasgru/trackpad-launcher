@@ -39,6 +39,10 @@ public enum Copy {
         }
     }
 
+    /// The plus and minus buttons beside a gesture's app pickers: tooltip and accessibility label.
+    public static let addSecondApp = "Add a second app"
+    public static let removeSecondApp = "Remove the second app"
+
     /// The window switcher's card for an app with one window, or none.
     public static let noOtherWindowsTitle = "No other windows"
     public static func noOtherWindowsMessage(of app: String) -> String { "\(app) has no other windows on this desktop." }

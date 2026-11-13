@@ -52,6 +52,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         let screenRecordingHint: ScreenRecordingHint?
         let card: UpdateCard?
         let hasMixedTrackpads: Bool
+        let twoAppRows: Int
     }
 
     public init(launcher: Launcher, updater: Updater?, quit: @escaping () -> Void) {
@@ -91,7 +92,8 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                         inactiveNotice: launcher.inactiveNotice, showsAccessibilityHint: launcher.showsAccessibilityHint,
                         isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint,
                         card: UpdateCardPreview.card(updater?.card),
-                        hasMixedTrackpads: launcher.thumbCorners.hasMixedTrackpads)
+                        hasMixedTrackpads: launcher.thumbCorners.hasMixedTrackpads,
+                        twoAppRows: launcher.rows.filter { $0.lineCount == 2 }.count)
                 }) {
                     guard fit != last else { continue }
                     last = fit
@@ -176,8 +178,14 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
 
     /// The picker's apps plus the present apps of the gesture rows, which may sit outside it.
     private static func iconTargets(_ launcher: Launcher) -> [AppEntry] {
-        let rowApps = launcher.rows.compactMap { row -> AppEntry? in
-            if case .present(let entry) = row.app { entry } else { nil }
+        let rowApps = launcher.rows.flatMap { row -> [AppEntry] in
+            let held: [GestureRow.Held]
+            switch row.apps {
+            case .unassigned: held = []
+            case .one(let first): held = [first]
+            case .two(let first, let second): held = [first, second]
+            }
+            return held.compactMap { if case .present(let entry) = $0 { entry } else { nil } }
         }
         return launcher.installedApps.all + rowApps
     }
@@ -220,7 +228,14 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         /// SwiftUI body calling it follows the model.
         public var canPreviewPickAnimation: Bool {
             guard case .open = launcher.window else { return false }
-            return launcher.rows.contains { if case .present = $0.app { true } else { false } }
+            return launcher.rows.contains { row in
+                switch row.apps {
+                case .unassigned: false
+                case .one(let first): if case .present = first { true } else { false }
+                case .two(let first, let second):
+                    [first, second].contains { if case .present = $0 { true } else { false } }
+                }
+            }
         }
 
         /// Debug builds' tuner: restarts the update card arrow's drift with the tuner's values now, when the card is

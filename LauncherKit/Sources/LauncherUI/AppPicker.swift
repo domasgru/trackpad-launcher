@@ -22,13 +22,17 @@ import SwiftUI
 /// The button shortens a long name itself, so the cut is always at the end of the name with an ellipsis.
 struct AppPicker: NSViewRepresentable {
     let current: RowApp
+    /// The app, in the menu, that is shown disabled: the first app, in the second app's menu.
+    let unavailable: BundleID?
     let installedApps: InstalledApps
     /// Never draws: the menu's icons.
     let cachedIcon: (URL) -> NSImage
     /// Draws a missing icon on the spot: the button's icon only.
     let icon: (URL) -> NSImage
-    /// nil = None. Answers the app the row now shows present, which is what plays the pick animation.
-    let choose: (AppChoice?) -> AppEntry?
+    /// Answers the app the picker now shows present, which is what plays the pick animation.
+    let choose: (AppChoice) -> AppEntry?
+    /// None. nil: None is inert, as closing the menu is: nothing changes, shows or animates.
+    let chooseNone: (() -> Void)?
     /// Hands the completion to the model's Other… path; the completion gets the app the row now shows present, or nil.
     let chooseOther: (@escaping (AppEntry?) -> Void) -> Void
     /// The pick animation to play for a pick now, or nil to swap the icon at once.
@@ -50,8 +54,7 @@ struct AppPicker: NSViewRepresentable {
 
     func makeView(coordinator: Coordinator) -> PickerButton {
         let button = PickerButton()
-        button.menu?.delegate = coordinator
-        coordinator.button = button
+        coordinator.attach(to: button)
         return button
     }
 
@@ -60,7 +63,9 @@ struct AppPicker: NSViewRepresentable {
         coordinator.installedApps = installedApps
         coordinator.cachedIcon = cachedIcon
         coordinator.icon = icon
+        coordinator.unavailable = unavailable
         coordinator.choose = choose
+        coordinator.chooseNone = chooseNone
         coordinator.chooseOther = chooseOther
         coordinator.pickAnimation = pickAnimation
         coordinator.showCurrent()
@@ -77,9 +82,18 @@ struct AppPicker: NSViewRepresentable {
         var installedApps = InstalledApps.empty
         var cachedIcon: (URL) -> NSImage = { _ in NSImage() }
         var icon: (URL) -> NSImage = { _ in NSImage() }
-        var choose: (AppChoice?) -> AppEntry? = { _ in nil }
+        var unavailable: BundleID?
+        var choose: (AppChoice) -> AppEntry? = { _ in nil }
+        var chooseNone: (() -> Void)?
         var chooseOther: (@escaping (AppEntry?) -> Void) -> Void = { _ in }
         var pickAnimation: () -> PickAnimation? = { nil }
+        /// Called when an accepted pick is about to show in the button, before it plays.
+        var willShowPick: (() -> Void)?
+
+        func attach(to button: PickerButton) {
+            button.menu?.delegate = self
+            self.button = button
+        }
 
         /// The row's app in the button. A running pick animation is left alone.
         func showCurrent() {
@@ -92,11 +106,13 @@ struct AppPicker: NSViewRepresentable {
         }
 
         /// The row's app and the list the menu was last built from.
-        private var builtFrom: (app: RowApp, list: InstalledApps)?
+        private var builtFrom: (app: RowApp, list: InstalledApps, unavailable: BundleID?)?
 
-        /// Builds the menu when the row's app or the list changed since it was last built.
+        /// Builds the menu when the row's app, the list or the disabled app changed since it was last built.
         func buildMenuIfChanged() {
-            guard let menu = button?.menu, builtFrom?.app != current || builtFrom?.list != installedApps else { return }
+            guard let menu = button?.menu,
+                builtFrom?.app != current || builtFrom?.list != installedApps || builtFrom?.unavailable != unavailable
+            else { return }
             build(menu)
         }
 
@@ -108,15 +124,30 @@ struct AppPicker: NSViewRepresentable {
         /// selected, so the menu opens with it over the button; with no row app in the menu, it opens at its top.
         private func build(_ menu: NSMenu) {
             guard let button else { return }
-            builtFrom = (current, installedApps)
+            builtFrom = (current, installedApps, unavailable)
+            button.selectItem(at: fill(menu))
+        }
+
+        /// A fresh menu with the picker's items, for a control other than the picker's button to pop up.
+        func standaloneMenu() -> NSMenu {
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            fill(menu)
+            return menu
+        }
+
+        /// Fills `menu` with the items; answers the index of the checked one, or 0.
+        @discardableResult
+        private func fill(_ menu: NSMenu) -> Int {
             menu.removeAllItems()
             var selected = 0
-            for pickerItem in installedApps.pickerMenu(checking: current) {
+            for pickerItem in installedApps.pickerMenu(checking: current, unavailable: unavailable) {
                 switch pickerItem {
                 case .app(let entry, let state):
                     let item = actionItem(title: entry.name, action: #selector(pick(_:)))
                     item.representedObject = entry
                     item.image = cachedIcon(entry.url)
+                    item.isEnabled = state != .unavailable
                     if state == .current {
                         item.state = .on
                         selected = menu.numberOfItems
@@ -130,7 +161,7 @@ struct AppPicker: NSViewRepresentable {
                     menu.addItem(actionItem(title: "None", action: #selector(pick(_:))))
                 }
             }
-            button.selectItem(at: selected)
+            return selected
         }
 
         /// What the button draws for `app`; never in the menu.
@@ -161,16 +192,16 @@ struct AppPicker: NSViewRepresentable {
         /// An item without a represented app is None: it plays nothing. The button shows the pick at once rather than
         /// at the model's next update.
         @objc private func pick(_ sender: NSMenuItem) {
-            let entry = sender.representedObject as? AppEntry
-            let answer = choose(entry.map(AppChoice.app))
-            if let answer {
-                show(picked: answer)
-            } else if entry == nil {
+            guard let entry = sender.representedObject as? AppEntry else {
+                guard let chooseNone else { return }
                 current = .unassigned
                 button?.stopPickAnimation()
                 showCurrent()
                 buildMenuIfChanged()
+                chooseNone()
+                return
             }
+            if let answer = choose(.app(entry)) { show(picked: answer) }
         }
 
         /// Other… is not an app: the button keeps what it shows, and only an app the model accepts shows and plays. A
@@ -187,6 +218,7 @@ struct AppPicker: NSViewRepresentable {
             current = .present(entry)
             showCurrent()
             buildMenuIfChanged()
+            willShowPick?()
             if let animation = pickAnimation() {
                 button?.play(animation)
             } else {

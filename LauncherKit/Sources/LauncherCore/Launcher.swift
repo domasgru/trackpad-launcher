@@ -137,14 +137,16 @@ public final class Launcher {
         resolveRows()
     }
 
-    /// App picker; nil = None. The same app on two gestures is fine. Answers the gesture's app when its row now shows
-    /// it present, so the picker knows whether to play the pick animation: nil for None, for a bundle that is no app,
-    /// and for an app the catalog cannot locate, whose row shows "not found".
+    /// The first picker; nil = None, which unassigns the gesture, second app included. An app becomes the first app
+    /// and the second app stays, unless it is that app. The same app on two gestures is fine. Answers the app the
+    /// first picker now shows present, so the picker knows whether to play the pick animation: nil for None, for a
+    /// bundle that is no app, and for an app the catalog cannot locate, whose row shows "not found".
     @discardableResult
     public func setAssignment(_ choice: AppChoice?, for gesture: Gesture) -> AppEntry? {
         if let choice {
             guard let entry = entry(for: choice) else { return nil }
-            settings.assignments[gesture] = AssignedApp(entry)
+            let app = AssignedApp(entry)
+            settings.assignments[gesture] = settings.assignments[gesture]?.settingFirst(app) ?? Assignment(first: app)
         } else {
             settings.assignments[gesture] = nil
         }
@@ -152,6 +154,29 @@ public final class Launcher {
         resolveRows()
         if case .present(let entry) = rows.first(where: { $0.gesture == gesture })?.app { return entry }
         return nil
+    }
+
+    /// The plus button and the second picker. Answers the app the second picker now shows present, which plays the
+    /// pick animation. nil, with nothing saved: no first app, the first app itself (also through Other…), a bundle that
+    /// is no app, or an app the catalog cannot locate.
+    @discardableResult
+    public func setSecondApp(_ choice: AppChoice, for gesture: Gesture) -> AppEntry? {
+        guard let assignment = settings.assignments[gesture], let entry = entry(for: choice),
+            let split = assignment.settingSecond(AssignedApp(entry))
+        else { return nil }
+        settings.assignments[gesture] = split
+        store.save(settings)
+        resolveRows()
+        if case .two(_, .present(let entry))? = rows.first(where: { $0.gesture == gesture })?.apps { return entry }
+        return nil
+    }
+
+    /// The minus button. Does nothing, and saves nothing, without a second app.
+    public func removeSecondApp(for gesture: Gesture) {
+        guard let assignment = settings.assignments[gesture], assignment.second != nil else { return }
+        settings.assignments[gesture] = assignment.removingSecond
+        store.save(settings)
+        resolveRows()
     }
 
     private func entry(for choice: AppChoice) -> AppEntry? {
@@ -315,7 +340,7 @@ public final class Launcher {
     /// decides something: the launch animation or the hide setting is on, and no launch of the app is watched.
     private func fire(_ event: GestureEvent) {
         guard activity.isActive,
-              let assigned = settings.assignments[event.gesture],
+              let assigned = settings.assignments[event.gesture]?.first,
               let app = catalog.locate(assigned)
         else { return }
         hardware.playFeedback(.gesture, on: event.trackpad)
@@ -370,7 +395,7 @@ public final class Launcher {
             // With nothing to show the swipe still runs its course: the fingers stay blocked until they lift.
             let running = system.runningApps()
             guard let switcher = Switcher(
-                frontmost: running.frontmost, running: running.apps, leavingOut: settings.assignedBundleIDs,
+                frontmost: running.frontmost, running: running.apps, leavingOut: settings.oneAppBundleIDs,
                 serial: switchersBegun + 1, trackpad: event.trackpad)
             else { return }
             switchersBegun += 1
@@ -471,19 +496,32 @@ public final class Launcher {
     private func resolveRows() {
         rows = makeRows()
         var seen = Set<URL>()
-        let present = rows.compactMap { row -> AppEntry? in
-            guard case .present(let app) = row.app, seen.insert(app.url).inserted else { return nil }
+        let present = rows.flatMap { row -> [GestureRow.Held] in
+            switch row.apps {
+            case .unassigned: []
+            case .one(let first): [first]
+            case .two(let first, let second): [first, second]
+            }
+        }.compactMap { held -> AppEntry? in
+            guard case .present(let app) = held, seen.insert(app.url).inserted else { return nil }
             return app
         }
         system.prepareLaunchAnimations(for: present)
     }
 
     private func makeRows() -> [GestureRow] {
-        Gesture.allCases.map { gesture in
-            let app = settings.assignments[gesture].map { assigned in
-                catalog.locate(assigned).map(RowApp.present) ?? .missing(name: assigned.name)
-            } ?? .unassigned
-            return GestureRow(gesture: gesture, app: app)
+        func held(_ assigned: AssignedApp) -> GestureRow.Held {
+            catalog.locate(assigned).map(GestureRow.Held.present)
+                ?? .missing(name: assigned.name, bundleID: assigned.bundleID)
+        }
+        return Gesture.allCases.map { gesture in
+            guard let assignment = settings.assignments[gesture] else {
+                return GestureRow(gesture: gesture, apps: .unassigned)
+            }
+            let first = held(assignment.first)
+            return GestureRow(
+                gesture: gesture,
+                apps: assignment.second.map { .two(first: first, second: held($0)) } ?? .one(first))
         }
     }
 }

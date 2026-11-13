@@ -25,7 +25,7 @@ import LauncherCore
             var settings = Settings()
             settings.thumbCorner = corner
             settings.isHideBackgroundAppsOn = hidesBackgroundApps
-            for (gesture, name) in record { settings.assignments[gesture] = AssignedApp(mac.app(name)) }
+            for (gesture, name) in record { settings.assignments[gesture] = Assignment(first: AssignedApp(mac.app(name))) }
             mac.freshStore().save(settings)
         }
         loginItem.isOn = loginItemOn

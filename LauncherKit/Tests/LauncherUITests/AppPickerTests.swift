@@ -106,6 +106,40 @@ import Testing
         #expect(bench.noLayerAnimates)
     }
 
+    @Test func pickingNoneRunsOnlyChooseNone() {
+        let bench = PickerBench(showing: "Notes")
+
+        bench.pick("None")
+
+        #expect(bench.noneCalls == 1)
+        #expect(bench.chooseCalls == 0)
+        #expect(bench.displayItem.title == "Choose app…")
+        #expect(bench.view.iconLayer.isHidden)
+        #expect(bench.noLayerAnimates)
+    }
+
+    @Test func withoutChooseNoneNoneIsInert() {
+        let bench = PickerBench(showing: "Notes", hasNone: false)
+
+        bench.pick("None")
+
+        #expect(bench.noneCalls == 0)
+        #expect(bench.chooseCalls == 0)
+        #expect(bench.displayItem.title == "Notes")
+        #expect(bench.iconLayerContents === bench.icon("Notes"))
+        #expect(bench.noLayerAnimates)
+    }
+
+    @Test func theUnavailableAppsItemIsDisabledAndTheCurrentOneIsOn() {
+        let bench = PickerBench(showing: "Notes", unavailable: BundleID(rawValue: "com.test.mail"))
+        let menu = bench.view.menu!
+        bench.coordinator.menuNeedsUpdate(menu)
+
+        #expect(menu.items.first { $0.title == "Mail" }?.isEnabled == false)
+        #expect(menu.items.first { $0.title == "Notes" }?.state == .on)
+        #expect(menu.items.first { $0.title == "Notes" }?.isEnabled == true)
+    }
+
     @Test func rendersNeverAnimateTheIcon() {
         let bench = PickerBench(showing: "Safari")
         bench.clearAnimations()
