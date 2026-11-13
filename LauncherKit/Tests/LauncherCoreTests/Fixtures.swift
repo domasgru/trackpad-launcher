@@ -40,9 +40,13 @@ extension Trackpad {
 }
 
 extension GestureRecognizer {
-    init(corner: ThumbCorner, surface: SurfaceSize, slides: Set<SlideKind>, swaps: Bool, travel: SwipeTravel) {
+    init(
+        corner: ThumbCorner, surface: SurfaceSize, slides: Set<SlideKind>, swaps: Bool, thumblessTaps: Bool = false,
+        travel: SwipeTravel
+    ) {
         self.init(
-            corner: corner, surface: surface, options: RecognizerOptions(slides: slides, swaps: swaps), travel: travel)
+            corner: corner, surface: surface,
+            options: RecognizerOptions(slides: slides, swaps: swaps, thumblessTaps: thumblessTaps), travel: travel)
     }
 }
 

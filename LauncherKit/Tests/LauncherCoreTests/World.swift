@@ -227,6 +227,11 @@ final class LaunchRecord: Sendable {
         hardware.touch(TouchScript(trackpad.surface).thumb(atMM: thumb).tap(fingers: fingers).frames, on: trackpad.id)
     }
 
+    /// A tap of `fingers` with no thumb, straight to the fake. Taps made this way can follow one another.
+    func tapWithoutThumb(_ fingers: Int, on trackpad: Trackpad = .macBook14, atMM point: (x: Double, y: Double) = (62, 45)) {
+        hardware.touch(TouchScript(trackpad.surface).tap(fingers: fingers, atMM: point).frames, on: trackpad.id)
+    }
+
     func tap(_ fingers: Int, on trackpad: Trackpad = .macBook14, thumbIn corner: ThumbCorner) {
         tap(fingers, on: trackpad, thumbAtMM: trackpad.surface.thumbMM(in: corner))
     }

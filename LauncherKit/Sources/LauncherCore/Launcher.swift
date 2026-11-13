@@ -34,6 +34,7 @@ public final class Launcher {
     public var isSwipeOn: Bool { settings.isSwipeOn }
     public var isSwapOn: Bool { settings.isSwapOn }
     public var isHideBackgroundAppsOn: Bool { settings.isHideBackgroundAppsOn }
+    public var isHoldThumbOn: Bool { settings.isHoldThumbOn }
     public var isWindowSwipeOn: Bool { settings.isWindowSwipeOn }
     /// One derivation, read by the notice and the fire guard.
     public var activity: GestureActivity {
@@ -211,6 +212,14 @@ public final class Launcher {
         reconcile()
     }
 
+    /// Hold thumb switch. Saved at once; the recognizers are rebuilt, so the next tap obeys it.
+    public func setHoldThumb(on: Bool) {
+        guard on != settings.isHoldThumbOn else { return }
+        settings.isHoldThumbOn = on
+        store.save(settings)
+        reconcile()
+    }
+
     /// Hide background apps switch. Saved at once; it hides and shows nothing now and applies to the next action.
     public func setHideBackgroundApps(on: Bool) {
         guard on != settings.isHideBackgroundAppsOn else { return }
@@ -298,7 +307,7 @@ public final class Launcher {
             blockTapClicks: blockClicks && tapToClickIsOn,
             options: RecognizerOptions(
                 slides: granted ? settings.slides : settings.slides.subtracting([.windowSwipe]),
-                swaps: settings.isSwapOn))
+                swaps: settings.isSwapOn, thumblessTaps: !settings.isHoldThumbOn))
         guard restart || run != lastRun else { return }
         lastRun = run
         // Running replaces every recognizer, which ends any swipe or window swipe in progress.

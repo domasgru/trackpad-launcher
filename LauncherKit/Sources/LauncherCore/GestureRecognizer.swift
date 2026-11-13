@@ -4,6 +4,7 @@ import Foundation
 public struct Recognition: Equatable, Sendable {
     /// What one frame produced, if anything. A frame never both fires a tap and moves a swipe or a window swipe.
     public enum Event: Equatable, Sendable {
+        /// A tap under the anchored thumb, or, while thumbless taps are on, a thumbless tap.
         case fired(Gesture)
         case swipe(SwipePhase)
         case windowSwipe(SwipePhase)
@@ -81,15 +82,20 @@ public struct RecognizerOptions: Hashable, Sendable {
     public var slides: Set<SlideKind>
     /// False: a thumb landing under resting fingers is only ever held, never a thumb tap.
     public var swaps: Bool
+    /// True: a short, clean tap of one to five fingers on an otherwise empty trackpad fires its gesture with no thumb,
+    /// and blocks nothing. False: a gesture needs the thumb held in the anchor corner.
+    public var thumblessTaps: Bool
 
-    public init(slides: Set<SlideKind>, swaps: Bool) {
+    public init(slides: Set<SlideKind>, swaps: Bool, thumblessTaps: Bool) {
         self.slides = slides
         self.swaps = swaps
+        self.thumblessTaps = thumblessTaps
     }
 }
 
 /// The tap-with-anchored-thumb rules for ONE trackpad, as a pure state machine, plus the swipe and the window swipe
-/// that start under the same thumb. Feed every frame in order.
+/// that start under the same thumb, and, while the option is on, the thumbless tap: a short, clean tap on an empty
+/// trackpad. Feed every frame in order.
 /// Owned by exactly one frame thread (real adapter) or by the test (in-memory adapter); never shared.
 public struct GestureRecognizer: Sendable {
     /// `travel`: how finger movement becomes switcher travel. A var, so a Debug tuner can change it between frames.
@@ -99,6 +105,7 @@ public struct GestureRecognizer: Sendable {
         self.surface = surface
         self.slides = options.slides
         self.swaps = options.swaps
+        self.thumblessTaps = options.thumblessTaps
         self.travel = travel
     }
 
@@ -140,7 +147,11 @@ public struct GestureRecognizer: Sendable {
                 let anchor = Anchor(id: thumb.id)
                 state = down.count == 1 ? .armed(anchor) : .spoiled(anchor)
             } else if !landed.isEmpty {
-                state = .rest(Rest(fingers: Set(landed.map(\.id))))
+                var rest = Rest(fingers: Set(landed.map(\.id)))
+                let isCleanStart = before.isEmpty && frame.press == nil
+                    && landed.allSatisfy { book[$0.id]?.isRealLanding ?? false }
+                if thumblessTaps && isCleanStart { rest.tap = Tap(start: frame.time, landing: landed) }
+                state = .rest(rest)
             }
         case .armed(let anchor):
             let fingers = landed.filter { $0.id != anchor.id }
@@ -294,6 +305,26 @@ public struct GestureRecognizer: Sendable {
         rest.fingers.subtract(lifted)
         rest.rolled.subtract(lifted)
 
+        if var tap = rest.tap {
+            for id in lifted { tap.down.remove(id) }
+            let landsInCorner = landed.contains { corner.admits($0.position) }
+            if tap.down.isEmpty {
+                // Only the time is judged on the lift frame: a press first seen there is the tap's own click.
+                let fires = frame.time - tap.start <= GestureRules.maxTapDuration
+                    ? Gesture(fingerCount: tap.touched.count) : nil
+                event = fires.map(Recognition.Event.fired)
+                let startsNext = fires != nil && frame.press == nil && !landsInCorner && !landed.isEmpty
+                rest.tap = startsNext ? Tap(start: frame.time, landing: landed) : nil
+            } else if landsInCorner || frame.press != nil
+                        || Self.drag(of: tap.fingers, in: down, book: book, on: surface) != nil
+                        || frame.time - tap.start > GestureRules.maxTapDuration {
+                rest.tap = nil
+            } else {
+                for touch in landed { tap.land(touch.id) }
+                rest.tap = tap
+            }
+        }
+
         if let thumb = rest.thumb {
             if lifted.contains(thumb.id) {
                 if thumb.canSwap, !changed, let landedAt = departed[thumb.id]?.firstSeen,
@@ -411,6 +442,9 @@ public struct GestureRecognizer: Sendable {
         var isStopped = false
         /// A swap has fired under this rest: it blocks until the rest empties.
         var isSeries = false
+        /// A thumbless tap in progress: only a rest that began on an empty trackpad, with the option on, carries one.
+        /// Once it ends it never comes back for this rest.
+        var tap: Tap?
     }
 
     private struct RestThumb: Sendable {
@@ -574,6 +608,7 @@ public struct GestureRecognizer: Sendable {
     private let surface: SurfaceSize
     private let slides: Set<SlideKind>
     private let swaps: Bool
+    private let thumblessTaps: Bool
     private var edgeContacts: EdgeContacts
     private var state: State = .idle
     /// A thumb touch is on: from a frame with a thumb in the anchor corner until the first frame with no contact down.

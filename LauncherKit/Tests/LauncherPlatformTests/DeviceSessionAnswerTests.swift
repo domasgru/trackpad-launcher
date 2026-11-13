@@ -36,7 +36,7 @@ import Testing
             trackpad: TrackpadID(rawValue: 1),
             recognizer: GestureRecognizer(
                 corner: .topLeft, surface: Self.surface,
-                options: RecognizerOptions(slides: [.swipe, .windowSwipe], swaps: true), travel: .linear),
+                options: RecognizerOptions(slides: [.swipe, .windowSwipe], swaps: true, thumblessTaps: false), travel: .linear),
             pointerCurves: PointerCurve.builtInCurves, tap: tap, clock: { clock.now },
             deliver: { delivered.append($0, $1) })
     }
