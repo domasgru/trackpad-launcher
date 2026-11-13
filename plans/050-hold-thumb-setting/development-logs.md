@@ -38,3 +38,4 @@
 - Review: T9(b) ran one press timing, T14 did not check the pulse kind, and T24 checked one of five bundle identifiers → all three now match their plan rows.
 - Review: T14, T15(a) and T16(e) used other timings than the plan → brought to the plan's 280 ms, 0–100/200–300 ms and 80 ms gap.
 - Review: `#expect(!…)` and a vague `enum Case` in the new suites → `== false` and a descriptive name.
+- Human, on a real trackpad: thumbless taps were far too generous (400 ms window), so still taps to click (104–232 ms) fired. Recorded deliberate thumbless taps ran 16–64 ms → R4 now has a 70 ms thumbless tap window; thumb-held taps keep 400 ms. Committed as "Shorten the thumbless tap window to 70 ms".
