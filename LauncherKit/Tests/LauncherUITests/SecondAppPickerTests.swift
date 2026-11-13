@@ -23,7 +23,7 @@ import Testing
         let bench = SecondPickerBench(slot: .add, unavailable: bundleID("Notes"))
         let plus = bench.view.plusButton
         #expect(bench.showsPlus)
-        #expect(plus.frame.size == CGSize(width: 16, height: 16))
+        #expect(plus.frame.size == CGSize(width: 20, height: 20))
         #expect(plus.toolTip == "Add a second app")
         #expect(plus.accessibilityLabel() == "Add a second app")
 
@@ -109,7 +109,7 @@ import Testing
         let bench = SecondPickerBench(slot: .app(.present(PickerBenchEntries.safari)))
         let minus = bench.view.minusButton
         #expect(bench.showsMinusAndPicker)
-        #expect(minus.frame.size == CGSize(width: 16, height: 16))
+        #expect(minus.frame.size == CGSize(width: 20, height: 20))
         #expect(minus.frame.maxX <= bench.pickerButton.frame.minX)
         #expect(minus.toolTip == "Remove the second app")
         #expect(minus.accessibilityLabel() == "Remove the second app")
@@ -143,27 +143,30 @@ import Testing
         try #require(rep.colorAt(x: Int(x * 2), y: Int(y * 2))?.usingColorSpace(.sRGB))
     }
 
-    @Test func thePlusAndMinusDrawASixteenPointCircleInTheBadgesFillWithTheSignInTheChevronsColour() throws {
+    @Test func thePlusAndMinusDrawATwentyPointCircleInTheBadgesFillWithTheSignInTheChevronsColour() throws {
         let bench = SecondPickerBench(slot: .add)
         bench.render(.add)
         let plus = try drawn(bench.view.plusButton)
         bench.render(.app(.present(PickerBenchEntries.safari)))
         let minus = try drawn(bench.view.minusButton)
+        #expect(plus.size == CGSize(width: 20, height: 20))
+        #expect(minus.size == CGSize(width: 20, height: 20))
+        let far = 19.5, middle = 10.0
 
         for (name, rep) in [("plus", plus), ("minus", minus)] {
-            // The circle fills the 16 pt frame: painted at each edge's midpoint, clear in the corners.
-            for (x, y) in [(0.5, 8.0), (15.5, 8.0), (8.0, 0.5), (8.0, 15.5)] {
+            // The circle fills the 20 pt frame: painted at each edge's midpoint, clear in the corners.
+            for (x, y) in [(0.5, middle), (far, middle), (middle, 0.5), (middle, far)] {
                 #expect(try colour(in: rep, atPoint: x, y).alphaComponent > 0.03, "\(name) edge \(x),\(y)")
             }
-            for (x, y) in [(0.5, 0.5), (15.5, 0.5), (0.5, 15.5), (15.5, 15.5)] {
+            for (x, y) in [(0.5, 0.5), (far, 0.5), (0.5, far), (far, far)] {
                 #expect(try colour(in: rep, atPoint: x, y).alphaComponent < 0.01, "\(name) corner \(x),\(y)")
             }
             // The circle's fill, away from the sign: the badge's 8 % black.
-            let fill = try colour(in: rep, atPoint: 4, 4)
+            let fill = try colour(in: rep, atPoint: 5, 5)
             #expect(abs(fill.alphaComponent - 0.078) < 0.02, "\(name) fill alpha \(fill.alphaComponent)")
             #expect(fill.redComponent + fill.greenComponent + fill.blueComponent < 0.05, "\(name) fill is black")
             // The sign's middle: the chevrons' label colour, 85 % black.
-            let sign = try colour(in: rep, atPoint: 8, 8)
+            let sign = try colour(in: rep, atPoint: middle, middle)
             #expect(abs(sign.alphaComponent - 0.85) < 0.06, "\(name) sign alpha \(sign.alphaComponent)")
             #expect(sign.redComponent + sign.greenComponent + sign.blueComponent < 0.05, "\(name) sign is black")
         }

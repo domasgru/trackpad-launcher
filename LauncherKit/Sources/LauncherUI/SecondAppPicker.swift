@@ -182,7 +182,7 @@ final class AddAppButton: NSPopUpButton {
 
     /// Draws the display item's image alone, unscaled and centred in the button, as a plain image button does. A pop-up
     /// cell lays its item's image out as a menu item, after a leading inset and off the button's centre, which would
-    /// draw the circle off its 16 pt frame. The button has no title, arrow or border to draw.
+    /// draw the circle off its frame. The button has no title, arrow or border to draw.
     private final class Cell: NSPopUpButtonCell {
         override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
             guard let image = menuItem?.image else { return }
@@ -196,14 +196,14 @@ final class AddAppButton: NSPopUpButton {
     }
 }
 
-/// The plus and minus buttons' symbols, drawn as the design draws them: a 16 pt circle in the fill of the picker's
-/// chevron badge, its sign in the chevrons' colour.
+/// The plus and minus buttons' symbols, drawn as the picker's chevron badge is: a 20 pt circle in the badge's fill,
+/// its sign in the chevrons' colour.
 enum CircleSymbol {
-    /// The circle's diameter, and the buttons' side.
-    static let side: CGFloat = 16
+    /// The circle's diameter, and the buttons' side: the chevron badge's 20 pt as the system draws it.
+    static let side: CGFloat = 20
 
-    /// `name` at 16 pt, medium scale, which draws its circle exactly 16 pt across inside a 19 pt image with 1.5 pt
-    /// of clear margin on each side (measured on macOS 26). A button shows it unscaled and centred in its 16 pt
+    /// `name` at 20 pt, medium scale, which draws its circle exactly 20 pt across inside a 23 pt image with 1.5 pt
+    /// of clear margin on each side (measured on macOS 26). A button shows it unscaled and centred in its 20 pt
     /// frame, so the circle fills the frame. Palette colours are the system's own, so both appearances follow.
     static func image(_ name: String, label: String) -> NSImage? {
         let configuration = NSImage.SymbolConfiguration(pointSize: side, weight: .regular, scale: .medium)

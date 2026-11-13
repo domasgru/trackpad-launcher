@@ -76,3 +76,4 @@
   - their colours differed from the chevron badge → the sign is `labelColor` and the circle `secondarySystemFill`, the badge's measured 8 % black;
   - a pop-up cell draws its item's image off centre → `AddAppButton`'s cell draws the image alone, centred;
   - a new test draws both buttons and checks the 16 pt circle, its fill and the sign's colour.
+  - the human measured the picker's chevron badge at 20 pt as the system draws it → plus and minus are 20 pt: `CircleSymbol` at 20 pt, medium scale, draws a circle exactly 20 pt across (measured), and the drawing test checks 20 pt.
