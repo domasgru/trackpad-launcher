@@ -170,13 +170,32 @@ struct LaunchFlight {
         (0...Self.steps).map { pose(at: CGFloat($0) / CGFloat(Self.steps)) }
     }
 
+    /// Where a split gesture's icon starts for a pointer at `pointer`: beside it on its side, so the two icons start
+    /// side by side, then each sways further to its side. They are the bounce row's spacing apart at their largest,
+    /// the pop's peak, so they never touch while they swell and tilt. Like the bounce row, the pair slides sideways
+    /// just enough to start whole on the pointer's display.
+    static func start(at pointer: CGPoint, toward side: SplitSide, on display: LaunchDisplay) -> CGPoint {
+        let width = 2 * peakSide + CGFloat(LaunchTuning.current.bounce.spacing)
+        var left = pointer.x - width / 2
+        left = min(left, display.frame.maxX - width)
+        left = max(left, display.frame.minX)
+        let centre = side == .left ? left + peakSide / 2 : left + width - peakSide / 2
+        return CGPoint(x: centre, y: pointer.y)
+    }
+
     /// Where and how the icon moves for a pointer at `pointer`, in global screen coordinates (y up).
     /// Nil when there is no display, or nothing of the flight's reach is left on the pointer's display.
     func staged(at pointer: CGPoint, among displays: [LaunchDisplay]) -> LaunchStage? {
         guard let display = LaunchDisplay.containing(pointer, among: displays) else { return nil }
+        return staged(at: pointer, on: display)
+    }
+
+    /// As `staged(at:among:)`, on `display` whether or not `start` lies on it: a split's icon starts beside the
+    /// pointer, which may be past the edge of the pointer's display, and plays on that display all the same.
+    func staged(at start: CGPoint, on display: LaunchDisplay) -> LaunchStage? {
         let start = CGPoint(
-            x: (pointer.x * display.scale).rounded() / display.scale,
-            y: (pointer.y * display.scale).rounded() / display.scale)
+            x: (start.x * display.scale).rounded() / display.scale,
+            y: (start.y * display.scale).rounded() / display.scale)
         let poses = poses
         let reach = poses.map { Self.bounds(of: $0, from: start) }.reduce(CGRect.null) { $0.union($1) }.integral
         let frame = reach.intersection(display.frame)

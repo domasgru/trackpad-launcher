@@ -69,12 +69,9 @@ import LauncherCore
         for step in SplitSteps(split).steps {
             switch step {
             case .open(let app, let activates, let watched):
-                guard watched, let watch = makeWatch(for: app.bundleID) else {
-                    open(app, activates: activates)
-                    continue
-                }
-                started.insert(app.bundleID)
-                open(app, activates: activates, then: watch.opened)
+                opening(app, activates: activates, watched: watched, started: &started)()
+            case .raiseThenOpen(let raised, let first, let watched):
+                placer.raise(raised.bundleID, then: opening(first, activates: true, watched: watched, started: &started))
             case .startWatch(let id):
                 guard started.contains(id) else { continue }
                 launches[id]?.watch.start(cap: cap)
@@ -84,6 +81,18 @@ import LauncherCore
                 overlay.play(for: app, toward: side)
             }
         }
+    }
+
+    /// The open of `app`, with a new watch when `watched` and the app's launch has none yet. The watch is recorded now,
+    /// so its clock starts with the gesture's even when the open itself runs later.
+    private func opening(
+        _ app: AppEntry, activates: Bool, watched: Bool, started: inout Set<BundleID>
+    ) -> @MainActor @Sendable () -> Void {
+        guard watched, let watch = makeWatch(for: app.bundleID) else {
+            return { [weak self] in self?.open(app, activates: activates) }
+        }
+        started.insert(app.bundleID)
+        return { [weak self] in self?.open(app, activates: activates, then: watch.opened) }
     }
 
     public func pointerDisplay() -> DisplayID? {
@@ -100,10 +109,16 @@ import LauncherCore
         bounces.end(app, with: ending)
     }
 
-    /// One call reproduces a Dock click: launches, unhides, restores, reopens and activates. `opened`, when given, hears
-    /// macOS's answer from any thread: the launched pid, or nil when it could not launch the app or the process
-    /// ended before checking in (pid -1).
+    /// One call reproduces a Dock click: launches, unhides, restores, reopens and activates. Without `activates` it does
+    /// the same without the focus: macOS still restores and reopens, but only activation unhides, so a hidden app is
+    /// unhidden here first. `opened`, when given, hears macOS's answer from any thread: the launched pid, or nil when it
+    /// could not launch the app or the process ended before checking in (pid -1).
     private func open(_ app: AppEntry, activates: Bool = true, then opened: (@Sendable (pid_t?) -> Void)? = nil) {
+        if !activates {
+            for running in NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID.rawValue) {
+                running.unhide()
+            }
+        }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = activates
         configuration.promptsUserIfNeeded = promptsUser

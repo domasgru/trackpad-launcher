@@ -67,6 +67,18 @@ import Testing
         #expect(world.launcher.screenRecordingHint == recordingHintBefore)
     }
 
+    @Test func theSecondAppTakesTheFocusOnlyWhileTheOtherAppsStayAndIsRaisedOnlyWithAccessibility() throws {
+        for accessGranted in [true, false] {
+            let world = world(running: ["Notes", "Safari"], accessGranted: accessGranted)
+            world.tap(1)
+            #expect(try #require(world.system.splits.last).arrival.secondEntry == .focused)
+
+            world.launcher.setHideBackgroundApps(on: true)
+            world.tap(1)
+            #expect(try #require(world.system.splits.last).arrival.secondEntry == .unfocused(raised: accessGranted))
+        }
+    }
+
     @Test func aLaunchingAppIsNotPlacedByTheGestureItself() {
         let world = world(running: ["Notes"], accessGranted: true)
         world.tap(1)

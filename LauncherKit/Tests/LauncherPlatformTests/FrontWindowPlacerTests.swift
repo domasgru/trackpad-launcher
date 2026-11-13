@@ -460,4 +460,89 @@ private func expectTimeouts(_ actual: [Float], _ expected: [Float], sourceLocati
         #expect(Array(calls.writes(101).dropFirst(6)) == [position(0, 33), size(756, 949)])
         #expect(calls.frame(pid: 101) == rect(0, 33, 900, 949))
     }
+
+    @Test func aRaiseFollowsThePlacingQueuedBeforeItWithoutStoppingItAndRaisesTheWindowItPlaced() async {
+        let calls = ScriptedPlacing([101: .init(windows: [window(rect(50, 50, 500, 400)), window(rect(80, 80, 500, 400))], main: 2)])
+        let finishes = Finishes()
+        let placer = placer(calls, finishes)
+        let held = calls.hold("setSize", pid: 101)
+        var reached = held.reached.makeAsyncIterator()
+
+        #expect(placer.place(Self.safari, in: R(Self.d1)))
+        await reached.next()
+        #expect(placer.raise(Self.safari))
+        held.release()
+
+        #expect(await finishes.outcome(of: Self.safari) == .placed(rect(756, 33, 756, 949)))
+        #expect(await finishes.outcome(of: Self.safari) == .raised)
+        #expect(calls.raised(101) == [2])
+        #expect(calls.touched(101) == [2])
+        #expect(calls.intoApp(101).suffix(2) == ["mainWindow", "raise"])
+    }
+
+    @Test func aRaiseOfAnAppWithNoProcessOrOfThisProcessDispatchesNothingAndGoesOnAtOnce() {
+        let calls = ScriptedPlacing(apps())
+        let placer = placer(calls, Finishes())
+        var wentOn = 0
+        #expect(placer.raise(Self.mail) { wentOn += 1 } == false)
+        #expect(placer.raise(Self.calendar) { wentOn += 1 } == false)
+        #expect(wentOn == 2)
+        #expect(calls.calls.isEmpty)
+    }
+
+    @Test func whatFollowsARaiseRunsOnTheMainActorOnlyOnceTheRaiseIsIn() async {
+        let calls = ScriptedPlacing(apps())
+        let placer = placer(calls, Finishes())
+        let held = calls.hold("raise", pid: 101)
+        var reached = held.reached.makeAsyncIterator()
+        let (followed, follow) = AsyncStream<[Int]>.makeStream()
+
+        #expect(placer.raise(Self.safari) { follow.yield(calls.raised(101)) })
+        await reached.next()
+        #expect(calls.raised(101).isEmpty)
+        held.release()
+
+        var raisedWhenFollowed = followed.makeAsyncIterator()
+        #expect(await raisedWhenFollowed.next() == [1], "the raise was in before what follows it ran")
+    }
+}
+
+@Suite struct FrontWindowPlacerRaiseTests {
+    private func raise(_ calls: ScriptedPlacing) -> Outcome {
+        FrontWindowPlacer.raise(1, budget: freshBudget, calls: calls)
+    }
+
+    @Test func withNoMainWindowTheFirstStandardWindowThatIsNotMinimisedIsRaisedAsItWouldBePlaced() {
+        var panel = window(rect(50, 50, 500, 400))
+        panel.isStandard = false
+        var minimised = window(rect(60, 50, 500, 400))
+        minimised.isMinimised = true
+        let calls = ScriptedPlacing([1: .init(windows: [panel, minimised, window(rect(70, 50, 500, 400))], main: nil)])
+        #expect(raise(calls) == .raised)
+        #expect(calls.raised() == [3])
+        #expect(calls.writes().isEmpty, "a raise moves and resizes nothing")
+    }
+
+    @Test func noWindowRaisesNothingAndARaiseThatCannotCompleteIsUnanswered() {
+        var minimised = window(rect(50, 50, 500, 400))
+        minimised.isMinimised = true
+        let none = ScriptedPlacing([1: .init(windows: [minimised], main: nil)])
+        #expect(raise(none) == .noWindow)
+        #expect(none.raised().isEmpty)
+
+        let hung = ScriptedPlacing(window(rect(50, 50, 500, 400)), script: .init(errors: ["raise": .cannotComplete]))
+        #expect(raise(hung) == .unanswered)
+        let refused = ScriptedPlacing(window(rect(50, 50, 500, 400)), script: .init(errors: ["raise": .other]))
+        #expect(raise(refused) == .refused)
+    }
+
+    @Test func everyCallOfARaiseGetsWhatIsLeftOfTheBudget() {
+        let calls = ScriptedPlacing(window(rect(50, 50, 500, 400)), script: .init(defaultCost: 100))
+        #expect(raise(calls) == .raised)
+        expectTimeouts(calls.timeouts(), [0.5, 0.4])
+
+        let slow = ScriptedPlacing(window(rect(50, 50, 500, 400)), script: .init(defaultCost: 600))
+        #expect(raise(slow) == .unanswered)
+        #expect(slow.raised().isEmpty)
+    }
 }

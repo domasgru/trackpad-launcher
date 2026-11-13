@@ -381,8 +381,9 @@ public final class Launcher {
         hideOtherApps(than: id)
     }
 
-    /// Both apps in one port call, so the adapter keeps the open order. The first app ends active; a launching app
-    /// hides the others once its window shows, and never hides the other app of the gesture.
+    /// Both apps in one port call, so the adapter keeps the open order. The first app ends active; while the hide
+    /// background apps setting is on, it is the only one activated. A launching app hides the others once its window
+    /// shows, and never hides the other app of the gesture.
     private func splitToFront(_ first: AppEntry, _ second: AppEntry) {
         // Without the permission no display is read and nothing is placed.
         let display = isAccessibilityGranted ? system.pointerDisplay() : nil
@@ -403,7 +404,9 @@ public final class Launcher {
             if watched { launches[id] = WatchedLaunch(stage: .startingUp, kind: .launched, hidesOnWindow: kept) }
             return SplitApp(app, .launching(watch: watched ? (animates ? .bouncing : .unseen) : nil))
         }
-        let arrival = SplitArrival(first: entrance(first), second: entrance(second))
+        let arrival = SplitArrival(
+            first: entrance(first), second: entrance(second),
+            secondEntry: kept == nil ? .focused : .unfocused(raised: isAccessibilityGranted))
         placing = display.map { SplitPlacing(first: first.bundleID, second: second.bundleID, display: $0) }
         system.bringToFront(arrival, cap: WatchedLaunch.cap)
         for part in [arrival.first, arrival.second] {
