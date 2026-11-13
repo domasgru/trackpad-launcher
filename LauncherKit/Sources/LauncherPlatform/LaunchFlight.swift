@@ -101,6 +101,8 @@ struct LaunchFlight {
     /// Every side of the flight, as a share of the icon's side: 1 from the pointer; a bounce's ending passes its icon's
     /// side then, so an inflated icon swells on from where it is instead of snapping back first.
     private var size: CGFloat = 1
+    /// How long the icon rests at its first pose, shown, before it moves.
+    private var delay: CFTimeInterval = 0
 
     fileprivate init(motion: Motion) {
         self.motion = motion
@@ -110,6 +112,13 @@ struct LaunchFlight {
     func sized(_ size: CGFloat) -> LaunchFlight {
         var flight = self
         flight.size = size
+        return flight
+    }
+
+    /// This flight resting at its first pose for `delay` before it plays: the icon shows at once and starts later.
+    func delayed(by delay: CFTimeInterval) -> LaunchFlight {
+        var flight = self
+        flight.delay = delay
         return flight
     }
 
@@ -170,9 +179,13 @@ struct LaunchFlight {
         (0...Self.steps).map { pose(at: CGFloat($0) / CGFloat(Self.steps)) }
     }
 
-    /// The gap between a split's two icons as they start, at rest size. It is more than the pop's swell takes from it,
-    /// so they never touch while they swell and tilt.
-    static let splitGap: CGFloat = 16
+    /// The gap between a split's two icons as they start, at rest size. While the second swells, their squares come
+    /// up to 3 points closer than touching, inside the clear margin every macOS app icon has around its shape, so the
+    /// icons themselves never touch.
+    static let splitGap: CGFloat = 8
+
+    /// How much later a split's second icon starts than its first, the length of about one pop.
+    static let splitStagger: CFTimeInterval = 0.06
 
     /// Where a split gesture's icon starts for a pointer at `pointer`: beside it on its side, `splitGap` from the other,
     /// so the two icons start side by side, then each sways further to its side. Like the bounce row, the pair slides
@@ -207,7 +220,7 @@ struct LaunchFlight {
         let centre = CGPoint(x: start.x - frame.minX, y: start.y - frame.minY)
         return LaunchStage(
             frame: frame, scale: display.scale, iconSide: Self.iconSide, iconCentre: centre,
-            animations: Self.animations(poses, from: centre))
+            animations: Self.animations(poses, from: centre, delay: delay))
     }
 
     /// The box holding a pose's square, rotated.
@@ -217,13 +230,24 @@ struct LaunchFlight {
             x: start.x + pose.offset.x - half, y: start.y + pose.offset.y - half, width: 2 * half, height: 2 * half)
     }
 
-    private static func animations(_ poses: [Pose], from centre: CGPoint) -> [CAKeyframeAnimation] {
-        let keyTimes = poses.indices.map { NSNumber(value: Double($0) / Double(steps)) }
+    /// One keyframe per pose; with a `delay`, a first keyframe holds the first pose from the start until the motion
+    /// begins, so the icon shows at once and rests until then.
+    private static func animations(
+        _ poses: [Pose], from centre: CGPoint, delay: CFTimeInterval
+    ) -> [CAKeyframeAnimation] {
+        let total = delay + duration
+        var times = poses.indices.map { (delay + Double($0) / Double(steps) * duration) / total }
+        var poses = poses
+        if delay > 0, let first = poses.first {
+            times.insert(0, at: 0)
+            poses.insert(first, at: 0)
+        }
+        let keyTimes = times.map { NSNumber(value: $0) }
         func animation(_ keyPath: String, _ values: [Any]) -> CAKeyframeAnimation {
             let animation = CAKeyframeAnimation(keyPath: keyPath)
             animation.values = values
             animation.keyTimes = keyTimes
-            animation.duration = duration
+            animation.duration = total
             animation.calculationMode = .linear
             return animation
         }

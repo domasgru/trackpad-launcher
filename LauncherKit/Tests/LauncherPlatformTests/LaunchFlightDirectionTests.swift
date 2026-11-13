@@ -43,43 +43,90 @@ import LauncherCore
         #expect(try drift(fed.next(draw: -0.6, reduceMotion: false)) < 0, "the directed flight made no streak")
     }
 
-    /// The keyframes of a split's icon on `side`, started beside the pointer at the middle of the built-in display.
+    /// The keyframes of a split's icon on `side`, started beside the pointer at the middle of the built-in display, as
+    /// the overlay plays it: the right one `splitStagger` late.
     private func splitKeyframes(_ side: SplitSide, draw: Double) throws -> [Keyframe] {
         var flights = LaunchFlights()
         let start = LaunchFlight.start(at: middle, toward: side, on: .builtIn)
-        let staged = try #require(
-            flights.next(draw: draw, reduceMotion: false, toward: side).staged(at: start, on: .builtIn))
-        return try staged.keyframes()
+        let flight = flights.next(draw: draw, reduceMotion: false, toward: side)
+            .delayed(by: side == .right ? LaunchFlight.splitStagger : 0)
+        return try #require(flight.staged(at: start, on: .builtIn)).keyframes()
     }
 
-    /// The box around an icon's tilted square at a keyframe.
+    /// The box around an icon's tilted square: its centre, side and tilt at a moment.
+    private func box(centre: CGPoint, side: Double, degrees: Double) -> CGRect {
+        let radians = degrees * .pi / 180
+        let half = side / 2 * (abs(cos(radians)) + abs(sin(radians)))
+        return CGRect(x: centre.x - half, y: centre.y - half, width: 2 * half, height: 2 * half)
+    }
+
     private func box(_ keyframe: Keyframe) -> CGRect {
-        let radians = keyframe.rotationDegrees * .pi / 180
-        let half = keyframe.side / 2 * (abs(cos(radians)) + abs(sin(radians)))
-        return CGRect(
-            x: keyframe.screenPosition.x - half, y: keyframe.screenPosition.y - half, width: 2 * half, height: 2 * half)
+        box(centre: keyframe.screenPosition, side: keyframe.side, degrees: keyframe.rotationDegrees)
+    }
+
+    /// The icon's box at `time`, between the keyframes around it, as Core Animation plays them (linear).
+    private func box(at time: Double, in frames: [Keyframe]) -> CGRect? {
+        guard let next = frames.firstIndex(where: { $0.time >= time }) else { return nil }
+        guard next > 0 else { return box(frames[0]) }
+        let a = frames[next - 1], b = frames[next]
+        let u = b.time > a.time ? (time - a.time) / (b.time - a.time) : 1
+        func mix(_ x: Double, _ y: Double) -> Double { x + (y - x) * u }
+        return box(
+            centre: CGPoint(
+                x: mix(a.screenPosition.x, b.screenPosition.x), y: mix(a.screenPosition.y, b.screenPosition.y)),
+            side: mix(a.side, b.side), degrees: mix(a.rotationDegrees, b.rotationDegrees))
     }
 
     @Test(arguments: LaunchFlightTests.draws)
     func aSplitsTwoIconsStartSideBySideAndPartWithoutEverTouching(draw: Double) throws {
         let left = try splitKeyframes(.left, draw: draw)
         let right = try splitKeyframes(.right, draw: draw)
-        // Side by side about the pointer at its height, 16 points apart as they start.
+        // Side by side about the pointer at its height, 8 points apart as they start.
         let leftStart = try #require(left.first).screenPosition, rightStart = try #require(right.first).screenPosition
-        #expect(LaunchFlight.splitGap == 16)
-        let shift = (LaunchFlight.iconSide + 16) / 2
+        #expect(LaunchFlight.splitGap == 8)
+        let shift = (LaunchFlight.iconSide + 8) / 2
         #expect(leftStart == CGPoint(x: middle.x - shift, y: middle.y))
         #expect(rightStart == CGPoint(x: middle.x + shift, y: middle.y))
-        let first = try #require(left.first), firstRight = try #require(right.first)
-        #expect(box(firstRight).minX - box(first).maxX == 16)
+        #expect(box(try #require(right.first)).minX - box(try #require(left.first)).maxX == 8)
 
-        #expect(left.count == right.count)
-        for (l, r) in zip(left, right) {
-            #expect(box(l).maxX < box(r).minX, "the icons touch at \(l.time) s")
+        // Every millisecond both icons show, their artwork stays apart. A macOS app icon draws its shape in the middle
+        // 824 of its 1024 points, so a clear margin of 100/1024 of its side lies inside each square. The squares
+        // themselves come within that margin of each other while the second icon swells.
+        let margin = 100.0 / 1024
+        let shown = min(try #require(left.last).time, try #require(right.last).time)
+        var closest = Double.infinity
+        for millisecond in 0...Int(shown * 1000) {
+            let time = Double(millisecond) / 1000
+            let l = try #require(box(at: time, in: left)), r = try #require(box(at: time, in: right))
+            let artwork = (l.maxX - l.width * margin, r.minX + r.width * margin)
+            #expect(artwork.0 < artwork.1, "the icons' artwork touches at \(time) s")
+            closest = min(closest, artwork.1 - artwork.0)
         }
+        #expect(closest > 5, "artwork at least 5 points apart, \(closest)")
         let leftEnd = try #require(left.last).screenPosition, rightEnd = try #require(right.last).screenPosition
         #expect(leftEnd.x < leftStart.x, "the left icon sways left")
         #expect(rightEnd.x > rightStart.x, "the right icon sways right")
+    }
+
+    @Test(arguments: LaunchFlightTests.draws)
+    func aDelayedFlightShowsAtOnceRestsForTheDelayThenPlaysTheSameFlight(draw: Double) throws {
+        var flights = LaunchFlights(), same = LaunchFlights()
+        let delay = LaunchFlight.splitStagger
+        let plain = try #require(
+            same.next(draw: draw, reduceMotion: false, toward: .right).staged(at: middle, on: .builtIn)).keyframes()
+        let delayed = try #require(
+            flights.next(draw: draw, reduceMotion: false, toward: .right).delayed(by: delay)
+                .staged(at: middle, on: .builtIn)).keyframes()
+
+        #expect(delay > 0 && delay < 0.1, "slightly after")
+        #expect(delayed.count == plain.count + 1)
+        let rest = try #require(delayed.first)
+        #expect(rest.time == 0 && rest.screenPosition == middle && rest.opacity == 1, "shown at once, at its start")
+        for (moving, original) in zip(delayed.dropFirst(), plain) {
+            #expect(abs(moving.time - (original.time + delay)) < 1e-9)
+            #expect(moving.screenPosition == original.screenPosition)
+            #expect(moving.side == original.side)
+        }
     }
 
     @Test(arguments: [CGFloat(1), 1511])

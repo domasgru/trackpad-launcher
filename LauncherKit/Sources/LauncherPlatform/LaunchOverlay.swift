@@ -32,12 +32,14 @@ import Synchronization
     }
 
     /// `toward`: a split gesture's app, which starts beside the pointer on that side and sways further to it, so the
-    /// split's two icons start side by side and part; nil: from the pointer, to a random side.
+    /// split's two icons start side by side and part, the second app's a moment after the first's; nil: from the
+    /// pointer, to a random side.
     func play(for app: AppEntry, toward: SplitSide? = nil) {
         let read = ScreenRead.now()
         guard let display = LaunchDisplay.containing(read.pointer, among: read.displays) else { return }
         let start = toward.map { LaunchFlight.start(at: read.pointer, toward: $0, on: display) } ?? read.pointer
-        play(for: app, from: start, on: display, size: 1, toward: toward)
+        let delay = toward == .right ? LaunchFlight.splitStagger : 0
+        play(for: app, from: start, on: display, size: 1, toward: toward, delay: delay)
     }
 
     /// As `play(for:)`, staged at `start` among `displays` instead of at the pointer among the connected screens: a
@@ -49,15 +51,17 @@ import Synchronization
         toward: SplitSide? = nil
     ) {
         guard let display = LaunchDisplay.containing(start, among: displays) else { return }
-        play(for: app, from: start, on: display, size: size, toward: toward)
+        play(for: app, from: start, on: display, size: size, toward: toward, delay: 0)
     }
 
     private func play(
-        for app: AppEntry, from start: CGPoint, on display: LaunchDisplay, size: CGFloat, toward: SplitSide?
+        for app: AppEntry, from start: CGPoint, on display: LaunchDisplay, size: CGFloat, toward: SplitSide?,
+        delay: CFTimeInterval
     ) {
         let reduceMotion =
             NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || LaunchTuning.current.forceReduceMotion
-        let flight = flights.next(draw: .random(in: -1...1), reduceMotion: reduceMotion, toward: toward).sized(size)
+        let flight = flights.next(draw: .random(in: -1...1), reduceMotion: reduceMotion, toward: toward)
+            .sized(size).delayed(by: delay)
         guard let stage = flight.staged(at: start, on: display),
               case let (panel, host)? = Self.makePanel(frame: stage.frame)
         else { return }
