@@ -36,12 +36,12 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// `trackpads`, each with a fresh recognizer anchoring the thumb in that entry's corner and, if `blockClicks` and
     /// `trackpads` is not empty, a fresh click tap. Idempotent.
     /// The tap needs Accessibility. If the system refuses it, nothing is filtered, presses are sampled as before,
-    /// and taps behave exactly as without access. [] = nothing runs. `slides`: the slide kinds each fresh recognizer
-    /// recognises; `swaps`: whether it recognises swaps. Replacing the recognizers ends any swipe in progress.
+    /// and taps behave exactly as without access. [] = nothing runs. `options`: what each fresh recognizer
+    /// recognises. Replacing the recognizers ends any swipe in progress.
     /// `blockTapClicks`: presses that arrive while a lift window is open are blocked; only meaningful together with
     /// `blockClicks`.
     func run(
-        _ trackpads: [TrackpadRun], blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>, swaps: Bool)
+        _ trackpads: [TrackpadRun], blockClicks: Bool, blockTapClicks: Bool, options: RecognizerOptions)
     /// One pulse of that kind on that trackpad. No-op if it is gone.
     func playFeedback(_ haptic: Haptic, on trackpad: TrackpadID)
     /// Only while `onEvent` is handling a `.windowSwipe(.began)` from `trackpad`: makes that slide a window swipe.

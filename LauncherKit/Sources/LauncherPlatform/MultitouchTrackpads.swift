@@ -67,7 +67,7 @@ import LauncherCore
     /// recognizer anchoring the thumb in that entry's corner.
     /// A click tap exists afterwards iff `blockClicks`, the system allows it and a trackpad is running.
     public func run(
-        _ trackpads: [TrackpadRun], blockClicks: Bool, blockTapClicks: Bool, slides: Set<SlideKind>, swaps: Bool
+        _ trackpads: [TrackpadRun], blockClicks: Bool, blockTapClicks: Bool, options: RecognizerOptions
     ) {
         runs += 1
         guard let framework else { return }
@@ -91,7 +91,7 @@ import LauncherCore
             let ref = Unmanaged.passUnretained(device).toOpaque()
             let session = DeviceSession(
                 trackpad: trackpad.id,
-                recognizer: GestureRecognizer(corner: corner, surface: trackpad.surface, slides: slides, swaps: swaps, travel: .linear),
+                recognizer: GestureRecognizer(corner: corner, surface: trackpad.surface, options: options, travel: .linear),
                 pointerCurves: CursorTravel.curves(of: framework.getService(ref)),
                 tap: clickTap, clock: { .now },
                 deliver: { [weak self] event, reply in

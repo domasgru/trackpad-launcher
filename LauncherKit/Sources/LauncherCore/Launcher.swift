@@ -263,8 +263,7 @@ public final class Launcher {
         let trackpads: [TrackpadRun]
         let blockClicks: Bool
         let blockTapClicks: Bool
-        let slides: Set<SlideKind>
-        let swaps: Bool
+        let options: RecognizerOptions
     }
 
     @ObservationIgnored private var lastRun: Run?
@@ -297,13 +296,15 @@ public final class Launcher {
             trackpads: active ? connected.map { TrackpadRun($0, corner: corners.corner(for: $0.kind)) } : [],
             blockClicks: blockClicks,
             blockTapClicks: blockClicks && tapToClickIsOn,
-            slides: granted ? settings.slides : settings.slides.subtracting([.windowSwipe]), swaps: settings.isSwapOn)
+            options: RecognizerOptions(
+                slides: granted ? settings.slides : settings.slides.subtracting([.windowSwipe]),
+                swaps: settings.isSwapOn))
         guard restart || run != lastRun else { return }
         lastRun = run
         // Running replaces every recognizer, which ends any swipe or window swipe in progress.
         shown = nil
         hardware.run(run.trackpads, blockClicks: run.blockClicks,
-            blockTapClicks: run.blockTapClicks, slides: run.slides, swaps: run.swaps)
+            blockTapClicks: run.blockTapClicks, options: run.options)
     }
 
     private func hideOtherApps(than app: BundleID) {

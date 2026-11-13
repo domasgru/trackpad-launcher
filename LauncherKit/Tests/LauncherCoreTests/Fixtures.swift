@@ -39,6 +39,13 @@ extension Trackpad {
     static let secondMagicTrackpad = Trackpad(id: TrackpadID(rawValue: 3), kind: .external, surface: .magicTrackpad)
 }
 
+extension GestureRecognizer {
+    init(corner: ThumbCorner, surface: SurfaceSize, slides: Set<SlideKind>, swaps: Bool, travel: SwipeTravel) {
+        self.init(
+            corner: corner, surface: surface, options: RecognizerOptions(slides: slides, swaps: swaps), travel: travel)
+    }
+}
+
 /// Runs a fresh recognizer over `frames` and returns everything that fired, in order.
 func fired(
     _ frames: [TouchFrame],

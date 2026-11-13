@@ -75,19 +75,30 @@ extension Recognition.Event {
     }
 }
 
+/// What a run's recognizers recognise, beyond the thumb-held tap they always recognise.
+public struct RecognizerOptions: Hashable, Sendable {
+    /// The slide kinds whose setting is on. Empty: a pair's drag spoils like any drag, as with both settings off.
+    public var slides: Set<SlideKind>
+    /// False: a thumb landing under resting fingers is only ever held, never a thumb tap.
+    public var swaps: Bool
+
+    public init(slides: Set<SlideKind>, swaps: Bool) {
+        self.slides = slides
+        self.swaps = swaps
+    }
+}
+
 /// The tap-with-anchored-thumb rules for ONE trackpad, as a pure state machine, plus the swipe and the window swipe
 /// that start under the same thumb. Feed every frame in order.
 /// Owned by exactly one frame thread (real adapter) or by the test (in-memory adapter); never shared.
 public struct GestureRecognizer: Sendable {
-    /// `slides`: the kinds whose setting is on. Empty: a pair's drag spoils like any drag, as with both settings off.
-    /// `swaps`: false: a thumb landing under resting fingers is only ever held, never a thumb tap.
     /// `travel`: how finger movement becomes switcher travel. A var, so a Debug tuner can change it between frames.
-    public init(corner: ThumbCorner, surface: SurfaceSize, slides: Set<SlideKind>, swaps: Bool, travel: SwipeTravel) {
+    public init(corner: ThumbCorner, surface: SurfaceSize, options: RecognizerOptions, travel: SwipeTravel) {
         self.corner = AnchorCorner(corner, surface: surface)
         self.edgeContacts = EdgeContacts(corner, surface: surface)
         self.surface = surface
-        self.slides = slides
-        self.swaps = swaps
+        self.slides = options.slides
+        self.swaps = options.swaps
         self.travel = travel
     }
 
