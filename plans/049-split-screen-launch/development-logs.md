@@ -1,0 +1,51 @@
+# Development logs: Split gesture: two apps side by side
+
+## Specify
+- An app's other windows could cover the placed windows → glossary defines *front window*; R12 keeps both placed windows fully visible.
+- Other desktops (Spaces) and Stage Manager were unspecified → listed as non-goals with the behaviour the user gets; restoring a window's earlier frame listed as a non-goal too.
+- Pending placement was ambiguous → R13 fixes the display at fire time, lets a later gesture cancel a pending placement, and adds scenarios for a late window, a windowless app and cancellation.
+- No scenario showed the Accessibility hint for the silent case → R17 gains a scenario showing the existing hint.
+- The best-effort placement rule was compound, and oversize windows were unspecified → split into R14–R16; the second app anchors at its half's top-right; the fixed-size example now uses Calculator.
+- Missing-app cases were incomplete → R18 gains scenarios for a missing first app, both apps missing, and a missing second app's picker.
+- Several MUSTs had no scenario → scenarios added to R1, R3 (row heights), R5, R9, R16, R19 and R21.
+- The plan contradicted the product overview → new "Product overview changes" section.
+- "The first app ends active" allowed two builds → R10 says a launching second app never takes the focus, with scenarios.
+- The launch effects requirement was compound → split into R19 (own effect, bounce order) and R20 (directional sway).
+- Odd usable widths and the design reference's gaps → R11 gives the extra point to the left half; the design reference gains dark-appearance colours, truncation and button labels, and a note that Notes-twice is filler.
+- Declined: making *None* in the second picker remove the second app (user decided it does nothing), and dropping the directional sway (user asked for it).
+
+## Plan
+- Grounding probes on this Mac:
+  - setting size before position clamps a window to the screen from its current origin → the design places position, then size;
+  - an app launched without activation stayed out of the focus, even when it asked for it → the second app launches without activation;
+  - the last-opened of two apps ends active, with only its front window lifted → the second app opens first;
+  - an Accessibility raise does not cross the active app → no raise in the placer;
+  - 1.0.19 reads a nested new key and drops it on save → the second app nests in the assignment entry.
+- Red-flag screen:
+  - candidate 1 put Accessibility's coordinate system into core (`ScreenRect`) → rejected; `DisplayID` + `SplitSide` cross the port, and the halving stays in the platform;
+  - candidate 1 rewrote the one-app port path → rejected; the split gets its own call.
+- Cross-judge recommended candidate 1 (26 to 24); my rubric scores gave candidate 2 the edge (24 to 23) → base candidate 2. The judge's own grafts were most of its skeleton. Its two reasons for candidate 1 were grafted: the pure `SplitSteps` order test, and one watch-record type.
+- Cross-judge: candidate 2 cancelled placements from silent gestures, breaking `fire`'s silent contract → `stopPlacing()` moved after the silent guard (O9 left to the human).
+- Cross-judge: candidate 2's partner wait could suppress every hide when the second app's launch ran out (R21) → only a pending first app defers the hide. Candidate 1's rule, which could hide while the active first app showed no window (plan 032 root cause 1), was not taken either.
+- Cross-judge: AX calls on the main actor for followed running apps → `LaunchWatch.finished` reads the window list first; a hung windowless app remains a stated risk.
+- Cross-judge: *Front window* already existed in the domain model → the entry was widened, not duplicated.
+- Verify: the usage called initializers the sketch lacked → public initializers added to `SplitApp`, `SplitArrival` and `ScreenHalf`.
+- Test planner pass 1, fixed:
+  - the plus button's pop-up could not be driven by a bench → injectable `popUp`;
+  - the placer instance had no seam → a test initializer;
+  - placings of one process could interleave → one serial queue per process, with the ticket checked before every call;
+  - "already there" missed anchored or fixed windows → the frame the last placing left is remembered;
+  - the window choice was untestable → `mainWindow`/`windows` calls, with the choice made in `place`;
+  - `DisplayID` had no public initializer;
+  - a refused position or full-screen exit now ends the sequence;
+  - `Build1018Settings` is reused as 1.0.19's coding.
+- Test planner pass 1, rejected:
+  - the 46/76 pt rows against R3's 48/78 (left to the human as O1);
+  - silent gestures not cancelling (O9);
+  - a seam for a bounce's kept side, and for the activation flag (one stored value and one line, covered by read checks and M3).
+- Test planner pass 1, folded in: R12's window order for launching or unhiding apps with several windows became a stated risk.
+- Test planner pass 2, fixed:
+  - the placer's work items could not be awaited → a `finished` callback, with `place(_:in:)` answering whether it dispatched;
+  - the own-process check now lives in `place(_:in:)`;
+  - the remembered frame is read back after the last write when time remains.
+- No runner dropped out.
