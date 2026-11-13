@@ -114,6 +114,9 @@ public struct GestureRecognizer: Sendable {
     public mutating func step(_ frame: TouchFrame) -> Recognition {
         let frame = edgeContacts.fingers(in: frame)
         let isFirstFrame = previouslyDown == nil
+        // A fresh recognizer has no earlier contact: a first frame that lands a finger on an empty pad is quiet, since
+        // the pad sends no frames while nothing touches it. Resting contacts on it never start a tap anyway.
+        let isQuiet = lastContact.map { frame.time - $0 >= GestureRules.thumblessQuietBefore } ?? true
         let wasInThumbTouch = isInThumbTouch
         let thumbBefore = state.knownThumb
         let before = previouslyDown ?? []
@@ -121,7 +124,10 @@ public struct GestureRecognizer: Sendable {
         let reused = Set(frame.touches.filter { $0.phase == .landing && before.contains($0.id) }.map(\.id))
         let lifted = before.subtracting(down.keys).union(reused)
         let landed = frame.touches.filter { $0.isLanding(after: before) }
-        defer { previouslyDown = Set(down.keys) }
+        defer {
+            previouslyDown = Set(down.keys)
+            if !down.isEmpty || !before.isEmpty { lastContact = frame.time }
+        }
 
         let departed = book.contacts(of: lifted)
         for id in lifted { book[id] = nil }
@@ -148,7 +154,7 @@ public struct GestureRecognizer: Sendable {
                 state = down.count == 1 ? .armed(anchor) : .spoiled(anchor)
             } else if !landed.isEmpty {
                 var rest = Rest(fingers: Set(landed.map(\.id)))
-                let isCleanStart = before.isEmpty && frame.press == nil
+                let isCleanStart = before.isEmpty && isQuiet && frame.press == nil
                     && landed.allSatisfy { book[$0.id]?.isRealLanding ?? false }
                 if thumblessTaps && isCleanStart { rest.tap = Tap(start: frame.time, landing: landed) }
                 state = .rest(rest)
@@ -308,16 +314,21 @@ public struct GestureRecognizer: Sendable {
         if var tap = rest.tap {
             for id in lifted { tap.down.remove(id) }
             let landsInCorner = landed.contains { corner.admits($0.position) }
+            rest.tapDriftMM = max(rest.tapDriftMM, Self.driftMM(of: tap.fingers, in: down, book: book, on: surface))
             if tap.down.isEmpty {
-                // Only the time is judged on the lift frame: a press first seen there is the tap's own click.
-                let fires = frame.time - tap.start <= GestureRules.maxThumblessTapDuration
+                // The limits are those of the finger count the tap ends with. The lift frame has no finger left to
+                // measure, so the drift is what earlier frames saw. A press first seen here is the tap's own click.
+                let isMulti = tap.touched.count >= 3
+                let window = isMulti ? GestureRules.maxThumblessMultiTapDuration : GestureRules.maxThumblessTapDuration
+                let dragLimit = isMulti ? GestureRules.thumblessMultiDragThresholdMM : GestureRules.dragThresholdMM
+                let fires = frame.time - tap.start <= window && rest.tapDriftMM <= dragLimit
                     ? Gesture(fingerCount: tap.touched.count) : nil
                 event = fires.map(Recognition.Event.fired)
-                let startsNext = fires != nil && frame.press == nil && !landsInCorner && !landed.isEmpty
-                rest.tap = startsNext ? Tap(start: frame.time, landing: landed) : nil
+                rest.tap = nil
             } else if landsInCorner || frame.press != nil
-                        || Self.drag(of: tap.fingers, in: down, book: book, on: surface) != nil
-                        || frame.time - tap.start > GestureRules.maxThumblessTapDuration {
+                        || frame.time - tap.start > GestureRules.maxThumblessMultiTapDuration {
+                rest.tap = nil
+            } else if rest.tapDriftMM > GestureRules.thumblessMultiDragThresholdMM {
                 rest.tap = nil
             } else {
                 for touch in landed { tap.land(touch.id) }
@@ -445,6 +456,8 @@ public struct GestureRecognizer: Sendable {
         /// A thumbless tap in progress: only a rest that began on an empty trackpad, with the option on, carries one.
         /// Once it ends it never comes back for this rest.
         var tap: Tap?
+        /// The farthest any finger of `tap` has been from its landing point so far, in mm.
+        var tapDriftMM = 0.0
     }
 
     private struct RestThumb: Sendable {
@@ -543,6 +556,16 @@ public struct GestureRecognizer: Sendable {
             .flatMap { hypot($0.dxMM, $0.dyMM) > GestureRules.dragThresholdMM ? $0 : nil }
     }
 
+    /// The farthest any of `fingers` is from its landing point, in mm.
+    private static func driftMM(
+        of fingers: [TouchID], in down: [TouchID: Touch], book: ContactBook, on surface: SurfaceSize
+    ) -> Double {
+        fingers.compactMap { id -> Double? in
+            guard let touch = down[id], let origin = book[id]?.origin else { return nil }
+            return hypot((touch.position.x - origin.x) * surface.widthMM, (touch.position.y - origin.y) * surface.heightMM)
+        }.max() ?? 0
+    }
+
     private struct Tap: Sendable {
         let start: FrameTime
         /// Fingers down now.
@@ -615,6 +638,8 @@ public struct GestureRecognizer: Sendable {
     /// macOS counts every contact, so whatever the thumb does meanwhile, two or more contacts can read as its swipe.
     private var isInThumbTouch = false
     private var book = ContactBook()
+    /// The last frame with a contact down, or on which the pad became empty. nil until a contact has been seen.
+    private var lastContact: FrameTime?
     /// Contacts down on the previous frame. nil until the first frame.
     private var previouslyDown: Set<TouchID>?
 }
