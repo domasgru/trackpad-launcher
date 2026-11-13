@@ -347,7 +347,7 @@ public final class Launcher {
         let target = assignment.target(locate: catalog.locate)
         guard target != .nothing else { return }
         hardware.playFeedback(.gesture, on: event.trackpad)
-        placing = nil
+        stopPlacing()
         switch target {
         case .nothing: break
         case .one(let app): bringOneToFront(app)
@@ -368,7 +368,7 @@ public final class Launcher {
         }
         guard animates || hides else { return system.bringToFront(app) }
         guard system.hasProcess(id) else {
-            launches[id] = WatchedLaunch(stage: .startingUp, hidesOnWindow: kept)
+            launches[id] = WatchedLaunch(stage: .startingUp, kind: .launched, hidesOnWindow: kept)
             // Opens the app first, inside the call.
             system.bringToFrontWatching(app, cap: WatchedLaunch.cap, bouncing: animates)
             return
@@ -394,9 +394,13 @@ public final class Launcher {
                 launches[id]?.hidesOnWindow = kept
                 return SplitApp(app, .alreadyLaunching)
             }
-            guard !system.hasProcess(id) else { return SplitApp(app, .running(animates: animates, followed: false)) }
-            let watched = animates || kept != nil
-            if watched { launches[id] = WatchedLaunch(stage: .startingUp, hidesOnWindow: kept) }
+            guard !system.hasProcess(id) else {
+                let followed = display != nil
+                if followed { launches[id] = WatchedLaunch(stage: .startingUp, kind: .followed, hidesOnWindow: nil) }
+                return SplitApp(app, .running(animates: animates, followed: followed))
+            }
+            let watched = animates || kept != nil || display != nil
+            if watched { launches[id] = WatchedLaunch(stage: .startingUp, kind: .launched, hidesOnWindow: kept) }
             return SplitApp(app, .launching(watch: watched ? (animates ? .bouncing : .unseen) : nil))
         }
         let arrival = SplitArrival(first: entrance(first), second: entrance(second))
@@ -406,8 +410,18 @@ public final class Launcher {
             guard case .running = part.entrance, let half = placing?.half(of: part.app.bundleID) else { continue }
             system.placeFrontWindow(of: part.app.bundleID, in: half)
         }
-        if let kept, launches[first.bundleID] == nil, launches[second.bundleID] == nil {
+        if let kept, launches[first.bundleID]?.kind != .launched, launches[second.bundleID]?.kind != .launched {
             system.hideOtherApps(keeping: kept)
+        }
+    }
+
+    /// A later gesture that brings an app to front ends the placements of the split before it: the follows stop, and
+    /// a window that shows after that is not moved.
+    private func stopPlacing() {
+        placing = nil
+        for (id, launch) in launches where launch.kind == .followed {
+            launches[id] = nil
+            system.endLaunch(of: id, with: .quietFade)
         }
     }
 
@@ -422,8 +436,10 @@ public final class Launcher {
         case .end(let ending):
             launches[app] = nil
             system.endLaunch(of: app, with: ending)
+            guard progress == .windowShown else { return }
+            if let half = placing?.half(of: app) { system.placeFrontWindow(of: app, in: half) }
             // After the end, so a bounce's launch animation starts first. The record decides, not the switch now.
-            if progress == .windowShown, let kept = launch.hidesOnWindow,
+            if let kept = launch.hidesOnWindow,
                kept.hides(
                    onWindowOf: app, frontmost: system.runningApps().frontmost?.bundleID,
                    frontStillWaits: launches[kept.front]?.hidesOnWindow != nil) {

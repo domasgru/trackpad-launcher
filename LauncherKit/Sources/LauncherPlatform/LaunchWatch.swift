@@ -96,6 +96,8 @@ import LauncherCore
         report(.finishedLaunching)
         // The report may have ended the bounce.
         guard !isStopped else { return }
+        // A listed window needs no Accessibility call: no element, no observer.
+        if Self.listedWindows(of: pid) > 0 { return report(.windowShown) }
         let element = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(element, Self.messagingTimeout)
         let registration = register(on: element, pid: pid)
