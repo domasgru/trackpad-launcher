@@ -9,16 +9,16 @@ public enum Copy {
     public static let openSettingsButton = "Open Settings…"
 
     /// The red button that ends the settings window, beside *Close*.
-    public static let quitButton = "Quit Trackpad Launcher"
+    public static let quitButton = "Quit Trackpad App"
 
     /// The move dialog's message and buttons.
-    public static let moveDialogTitle = "Trackpad Launcher needs to be in the Applications folder"
+    public static let moveDialogTitle = "Trackpad App needs to be in the Applications folder"
     public static let moveDialogMessage = "Move it there to finish installing."
     public static let moveButton = "Move to Applications"
     public static let moveQuitButton = "Quit"
     public static let cannotWriteToApplications = "This account can't change the Applications folder."
     public static let applicationsFolderNotChanged = "The Applications folder could not be changed."
-    public static let moveFailedTitle = "Trackpad Launcher couldn't be moved to the Applications folder"
+    public static let moveFailedTitle = "Trackpad App couldn't be moved to the Applications folder"
 
     /// The update card's text and its button's two titles.
     public static let updateAvailable = "Update available"

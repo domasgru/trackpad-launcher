@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// The running Trackpad Launcher. Owns every decision; adapters sense and act, the shell and views render.
+/// The running Trackpad App. Owns every decision; adapters sense and act, the shell and views render.
 /// `activity` is derived, never stored; `rows` derive from settings plus the catalog; `fire` is the only path
 /// that pulses, launches, plays the launch animation or the launch bounce from a gesture; no gesture closes the window. `fire`
 /// shows either only while the launch animation setting is on: the bounce for an app with no process, the animation for
@@ -271,7 +271,7 @@ public final class Launcher {
         permissions.ask(.screenRecording)
     }
 
-    /// The user opened Trackpad Launcher. The first time in this process, on a first run (no saved settings): start at
+    /// The user opened Trackpad App. The first time in this process, on a first run (no saved settings): start at
     /// login and ask for Accessibility when it is missing, then save; both effects come before the save, so a crash in
     /// between repeats them rather than losing them. On any other run, start at login again if a Quit turned it off.
     /// Every time: the settings window opens or comes to the front, the

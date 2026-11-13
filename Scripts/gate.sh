@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 Scripts/test.sh
 xcodegen generate --quiet
-xcodebuild build -project TrackpadLauncher.xcodeproj -scheme TrackpadLauncher -configuration Debug \
+xcodebuild build -project TrackpadApp.xcodeproj -scheme TrackpadApp -configuration Debug \
     -derivedDataPath build/gate -quiet
 
 echo "gate: all green"

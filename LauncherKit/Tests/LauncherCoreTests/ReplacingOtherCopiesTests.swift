@@ -107,7 +107,7 @@ import Testing
 
     @Test func theInstalledCopyEjectsTheMoversDiskImageOnlyAfterTheMoverHasExited() {
         let world = LifecycleWorld(record: [.one: "Arc"])
-        let image = DiskImage(volume: URL(filePath: "/Volumes/Trackpad Launcher"))
+        let image = DiskImage(volume: URL(filePath: "/Volumes/Trackpad App"))
         let process = world.launch(.byHand, others: [.earlier], diskImageToEject: image)
 
         #expect(process.installer.ejected.isEmpty)
@@ -122,7 +122,7 @@ import Testing
 
     @Test func anOpeningByHandWhileWaitingKeepsTheDiskImageToEject() {
         let world = LifecycleWorld(record: [.one: "Arc"])
-        let image = DiskImage(volume: URL(filePath: "/Volumes/Trackpad Launcher"))
+        let image = DiskImage(volume: URL(filePath: "/Volumes/Trackpad App"))
         let process = world.launch(.atLogin, others: [.later], diskImageToEject: image)
         process.openAgain(.byHand)
 

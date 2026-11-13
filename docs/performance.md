@@ -1,6 +1,6 @@
 # Performance
 
-How much of the Mac Trackpad Launcher uses, measured on Release builds, and how to measure it again. The product promise is the least resources technically possible (`product-overview.md`). Add each new run as a dated entry under Results, newest first, and keep the method stable so entries compare.
+How much of the Mac Trackpad App uses, measured on Release builds, and how to measure it again. The product promise is the least resources technically possible (`product-overview.md`). Add each new run as a dated entry under Results, newest first, and keep the method stable so entries compare.
 
 ## Method
 

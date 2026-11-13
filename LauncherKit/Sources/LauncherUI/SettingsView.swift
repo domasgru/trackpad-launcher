@@ -8,7 +8,7 @@ import SwiftUI
 /// draws one, its sections 10 pt apart: the five gesture rows, the Animate app launch switch and the Hold thumb
 /// switch, the switcher section, and the thumb corner group, with the Hide background apps switch below it: one
 /// row, or once the Mac has mixed trackpads one cell with a title and two indented pop-up rows; the no trackpad
-/// notice, while it applies, in a rounded group 10 pt below the form; then *Quit Trackpad Launcher* and *Close*,
+/// notice, while it applies, in a rounded group 10 pt below the form; then *Quit Trackpad App* and *Close*,
 /// aligned right, 20 pt below the last of them. The form keeps the system's own fonts, insets and controls. A
 /// one-line row is 48 pt tall and a two-line row 86 pt (`formRow(height:)`), except the 1-finger gesture's, which is 70 pt
 /// or 86 pt, the *Switch windows* row, which grows while the screen recording hint sits in it, and the mixed trackpads

@@ -3,7 +3,7 @@
 # version, refuses a version that is not above every earlier release, archives, exports with the developer-id
 # method, notarizes and staples the app, archives it as the update asset, lays out a disk image, signs, notarizes
 # and staples it, and publishes a GitHub release carrying both, then adds its item to the update feed.
-# Output: build/release/TrackpadLauncher.dmg
+# Output: build/release/TrackpadApp.dmg
 #         build/release/TrackpadLauncher-<version>-macOS-<minimum>.aar
 #         the release v<version> on GitHub, published and marked latest: copies from before automatic updates
 #         offer it on their old card the next time their settings window opens. gh uploads the assets before it publishes, so no copy sees a half-made one.
@@ -45,19 +45,23 @@ set -euo pipefail
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TEAM_ID="${TEAM_ID:-CQK27876UL}"
-PROJECT_NAME="TrackpadLauncher"
+PROJECT_NAME="TrackpadApp"
 # The bundle as users get it: Finder, the Dock and Spotlight show its file name, not CFBundleDisplayName.
-BUNDLE_NAME="Trackpad Launcher.app"
+BUNDLE_NAME="Trackpad App.app"
 # The update archive's asset prefix and the one bundle name inside it: a contract with every shipped version, which
 # refuses any other entry and installs the bundle over its own copy, whatever that copy is named.
 ARCHIVE_PREFIX="TrackpadLauncher"
 ARCHIVED_BUNDLE_NAME="TrackpadLauncher.app"
 BUNDLE_ID="com.domasgru.TrackpadLauncherApp"
-VOLUME_NAME="Trackpad Launcher"
+VOLUME_NAME="Trackpad App"
 OUT="${RELEASE_OUT:-$ROOT/build/release}"
 BACKGROUND="$ROOT/Scripts/release/dmg-background.png"
 DMG="$OUT/$PROJECT_NAME.dmg"
-REPOSITORY="domasgru/trackpad-launcher"
+REPOSITORY="domasgru/trackpad-app"
+# Where every feed item's download lies: the repository's path before its rename, which GitHub redirects to
+# $REPOSITORY. A contract with every shipped version, whose Info.plist key TLUpdateDownloads admits only addresses
+# under it; keep it equal to TLUpdateDownloads in project.yml.
+DOWNLOADS="https://github.com/domasgru/trackpad-launcher/releases/download"
 VERSION_FILE="$ROOT/Config/Version.xcconfig"
 FEED="$ROOT/appcast.xml"
 SPARKLE_BIN="$ROOT/LauncherKit/Vendor/Sparkle/bin"
@@ -286,7 +290,7 @@ eject_same_named_images() {
     echo "Ejecting the disk image mounted at $mount_point"
     hdiutil detach "$mount_point" >/dev/null 2>&1 ||
       { sleep 2; hdiutil detach "$mount_point" >/dev/null 2>&1; } ||
-      fail "cannot eject the disk image at '$mount_point'; something on it is in use (a running Trackpad Launcher?). Quit it and retry."
+      fail "cannot eject the disk image at '$mount_point'; something on it is in use (a running Trackpad App?). Quit it and retry."
   done < <(hdiutil info | awk -F'\t' -v name="/Volumes/$VOLUME_NAME" \
     '$NF == name || index($NF, name " ") == 1 && substr($NF, length(name) + 2) ~ /^[0-9]+$/ { print $NF }')
   [ ! -e "/Volumes/$VOLUME_NAME" ] ||
@@ -369,7 +373,7 @@ write_feed() {
   item+="<sparkle:version>$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")</sparkle:version>"
   item+="<sparkle:shortVersionString>$EXPECTED_VERSION</sparkle:shortVersionString>"
   item+="<sparkle:minimumSystemVersion>$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$plist")</sparkle:minimumSystemVersion>"
-  item+="<enclosure url=\"https://github.com/$REPOSITORY/releases/download/v$EXPECTED_VERSION/$name\" $attributes type=\"application/octet-stream\"/></item>"
+  item+="<enclosure url=\"$DOWNLOADS/v$EXPECTED_VERSION/$name\" $attributes type=\"application/octet-stream\"/></item>"
   # A version already in the feed is replaced, so --feed-only can run twice.
   awk -v item="$item" -v version="<title>$EXPECTED_VERSION</title>" \
     'index($0, version) { next } /<\/channel>/ { print item } { print }' "$FEED" > "$OUT/appcast.xml"
@@ -393,7 +397,7 @@ publish_feed() {
 }
 
 if [ "${1:-}" = "--image-only" ]; then
-  [ -n "${2:-}" ] || fail "usage: release.sh --image-only <path to Trackpad Launcher.app>"
+  [ -n "${2:-}" ] || fail "usage: release.sh --image-only <path to Trackpad App.app>"
   mkdir -p "$OUT"
   build_image "$2"
   echo "Unsigned test image: $DMG"
@@ -401,7 +405,7 @@ if [ "${1:-}" = "--image-only" ]; then
 fi
 
 if [ "${1:-}" = "--archive-only" ]; then
-  [ -n "${2:-}" ] || fail "usage: release.sh --archive-only <path to Trackpad Launcher.app>"
+  [ -n "${2:-}" ] || fail "usage: release.sh --archive-only <path to Trackpad App.app>"
   archive_and_check "$2" lenient
   swift run --package-path "$ROOT/LauncherKit" card-contract \
     "$AAR" --team "$TEAM_ID" --identifier "$BUNDLE_ID" ||
@@ -521,7 +525,7 @@ if $UNPUSHED_BUMP; then
 fi
 gh release create "v$EXPECTED_VERSION" "$DMG" "$AAR" --repo "$REPOSITORY" --latest \
   --target "$(git -C "$ROOT" rev-parse HEAD)" \
-  --title "Trackpad Launcher $EXPECTED_VERSION" --notes "Requires macOS $MIN_MACOS or later." ||
+  --title "Trackpad App $EXPECTED_VERSION" --notes "Requires macOS $MIN_MACOS or later." ||
   fail "publishing v$EXPECTED_VERSION failed; main already holds its version, so run release.sh with no argument to retry."
 publish_feed
 echo "Release artifacts: $DMG $AAR"

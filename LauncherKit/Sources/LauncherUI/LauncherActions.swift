@@ -31,6 +31,6 @@ struct LauncherActions {
     let arrowDrift: () -> ArrowDrift
     /// Opens the System Settings pane; the settings window stays open.
     let openSettings: (SettingsPane) -> Void
-    /// The *Quit Trackpad Launcher* button.
+    /// The *Quit Trackpad App* button.
     let quit: () -> Void
 }

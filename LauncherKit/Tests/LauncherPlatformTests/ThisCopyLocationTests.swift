@@ -6,7 +6,7 @@ import Testing
 
 @Suite struct ThisCopyLocationTests {
     @Test func aBundleInApplicationsWithATrailingSlashIsInstalledAndNotTranslocated() {
-        let bundle = URL(filePath: "/Applications/TrackpadLauncher.app/")
+        let bundle = URL(filePath: "/Applications/TrackpadApp.app/")
 
         let location = ThisCopy.location(of: bundle, originalIfTranslocated: { _ in nil }, diskImage: { _ in nil })
 
@@ -18,9 +18,9 @@ import Testing
     }
 
     @Test func aTranslocatedBundleFindsItsDiskImageFromTheOriginal() {
-        let running = URL(filePath: "/private/var/folders/xx/AppTranslocation/ABC/d/TrackpadLauncher.app")
-        let original = URL(filePath: "/Volumes/Trackpad Launcher/TrackpadLauncher.app")
-        let volume = URL(filePath: "/Volumes/Trackpad Launcher")
+        let running = URL(filePath: "/private/var/folders/xx/AppTranslocation/ABC/d/TrackpadApp.app")
+        let original = URL(filePath: "/Volumes/Trackpad App/TrackpadApp.app")
+        let volume = URL(filePath: "/Volumes/Trackpad App")
 
         let location = ThisCopy.location(
             of: running,

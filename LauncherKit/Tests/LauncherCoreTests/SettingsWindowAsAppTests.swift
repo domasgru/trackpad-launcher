@@ -7,7 +7,7 @@ import LauncherCore
     private func names(_ switcher: Switcher?) -> [String]? { switcher?.row.map(\.name) }
 
     private func settingsComesForward(_ world: World) {
-        #expect(world.system.broughtToFront == [world.trackpadLauncher])
+        #expect(world.system.broughtToFront == [world.trackpadApp])
         #expect(world.hardware.feedback == [trackpad.id])
         #expect(world.launcher.window == .open(request: 2))
     }
@@ -18,8 +18,8 @@ import LauncherCore
         world.activate("Safari")
 
         let hand = world.swipe(3.5, 12, lift: false)
-        #expect(names(world.launcher.switcher) == ["Safari", "Trackpad Launcher", "Mail", "Notes"])
-        #expect(world.launcher.switcher?.selectedApp == world.trackpadLauncher)
+        #expect(names(world.launcher.switcher) == ["Safari", "Trackpad App", "Mail", "Notes"])
+        #expect(world.launcher.switcher?.selectedApp == world.trackpadApp)
 
         world.play(hand.lift())
         settingsComesForward(world)
@@ -55,7 +55,7 @@ import LauncherCore
         world.openSettings()
 
         let hand = world.swipe(3.5, lift: false)
-        #expect(names(world.launcher.switcher) == ["Trackpad Launcher", "Safari", "Mail"])
+        #expect(names(world.launcher.switcher) == ["Trackpad App", "Safari", "Mail"])
         #expect(world.launcher.switcher?.selection.selected == 0)
 
         let history = world.playFrameByFrame(hand.lift()) { (world.system.broughtToFront, world.hardware.pulses) }
@@ -73,7 +73,7 @@ import LauncherCore
         if activationLanded { world.activate("Safari") }
         world.play(hand.thumbTap().lift())
 
-        #expect(world.system.broughtToFront == [world.app("Safari"), world.trackpadLauncher])
+        #expect(world.system.broughtToFront == [world.app("Safari"), world.trackpadApp])
         #expect(world.hardware.pulses.count == 2)
         #expect(world.hardware.pulses.allSatisfy { $0.haptic == .gesture })
         #expect(world.launcher.window == .open(request: 2))
@@ -86,6 +86,6 @@ import LauncherCore
         world.openSettings()
 
         world.swipe(3.5, lift: false)
-        #expect(names(world.launcher.switcher) == ["Trackpad Launcher", "Finder"])
+        #expect(names(world.launcher.switcher) == ["Trackpad App", "Finder"])
     }
 }

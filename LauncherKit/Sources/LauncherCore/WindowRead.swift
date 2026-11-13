@@ -20,7 +20,7 @@ public enum WindowRead: Equatable, Sendable {
     /// No answer within the deadline, a call that could not complete partway (what was read so far is dropped), an
     /// immediate refusal, no Accessibility, or the app no longer running.
     case unanswered
-    /// Trackpad Launcher itself, never read: its one window is the settings window.
+    /// Trackpad App itself, never read: its one window is the settings window.
     case ownProcess
 }
 

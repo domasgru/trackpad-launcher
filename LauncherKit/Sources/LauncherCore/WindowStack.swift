@@ -18,7 +18,7 @@ public struct WindowStack: Equatable, Sendable {
 /// One slot's stack as the swipe knows it: `.pending` until its app answers, then fixed for the swipe.
 public enum SlotStack: Equatable, Sendable {
     case pending
-    /// Zero or one window, Trackpad Launcher itself, or no answer within the deadline.
+    /// Zero or one window, Trackpad App itself, or no answer within the deadline.
     case alone
     case stack(WindowStack)
 

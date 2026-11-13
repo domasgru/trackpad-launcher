@@ -1,4 +1,4 @@
-name: TrackpadLauncher
+name: TrackpadApp
 options:
   bundleIdPrefix: com.domasgru
   deploymentTarget:
@@ -13,11 +13,11 @@ packages:
   LauncherKit:
     path: LauncherKit
 targets:
-  TrackpadLauncher:
+  TrackpadApp:
     type: application
     platform: macOS
     sources:
-      - path: TrackpadLauncher
+      - path: TrackpadApp
         excludes: ["Info.plist"]
       - path: assets
         includes: ["*.svg", "*.png"]
@@ -30,25 +30,27 @@ targets:
       - package: LauncherKit
         product: LauncherUI
     info:
-      path: TrackpadLauncher/Info.plist
+      path: TrackpadApp/Info.plist
       properties:
-        CFBundleName: Trackpad Launcher
-        CFBundleDisplayName: Trackpad Launcher
+        CFBundleName: Trackpad App
+        CFBundleDisplayName: Trackpad App
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
-        SUFeedURL: https://raw.githubusercontent.com/domasgru/trackpad-launcher/main/appcast.xml
+        SUFeedURL: https://raw.githubusercontent.com/domasgru/trackpad-app/main/appcast.xml
         SUPublicEDKey: 7bU2ETbJmXD69AOzuCQ/dtoiWle+FeITZAx6sFHyz4s=
         SUEnableAutomaticChecks: false
         SUVerifyUpdateBeforeExtraction: true
         SUEnableInstallerLauncherService: true
+        # The repository's path before its rename to trackpad-app, which GitHub redirects: every shipped version admits
+        # only downloads under it, so the feed keeps naming it (Scripts/release.sh, DOWNLOADS).
         TLUpdateDownloads: https://github.com/domasgru/trackpad-launcher/releases/download/
     settings:
       base:
         # The bundle's file name is the name Finder, the Dock and Spotlight show; CFBundleDisplayName cannot override it.
-        PRODUCT_NAME: Trackpad Launcher
-        PRODUCT_MODULE_NAME: TrackpadLauncher
+        PRODUCT_NAME: Trackpad App
+        PRODUCT_MODULE_NAME: TrackpadApp
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ONLY_ACTIVE_ARCH: NO

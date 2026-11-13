@@ -17,7 +17,7 @@ final class SettingsWindow: NSWindow {
     init() {
         super.init(
             contentRect: .zero, styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: true)
-        title = "Trackpad Launcher"
+        title = "Trackpad App"
         isReleasedWhenClosed = false
         level = .normal
         appearance = Self.pinnedAppearance

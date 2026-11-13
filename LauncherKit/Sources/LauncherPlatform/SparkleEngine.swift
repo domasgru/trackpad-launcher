@@ -79,7 +79,7 @@ internal import Sparkle
         kind = cycle
         delegate.beginCycle()
         let candidate = SPUUpdater(hostBundle: host, applicationBundle: host, userDriver: driver, delegate: delegate)
-        candidate.userAgentString = "TrackpadLauncher"
+        candidate.userAgentString = "TrackpadApp"
         candidate.httpHeaders = ["Accept-Language": "en", "Accept-Encoding": "gzip"]
         do {
             try candidate.start()
@@ -254,7 +254,7 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
         throws
     {
         guard isPinned(enclosure: updateItem.fileURL, under: prefix) else {
-            throw NSError(domain: "TrackpadLauncher.update", code: 1)
+            throw NSError(domain: "TrackpadApp.update", code: 1)
         }
     }
 

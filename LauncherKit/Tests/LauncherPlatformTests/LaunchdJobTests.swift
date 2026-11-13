@@ -26,7 +26,7 @@ import Testing
     /// A bundle at build 1, a stub `open` that records its arguments, and an old process that lives until `killOld`.
     private final class Rig {
         let folder = FileManager.default.temporaryDirectory.appending(path: "tl-handover-\(UUID().uuidString)")
-        var bundle: URL { folder.appending(path: "Trackpad Launcher.app") }
+        var bundle: URL { folder.appending(path: "Trackpad App.app") }
         var plist: URL { bundle.appending(path: "Contents/Info.plist") }
         var stub: URL { folder.appending(path: "open-stub") }
         var calls: URL { folder.appending(path: "calls") }

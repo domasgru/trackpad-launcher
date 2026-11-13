@@ -96,7 +96,7 @@ final class LaunchRecord: Sendable {
         install("Finder", in: coreServices)
         for name in apps { install(name) }
         system.onBringToFront = { [unowned self] app in
-            guard app.bundleID == Self.bundleID(Self.trackpadLauncherName) else { return }
+            guard app.bundleID == Self.bundleID(Self.trackpadAppName) else { return }
             listFirst(app)
             launcher.openedByHand()
         }
@@ -314,28 +314,28 @@ extension World {
         system.running = [entry] + system.running.filter { $0.url != entry.url }
     }
 
-    private static let trackpadLauncherName = "Trackpad Launcher"
+    private static let trackpadAppName = "Trackpad App"
 
-    /// The installed Trackpad Launcher bundle, installed on first use.
-    var trackpadLauncher: AppEntry {
-        let bundle = applications.appending(path: "\(Self.trackpadLauncherName).app")
-        if !FileManager.default.fileExists(atPath: bundle.path) { install(Self.trackpadLauncherName) }
-        return app(Self.trackpadLauncherName)
+    /// The installed Trackpad App bundle, installed on first use.
+    var trackpadApp: AppEntry {
+        let bundle = applications.appending(path: "\(Self.trackpadAppName).app")
+        if !FileManager.default.fileExists(atPath: bundle.path) { install(Self.trackpadAppName) }
+        return app(Self.trackpadAppName)
     }
 
-    /// The user opens Trackpad Launcher by hand: its settings window opens, and LaunchServices lists it first and makes
+    /// The user opens Trackpad App by hand: its settings window opens, and LaunchServices lists it first and makes
     /// it the active app while its Dock icon shows.
     func openSettings() {
-        let own = trackpadLauncher
+        let own = trackpadApp
         system.ownApp = own
         launcher.openedByHand()
         listFirst(own)
     }
 
-    /// The settings window closes: Trackpad Launcher leaves ⌘-Tab, and if it was in front the next app is.
+    /// The settings window closes: Trackpad App leaves ⌘-Tab, and if it was in front the next app is.
     func closeSettings() {
         launcher.closeWindow()
-        let own = trackpadLauncher
+        let own = trackpadApp
         system.running.removeAll { $0.url == own.url }
         if system.frontmost?.url == own.url { system.frontmost = system.running.first }
     }

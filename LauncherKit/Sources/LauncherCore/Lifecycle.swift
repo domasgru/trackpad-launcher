@@ -58,7 +58,7 @@ public struct CopyID: Hashable, Sendable {
     public init(rawValue: Int32) { self.rawValue = rawValue }
 }
 
-/// Another running Trackpad Launcher process: any build, any place, the menu bar version included.
+/// Another running Trackpad App process: any build, any place, the menu bar version included.
 public struct RunningCopy: Hashable, Sendable {
     public let id: CopyID
     /// Launched before this process, by the adapter's one total order (launch date, a missing date counting as latest,
@@ -71,7 +71,7 @@ public struct RunningCopy: Hashable, Sendable {
     }
 }
 
-/// Starting at login: the one owner of "Trackpad Launcher turns back on only what it turned off itself". Its one fact
+/// Starting at login: the one owner of "Trackpad App turns back on only what it turned off itself". Its one fact
 /// is its own key in the app's defaults domain, beside the `settings` record and never inside it, so a move and the
 /// running copy never write the same record. A development build outside /Applications leaves starting at login
 /// alone: every intent is a no-op for it. It only ever asks whether the item is on now, so how macOS reports a user's
@@ -95,7 +95,7 @@ public struct RunningCopy: Hashable, Sendable {
         forget()
     }
 
-    /// Quit, or a move: if it is on now, remember that Trackpad Launcher turned it off, then turn it off. Remembering
+    /// Quit, or a move: if it is on now, remember that Trackpad App turned it off, then turn it off. Remembering
     /// comes first, so a crash before the unregister leaves it on and remembered, and resuming converges.
     public func suspend() {
         guard placement != .development, item.isOn else { return }
@@ -103,7 +103,7 @@ public struct RunningCopy: Hashable, Sendable {
         item.unregister()
     }
 
-    /// Opened by hand: turn it back on only if Trackpad Launcher turned it off. The fact stays until macOS accepts;
+    /// Opened by hand: turn it back on only if Trackpad App turned it off. The fact stays until macOS accepts;
     /// registering comes first, so a crash before forgetting registers again, harmlessly.
     public func resume() {
         guard placement != .development, defaults.bool(forKey: key) else { return }
@@ -115,7 +115,7 @@ public struct RunningCopy: Hashable, Sendable {
 
 /// The dialog a copy opened by hand outside /Applications shows before anything else.
 public enum MoveDialog: Equatable, Sendable {
-    /// "Trackpad Launcher needs to be in the Applications folder": Move to Applications (default), Quit.
+    /// "Trackpad App needs to be in the Applications folder": Move to Applications (default), Quit.
     case asking
     /// The move failed before /Applications changed: the reason, and Quit.
     case failed(reason: String)
@@ -239,7 +239,7 @@ public final class Lifecycle {
         }
     }
 
-    /// The Quit Trackpad Launcher button: it also turns starting at login off, when that is on.
+    /// The Quit Trackpad App button: it also turns starting at login off, when that is on.
     public func quit() {
         guard case .resident = stage else { return }
         startAtLogin.suspend()

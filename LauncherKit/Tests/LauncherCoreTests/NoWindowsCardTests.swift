@@ -172,7 +172,7 @@ import LauncherCore
     // MARK: The card
 
     enum Case: String, CaseIterable, Sendable {
-        case notesOneWindow, finderNoWindows, safariFullScreenFront, safariLoneMinimised, trackpadLauncherItself
+        case notesOneWindow, finderNoWindows, safariFullScreenFront, safariLoneMinimised, trackpadAppItself
 
         var lines: (title: String, message: String) {
             switch self {
@@ -180,8 +180,8 @@ import LauncherCore
             case .finderNoWindows: ("No open windows", "Finder has no windows on this desktop.")
             case .safariFullScreenFront, .safariLoneMinimised:
                 ("No other windows", "Safari has no other windows on this desktop.")
-            case .trackpadLauncherItself:
-                ("No other windows", "Trackpad Launcher has no other windows on this desktop.")
+            case .trackpadAppItself:
+                ("No other windows", "Trackpad App has no other windows on this desktop.")
             }
         }
     }
@@ -198,7 +198,7 @@ import LauncherCore
         case .safariFullScreenFront:
             world = .windowWorld(visible: ["Film", "Docs", "Mail"], fullScreenFront: true)
         case .safariLoneMinimised: world = .windowWorld(minimised: ["Old"])
-        case .trackpadLauncherItself:
+        case .trackpadAppItself:
             world = .windowWorld()
             world.openSettings()
         }

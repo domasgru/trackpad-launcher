@@ -325,7 +325,7 @@ import LauncherCore
     private let windowNumbers = WindowNumbers()
     private var windowSets: [URL: FakeWindows] = [:]
     private let noAppWindows: FakeWindows
-    /// The app whose reads are `.ownProcess`: Trackpad Launcher.
+    /// The app whose reads are `.ownProcess`: Trackpad App.
     var ownApp: AppEntry?
     /// The deadline each `frontmostWindows(within:)` call asked for, in order.
     private(set) var frontmostDeadlines: [Duration] = []

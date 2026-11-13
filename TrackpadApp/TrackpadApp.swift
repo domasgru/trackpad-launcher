@@ -4,7 +4,7 @@ import LauncherPlatform
 import LauncherUI
 
 @main
-enum TrackpadLauncherApp {
+enum TrackpadApp {
     static func main() {
         let delegate = AppDelegate()
         NSApplication.shared.delegate = delegate
@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #endif
 
     func applicationWillFinishLaunching(_: Notification) {
-        // Only the login item starts Trackpad Launcher at login.
+        // Only the login item starts Trackpad App at login.
         NSApp.disableRelaunchOnLogin()
         let location = ThisCopy.location()
         let placement = Placement(

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Each app's window order, by the app's location, for one launch of the app and as long as Trackpad Launcher runs;
+/// Each app's window order, by the app's location, for one launch of the app and as long as Trackpad App runs;
 /// never saved. Owned by `Launcher`, written only when a window swipe starts.
 package struct WindowOrders: Equatable, Sendable {
     private struct Remembered: Equatable, Sendable {

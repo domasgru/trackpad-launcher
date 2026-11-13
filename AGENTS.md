@@ -1,4 +1,4 @@
-# Trackpad Launcher
+# Trackpad App
 
 `docs/architecture.md` holds the core decisions, and `make` lists the project's commands.
 

@@ -196,13 +196,13 @@ import Testing
             token: "setActivationPolicy", onlyIn: ["SettingsShell.swift"],
             rule: "the Dock icon follows the settings window, in one place"),
         Confined(
-            token: "disableRelaunchOnLogin", onlyIn: ["TrackpadLauncherApp.swift"],
+            token: "disableRelaunchOnLogin", onlyIn: ["TrackpadApp.swift"],
             rule: "only the login item starts the app at login"),
         Confined(
             token: "keyAELaunchedAsLogInItem", onlyIn: ["ThisCopy.swift"],
             rule: "the launch event is parsed in one place"),
         Confined(
-            token: "currentAppleEvent", onlyIn: ["ThisCopy.swift", "TrackpadLauncherApp.swift"],
+            token: "currentAppleEvent", onlyIn: ["ThisCopy.swift", "TrackpadApp.swift"],
             rule: "the launch event is read at the app delegate and parsed in one place"),
         Confined(
             token: "forceTerminate", onlyIn: ["SystemRunningCopies.swift"], rule: "other copies are stopped in one place"),
@@ -310,7 +310,7 @@ import Testing
     static var scannedRoots: [URL] {
         [
             packageRoot.appending(path: "Sources"),
-            packageRoot.deletingLastPathComponent().appending(path: "TrackpadLauncher"),
+            packageRoot.deletingLastPathComponent().appending(path: "TrackpadApp"),
         ].filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
@@ -460,7 +460,7 @@ import Testing
         for target in ["LauncherCore", "LauncherPlatform", "LauncherUI", "CardContract"] {
             #expect(visited.contains { $0.contains("/Sources/\(target)/") }, "no file scanned under \(target)")
         }
-        #expect(visited.contains { $0.contains("/TrackpadLauncher/") }, "no file scanned under the app target")
+        #expect(visited.contains { $0.contains("/TrackpadApp/") }, "no file scanned under the app target")
     }
 
     static let coreAllowedImports: Set<String> = ["Foundation", "Observation"]

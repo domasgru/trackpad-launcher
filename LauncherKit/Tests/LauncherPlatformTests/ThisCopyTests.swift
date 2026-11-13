@@ -37,47 +37,47 @@ import Testing
     }
 
     @Test func theEjectFlagWithAVolumeNamesTheDiskImageToEject() {
-        let launch = ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "--eject-disk-image", "/Volumes/Trackpad Launcher"])
-        #expect(launch == Launch(opening: .byHand, diskImageToEject: DiskImage(volume: URL(filePath: "/Volumes/Trackpad Launcher"))))
+        let launch = ThisCopy.launch(event: nil, arguments: ["TrackpadApp", "--eject-disk-image", "/Volumes/Trackpad App"])
+        #expect(launch == Launch(opening: .byHand, diskImageToEject: DiskImage(volume: URL(filePath: "/Volumes/Trackpad App"))))
     }
 
     @Test func theEjectFlagWithNoVolumeIsIgnored() {
-        #expect(ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "--eject-disk-image"]).diskImageToEject == nil)
+        #expect(ThisCopy.launch(event: nil, arguments: ["TrackpadApp", "--eject-disk-image"]).diskImageToEject == nil)
     }
 
     @Test func theAfterUpdateFlagIsTheHandOversStartWhateverTheEventSays() {
         let atLogin = Self.event(AEEventID(kAEOpenApplication), loginMarker: true)
-        #expect(ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "--after-update"]) == Launch(opening: .afterUpdate(withWindow: false)))
-        #expect(ThisCopy.launch(event: atLogin, arguments: ["TrackpadLauncher", "--after-update"]).opening == .afterUpdate(withWindow: false))
+        #expect(ThisCopy.launch(event: nil, arguments: ["TrackpadApp", "--after-update"]) == Launch(opening: .afterUpdate(withWindow: false)))
+        #expect(ThisCopy.launch(event: atLogin, arguments: ["TrackpadApp", "--after-update"]).opening == .afterUpdate(withWindow: false))
     }
 
     @Test func theAfterUpdateFlagSitsBesideTheEjectFlag() {
         let launch = ThisCopy.launch(
-            event: nil, arguments: ["TrackpadLauncher", "--after-update", "--eject-disk-image", "/Volumes/Trackpad Launcher"])
-        #expect(launch == Launch(opening: .afterUpdate(withWindow: false), diskImageToEject: DiskImage(volume: URL(filePath: "/Volumes/Trackpad Launcher"))))
+            event: nil, arguments: ["TrackpadApp", "--after-update", "--eject-disk-image", "/Volumes/Trackpad App"])
+        #expect(launch == Launch(opening: .afterUpdate(withWindow: false), diskImageToEject: DiskImage(volume: URL(filePath: "/Volumes/Trackpad App"))))
     }
 
     @Test func theWithWindowFlagBesideAfterUpdateBringsTheWindowInEitherOrderAndBesideTheEjectFlag() {
-        let volume = DiskImage(volume: URL(filePath: "/Volumes/Trackpad Launcher"))
+        let volume = DiskImage(volume: URL(filePath: "/Volumes/Trackpad App"))
         #expect(
-            ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "--after-update", "--with-window"])
+            ThisCopy.launch(event: nil, arguments: ["TrackpadApp", "--after-update", "--with-window"])
                 == Launch(opening: .afterUpdate(withWindow: true)))
         #expect(
-            ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "--with-window", "--after-update"])
+            ThisCopy.launch(event: nil, arguments: ["TrackpadApp", "--with-window", "--after-update"])
                 == Launch(opening: .afterUpdate(withWindow: true)))
         #expect(
             ThisCopy.launch(
                 event: nil,
-                arguments: ["TrackpadLauncher", "--after-update", "--with-window", "--eject-disk-image", "/Volumes/Trackpad Launcher"])
+                arguments: ["TrackpadApp", "--after-update", "--with-window", "--eject-disk-image", "/Volumes/Trackpad App"])
                 == Launch(opening: .afterUpdate(withWindow: true), diskImageToEject: volume))
     }
 
     @Test func theWithWindowFlagAloneIsIgnored() {
-        #expect(ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "--with-window"]) == Launch(opening: .byHand))
+        #expect(ThisCopy.launch(event: nil, arguments: ["TrackpadApp", "--with-window"]) == Launch(opening: .byHand))
     }
 
     @Test func theAtLoginFlagReadsAsALoginStartWithNoEvent() {
-        #expect(ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "--at-login"]) == Launch(opening: .atLogin))
+        #expect(ThisCopy.launch(event: nil, arguments: ["TrackpadApp", "--at-login"]) == Launch(opening: .atLogin))
     }
 
     @Test func aReopenIgnoresArguments() {
@@ -85,7 +85,7 @@ import Testing
     }
 
     @Test func unrelatedArgumentsAreIgnored() {
-        let launch = ThisCopy.launch(event: nil, arguments: ["TrackpadLauncher", "-NSDocumentRevisionsDebugMode", "YES"])
+        let launch = ThisCopy.launch(event: nil, arguments: ["TrackpadApp", "-NSDocumentRevisionsDebugMode", "YES"])
         #expect(launch == Launch(opening: .byHand))
     }
 }

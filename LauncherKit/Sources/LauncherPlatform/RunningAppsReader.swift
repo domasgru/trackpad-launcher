@@ -37,13 +37,13 @@ import LauncherCore
         return FallbackOrder.pids(running: running, recency: tracker?.recency ?? []).compactMap { entries[$0] }
     }
 
-    /// The active app. Trackpad Launcher is the frontmost app only while ⌘-Tab lists it (its Dock icon shows), as its
+    /// The active app. Trackpad App is the frontmost app only while ⌘-Tab lists it (its Dock icon shows), as its
     /// listed entry. Active without it (the move dialog, the Debug animation tuner, a closing settings window), it stands
     /// for the app that was in front before it, the first ⌘-Tab app. Pure.
     static func frontmost(activePID: pid_t?, activeEntry: AppEntry?, ownPID: pid_t, apps: [AppEntry]) -> AppEntry? {
         guard let activePID else { return nil }
         guard activePID == ownPID else { return activeEntry }
-        // LaunchServices lists the active app first, so a spelling mismatch still lands on Trackpad Launcher's own entry.
+        // LaunchServices lists the active app first, so a spelling mismatch still lands on Trackpad App's own entry.
         return apps.first { $0.url == activeEntry?.url } ?? apps.first
     }
 }

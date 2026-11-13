@@ -146,7 +146,7 @@ import LauncherCore
         #expect(swiper.swipe().rows == ["C2", "A2", "B2"])
     }
 
-    @Test func restartingTrackpadLauncherForgetsTheOrderAndSavesNothing() {
+    @Test func restartingTrackpadAppForgetsTheOrderAndSavesNothing() {
         let (world, swiper) = safariWorld(["A", "B", "C"])
         let before = Set(world.suiteDomain().keys)
         swiper.swipe()

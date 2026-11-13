@@ -42,7 +42,7 @@ import Testing
 
     @Test func archiveOnlyReportsAFailingCardContractAndSucceeds() throws {
         let harness = try ReleaseHarness()
-        let app = harness.out.appending(path: "Trackpad Launcher.app")
+        let app = harness.out.appending(path: "Trackpad App.app")
         try harness.makeApp(at: app)
         try harness.failOn("card-contract")
 
@@ -113,7 +113,7 @@ import Testing
             <?xml version="1.0" encoding="utf-8"?>
             <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
             <channel>
-            <title>Trackpad Launcher</title>
+            <title>Trackpad App</title>
             \(item("1.0.16", build: 17))
             \(item("1.0.17", build: 18))
             </channel>
@@ -131,7 +131,7 @@ import Testing
         let run = try harness.run("patch")
         #expect(run.status == 0, "\(run.output)")
 
-        #expect(try harness.publishedAssets(of: "1.0.16") == ["TrackpadLauncher-1.0.16-macOS-26.0.aar", "TrackpadLauncher.dmg"])
+        #expect(try harness.publishedAssets(of: "1.0.16") == ["TrackpadApp.dmg", "TrackpadLauncher-1.0.16-macOS-26.0.aar"])
         let feed = try harness.feedText
         let signature = try #require(feed.firstMatch(of: /edSignature="([^"]+)"/)?.1)
         #expect(try harness.verifies(signature: String(signature), of: harness.publishedArchive(of: "1.0.16")))
@@ -279,7 +279,7 @@ import Testing
         <?xml version="1.0" encoding="utf-8"?>
         <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
         <channel>
-        <title>Trackpad Launcher</title>
+        <title>Trackpad App</title>
         </channel>
         </rss>
 

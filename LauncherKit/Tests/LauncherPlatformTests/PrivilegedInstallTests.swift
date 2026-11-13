@@ -67,9 +67,9 @@ final class TestAdministrator: Administrator {
         answer: AdministratorResult
     ) async throws {
         let fixture = try BundleFixture()
-        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.0")
+        let source = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Downloads"), version: "1.0")
         let applications = try fixture.folder("Applications")
-        let older = try fixture.makeBundle(named: "Trackpad Launcher.app", in: applications, version: "0.9")
+        let older = try fixture.makeBundle(named: "Trackpad App.app", in: applications, version: "0.9")
         let before = try BundleFixture.manifest(of: older)
         chmod(applications.path, 0o555)
         let administrator = TestAdministrator(answer: answer)
@@ -84,7 +84,7 @@ final class TestAdministrator: Administrator {
         }
         #expect(administrator.calls.count == 1)
         #expect(try BundleFixture.manifest(of: older) == before)
-        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher.app"])
+        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad App.app"])
         let staged = try #require(stagedPath(administrator))
         #expect(!FileManager.default.fileExists(atPath: staged))
     }
@@ -92,9 +92,9 @@ final class TestAdministrator: Administrator {
     @Test(arguments: [AdministratorResult.cancelled, .failed])
     func anInstalledCopyThisAccountCannotWriteAsksTheAdministratorAndLeavesItAsItWas(answer: AdministratorResult) async throws {
         let fixture = try BundleFixture()
-        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.0")
+        let source = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Downloads"), version: "1.0")
         let applications = try fixture.folder("Applications")
-        let older = try fixture.makeBundle(named: "Trackpad Launcher.app", in: applications, version: "0.9")
+        let older = try fixture.makeBundle(named: "Trackpad App.app", in: applications, version: "0.9")
         let before = try BundleFixture.manifest(of: older)
         chmod(older.path, 0o555)
         let administrator = TestAdministrator(answer: answer)
@@ -112,7 +112,7 @@ final class TestAdministrator: Administrator {
     @Test func aRunningBundleThatCannotBeReadFailsBeforeTheAdministratorIsAsked() async throws {
         let fixture = try BundleFixture()
         let applications = try fixture.folder("Applications")
-        let older = try fixture.makeBundle(named: "Trackpad Launcher.app", in: applications, version: "0.9")
+        let older = try fixture.makeBundle(named: "Trackpad App.app", in: applications, version: "0.9")
         let before = try BundleFixture.manifest(of: older)
         chmod(applications.path, 0o555)
         let administrator = TestAdministrator(answer: .cancelled)
@@ -132,9 +132,9 @@ final class TestAdministrator: Administrator {
 
     @Test func putLeavesTheInstalledCopyWholeWhenTheAdministratorCancels() throws {
         let fixture = try BundleFixture()
-        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.1.0")
+        let source = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Downloads"), version: "1.1.0")
         let applications = try fixture.folder("Applications")
-        let older = try fixture.makeBundle(named: "Trackpad Launcher.app", in: applications, version: "1.0.0")
+        let older = try fixture.makeBundle(named: "Trackpad App.app", in: applications, version: "1.0.0")
         let before = try BundleFixture.manifest(of: older)
         chmod(older.path, 0o555)
         let administrator = TestAdministrator.refusing
@@ -150,9 +150,9 @@ final class TestAdministrator: Administrator {
 
     @Test func putReportsAFailureWhenTheScriptFailsAndLeavesTheOldCopyWhole() throws {
         let fixture = try BundleFixture()
-        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.1.0")
+        let source = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Downloads"), version: "1.1.0")
         let applications = try fixture.folder("Applications")
-        let older = try fixture.makeBundle(named: "Trackpad Launcher.app", in: applications, version: "1.0.0")
+        let older = try fixture.makeBundle(named: "Trackpad App.app", in: applications, version: "1.0.0")
         let before = try BundleFixture.manifest(of: older)
         chmod(older.path, 0o555)
         let staged = try BundleInstall.stage(source, near: older)
@@ -167,7 +167,7 @@ final class TestAdministrator: Administrator {
             return
         }
         #expect(try BundleFixture.manifest(of: older) == before)
-        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher.app"])
+        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad App.app"])
         expectStagedGone(staged)
     }
 
@@ -175,9 +175,9 @@ final class TestAdministrator: Administrator {
         let fixture = try BundleFixture()
         let nasty = "a b ' \" $(touch pwned)"
         let source = try fixture.makeBundle(
-            named: "Trackpad Launcher.app", in: fixture.folder("Downloads \(nasty)"), version: "1.1.0")
+            named: "Trackpad App.app", in: fixture.folder("Downloads \(nasty)"), version: "1.1.0")
         let applications = try fixture.folder("Applications \(nasty)")
-        let older = try fixture.makeBundle(named: "Trackpad Launcher.app", in: applications, version: "1.0.0")
+        let older = try fixture.makeBundle(named: "Trackpad App.app", in: applications, version: "1.0.0")
         chmod(older.path, 0o555)
         let administrator = TestAdministrator(answer: nil, workingDirectory: fixture.root) { arguments in
             chmod(arguments[0], 0o755)
@@ -190,7 +190,7 @@ final class TestAdministrator: Administrator {
         let arguments = try #require(administrator.calls.first?.arguments)
         #expect(arguments == [older.path, staged.path, PrivilegedInstall.exchange])
         #expect(try BundleFixture.manifest(of: older) == BundleFixture.manifest(of: source))
-        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher.app"])
+        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad App.app"])
         let names = (FileManager.default.enumerator(atPath: fixture.root.path)?.allObjects as? [String] ?? [])
             .map { ($0 as NSString).lastPathComponent }
         #expect(!names.contains("pwned"))
@@ -199,9 +199,9 @@ final class TestAdministrator: Administrator {
 
     @Test func putMovesTheCopyInWhenNothingLiesAtTheDestinationOfAFolderOnlyTheAdministratorCanWrite() throws {
         let fixture = try BundleFixture()
-        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.1.0")
+        let source = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Downloads"), version: "1.1.0")
         let applications = try fixture.folder("Applications")
-        let destination = applications.appending(path: "Trackpad Launcher.app")
+        let destination = applications.appending(path: "Trackpad App.app")
         let staged = try BundleInstall.stage(source, near: destination)
         chmod(applications.path, 0o555)
         let administrator = TestAdministrator(answer: nil) { _ in chmod(applications.path, 0o755) }
@@ -211,15 +211,15 @@ final class TestAdministrator: Administrator {
         #expect(outcome == .installed)
         #expect(administrator.calls.count == 1)
         #expect(try BundleFixture.manifest(of: destination) == BundleFixture.manifest(of: source))
-        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher.app"])
+        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad App.app"])
         expectStagedGone(staged)
     }
 
     @Test func putSwapsInProcessWithoutAskingWhenTheDestinationIsWritable() throws {
         let fixture = try BundleFixture()
-        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.1.0")
+        let source = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Downloads"), version: "1.1.0")
         let applications = try fixture.folder("Applications")
-        let older = try fixture.makeBundle(named: "Trackpad Launcher.app", in: applications, version: "1.0.0")
+        let older = try fixture.makeBundle(named: "Trackpad App.app", in: applications, version: "1.0.0")
         let staged = try BundleInstall.stage(source, near: older)
         let administrator = TestAdministrator.refusing
 
@@ -240,12 +240,12 @@ final class TestAdministrator: Administrator {
 @Suite(.timeLimit(.minutes(3))) struct PrivilegedSwapAtomicityTests {
     @Test func killingTheRealScriptAtAnyMomentLeavesAWholeCopyAndTheNewOneOnceItExitedZero() async throws {
         let fixture = try BundleFixture()
-        let old = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Templates/old"), version: "1.0.0")
-        let new = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Templates/new"), version: "1.1.0")
+        let old = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Templates/old"), version: "1.0.0")
+        let new = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Templates/new"), version: "1.1.0")
         let oldManifest = try BundleFixture.manifest(of: old)
         let newManifest = try BundleFixture.manifest(of: new)
         let applications = try fixture.folder("Applications")
-        let destination = applications.appending(path: "Trackpad Launcher.app")
+        let destination = applications.appending(path: "Trackpad App.app")
 
         let failures = try await onItsOwnThread("the script to be killed in 100 rounds", within: .seconds(150)) { () throws -> [String] in
             let files = FileManager.default
@@ -254,7 +254,7 @@ final class TestAdministrator: Administrator {
             func prepare(_ round: Int) throws -> URL {
                 try? files.removeItem(at: destination)
                 try files.copyItem(at: old, to: destination)
-                let staged = try fixture.folder("Staging \(round)").appending(path: "Trackpad Launcher.app")
+                let staged = try fixture.folder("Staging \(round)").appending(path: "Trackpad App.app")
                 try files.copyItem(at: new, to: staged)
                 return staged
             }
@@ -274,7 +274,7 @@ final class TestAdministrator: Administrator {
                 let held = try BundleFixture.manifest(of: destination)
                 if held != oldManifest && held != newManifest { failures.append("round \(round): neither the old copy nor the new one") }
                 if status == 0 && held != newManifest { failures.append("round \(round): exited 0 without the new copy") }
-                if try BundleFixture.appNames(in: applications) != ["Trackpad Launcher.app"] {
+                if try BundleFixture.appNames(in: applications) != ["Trackpad App.app"] {
                     failures.append("round \(round): the Applications folder holds something else")
                 }
             }
@@ -287,15 +287,15 @@ final class TestAdministrator: Administrator {
     @Test func anObserverNeverReadsAMixedOrBrokenCopyWhilePutAlternatesTwoVersionsIn() async throws {
         let fixture = try BundleFixture()
         let applications = try fixture.folder("Applications")
-        let destination = applications.appending(path: "Trackpad Launcher.app")
+        let destination = applications.appending(path: "Trackpad App.app")
         let sources = [
-            try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Templates/old"), version: "1.0.0"),
-            try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Templates/new"), version: "1.1.0"),
+            try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Templates/old"), version: "1.0.0"),
+            try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Templates/new"), version: "1.1.0"),
         ]
         try FileManager.default.copyItem(at: sources[0], to: destination)
 
         let found = try await onItsOwnThread("200 swaps under observation", within: .seconds(150)) { () throws -> (DestinationObserver.Report, [String]) in
-            let observer = DestinationObserver(folder: applications, appName: "Trackpad Launcher.app")
+            let observer = DestinationObserver(folder: applications, appName: "Trackpad App.app")
             observer.start()
             var failures: [String] = []
             for round in 0..<200 {

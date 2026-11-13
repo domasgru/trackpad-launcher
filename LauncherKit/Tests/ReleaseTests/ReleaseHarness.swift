@@ -275,7 +275,7 @@ final class ReleaseHarness: Sendable {
         <?xml version="1.0" encoding="utf-8"?>
         <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
         <channel>
-        <title>Trackpad Launcher</title>
+        <title>Trackpad App</title>
         </channel>
         </rss>
 
@@ -353,8 +353,8 @@ final class ReleaseHarness: Sendable {
             </dict>
             </plist>
             PLIST
-            printf 'binary' > "$dest/Contents/MacOS/TrackpadLauncher"
-            chmod +x "$dest/Contents/MacOS/TrackpadLauncher"
+            printf 'binary' > "$dest/Contents/MacOS/Trackpad App"
+            chmod +x "$dest/Contents/MacOS/Trackpad App"
             printf 'installer' > "$dest/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
             """#
         )
@@ -429,7 +429,7 @@ final class ReleaseHarness: Sendable {
                 if [ "$1" = "-exportPath" ]; then path="$2"; fi
                 shift
               done
-              "$STUB_STATE/make-app" "$path/Trackpad Launcher.app"
+              "$STUB_STATE/make-app" "$path/Trackpad App.app"
             fi
             exit 0
             """#)
@@ -454,7 +454,7 @@ final class ReleaseHarness: Sendable {
             case "$1" in
               info) ;;
               create) printf 'image' > "$last" ;;
-              attach) printf '/dev/disk9\tApple_partition_scheme\t\n/dev/disk9s1\tApple_HFS\t/Volumes/Trackpad Launcher\n' ;;
+              attach) printf '/dev/disk9\tApple_partition_scheme\t\n/dev/disk9s1\tApple_HFS\t/Volumes/Trackpad App\n' ;;
               detach) ;;
               convert)
                 while [ $# -gt 0 ]; do

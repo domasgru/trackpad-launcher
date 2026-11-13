@@ -1,8 +1,8 @@
 .build/
 .swiftpm/
 .DS_Store
-TrackpadLauncher.xcodeproj/
-TrackpadLauncher/Info.plist
+TrackpadApp.xcodeproj/
+TrackpadApp/Info.plist
 DerivedData/
 build/
 plans/**/.temp/

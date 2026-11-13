@@ -15,7 +15,7 @@ import Testing
         /// `<random>/<folder>/<file>`, the random folder dated `age` seconds ago.
         @discardableResult
         func download(
-            file: String = "TrackpadLauncher-fixture.aar", folder: String = "Trackpad Launcher 2",
+            file: String = "TrackpadLauncher-fixture.aar", folder: String = "Trackpad App 2",
             age: TimeInterval = 0, contents: Data = Data("archive".utf8)
         ) throws -> URL {
             let random = root.appending(
@@ -81,7 +81,7 @@ import Testing
             archive = try caches.download()
             try Data("second".utf8).write(to: archive.deletingLastPathComponent().appending(path: "other.aar"))
         } else {
-            archive = try caches.download(folder: "Trackpad Launcher 3")
+            archive = try caches.download(folder: "Trackpad App 3")
         }
         #expect(caches.found(build: "2") == nil)
 
@@ -94,7 +94,7 @@ import Testing
 
     @Test func aFolderNamedForAnotherBuildIsNone() throws {
         let caches = try Caches()
-        try caches.download(folder: "Trackpad Launcher 3")
+        try caches.download(folder: "Trackpad App 3")
 
         #expect(caches.found(build: "2") == nil)
     }
@@ -150,8 +150,8 @@ import Testing
         let genuine = Self.offer(record)
         let caches = try Caches()
         let bytes = try Data(contentsOf: UpdateFixtures.archive)
-        let kept = try caches.download(folder: "Trackpad Launcher 1", contents: bytes)
-        let refused = try caches.download(folder: "Trackpad Launcher 9", contents: bytes)
+        let kept = try caches.download(folder: "Trackpad App 1", contents: bytes)
+        let refused = try caches.download(folder: "Trackpad App 9", contents: bytes)
 
         #expect(UpdateArchive.admit(kept, as: genuine, signer: signer))
         #expect(FileManager.default.fileExists(atPath: kept.path))

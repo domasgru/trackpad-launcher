@@ -12,8 +12,8 @@ import Testing
     }
 
     @Test(arguments: [
-        "/Applications/TrackpadLauncher.app/",
-        "/Applications/Utilities/TrackpadLauncher.app/",
+        "/Applications/TrackpadApp.app/",
+        "/Applications/Utilities/TrackpadApp.app/",
     ])
     func aCopyInsideApplicationsIsInstalledWhateverItsBuild(path: String) {
         #expect(Placement(build: .release, location: Self.location(path)) == .installed)
@@ -21,12 +21,12 @@ import Testing
     }
 
     @Test(arguments: [
-        Self.location("/ApplicationsOld/TrackpadLauncher.app/"),
-        Self.location("/Applications/../Users/me/Downloads/TrackpadLauncher.app/"),
-        Self.location("/Users/me/Applications/TrackpadLauncher.app/"),
-        Self.location("/Users/me/Applications/Tools/TrackpadLauncher.app/"),
-        Self.location("/Users/me/Downloads/TrackpadLauncher.app/"),
-        Self.location("/Volumes/Trackpad Launcher/TrackpadLauncher.app/", image: "/Volumes/Trackpad Launcher"),
+        Self.location("/ApplicationsOld/TrackpadApp.app/"),
+        Self.location("/Applications/../Users/me/Downloads/TrackpadApp.app/"),
+        Self.location("/Users/me/Applications/TrackpadApp.app/"),
+        Self.location("/Users/me/Applications/Tools/TrackpadApp.app/"),
+        Self.location("/Users/me/Downloads/TrackpadApp.app/"),
+        Self.location("/Volumes/Trackpad App/TrackpadApp.app/", image: "/Volumes/Trackpad App"),
     ])
     func aCopyOutsideApplicationsIsElsewhereOrDevelopment(location: Location) {
         #expect(Placement(build: .release, location: location) == .elsewhere)
@@ -35,8 +35,8 @@ import Testing
 
     @Test func aTranslocatedCopyIsNeverInstalledEvenWhenItsOriginalIs() {
         let location = Self.location(
-            "/private/var/folders/xx/AppTranslocation/ABC/d/TrackpadLauncher.app/", translocated: true,
-            original: "/Applications/TrackpadLauncher.app/")
+            "/private/var/folders/xx/AppTranslocation/ABC/d/TrackpadApp.app/", translocated: true,
+            original: "/Applications/TrackpadApp.app/")
 
         #expect(Placement(build: .release, location: location) == .elsewhere)
         #expect(Placement(build: .development, location: location) == .development)

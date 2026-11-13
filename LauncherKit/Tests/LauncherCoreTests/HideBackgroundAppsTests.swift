@@ -428,7 +428,7 @@ import LauncherCore
         world.openSettings()
         world.tap(1)
         #expect(world.system.hidesOthers == [B("Safari")])
-        #expect(world.system.hiddenApps.contains(world.trackpadLauncher.bundleID))
+        #expect(world.system.hiddenApps.contains(world.trackpadApp.bundleID))
         #expect(world.launcher.window == .open(request: 1))
         #expect(world.system.launchAnimations == [world.app("Safari")])
         #expect(world.hardware.feedback.count == 1)
@@ -444,9 +444,9 @@ import LauncherCore
         world.openSettings()
         world.activate("Safari")
         world.swap()
-        #expect(world.system.broughtToFront == [world.trackpadLauncher])
+        #expect(world.system.broughtToFront == [world.trackpadApp])
         #expect(world.launcher.window == .open(request: 2))
-        #expect(world.system.hidesOthers == [B("Trackpad Launcher")])
+        #expect(world.system.hidesOthers == [B("Trackpad App")])
         #expect(world.system.hiddenApps == [B("Safari"), B("Mail"), B("Notes")])
     }
 }

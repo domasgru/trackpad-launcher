@@ -62,7 +62,7 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// Bring to front: launch, or unhide / restore / reopen / activate exactly like a Dock click.
     func bringToFront(_ app: AppEntry)
     /// Hides every running app with a Dock icon whose bundle identifier is not kept (every copy of a kept app stays),
-    /// on every display and Space, full-screen apps included; menu bar apps stay. Trackpad Launcher itself is included
+    /// on every display and Space, full-screen apps included; menu bar apps stay. Trackpad App itself is included
     /// while its Dock icon shows (its settings window is open), unless it is kept. Idempotent; needs no permission;
     /// returns at once. Nothing hides until `kept.front` is active and no longer hidden, whichever comes last, and
     /// within about 3 s or not at all; a later call replaces the goal and hides whatever this one had not. Hides that do
@@ -76,7 +76,7 @@ public enum Haptic: Sendable { case gesture, lightTick }
     /// For an app with a process. Returns at once. Reads the pointer, the displays and Reduce motion at the moment of the
     /// call, plays for about a third of a second and removes itself. Every call plays its own and never cancels,
     /// restarts or reuses one already playing. A launch bounce's ending plays the same animation inside the adapter.
-    /// Nothing it shows activates Trackpad Launcher, becomes key or receives a click.
+    /// Nothing it shows activates Trackpad App, becomes key or receives a click.
     func playLaunchAnimation(for app: AppEntry)
 
     // A gesture that launches its app watches the launch.
@@ -146,19 +146,19 @@ public enum Haptic: Sendable { case gesture, lightTick }
     func endLaunch(of app: BundleID, with ending: LaunchBounceEnding)
 
     /// On the main actor, only for an app whose launch is watched: `.finishedLaunching` at most once, then at most one
-    /// of the others before `endLaunch`. Nothing for a launch Trackpad Launcher did not start.
+    /// of the others before `endLaunch`. Nothing for a launch Trackpad App did not start.
     var onLaunchProgress: (@MainActor (BundleID, LaunchProgress) -> Void)? { get set }
 
     /// The active app and the ⌘-Tab apps, read now from their one source of truth.
     func runningApps() -> RunningApps
     /// The frontmost app's windows, read now on the main actor and held to `deadline` in all: each call into the app
-    /// waits at most what is left, and a read that ends past it is `.unanswered`. Never reads Trackpad Launcher
+    /// waits at most what is left, and a read that ends past it is `.unanswered`. Never reads Trackpad App
     /// (`.ownProcess`). The windows it lists are the only ones a later `raiseWindows` may name, until the next read.
     func frontmostWindows(within deadline: Duration) -> FrontmostWindows
     /// Reads each app's windows away from the main actor, each on its own, all held to `deadline` from this call, and
     /// returns. `answer` runs on the main actor exactly once per slot of `apps`, inside this call or later, in no set
     /// order: `.unanswered` for an app that did not answer in time, stopped answering partway or no longer runs;
-    /// `.ownProcess` for Trackpad Launcher. A slow or hung app delays no other. Nothing these reads list is ever raised.
+    /// `.ownProcess` for Trackpad App. A slow or hung app delays no other. Nothing these reads list is ever raised.
     /// The caller checks Accessibility.
     func readWindows(
         of apps: [AppEntry], within deadline: Duration,
@@ -199,9 +199,9 @@ public enum Permission: Hashable, Sendable {
     func scan()
 }
 
-/// The running Trackpad Launcher processes. Real: SystemRunningCopies. Test: InMemoryRunningCopies.
+/// The running Trackpad App processes. Real: SystemRunningCopies. Test: InMemoryRunningCopies.
 @MainActor public protocol RunningCopies: AnyObject {
-    /// Every other running Trackpad Launcher, Debug or release, read now.
+    /// Every other running Trackpad App, Debug or release, read now.
     func others() -> [RunningCopy]
     /// Stops each at once without asking: a copy can neither refuse, nor ask its user, nor hang the stop. Calls
     /// `exited` once, on the main actor, when every listed copy has exited; synchronously when none still runs. The
@@ -224,7 +224,7 @@ public enum Permission: Hashable, Sendable {
 
 /// Putting this copy into /Applications. Real: ApplicationsInstaller. Test: InMemoryInstaller.
 @MainActor public protocol Installer: AnyObject {
-    /// Copies this copy into /Applications, replacing any Trackpad Launcher there whatever its version. Nothing there
+    /// Copies this copy into /Applications, replacing any Trackpad App there whatever its version. Nothing there
     /// changes unless the outcome is `.installed`, and never a mix of two copies. Unprivileged, the replace is one
     /// atomic step. `done` runs once, on the main actor. The copy can block; a test holds `done`.
     func install(then done: @escaping @MainActor (InstallOutcome) -> Void)

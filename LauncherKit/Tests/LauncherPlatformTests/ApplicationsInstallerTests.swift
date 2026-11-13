@@ -19,51 +19,51 @@ import Testing
 
     @Test func installingIntoAnEmptyApplicationsFolderCopiesTheBundleWithoutQuarantine() async throws {
         let fixture = try BundleFixture()
-        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.0")
+        let source = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Downloads"), version: "1.0")
         let applications = try fixture.folder("Applications")
         let installer = ApplicationsInstaller(location: location(running: source), applications: applications, administrator: TestAdministrator.refusing)
 
         let outcome = await install(installer)
 
-        let destination = applications.appending(path: "Trackpad Launcher.app")
+        let destination = applications.appending(path: "Trackpad App.app")
         #expect(outcome == .installed)
         #expect(try BundleFixture.manifest(of: destination) == BundleFixture.manifest(of: source))
         #expect(try BundleFixture.extendedAttributes(under: destination).contains("com.apple.quarantine") == false)
         #expect(try BundleFixture.extendedAttributes(under: source).contains("com.apple.quarantine"))
-        #expect(try FileManager.default.contentsOfDirectory(atPath: applications.path) == ["Trackpad Launcher.app"])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: applications.path) == ["Trackpad App.app"])
     }
 
     @Test func installingReplacesAnotherVersionUnderTheSameName() async throws {
         let fixture = try BundleFixture()
-        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.0")
+        let source = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Downloads"), version: "1.0")
         let applications = try fixture.folder("Applications")
-        let newer = try fixture.makeBundle(named: "Trackpad Launcher.app", in: applications, version: "2.0")
+        let newer = try fixture.makeBundle(named: "Trackpad App.app", in: applications, version: "2.0")
         #expect(try BundleFixture.manifest(of: newer) != BundleFixture.manifest(of: source))
 
         let outcome = await install(ApplicationsInstaller(location: location(running: source), applications: applications, administrator: TestAdministrator.refusing))
 
         #expect(outcome == .installed)
-        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher.app"])
+        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad App.app"])
         #expect(try BundleFixture.manifest(of: newer) == BundleFixture.manifest(of: source))
         #expect(try BundleFixture.extendedAttributes(under: newer).contains("com.apple.quarantine") == false)
     }
 
     @Test func installingReplacesTheInstalledCopyWhateverItIsNamed() async throws {
         let fixture = try BundleFixture()
-        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.0")
+        let source = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Downloads"), version: "1.0")
         let applications = try fixture.folder("Applications")
-        let renamed = try fixture.makeBundle(named: "Trackpad Launcher Old.app", in: applications, version: "2.0")
+        let renamed = try fixture.makeBundle(named: "Trackpad App Old.app", in: applications, version: "2.0")
 
         let outcome = await install(ApplicationsInstaller(location: location(running: source), applications: applications, administrator: TestAdministrator.refusing))
 
         #expect(outcome == .installed)
-        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher Old.app"])
+        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad App Old.app"])
         #expect(try BundleFixture.manifest(of: renamed) == BundleFixture.manifest(of: source))
     }
 
     @Test func installingReplacesACopyNestedInAFolderInsideApplications() async throws {
         let fixture = try BundleFixture()
-        let source = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.0")
+        let source = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Downloads"), version: "1.0")
         let applications = try fixture.folder("Applications")
         let nested = try fixture.makeBundle(named: "TrackpadLauncher.app", in: fixture.folder("Applications/Utilities"), version: "2.0")
 
@@ -78,16 +78,16 @@ import Testing
     @Test func aTranslocatedCopyIsCopiedFromTheRunningBundleUnderTheOriginalsName() async throws {
         let fixture = try BundleFixture()
         let running = try fixture.makeBundle(named: "Mounted.app", in: fixture.folder("AppTranslocation"), version: "1.0")
-        let original = try fixture.folder("Downloads").appending(path: "Trackpad Launcher.app")
+        let original = try fixture.folder("Downloads").appending(path: "Trackpad App.app")
         let applications = try fixture.folder("Applications")
         let place = location(running: running, original: original, translocated: true)
 
         let outcome = await install(ApplicationsInstaller(location: place, applications: applications, administrator: TestAdministrator.refusing))
 
         #expect(outcome == .installed)
-        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad Launcher.app"])
+        #expect(try BundleFixture.appNames(in: applications) == ["Trackpad App.app"])
         #expect(
-            try BundleFixture.manifest(of: applications.appending(path: "Trackpad Launcher.app"))
+            try BundleFixture.manifest(of: applications.appending(path: "Trackpad App.app"))
                 == BundleFixture.manifest(of: running))
     }
 
@@ -107,7 +107,7 @@ import Testing
 
     @Test func removingTheOriginalDeletesItFromDownloads() throws {
         let fixture = try BundleFixture()
-        let original = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Downloads"), version: "1.0")
+        let original = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Downloads"), version: "1.0")
         let installer = ApplicationsInstaller(location: location(running: original), applications: try fixture.folder("Applications"), administrator: TestAdministrator.refusing)
 
         installer.removeOriginal()
@@ -118,7 +118,7 @@ import Testing
     @Test func aFolderThatCannotBeWrittenKeepsTheOriginalWhole() throws {
         let fixture = try BundleFixture()
         let downloads = try fixture.folder("Share")
-        let original = try fixture.makeBundle(named: "Trackpad Launcher.app", in: downloads, version: "1.0")
+        let original = try fixture.makeBundle(named: "Trackpad App.app", in: downloads, version: "1.0")
         let before = try BundleFixture.manifest(of: original)
         chmod(downloads.path, 0o555)
         let installer = ApplicationsInstaller(location: location(running: original), applications: try fixture.folder("Applications"), administrator: TestAdministrator.refusing)
@@ -130,7 +130,7 @@ import Testing
 
     @Test func aCopyOnADiskImageStays() throws {
         let fixture = try BundleFixture()
-        let original = try fixture.makeBundle(named: "Trackpad Launcher.app", in: fixture.folder("Volume"), version: "1.0")
+        let original = try fixture.makeBundle(named: "Trackpad App.app", in: fixture.folder("Volume"), version: "1.0")
         let image = DiskImage(volume: original.deletingLastPathComponent())
         let installer = ApplicationsInstaller(
             location: location(running: original, diskImage: image), applications: try fixture.folder("Applications"), administrator: TestAdministrator.refusing)
@@ -143,7 +143,7 @@ import Testing
     @Test func theInstalledCopyItselfStays() throws {
         let fixture = try BundleFixture()
         let applications = try fixture.folder("Applications")
-        let installed = try fixture.makeBundle(named: "Trackpad Launcher.app", in: applications, version: "1.0")
+        let installed = try fixture.makeBundle(named: "Trackpad App.app", in: applications, version: "1.0")
         let installer = ApplicationsInstaller(location: location(running: installed), applications: applications, administrator: TestAdministrator.refusing)
 
         installer.removeOriginal()

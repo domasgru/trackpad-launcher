@@ -31,7 +31,7 @@ public struct AppEntry: Hashable, Sendable, Identifiable {
 
 /// What the apps on screen are right now, as one read of the system.
 public struct RunningApps: Equatable, Sendable {
-    /// The active app; nil when there is none or it has no bundle identifier or location. Trackpad Launcher itself while its
+    /// The active app; nil when there is none or it has no bundle identifier or location. Trackpad App itself while its
     /// settings window is in front; active without its Dock icon (behind the move dialog), the app that was in front
     /// before it, the most recently used ⌘-Tab app.
     public let frontmost: AppEntry?

@@ -12,8 +12,8 @@ clang -O2 -framework CoreFoundation -o "$OUT/tools/sampler" "$ROOT/Scripts/perf/
 clang -O2 -framework CoreFoundation -o "$OUT/tools/mtidle" "$ROOT/Scripts/perf/mtidle.c"
 
 (cd "$ROOT" && xcodegen generate >/dev/null)
-xcodebuild -project "$ROOT/TrackpadLauncher.xcodeproj" -scheme TrackpadLauncher -configuration Release \
+xcodebuild -project "$ROOT/TrackpadApp.xcodeproj" -scheme TrackpadApp -configuration Release \
   -destination 'generic/platform=macOS' -derivedDataPath "$OUT/dd" CODE_SIGN_IDENTITY="Apple Development" \
   build > "$OUT/build.log" 2>&1 || { tail -20 "$OUT/build.log"; exit 1; }
-echo "App: $OUT/dd/Build/Products/Release/Trackpad Launcher.app"
+echo "App: $OUT/dd/Build/Products/Release/Trackpad App.app"
 echo "Tools: $OUT/tools"

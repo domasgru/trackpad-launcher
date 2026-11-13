@@ -15,14 +15,14 @@ import Testing
     private static let mail = entry("Mail")
     private static let menuBarApp = entry("MenuBarApp")
 
-    private static let trackpadLauncher = entry("TrackpadLauncher")
+    private static let trackpadApp = entry("TrackpadApp")
 
-    private func frontmost(listed apps: [AppEntry], activeEntry: AppEntry? = trackpadLauncher) -> AppEntry? {
+    private func frontmost(listed apps: [AppEntry], activeEntry: AppEntry? = trackpadApp) -> AppEntry? {
         RunningAppsReader.frontmost(activePID: Self.own, activeEntry: activeEntry, ownPID: Self.own, apps: apps)
     }
 
     @Test func thisProcessActiveAndListedIsTheFrontmostAppWhereverTheListHasIt() {
-        let launcher = Self.trackpadLauncher
+        let launcher = Self.trackpadApp
         #expect(frontmost(listed: [launcher, Self.safari, Self.mail]) == launcher)
         #expect(frontmost(listed: [Self.safari, launcher, Self.mail]) == launcher)
     }
@@ -33,16 +33,16 @@ import Testing
 
     @Test func thisProcessListedUnderAnotherSpellingIsTheListedEntry() {
         let listed = AppEntry(
-            bundleID: Self.trackpadLauncher.bundleID, name: "TrackpadLauncher",
-            url: URL(fileURLWithPath: "/Applications/./TrackpadLauncher.app/"))
+            bundleID: Self.trackpadApp.bundleID, name: "TrackpadApp",
+            url: URL(fileURLWithPath: "/Applications/./TrackpadApp.app/"))
         let spelled = AppEntry(
-            bundleID: Self.trackpadLauncher.bundleID, name: "TrackpadLauncher",
-            url: URL(fileURLWithPath: "/private/Applications/TrackpadLauncher.app"))
+            bundleID: Self.trackpadApp.bundleID, name: "TrackpadApp",
+            url: URL(fileURLWithPath: "/private/Applications/TrackpadApp.app"))
         #expect(frontmost(listed: [listed, Self.safari], activeEntry: spelled) == listed)
     }
 
-    @Test func thisProcessActiveWithAnUnreadableEntryIsTheFirstListedAppEvenWhenThatIsTrackpadLauncher() {
-        let launcher = Self.trackpadLauncher
+    @Test func thisProcessActiveWithAnUnreadableEntryIsTheFirstListedAppEvenWhenThatIsTrackpadApp() {
+        let launcher = Self.trackpadApp
         #expect(frontmost(listed: [launcher, Self.safari], activeEntry: nil) == launcher)
     }
 
