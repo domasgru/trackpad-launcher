@@ -6,6 +6,7 @@ import Testing
 
 /// The real presenter over a portless `Updater`, with real `runModal` sessions on screen. A common-mode timer aborts a
 /// session still up after 5 s and fails the row, so a regression that holds the main queue fails rather than hangs.
+extension ModalSessions {
 @MainActor @Suite(.serialized) struct UpdateAlertBench {
     private final class Sighting {
         var sawModal = false
@@ -89,4 +90,5 @@ import Testing
         #expect(updater.alert == nil)
         #expect(NSApp.modalWindow == nil)
     }
+}
 }

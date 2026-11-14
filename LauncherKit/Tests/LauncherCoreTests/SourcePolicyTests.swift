@@ -240,10 +240,10 @@ import Testing
         Confined(token: "SecTranslocate", onlyIn: ["ThisCopy.swift"], rule: "translocation is read in one place"),
         Confined(
             token: "runModal", onlyIn: ["MoveDialogPresenter.swift", "UpdateAlertPresenter.swift"],
-            rule: "two modals: the move dialog, and the update alerts, whose session starts in a run-loop callout so the main queue keeps running"),
+            rule: "two modals: the move dialog and the update alerts, whose sessions start in a run-loop callout so the main queue keeps running"),
         Confined(
-            token: "abortModal", onlyIn: ["UpdateAlertPresenter.swift"],
-            rule: "only the update alerts' session is ended from outside, and only when its alert is withdrawn or the Mac powers off"),
+            token: "abortModal", onlyIn: ["MoveDialogPresenter.swift", "UpdateAlertPresenter.swift"],
+            rule: "a modal session is ended from outside only when its alert is withdrawn or the Mac powers off"),
         Confined(token: "kAEQuitReason", onlyIn: ["QuitSignals.swift"], rule: "the quit event is parsed in one place"),
     ]
 

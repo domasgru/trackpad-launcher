@@ -213,7 +213,11 @@ public final class Lifecycle {
     /// From applicationShouldTerminate.
     public func shouldEnd(_ request: QuitRequest) -> Bool {
         switch stage {
-        case .ending, .idle, .replacingOthers, .askingToMove, .moveFailed: return true
+        case .ending, .idle, .replacingOthers: return true
+        case .askingToMove, .moveFailed:
+            // A button answered after this, as AppKit does when it ends the modal on a quit, must move nothing.
+            stage = .ending
+            return true
         case .moving: return request == .system
         case .resident(let launcher):
             // Logout, restart and shutdown always end.
@@ -225,6 +229,15 @@ public final class Lifecycle {
             }
             // With the window closed, an ordinary quit is a script's: end.
             return true
+        }
+    }
+
+    /// From `NSWorkspace.willPowerOffNotification`: a dialog still up is over, whether or not the quit event that follows
+    /// reaches `shouldEnd` before its session ends.
+    public func powerOffAnnounced() {
+        switch stage {
+        case .askingToMove, .moveFailed: stage = .ending
+        default: break
         }
     }
 

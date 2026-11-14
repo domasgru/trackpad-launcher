@@ -239,6 +239,49 @@ import Testing
         #expect(failed.shouldEnd(.other))
     }
 
+    @Test(arguments: [QuitRequest.system, .other])
+    func aQuitWhileTheDialogAsksEndsTheCopyAndALateMoveMovesNothing(request: QuitRequest) {
+        let world = LifecycleWorld(record: [.one: "Arc"], loginItemOn: true)
+        let process = world.launch(.byHand, placement: .elsewhere)
+
+        #expect(process.shouldEnd(request))
+        process.answer(.move)
+
+        #expect(process.moveDialog == nil)
+        #expect(process.installer.installCalls == 0)
+        #expect(process.installer.removeOriginalCalls == 0)
+        #expect(process.installer.openInstalledCopyCalls == 0)
+        #expect(world.loginItem.calls.isEmpty)
+    }
+
+    @Test(arguments: [QuitRequest.system, .other])
+    func aQuitWhileTheDialogAsksOverAResidentEndsTheCopyAndALateMoveMovesNothing(request: QuitRequest) {
+        let world = LifecycleWorld(record: [.one: "Arc"], loginItemOn: true)
+        let process = world.launch(.atLogin, placement: .elsewhere)
+        process.openAgain(.byHand)
+        #expect(process.moveDialog == .asking)
+
+        #expect(process.shouldEnd(request))
+        process.answer(.move)
+
+        #expect(process.moveDialog == nil)
+        #expect(process.installer.installCalls == 0)
+        #expect(process.installer.removeOriginalCalls == 0)
+        #expect(process.installer.openInstalledCopyCalls == 0)
+    }
+
+    @Test func aPowerOffWhileTheDialogAsksEndsTheCopyAndALateMoveMovesNothing() {
+        let world = LifecycleWorld(record: [.one: "Arc"], loginItemOn: true)
+        let process = world.launch(.byHand, placement: .elsewhere)
+
+        process.lifecycle.powerOffAnnounced()
+        process.answer(.move)
+
+        #expect(process.moveDialog == nil)
+        #expect(process.installer.installCalls == 0)
+        #expect(process.shouldEnd(.other))
+    }
+
     /// Whatever the move does, a kill between any two of its effects leaves either the Mac as it was before, with the
     /// original opened again, or an installed copy that converges on the uncrashed run's end state when opened.
     private func convergesAfterAKillAnywhereIn(_ world: LifecycleWorld, others: [RunningCopy]) {
