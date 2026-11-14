@@ -9,10 +9,11 @@ import SwiftUI
 /// switch, the switcher section, and the thumb corner group, with the Hide background apps switch below it: one
 /// row, or once the Mac has mixed trackpads one cell with a title and two indented pop-up rows; the no trackpad
 /// notice, while it applies, in a rounded group 10 pt below the form; then *Quit Trackpad App* and *Close*,
-/// aligned right, 20 pt below the last of them. The form keeps the system's own fonts, insets and controls. A
+/// aligned right, 20 pt below the last of them. The form keeps the system's own fonts and controls; each section is
+/// one cell of `FormRows`, which lays out the rows and the dividers between them, 14 pt in from the group's sides. A
 /// one-line row is 48 pt tall and a two-line row 86 pt (`formRow(height:)`), except the 1-finger gesture's, which is 70 pt
 /// or 86 pt, the *Switch windows* row, which grows while the screen recording hint sits in it, and the mixed trackpads
-/// cell, which is as tall as its three lines. The small illustrations are 45 x 28 pt. The first gesture's picture is
+/// row, which is as tall as its three lines. The small illustrations are 45 x 28 pt. The first gesture's picture is
 /// not row content: `FirstGestureArt` overlays the form at the gesture group's top-leading corner.
 struct SettingsView: View {
     let launcher: Launcher
@@ -36,9 +37,12 @@ struct SettingsView: View {
     /// bottom as they are and adds to the sides, so these are measured on macOS 26
     /// (`plans/030-thumb-corner-popup-style`, `plans/036-settings-form-padding`).
     private static let formMargins = (top: CGFloat(20), bottom: CGFloat(20), side: CGFloat(20))
-    /// A grouped Form's own padding above and below every row, measured on macOS 27.2: rows of 28, 50 and 66 pt content
-    /// come out 48, 70 and 86 pt. A grouped Form ignores `listRowInsets`, so `formRow(height:)` takes this off.
-    static let formRowPadding: CGFloat = 20
+    /// A grouped Form's own padding on every side of a cell, measured on macOS 27.2: cells of 28, 50 and 66 pt content
+    /// come out 48, 70 and 86 pt, their content 10 pt in from the group's sides. A grouped Form ignores
+    /// `listRowInsets`, so `FormRows` works from it.
+    static let formCellPadding: CGFloat = 10
+    /// A row's content, and the dividers between rows, from the group's sides.
+    static let rowSideInset: CGFloat = 14
     /// The group's width, which the first gesture's picture is clipped to.
     static let groupWidth: CGFloat = 326
     /// The column's width: the groups and the inset on each side.
@@ -71,33 +75,40 @@ struct SettingsView: View {
             }
             Form {
                 Section {
-                    ForEach(launcher.rows) { row in
-                        GestureRowView(row: row, thumb: gestureThumb, launcher: launcher, actions: actions)
+                    FormRows {
+                        ForEach(launcher.rows) { row in
+                            GestureRowView(row: row, thumb: gestureThumb, launcher: launcher, actions: actions)
+                        }
+                        Toggle(
+                            isOn: Binding(
+                                get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
+                        ) {
+                            Text("Animate app launch").formRow(height: Self.oneLineRowHeight)
+                        }
+                        .toggleStyle(.switch)
+                        Toggle(
+                            isOn: Binding(get: { launcher.isHoldThumbOn }, set: { launcher.setHoldThumb(on: $0) })
+                        ) {
+                            Text("Hold thumb").formRow(height: Self.oneLineRowHeight)
+                        }
+                        .toggleStyle(.switch)
                     }
-                    Toggle(
-                        isOn: Binding(
-                            get: { launcher.isLaunchAnimationOn }, set: { launcher.setLaunchAnimation(on: $0) })
-                    ) {
-                        Text("Animate app launch").formRow(height: Self.oneLineRowHeight)
-                    }
-                    .toggleStyle(.switch)
-                    Toggle(
-                        isOn: Binding(get: { launcher.isHoldThumbOn }, set: { launcher.setHoldThumb(on: $0) })
-                    ) {
-                        Text("Hold thumb").formRow(height: Self.oneLineRowHeight)
-                    }
-                    .toggleStyle(.switch)
                 }
-                Section { SwitcherSection(launcher: launcher, corner: drawn, actions: actions) }
                 Section {
-                    ThumbCornerRows(launcher: launcher)
-                    Toggle(
-                        isOn: Binding(
-                            get: { launcher.isHideBackgroundAppsOn }, set: { launcher.setHideBackgroundApps(on: $0) })
-                    ) {
-                        Text("Hide background apps").formRow(height: Self.oneLineRowHeight)
+                    FormRows { SwitcherSection(launcher: launcher, corner: drawn, actions: actions) }
+                }
+                Section {
+                    FormRows {
+                        ThumbCornerRows(launcher: launcher)
+                        Toggle(
+                            isOn: Binding(
+                                get: { launcher.isHideBackgroundAppsOn },
+                                set: { launcher.setHideBackgroundApps(on: $0) })
+                        ) {
+                            Text("Hide background apps").formRow(height: Self.oneLineRowHeight)
+                        }
+                        .toggleStyle(.switch)
                     }
-                    .toggleStyle(.switch)
                 }
             }
             .formStyle(.grouped)
@@ -133,6 +144,35 @@ struct SettingsView: View {
         .padding(.vertical, Self.inset)
         .frame(width: Self.columnWidth)
         .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+/// A form section's rows, laid out here rather than by the form: the section is one cell, so the form draws no dividers
+/// of its own, and its controls keep the grouped form's look, which SwiftUI gives only to a Form's content. Each row
+/// gets the padding a form row has, but `SettingsView.rowSideInset` from the group's sides, and a divider as far in
+/// sits between every two rows. The cell's own padding is taken back, so the first and last rows reach the group's
+/// edges as a form row does.
+struct FormRows<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    /// Added to the cell's own padding at a row's sides.
+    private static var extraSideInset: CGFloat { SettingsView.rowSideInset - SettingsView.formCellPadding }
+
+    var body: some View {
+        Group(subviews: content) { rows in
+            VStack(spacing: 0) {
+                ForEach(rows) { row in
+                    if row.id != rows.first?.id {
+                        Divider().padding(.horizontal, Self.extraSideInset)
+                    }
+                    row
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, SettingsView.formCellPadding)
+                        .padding(.horizontal, Self.extraSideInset)
+                }
+            }
+            .padding(.vertical, -SettingsView.formCellPadding)
+        }
     }
 }
 
@@ -381,11 +421,11 @@ struct Illustration: View {
 }
 
 extension View {
-    /// A settings form row `height` pt tall, its content centred. The height is set here because a grouped Form ignores
-    /// `listRowInsets` on macOS, and the form pads every row by `SettingsView.formRowPadding`, which this takes off. An
-    /// illustration, which is taller than a one-line row's content, stays centred and reaches into that padding.
+    /// A settings form row `height` pt tall, its content centred. `FormRows` pads every row by
+    /// `SettingsView.formCellPadding` above and below, which this takes off. An illustration, which is taller than a
+    /// one-line row's content, stays centred and reaches into that padding.
     func formRow(height: CGFloat) -> some View {
-        frame(height: height - SettingsView.formRowPadding)
+        frame(height: height - 2 * SettingsView.formCellPadding)
     }
 
     /// The message of a hint: 11 pt, wrapping at `maxWidth` to as many lines as it needs.
@@ -433,7 +473,7 @@ enum BundleImage {
 }
 
 /// The thumb corner group's rows: one row, or once the Mac has mixed trackpads one cell holding a title and a pop-up
-/// for each kind. A single cell, so the grouped form draws no divider between its lines.
+/// for each kind. A single row, so `FormRows` draws no divider between its lines.
 struct ThumbCornerRows: View {
     let launcher: Launcher
 
@@ -444,7 +484,7 @@ struct ThumbCornerRows: View {
     /// design asks for between the two badges (measured on a screenshot of the running window).
     private static let pickerSpacing: CGFloat = 18
     private static let indent: CGFloat = 20
-    /// The design's 16 pt is the edge-to-text distance, which the grouped form's own cell padding already supplies in
+    /// The design's 16 pt is the edge-to-text distance, which the row's padding from `FormRows` already supplies in
     /// part: measured, 4 pt more puts the title as far from the cell's top edge as the Hide background apps label is
     /// from its own.
     private static let topPadding: CGFloat = 4
