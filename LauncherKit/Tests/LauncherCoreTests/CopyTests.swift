@@ -8,10 +8,10 @@ import LauncherCore
     }
 
     @Test func aProgressLabelIsItsWordAndAnEllipsis() {
-        #expect(Progress.checking.word == "Checking")
-        #expect(Progress.checking.label == "Checking…")
-        #expect(Progress.updating.word == "Updating")
-        #expect(Progress.updating.label == "Updating…")
+        #expect(ProgressLabel.checking.word == "Checking")
+        #expect(ProgressLabel.checking.label == "Checking…")
+        #expect(ProgressLabel.updating.word == "Updating")
+        #expect(ProgressLabel.updating.label == "Updating…")
     }
 
     @Test func onlyAProgressTitleIsTypedAsWorkUnderWay() {

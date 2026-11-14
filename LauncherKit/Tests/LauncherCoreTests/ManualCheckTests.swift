@@ -4,25 +4,8 @@ import Testing
 
 @MainActor @Suite struct ManualCheckTests {
     private func world(automaticUpdates: Bool = true) -> LifecycleWorld {
-        LifecycleWorld(record: [.one: "Arc"], loginItemOn: true, automaticUpdates: automaticUpdates)
+        .updateWorld(automaticUpdates: automaticUpdates)
     }
-
-    private func requests(_ world: LifecycleWorld) -> Int {
-        world.log.entries.filter {
-            $0 == "probe" || $0 == "update" || $0 == "discard" || $0.hasPrefix("arm restart")
-        }.count
-    }
-
-    /// A release copy whose start's probe ended `.nothingNew`.
-    private func answered(_ world: LifecycleWorld) -> OneProcess {
-        let process = world.launch(.byHand, running: .release)
-        process.engine.push(.cycleEnded(.nothingNew))
-        return process
-    }
-
-    private func found(_ process: OneProcess) { process.engine.push(.cycleEnded(.found("1.1.23"))) }
-
-    private static let offered = UpdateAlert.updateAvailable(from: "1.1.22", to: "1.1.23")
 
     // MARK: The click reads the list once
 
@@ -52,34 +35,34 @@ import Testing
     @Test func aClickWhileTheCardShowsReadsTheListAgainAndKeepsTheCard() {
         let world = world()
         let process = world.launch(.byHand, running: .release)
-        found(process)
+        process.found()
         #expect(process.card == .available)
         let from = process.history.count
 
         process.checkForUpdates()
         #expect(process.engine.probes == 2)
-        found(process)
+        process.found()
 
-        #expect(process.updater.alert == Self.offered)
+        #expect(process.updater.alert == LifecycleWorld.offeredAlert)
         #expect(process.history.dropFirst(from).map(\.card).allSatisfy { $0 == .available })
         #expect(process.engine.overlaps == 0)
     }
 
     @Test func aSecondClickWhileCheckingDoesNothingAndTheAnswerChangesButtonAndAlertTogether() throws {
         let world = world()
-        let process = answered(world)
+        let process = world.answeredLaunch()
         let from = process.history.count
 
         process.checkForUpdates()
         process.checkForUpdates()
-        found(process)
+        process.found()
 
         #expect(process.engine.probes == 2)
         #expect(process.deadline.arms == [.seconds(30)])
         let states = Array(process.history.dropFirst(from))
         let answer = try #require(states.last)
         #expect(states.dropLast().allSatisfy { $0.button == .checking && $0.alert == nil })
-        #expect(answer.alert == Self.offered)
+        #expect(answer.alert == LifecycleWorld.offeredAlert)
         #expect(answer.button == .idle)
     }
 
@@ -87,7 +70,7 @@ import Testing
 
     @Test func aCheckWithNoAnswerWithin30SecondsFailsAndALaterAnswerShowsNothing() {
         let world = world()
-        let process = answered(world)
+        let process = world.answeredLaunch()
         process.checkForUpdates()
 
         process.deadline.pass()
@@ -95,7 +78,7 @@ import Testing
         #expect(process.updater.alert == .checkFailed)
         #expect(process.updater.checkButton == .idle)
         process.answer(.dismissed)
-        found(process)
+        process.found()
         #expect(process.updater.alert == nil)
         #expect(process.card == nil)
         #expect(process.engine.probes == 2)
@@ -103,7 +86,7 @@ import Testing
 
     @Test func aClickAfterAPassAdoptsTheReadStillRunningWithAFresh30Seconds() {
         let world = world()
-        let process = answered(world)
+        let process = world.answeredLaunch()
         process.checkForUpdates()
         process.deadline.pass()
         process.answer(.dismissed)
@@ -113,14 +96,14 @@ import Testing
         #expect(process.engine.probes == 2)
         #expect(process.deadline.arms == [.seconds(30), .seconds(30)])
         #expect(process.updater.checkButton == .checking)
-        found(process)
-        #expect(process.updater.alert == Self.offered)
+        process.found()
+        #expect(process.updater.alert == LifecycleWorld.offeredAlert)
         #expect(process.engine.overlaps == 0)
     }
 
     @Test func anEngineThatAnswersInsideTheCallEndsTheCheckInTheSameInput() {
         let world = world()
-        let process = answered(world)
+        let process = world.answeredLaunch()
         process.engine.answersInside = .cycleEnded(.failed)
 
         process.checkForUpdates()
@@ -135,7 +118,7 @@ import Testing
     @Test(arguments: [CycleOutcome.requestFailed, .failed])
     func aFailedCheckAlertsOnceAndNothingRetriesWhenTheConnectionReturns(outcome: CycleOutcome) {
         let world = world()
-        let process = answered(world)
+        let process = world.answeredLaunch()
         process.checkForUpdates()
         process.engine.push(.cycleEnded(outcome))
 
@@ -144,10 +127,10 @@ import Testing
         #expect(process.updater.alert?.message == "Check your internet connection and try again.")
         #expect(process.updater.alert?.buttons.map(\.title) == ["OK"])
         #expect(process.updater.checkButton == .idle)
-        let before = requests(world)
+        let before = world.requests
         process.connection.set(false)
         process.connection.set(true)
-        #expect(requests(world) == before)
+        #expect(world.requests == before)
         #expect(process.connection.watches == 0)
     }
 
@@ -159,18 +142,18 @@ import Testing
         process.checkForUpdates()
         #expect(process.engine.probes == 1)
         #expect(process.updater.checkButton == .checking)
-        found(process)
+        process.found()
 
-        #expect(process.updater.alert == Self.offered)
+        #expect(process.updater.alert == LifecycleWorld.offeredAlert)
         #expect(process.cards.allSatisfy { $0 == nil })
     }
 
     // MARK: The alerts as values
 
     @Test func theUpdateAlertAsksToRestartWithUpdateAsTheDefaultAndNotNowOnEscape() {
-        let process = answered(world())
+        let process = world().answeredLaunch()
         process.checkForUpdates()
-        found(process)
+        process.found()
 
         let alert = process.updater.alert
         #expect(alert?.title == "Restart Trackpad App to update?")
@@ -188,21 +171,21 @@ import Testing
         let world = world(automaticUpdates: false)
         let process = world.launch(.byHand, running: .release)
         process.checkForUpdates()
-        found(process)
-        #expect(process.updater.alert == Self.offered)
+        process.found()
+        #expect(process.updater.alert == LifecycleWorld.offeredAlert)
 
         process.answer(.dismissed)
         #expect(process.updater.alert == nil)
         process.checkForUpdates()
-        found(process)
+        process.found()
 
-        #expect(process.updater.alert == Self.offered)
+        #expect(process.updater.alert == LifecycleWorld.offeredAlert)
         #expect(process.cards.allSatisfy { $0 == nil })
         #expect(process.engine.updates == 0)
     }
 
     @Test func theUpToDateAlertQuotesTheRunningVersion() {
-        let process = answered(world())
+        let process = world().answeredLaunch()
         process.checkForUpdates()
         process.engine.push(.cycleEnded(.nothingNew))
 
@@ -224,7 +207,7 @@ import Testing
         process.closeWindow()
         #expect(process.deadline.armed == nil)
         #expect(process.updater.checkButton == .idle)
-        found(process)
+        process.found()
         process.openAgain(.byHand)
 
         #expect(process.history.dropFirst(from).allSatisfy { $0.alert == nil && $0.card == nil })
@@ -233,13 +216,13 @@ import Testing
 
     @Test func aCheckDroppedByClosingAndAnOpeningBeforeTheAnswerStillShowsTheCardOnly() {
         let world = world()
-        let process = answered(world)
+        let process = world.answeredLaunch()
         process.checkForUpdates()
 
         process.closeWindow()
         process.openAgain(.byHand)
         #expect(process.engine.probes == 2)
-        found(process)
+        process.found()
 
         #expect(process.card == .available)
         #expect(process.history.allSatisfy { $0.alert == nil })
@@ -247,13 +230,13 @@ import Testing
 
     @Test func turningTheSwitchOffLetsACheckCarryOn() {
         let world = world()
-        let process = answered(world)
+        let process = world.answeredLaunch()
         process.checkForUpdates()
         process.setAutomaticUpdates(on: false)
         #expect(process.deadline.armed == .seconds(30))
-        found(process)
+        process.found()
 
-        #expect(process.updater.alert == Self.offered)
+        #expect(process.updater.alert == LifecycleWorld.offeredAlert)
         #expect(process.deadline.armed == nil)
     }
 
@@ -269,7 +252,7 @@ import Testing
         let accepted = process.engine.offer("1.1.23")
 
         #expect(!accepted)
-        #expect(process.updater.alert == Self.offered)
+        #expect(process.updater.alert == LifecycleWorld.offeredAlert)
         #expect(process.updater.checkButton == .idle)
     }
 
@@ -303,7 +286,7 @@ import Testing
         #expect(process.updater.alert?.message == "This copy of Trackpad App can't update itself.")
         #expect(process.updater.alert?.buttons.map(\.title) == ["OK"])
         #expect(process.updater.checkButton == .idle)
-        #expect(requests(world) == 0)
+        #expect(world.requests == 0)
         #expect(process.connection.watches == 0)
 
         process.closeWindow()
@@ -319,9 +302,9 @@ import Testing
 
     @Test func aClickWhileAnAlertShowsChangesNothingAndALateAnswerToAClosedWindowsAlertDoesNothing() {
         let world = world()
-        let process = answered(world)
+        let process = world.answeredLaunch()
         process.checkForUpdates()
-        found(process)
+        process.found()
         let before = process.history.last
 
         process.checkForUpdates()
@@ -331,7 +314,7 @@ import Testing
 
         process.closeWindow()
         #expect(process.updater.alert == nil)
-        process.updater.answer(.update, to: Self.offered)
+        process.updater.answer(.update, to: LifecycleWorld.offeredAlert)
         #expect(process.engine.updates == 0)
     }
 
@@ -339,7 +322,7 @@ import Testing
         let world = world(automaticUpdates: false)
         let process = world.launch(.byHand, running: .release)
         process.checkForUpdates()
-        found(process)
+        process.found()
 
         process.answer(.update)
 
@@ -348,13 +331,18 @@ import Testing
         #expect(process.engine.offer("1.1.23"))
         process.engine.push(.held)
         #expect(process.engine.arms == [true])
+        #expect(world.log.entries.last == "end")
+        let before = world.requests
 
         let next = world.finishHandOver()
         #expect(next.window != .closed)
         #expect(!next.updater.isAutomaticUpdatesOn)
+        #expect(world.requests == before)
+        #expect(next.connection.watches == 0)
+
         next.closeWindow()
         next.openAgain(.byHand)
-        #expect(next.engine.probes == 0)
-        #expect(next.engine.updates == 0)
+        #expect(world.requests == before)
+        #expect(next.connection.watches == 0)
     }
 }

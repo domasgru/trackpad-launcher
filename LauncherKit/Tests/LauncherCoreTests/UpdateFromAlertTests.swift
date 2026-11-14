@@ -4,24 +4,14 @@ import Testing
 
 @MainActor @Suite struct UpdateFromAlertTests {
     private func world(automaticUpdates: Bool = true) -> LifecycleWorld {
-        LifecycleWorld(record: [.one: "Arc"], loginItemOn: true, automaticUpdates: automaticUpdates)
+        .updateWorld(automaticUpdates: automaticUpdates)
     }
-
-    private static let offered = UpdateAlert.updateAvailable(from: "1.1.22", to: "1.1.23")
-
-    private func answered(_ world: LifecycleWorld) -> OneProcess {
-        let process = world.launch(.byHand, running: .release)
-        process.engine.push(.cycleEnded(.nothingNew))
-        return process
-    }
-
-    private func found(_ process: OneProcess) { process.engine.push(.cycleEnded(.found("1.1.23"))) }
 
     /// A release copy answered, clicked and *Found*, then *Update*: no card showed.
     private func updateClicked(_ world: LifecycleWorld) -> OneProcess {
-        let process = answered(world)
+        let process = world.answeredLaunch()
         process.checkForUpdates()
-        found(process)
+        process.found()
         process.answer(.update)
         return process
     }
@@ -29,9 +19,9 @@ import Testing
     /// A release copy showing its card, clicked and *Found*, then *Update*.
     private func updateClickedOverCard(_ world: LifecycleWorld) -> OneProcess {
         let process = world.launch(.byHand, running: .release)
-        found(process)
+        process.found()
         process.checkForUpdates()
-        found(process)
+        process.found()
         process.answer(.update)
         return process
     }
@@ -56,7 +46,7 @@ import Testing
         #expect(process.deadline.armed == .seconds(30))
 
         #expect(process.engine.offer("1.1.23"))
-        #expect(process.updater.alert == Self.offered)
+        #expect(process.updater.alert == LifecycleWorld.offeredAlert)
         #expect(process.updater.checkButton == .updating)
         #expect(process.deadline.armed == nil)
 
@@ -102,13 +92,13 @@ import Testing
         process.openAgain(.byHand)
         process.checkForUpdates()
         #expect(!process.engine.offer("1.1.23"))
-        #expect(process.updater.alert == Self.offered)
+        #expect(process.updater.alert == LifecycleWorld.offeredAlert)
 
         process.answer(.update)
         #expect(process.engine.updates == 1)
         #expect(process.updater.checkButton == .updating)
 
-        process.engine.push(.cycleEnded(.found("1.1.23")))
+        process.engine.push(.cycleEnded(.failed))
         #expect(process.engine.updates == 2)
         #expect(process.engine.offer("1.1.23"))
         process.engine.push(.held)
@@ -119,19 +109,20 @@ import Testing
     @Test func updateNowDuringACheckWaitsForTheReadAndNoAlertAnswersTheClick() {
         let world = world()
         let process = world.launch(.byHand, running: .release)
-        found(process)
+        process.found()
         process.checkForUpdates()
         #expect(process.engine.probes == 2)
 
+        let from = process.history.count
         process.updater.updateNow()
         #expect(process.updater.checkButton == .updating)
         #expect(process.card == .updating)
         #expect(process.deadline.armed == nil)
         #expect(process.engine.updates == 0)
 
-        found(process)
+        process.found()
         #expect(process.engine.updates == 1)
-        #expect(process.updater.alert == nil)
+        #expect(process.history.dropFirst(from).allSatisfy { $0.alert == nil })
         #expect(process.engine.overlaps == 0)
     }
 
@@ -192,7 +183,7 @@ import Testing
     @Test func reopeningTheWindowDuringUpdateNowKeepsTheCardUpdating() {
         let world = world()
         let process = world.launch(.byHand, running: .release)
-        found(process)
+        process.found()
         process.updater.updateNow()
 
         process.closeWindow()
@@ -226,6 +217,8 @@ import Testing
         #expect(process.updater.alert?.buttons.map(\.title) == ["OK"])
         #expect(process.updater.checkButton == .idle)
         #expect(!process.copies.hasEnded)
+        process.tap(1)
+        #expect(process.system.broughtToFront == [world.mac.app("Arc")])
     }
 
     @Test func aRefusedRestartAfterTheAlertKeepsTheProcessWorking() {

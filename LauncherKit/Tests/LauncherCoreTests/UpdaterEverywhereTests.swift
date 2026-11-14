@@ -7,10 +7,6 @@ import Testing
         LifecycleWorld(record: [.one: "Arc"], loginItemOn: true)
     }
 
-    private static let engineEntries: Set<String> = [
-        "probe", "update", "discard", "arm restart", "arm restart with window",
-    ]
-
     @Test func aLoginUpdateTakesTheOfferShowsNoCardAndHandsOverWithTheWindowTheUserOpened() {
         let world = world()
         let process = world.launch(.atLogin, running: .release)
@@ -85,6 +81,6 @@ import Testing
             #expect(process.engine.overlaps == 0)
             #expect(process.engine.unconsented == 0)
         }
-        #expect(Set(world.log.entries).isDisjoint(with: Self.engineEntries))
+        #expect(Set(world.log.entries).isDisjoint(with: LifecycleWorld.engineRequests))
     }
 }

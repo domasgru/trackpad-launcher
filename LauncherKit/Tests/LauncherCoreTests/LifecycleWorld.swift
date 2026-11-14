@@ -285,3 +285,29 @@ extension AppVersion: ExpressibleByStringLiteral {
         tap(fingers, on: trackpad, thumbAtMM: trackpad.surface.thumbMM(in: corner))
     }
 }
+
+/// What the update rows share: the one world they all build, its engine requests, and the list's answers.
+extension LifecycleWorld {
+    static func updateWorld(automaticUpdates: Bool = true, corner: ThumbCorner = .topLeft) -> LifecycleWorld {
+        LifecycleWorld(record: [.one: "Arc"], corner: corner, loginItemOn: true, automaticUpdates: automaticUpdates)
+    }
+
+    static let engineRequests: Set<String> = ["probe", "update", "discard", "arm restart", "arm restart with window"]
+
+    static let offeredAlert = UpdateAlert.updateAvailable(from: "1.1.22", to: "1.1.23")
+
+    /// How many requests every process of this world has made of its engine.
+    var requests: Int { log.entries.filter { Self.engineRequests.contains($0) }.count }
+
+    /// A release copy started by hand whose start's probe ended `.nothingNew`.
+    func answeredLaunch() -> OneProcess {
+        let process = launch(.byHand, running: .release)
+        process.engine.push(.cycleEnded(.nothingNew))
+        return process
+    }
+}
+
+extension OneProcess {
+    /// The running probe ends having found 1.1.23.
+    func found() { engine.push(.cycleEnded(.found("1.1.23"))) }
+}

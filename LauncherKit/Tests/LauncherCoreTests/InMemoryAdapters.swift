@@ -925,6 +925,9 @@ final class EffectLog {
     /// A cycle's end is recorded before the event is delivered: the answer may start the next cycle. A `.held` first
     /// makes the offer its cycle has not made, and is dropped when the model said no.
     func push(_ event: UpdateEngineEvent) {
+        if case .cycleEnded(.found) = event {
+            precondition(!(cycleRuns && cycleDownloads), "a real engine reports a found version only for a probe")
+        }
         if case .cycleEnded = event { cycleRuns = false }
         if case .held = event {
             if cycleRuns, cycleDownloads, !cycleOffered { offer("1.1.23") }

@@ -42,3 +42,12 @@
 - Test planner: adoption and *Update now* during *Checking…* strain R10's, R11's and R12's wording, and R2's dark scenario cannot be observed → recorded as tradeoffs and open questions for the human, and R2's dark appearance becomes a hand check with the light pin removed locally. The requirements were not edited.
 - Test planner, second pass: the `alert` preview had no path through the presenter → it is scheduled once from the presenter's init, through the same session code.
 - Dropout: none. Both runners produced a candidate.
+
+## Implement
+- Review: six test rows checked less than their row says (T27 the button, T63 a `.found` ending an update cycle, T6(b) any event, T50 the process end and the new copy's watches, T64 only the final state, T65 the tap on one ending only) → each asserts its whole Then; the in-memory engine refuses `.found` while an update cycle runs, and T63 ends its declined cycle `.failed`, as the real engine does.
+- Review: `UpdateAlertBench` left a defaults suite behind and force-unwrapped it → `try #require`, and the suite is removed at the end.
+- Review: `Progress` shadowed Foundation's `Progress` → renamed `ProgressLabel`, the domain's term.
+- Review: the `CheckDeadline` port sat in `Updater.swift` → moved to `Ports.swift` with the other ports.
+- Review: the progress label's font was built in two places → one `ProgressDots.font(for:)`.
+- Review: `UpdatesPreview` read and compared raw strings three times → one Debug-only `PreviewState`.
+- Review: update-row test helpers were copied across three suites → shared in `LifecycleWorld.swift`.

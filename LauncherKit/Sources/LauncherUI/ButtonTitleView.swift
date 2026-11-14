@@ -14,7 +14,7 @@ struct ButtonTitleView: View {
             Text(text)
         case .progress(let progress):
             let size = nsControlSize
-            let font = NSFont.systemFont(ofSize: NSFont.systemFontSize(for: size))
+            let font = ProgressDots.font(for: size)
             let box = ProgressDotsView.size(font: font)
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(progress.word)

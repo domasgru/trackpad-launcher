@@ -168,7 +168,12 @@ final class ProgressDotsView: NSView {
 struct ProgressDots: NSViewRepresentable {
     let controlSize: NSControl.ControlSize
 
-    var font: NSFont { NSFont.systemFont(ofSize: NSFont.systemFontSize(for: controlSize)) }
+    /// The one place the label's font is made, so the word and its dots cannot drift apart.
+    static func font(for controlSize: NSControl.ControlSize) -> NSFont {
+        NSFont.systemFont(ofSize: NSFont.systemFontSize(for: controlSize))
+    }
+
+    var font: NSFont { Self.font(for: controlSize) }
 
     func makeNSView(context: Context) -> ProgressDotsView {
         ProgressDotsView(

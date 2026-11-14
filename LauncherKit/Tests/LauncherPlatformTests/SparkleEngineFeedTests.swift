@@ -154,7 +154,7 @@ private final class FeedServer: Sendable {
 
         let event = await cycle(setup.engine) { setup.engine.update() }
 
-        #expect(event != nil)
+        #expect(event == .cycleEnded(.failed))
         #expect(model.questions == [AppVersion("1.1.23")])
         #expect(!setup.server.paths.contains { $0.hasPrefix("/downloads/") })
         let defaults = UserDefaults(suiteName: setup.host.identifier)

@@ -7,13 +7,7 @@ import Testing
     private static let switchKey = "automaticUpdatesOff"
 
     private func world(automaticUpdates: Bool = true) -> LifecycleWorld {
-        LifecycleWorld(record: [.one: "Arc"], corner: .topRight, loginItemOn: true, automaticUpdates: automaticUpdates)
-    }
-
-    private func requests(_ world: LifecycleWorld) -> Int {
-        world.log.entries.filter {
-            $0 == "probe" || $0 == "update" || $0 == "discard" || $0.hasPrefix("arm restart")
-        }.count
+        .updateWorld(automaticUpdates: automaticUpdates, corner: .topRight)
     }
 
     private func login(_ world: LifecycleWorld) throws -> OneProcess {
@@ -59,7 +53,7 @@ import Testing
         let process = world.launch(.afterUpdate(withWindow: true), running: .release)
 
         #expect(process.updater.isAutomaticUpdatesOn)
-        #expect(requests(world) == 0)
+        #expect(world.requests == 0)
         process.closeWindow()
         process.openAgain(.byHand)
         #expect(process.engine.probes == 1)
@@ -97,23 +91,23 @@ import Testing
     @Test(arguments: ["a string", "false"]) func aValueTheBuildCannotReadStaysOff(kind: String) throws {
         let world = world()
         world.mac.seedSuite([Self.switchKey: kind == "false" ? false as Any : "off" as Any])
-        let before = requests(world)
+        let before = world.requests
 
         let process = try login(world)
 
         #expect(!process.updater.isAutomaticUpdatesOn)
-        #expect(requests(world) == before)
+        #expect(world.requests == before)
     }
 
     @Test func anOffSurvivesAForceQuitAndALoginStart() throws {
         let world = world()
         world.launch(.byHand, running: .release).setAutomaticUpdates(on: false)
-        let before = requests(world)
+        let before = world.requests
 
         let next = try login(world)
 
         #expect(!next.updater.isAutomaticUpdatesOn)
-        #expect(requests(world) == before)
+        #expect(world.requests == before)
     }
 
     @Test func anOffSurvivesAQuitAndALoginStart() {
@@ -121,12 +115,12 @@ import Testing
         let process = world.launch(.byHand, running: .release)
         process.setAutomaticUpdates(on: false)
         process.quit()
-        let before = requests(world)
+        let before = world.requests
 
         let next = world.launch(.atLogin, running: .release)
 
         #expect(!next.updater.isAutomaticUpdatesOn)
-        #expect(requests(world) == before)
+        #expect(world.requests == before)
     }
 
     @Test func aSwitchTurnedOffAndOnAgainResumesTheLoginUpdateAndTheOpeningsCheck() {
@@ -186,7 +180,7 @@ import Testing
             process.closeWindow()
         }
 
-        #expect(requests(world) == 0)
+        #expect(world.requests == 0)
         #expect(process.connection.watches == 0)
         #expect(process.installer.installCalls == 0)
         #expect(process.engine.overlaps == 0)
@@ -201,7 +195,7 @@ import Testing
             process.openAgain(.byHand)
         }
 
-        #expect(requests(world) == 0)
+        #expect(world.requests == 0)
         #expect(process.history.allSatisfy { $0.card == nil })
         #expect(process.engine.overlaps == 0)
     }
@@ -283,6 +277,7 @@ import Testing
         #expect(process.engine.arms.isEmpty)
         #expect(process.engine.discards == 0)
         #expect(process.history.allSatisfy { $0.card != .updating })
+        #expect(process.history.allSatisfy { $0.button != .updating })
         #expect(process.engine.probes == 0)
         #expect(process.engine.updates == 1)
         #expect(process.engine.overlaps == 0)
@@ -341,7 +336,7 @@ import Testing
         let process = world.launch(.byHand, running: .release)
 
         process.setAutomaticUpdates(on: true)
-        #expect(requests(world) == 0)
+        #expect(world.requests == 0)
 
         process.closeWindow()
         process.openAgain(.byHand)

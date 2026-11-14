@@ -245,6 +245,15 @@ public enum Permission: Hashable, Sendable {
     func stop()
 }
 
+/// The manual check's limit, on Core Animation's clock. A stop of the clock the system causes counts as passed.
+/// Real: LayerCheckDeadline. Test: InMemoryCheckDeadline.
+@MainActor public protocol CheckDeadline: AnyObject {
+    var onPassed: (@MainActor () -> Void)? { get set }
+    /// Calls `onPassed` once after `wait`, unless cancelled or armed again first.
+    func arm(for wait: Duration)
+    func cancel()
+}
+
 /// Sparkle, and the restart that follows it. No Sparkle type or feed value crosses this port; a version crosses only as
 /// `AppVersion`. Real: SparkleEngine. Test: InMemoryUpdateEngine.
 @MainActor public protocol UpdateEngine: AnyObject {

@@ -18,9 +18,11 @@ import Testing
 
     /// Opens `.unavailable`, waits on a background thread's main-queue blocks until the session shows, then ends it
     /// the way `ending` says.
-    private func run(ending: Ending) async -> (updater: Updater, sighting: Sighting) {
+    private func run(ending: Ending) async throws -> (updater: Updater, sighting: Sighting) {
         _ = NSApplication.shared
-        let defaults = UserDefaults(suiteName: "UpdateAlertBench-\(UUID().uuidString)")!
+        let name = "UpdateAlertBench-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
         let updater = Updater(version: AppVersion("1.1.22"), store: SettingsStore(defaults: defaults), ports: nil)
         let presenter = UpdateAlertPresenter(updater: updater)
         let sighting = Sighting()
@@ -68,8 +70,8 @@ import Testing
         return own + view.subviews.flatMap { texts(in: $0) }
     }
 
-    @Test func aSessionStartedFromTheCalloutServesTheMainQueueIsFreeStandingAndEndsWhenAnswered() async {
-        let (updater, sighting) = await run(ending: .answered)
+    @Test func aSessionStartedFromTheCalloutServesTheMainQueueIsFreeStandingAndEndsWhenAnswered() async throws {
+        let (updater, sighting) = try await run(ending: .answered)
 
         #expect(sighting.sawModal, "a main-queue block ran while the alert showed")
         #expect(sighting.sheetParent == nil)
@@ -79,8 +81,8 @@ import Testing
         #expect(NSApp.modalWindow == nil)
     }
 
-    @Test func aPowerOffEndsTheSessionUnansweredAndTheModelWithdrawsTheAlert() async {
-        let (updater, sighting) = await run(ending: .powerOff)
+    @Test func aPowerOffEndsTheSessionUnansweredAndTheModelWithdrawsTheAlert() async throws {
+        let (updater, sighting) = try await run(ending: .powerOff)
 
         #expect(sighting.sawModal)
         #expect(!sighting.safetyFired)

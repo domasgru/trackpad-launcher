@@ -21,7 +21,7 @@ public struct AppVersion: Equatable, Sendable, CustomStringConvertible {
 }
 
 /// Work under way: a still word, then three dots that step while it runs.
-public enum Progress: Equatable, Sendable {
+public enum ProgressLabel: Equatable, Sendable {
     case checking
     case updating
 
@@ -40,7 +40,7 @@ public enum Progress: Equatable, Sendable {
 /// A button's title. Only `.progress` animates; an ellipsis meaning "opens something" is `.plain`.
 public enum ButtonTitle: Equatable, Sendable {
     case plain(String)
-    case progress(Progress)
+    case progress(ProgressLabel)
 
     public var text: String {
         switch self {
@@ -164,15 +164,6 @@ public enum UpdateEngineEvent: Equatable, Sendable {
     case held
     /// A cycle ended. For a probe, its one answer.
     case cycleEnded(CycleOutcome)
-}
-
-/// The manual check's limit, on Core Animation's clock. A stop of the clock the system causes counts as passed.
-/// Real: LayerCheckDeadline. Test: InMemoryCheckDeadline.
-@MainActor public protocol CheckDeadline: AnyObject {
-    var onPassed: (@MainActor () -> Void)? { get set }
-    /// Calls `onPassed` once after `wait`, unless cancelled or armed again first.
-    func arm(for wait: Duration)
-    func cancel()
 }
 
 /// What an update-capable copy updates through. Only the gate's value makes one, so a copy the gate turns away has no
