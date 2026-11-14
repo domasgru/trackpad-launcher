@@ -1466,3 +1466,46 @@ The pieces:
 - [ ] The quick gate is green. The existing tests this can break are `UpdateCardTests` (a cancelled prompt still returns the card) and `SparkleEngineTests` (the outcome table).
 - [ ] M7 passes once a newer version is published, or is recorded as pending until then.
 - [ ] The docs Phase D already rewrote match what S5 built: `docs/domain-model.md`'s *Update alert* (the endings of its *Update*), *Update card* and *Hand-over* (the alert's *Update* opens the new version with its window, and takes over a running login download). Where the build departs from them, they are corrected.
+
+---
+
+# Addendum: Move dialog fix (technical change, requested during 052)
+
+## Problem statement
+
+The update alerts start their modal session from a run-loop callout so the main queue keeps running. The move dialog predates that rule: `MoveDialogPresenter` runs `NSAlert.runModal()` inside its `Observations` task, a main-actor job. Reproduced end-to-end on 2026-11-14 with a Developer ID release build in `/tmp`, started with `--at-login` and then opened by hand (`Lifecycle.openedAgain` → `.askingToMove(resident:)`):
+
+- `sample` of the process showed `-[NSAlert runModal]` under `completeTaskWithClosure` on the main thread: the session holds a main-actor job, so every other main-queue job, recognised gestures included, waits until the dialog is answered (grounding F26). That breaks the domain model's promise that a resident copy keeps its gestures.
+- A quit Apple event that reached the copy while the dialog showed ended the dialog as its first button, *Move to Applications*: the move ran, the opened copy in `/tmp` was removed, and the installed copy opened. A logout, restart, shutdown, the Dock's *Quit*, or another copy stopping this one can therefore install the copy instead of ending it.
+
+## Requirements
+
+### R27. The move dialog does not stop a resident copy's gestures
+While the move dialog shows over a resident copy (a login-started copy outside /Applications opened by hand), main-queue work, recognised gestures included, MUST keep running.
+
+#### Scenario: Gestures during the move dialog
+- **GIVEN** a release copy outside /Applications started at login and recognising gestures
+- **WHEN** the user opens it by hand and the move dialog shows
+- **THEN** a main-queue job queued from another thread runs while the dialog is still up, and gestures keep working
+
+### R28. A quit request while the move dialog shows never moves
+While the move dialog shows, no quit request MUST ever end it as *Move to Applications*. A logout, restart or shutdown MUST end the copy with nothing moved, so the dialog never cancels a logout. Any other quit Apple event (a script, the Dock's *Quit*) waits until the dialog is answered, as it does for the update alerts.
+
+#### Scenario: Quit Apple event during the dialog (the reproduction)
+- **GIVEN** the move dialog shows over a login-started copy in `/tmp`
+- **WHEN** a quit Apple event reaches the copy
+- **THEN** the event is refused, the dialog stays, /Applications is unchanged, and the opened copy stays where it was
+
+#### Scenario: Logout during the dialog
+- **GIVEN** the move dialog shows
+- **WHEN** the user logs out
+- **THEN** the logout proceeds and nothing is moved
+
+### Verification (2026-11-14, Developer ID build of 294c5a8 run from `/tmp`)
+- R27: `sample` shows `-[NSAlert runModal]` under `__CFRunLoopDoBlocks` (a run-loop callout), no longer under a Swift task job.
+- R28: a quit Apple event by pid and `osascript … to quit` each got -128; the copy kept running with the dialog up, the `/tmp` bundle stayed, and /Applications was byte-identical to its backup. Before the fix the same `osascript` quit ran the move.
+- Not verified: a real logout with the dialog up (hand check, as M10 is for the update alert).
+
+## Non-goals
+
+- Changing the dialog's text, buttons or default. *Move to Applications* stays the default button for a real click and Return.

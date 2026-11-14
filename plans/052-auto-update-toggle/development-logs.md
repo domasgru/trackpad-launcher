@@ -51,3 +51,5 @@
 - Review: the progress label's font was built in two places → one `ProgressDots.font(for:)`.
 - Review: `UpdatesPreview` read and compared raw strings three times → one Debug-only `PreviewState`.
 - Review: update-row test helpers were copied across three suites → shared in `LifecycleWorld.swift`.
+- Human asked to fix the architect's move-dialog findings in this branch → reproduced end-to-end (Developer ID build in /tmp, `--at-login`, opened by hand): the session ran inside a Swift task job, and an `osascript` quit ended the dialog as *Move* and ran the move → addendum R27/R28, slice S6 (`294c5a8`).
+- E2E check of S6: R27 holds (session under `__CFRunLoopDoBlocks`); the quit no longer moves but is refused (-128), as C4 found for the update alerts → R28 aligned with the update alerts (logout/restart/shutdown end it via power-off; other quits wait for an answer), domain model sentence corrected. A real logout stays a hand check.
