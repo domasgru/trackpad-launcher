@@ -152,6 +152,8 @@ public enum CycleOutcome: Equatable, Sendable {
     /// The feed's request failed: what a lost connection looks like, and the only outcome that earns a login start's
     /// retry.
     case requestFailed
+    /// The user cancelled the administrator prompt. An update's outcome only.
+    case cancelled
     /// Anything else after the feed was read: a download that failed, a refused or ungenuine archive, a discarded update.
     case failed
 }
@@ -548,7 +550,7 @@ public final class Updater {
             switch outcome {
             case .found(let new): next.alert = .updateAvailable(from: version, to: new)
             case .nothingNew: next.alert = .upToDate(version)
-            case .requestFailed, .failed: next.alert = .checkFailed
+            case .requestFailed, .cancelled, .failed: next.alert = .checkFailed
             }
         }
         switch (next.window, outcome) {
@@ -559,10 +561,17 @@ public final class Updater {
         }
     }
 
-    /// At most one download.
+    /// *Update now* and the alert's *Update*. At most one download.
     private func want(_ install: Install) {
         switch state.phase {
         case .installing, .handedOver: return
+        case .updatingAtLogin:
+            // The running login download becomes the user's: it hands over with the window and reports a failure.
+            var next = state
+            next.manualWaits = false
+            next.phase = .installing(install)
+            enter(next)
+            return
         default: break
         }
         guard state.queued == nil else { return }
@@ -579,7 +588,11 @@ public final class Updater {
             next.window = .card
         }
         if case .fromAlert = install, isWindowOpen {
-            next.alert = outcome == .nothingNew ? .upToDate(version) : .installFailed(running: version)
+            switch outcome {
+            case .nothingNew: next.alert = .upToDate(version)
+            case .cancelled: break
+            default: next.alert = .installFailed(running: version)
+            }
         }
     }
 

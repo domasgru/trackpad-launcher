@@ -134,6 +134,7 @@ internal import Sparkle
             switch code {
             case Int(SUError.noUpdateError.rawValue): return .nothingNew
             case Int(SUError.downloadError.rawValue) where !feedRead: return .requestFailed
+            case Int(SUError.installationCanceledError.rawValue): return .cancelled
             default: return .failed
             }
         }
