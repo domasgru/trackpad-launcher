@@ -14,6 +14,8 @@ import Testing
     static let suddenTerminationRule =
         "loginwindow force-quits, 3 s after a foreground app ends, every child of it that is a UI element without a visible window and declares sudden termination; a move's opening, and an older version's update card, make the new process that child for its first moments"
 
+    static let repeatingAnimationRule = "a repeating animation is the render server's"
+
     static let banned: [Entry] = [
         Entry(token: "SuddenTermination", rule: suddenTerminationRule),
         Entry(token: "print(", rule: "log"),
@@ -56,6 +58,10 @@ import Testing
         Entry(token: "Task.sleep", rule: "polling"),
         Entry(token: "displayLink", rule: "timer"),
         Entry(token: "DisplayLink", rule: "timer"),
+        Entry(token: "repeatForever", rule: Self.repeatingAnimationRule),
+        Entry(token: "TimelineView", rule: Self.repeatingAnimationRule),
+        Entry(token: "phaseAnimator", rule: Self.repeatingAnimationRule),
+        Entry(token: "keyframeAnimator", rule: Self.repeatingAnimationRule),
         Entry(token: "IOHIDManager", rule: "no Input Monitoring or event posting"),
         Entry(token: "CGRequestListenEventAccess", rule: "no Input Monitoring or event posting"),
         Entry(token: "CGPreflightListenEventAccess", rule: "no Input Monitoring or event posting"),
@@ -453,6 +459,20 @@ import Testing
         let hits = try Self.banned.flatMap { try Self.scan(dir, for: $0.token) }
 
         #expect(hits == ["Planted.swift:2: print("])
+    }
+
+    @Test(arguments: ["repeatForever", "TimelineView", "phaseAnimator", "keyframeAnimator"])
+    func aPlantedRepeatingAnimationIsFound(token: String) throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tl-policy-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data("func f() {\n    _ = \(token)\n}\n".utf8).write(to: dir.appending(path: "Planted.swift"))
+
+        let hits = try Self.banned.filter { $0.rule == Self.repeatingAnimationRule }.flatMap {
+            try Self.scan(dir, for: $0.token)
+        }
+
+        #expect(hits == ["Planted.swift:2: \(token)"])
     }
 
     @Test func scanVisitsEveryLibraryTarget() throws {

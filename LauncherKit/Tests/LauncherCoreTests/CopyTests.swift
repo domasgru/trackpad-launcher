@@ -7,6 +7,18 @@ import LauncherCore
         #expect(Copy.openSettingsButton == "Open Settings…")
     }
 
+    @Test func aProgressLabelIsItsWordAndAnEllipsis() {
+        #expect(Progress.checking.word == "Checking")
+        #expect(Progress.checking.label == "Checking…")
+        #expect(Progress.updating.word == "Updating")
+        #expect(Progress.updating.label == "Updating…")
+    }
+
+    @Test func onlyAProgressTitleIsTypedAsWorkUnderWay() {
+        #expect(ButtonTitle.plain("Check for updates…").text == "Check for updates…")
+        #expect(ButtonTitle.progress(.checking).text == "Checking…")
+    }
+
     @Test func theMixedTrackpadsRowsAreNamedAndTitled() {
         #expect(Copy.thumbCornerGroupTitle == "Thumb corner:")
         #expect(Copy.macBookTrackpadRow == "MacBook trackpad")

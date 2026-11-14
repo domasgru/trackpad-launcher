@@ -52,7 +52,7 @@ struct SettingsView: View {
     var body: some View {
         let drawn = launcher.drawnThumbCorner
         let gestureThumb = launcher.gestureThumbCorner
-        let updateCard = UpdateCardPreview.card(updater.card)
+        let updateCard = UpdatesPreview.card(updater.card)
         VStack(spacing: 0) {
             if updateCard != nil || launcher.showsAccessibilityHint {
                 WholeHeight {

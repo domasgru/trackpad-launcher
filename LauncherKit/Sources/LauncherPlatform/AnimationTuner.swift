@@ -353,7 +353,7 @@ struct TunerView: View {
         } header: {
             Text("Update card arrow: drop")
         } footer: {
-            Text("Show the card with a Debug build launched with -PreviewUpdateCard YES. Changes restart the arrow.")
+            Text("Show the card with a Debug build launched with -PreviewUpdates available. Changes restart the arrow.")
         }
     }
 

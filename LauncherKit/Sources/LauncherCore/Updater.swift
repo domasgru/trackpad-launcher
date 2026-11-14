@@ -20,6 +20,36 @@ public struct AppVersion: Equatable, Sendable, CustomStringConvertible {
     public init(_ text: String) { description = text }
 }
 
+/// Work under way: a still word, then three dots that step while it runs.
+public enum Progress: Equatable, Sendable {
+    case checking
+    case updating
+
+    /// The part that never moves.
+    public var word: String {
+        switch self {
+        case .checking: Copy.checkingWord
+        case .updating: Copy.updatingWord
+        }
+    }
+
+    /// What VoiceOver reads and Reduce motion shows.
+    public var label: String { word + "…" }
+}
+
+/// A button's title. Only `.progress` animates; an ellipsis meaning "opens something" is `.plain`.
+public enum ButtonTitle: Equatable, Sendable {
+    case plain(String)
+    case progress(Progress)
+
+    public var text: String {
+        switch self {
+        case .plain(let text): text
+        case .progress(let progress): progress.label
+        }
+    }
+}
+
 /// The update card the settings window shows, as values.
 public enum UpdateCard: Equatable, Sendable {
     case available
@@ -27,10 +57,10 @@ public enum UpdateCard: Equatable, Sendable {
 
     public var text: String { Copy.updateAvailable }
 
-    public var buttonTitle: String {
+    public var buttonTitle: ButtonTitle {
         switch self {
-        case .available: Copy.updateNowButton
-        case .updating: Copy.updatingButton
+        case .available: .plain(Copy.updateNowButton)
+        case .updating: .progress(.updating)
         }
     }
 

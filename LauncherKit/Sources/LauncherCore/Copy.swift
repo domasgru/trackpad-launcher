@@ -23,7 +23,8 @@ public enum Copy {
     /// The update card's text and its button's two titles.
     public static let updateAvailable = "Update available"
     public static let updateNowButton = "Update now"
-    public static let updatingButton = "Updating…"
+    public static let checkingWord = "Checking"
+    public static let updatingWord = "Updating"
 
     /// The settings window's thumb corner row and its pop-up's choices.
     public static let thumbCornerRow = "Thumb corner"

@@ -92,7 +92,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                     Fit(
                         inactiveNotice: launcher.inactiveNotice, showsAccessibilityHint: launcher.showsAccessibilityHint,
                         isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint,
-                        card: UpdateCardPreview.card(updater.card),
+                        card: UpdatesPreview.card(updater.card),
                         hasMixedTrackpads: launcher.thumbCorners.hasMixedTrackpads,
                         twoAppRows: launcher.rows.filter { $0.lineCount == 2 }.count)
                 }) {

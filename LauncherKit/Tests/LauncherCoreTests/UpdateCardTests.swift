@@ -368,9 +368,9 @@ import Testing
     @Test func theCardsTextAndButtonFollowItsState() {
         #expect(UpdateCard.available.text == "Update available")
         #expect(UpdateCard.updating.text == "Update available")
-        #expect(UpdateCard.available.buttonTitle == "Update now")
+        #expect(UpdateCard.available.buttonTitle == .plain("Update now"))
         #expect(UpdateCard.available.isButtonEnabled)
-        #expect(UpdateCard.updating.buttonTitle == "Updating…")
+        #expect(UpdateCard.updating.buttonTitle == .progress(.updating))
         #expect(!UpdateCard.updating.isButtonEnabled)
     }
 }
