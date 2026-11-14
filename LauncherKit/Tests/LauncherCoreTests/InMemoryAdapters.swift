@@ -862,17 +862,28 @@ final class EffectLog {
     private var cycleOffered = false
     private var cycleAccepted = false
     var armWorks = true
+    /// An event the next `probe()` or `update()` pushes before returning, as `SparkleEngine` does when a cycle cannot
+    /// begin.
+    var answersInside: UpdateEngineEvent?
 
     func probe() {
         probes += 1
         log?.entries.append("probe")
         startCycle(downloads: false)
+        pushAnswerInside()
     }
 
     func update() {
         updates += 1
         log?.entries.append("update")
         startCycle(downloads: true)
+        pushAnswerInside()
+    }
+
+    private func pushAnswerInside() {
+        guard let event = answersInside else { return }
+        answersInside = nil
+        push(event)
     }
 
     private func startCycle(downloads: Bool) {
@@ -923,6 +934,31 @@ final class EffectLog {
             }
         }
         onEvent?(event)
+        onDelivered?()
+    }
+}
+
+/// The manual check's limit, which a test lets pass.
+@MainActor final class InMemoryCheckDeadline: CheckDeadline {
+    var onPassed: (@MainActor () -> Void)?
+    /// The wait now armed; nil once passed or cancelled.
+    private(set) var armed: Duration?
+    /// Every wait armed, in order.
+    private(set) var arms: [Duration] = []
+    /// Runs after a pass reaches the model, as the process's publishing hook.
+    var onDelivered: (() -> Void)?
+
+    func arm(for wait: Duration) {
+        armed = wait
+        arms.append(wait)
+    }
+
+    func cancel() { armed = nil }
+
+    func pass() {
+        precondition(armed != nil, "a deadline passes only while armed")
+        armed = nil
+        onPassed?()
         onDelivered?()
     }
 }

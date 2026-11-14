@@ -238,7 +238,12 @@ import Testing
         Confined(token: "DADisk", onlyIn: ["DiskImages.swift"], rule: "disk images are read and ejected in one place"),
         Confined(token: "unmountVolume", onlyIn: ["DiskImages.swift"], rule: "disk images are read and ejected in one place"),
         Confined(token: "SecTranslocate", onlyIn: ["ThisCopy.swift"], rule: "translocation is read in one place"),
-        Confined(token: "runModal", onlyIn: ["MoveDialogPresenter.swift"], rule: "the move dialog is the one modal"),
+        Confined(
+            token: "runModal", onlyIn: ["MoveDialogPresenter.swift", "UpdateAlertPresenter.swift"],
+            rule: "two modals: the move dialog, and the update alerts, whose session starts in a run-loop callout so the main queue keeps running"),
+        Confined(
+            token: "abortModal", onlyIn: ["UpdateAlertPresenter.swift"],
+            rule: "only the update alerts' session is ended from outside, and only when its alert is withdrawn or the Mac powers off"),
         Confined(token: "kAEQuitReason", onlyIn: ["QuitSignals.swift"], rule: "the quit event is parsed in one place"),
     ]
 
@@ -270,8 +275,8 @@ import Testing
     ]
 
     static let keptOutOfTheFramePath: [String] = [
-        "Updater", "UpdateEngine", "Sparkle", "contactChanged", "isTouched", "sensesContact", "isInUse", "occupied",
-        "IdleClock",
+        "Updater", "UpdateEngine", "UpdatePorts", "UpdateAlert", "CheckDeadline", "Sparkle", "contactChanged", "isTouched",
+        "sensesContact", "isInUse", "occupied", "IdleClock",
     ]
 
     /// One "<file>:<line>: <token>" string per kept-out token on a line of `text`.
@@ -306,6 +311,13 @@ import Testing
 
         #expect(hits.count == 1)
         #expect(hits.first?.hasSuffix(": isTouched") == true)
+    }
+
+    @Test(arguments: ["UpdatePorts", "UpdateAlert", "CheckDeadline"])
+    func aPlantedUpdateTokenInTheFrameStreamFailsTheFramePathScan(token: String) throws {
+        let hits = Self.framePathHits(in: "let planted: \(token)? = nil\n", file: "FrameStream.swift")
+
+        #expect(hits == ["FrameStream.swift:1: \(token)"])
     }
 
     /// `Tests/LauncherCoreTests/<this file>` is three levels below the package root.

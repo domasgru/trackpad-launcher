@@ -133,6 +133,8 @@ extension AppVersion: ExpressibleByStringLiteral {
         let window: Launcher.Window
         let card: UpdateCard?
         let isAutomaticUpdatesOn: Bool
+        let button: CheckButton
+        let alert: UpdateAlert?
         /// Taken after a fake delivered something, not after an intent.
         var afterDelivery = false
     }
@@ -152,6 +154,7 @@ extension AppVersion: ExpressibleByStringLiteral {
     let ports: UpdatePorts?
     let engine = InMemoryUpdateEngine()
     let connection = InMemoryConnection()
+    let deadline = InMemoryCheckDeadline()
 
     init(mac: World, placement: Placement, running: RunningBuild, attached: [Trackpad], log: EffectLog) {
         self.mac = mac
@@ -162,9 +165,10 @@ extension AppVersion: ExpressibleByStringLiteral {
         hardware = InMemoryTrackpads(attached: attached)
         let engine = self.engine
         let connection = self.connection
+        let deadline = self.deadline
         ports = UpdatableCopy(
             placement: placement, developerIDSigned: running.developerIDSigned, canReplaceItself: running.canWrite
-        ).map { UpdatePorts($0, engine: engine, connection: connection) }
+        ).map { UpdatePorts($0, engine: engine, connection: connection, deadline: deadline) }
         updater = Updater(version: running.version, store: mac.freshStore(), ports: ports)
         lifecycle = Lifecycle(
             placement: placement, copies: copies, installer: installer, startAtLogin: startAtLogin,
@@ -172,6 +176,7 @@ extension AppVersion: ExpressibleByStringLiteral {
         copies.lifecycle = lifecycle
         engine.onDelivered = { [unowned self] in record(afterDelivery: true) }
         connection.onDelivered = { [unowned self] in record(afterDelivery: true) }
+        deadline.onDelivered = { [unowned self] in record(afterDelivery: true) }
     }
 
     private func makeResident() -> Launcher {
@@ -186,7 +191,8 @@ extension AppVersion: ExpressibleByStringLiteral {
 
     private func record(afterDelivery: Bool = false) {
         history.append(Published(
-            window: window, card: card, isAutomaticUpdatesOn: updater.isAutomaticUpdatesOn, afterDelivery: afterDelivery))
+            window: window, card: card, isAutomaticUpdatesOn: updater.isAutomaticUpdatesOn, button: updater.checkButton,
+            alert: updater.alert, afterDelivery: afterDelivery))
     }
 
     var launcher: Launcher { resident! }
@@ -199,6 +205,17 @@ extension AppVersion: ExpressibleByStringLiteral {
 
     func setAutomaticUpdates(on: Bool) {
         updater.setAutomaticUpdates(on: on)
+        record()
+    }
+
+    func checkForUpdates() {
+        updater.checkForUpdates()
+        record()
+    }
+
+    /// Answers the alert that shows.
+    func answer(_ answer: AlertAnswer) {
+        updater.answer(answer, to: updater.alert!)
         record()
     }
 

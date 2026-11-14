@@ -18,4 +18,27 @@ enum UpdatesPreview {
         #endif
         return modelCard
     }
+
+    /// `checking` and `updating`: the row's button in that state, with the card's part of `updating` as above. Otherwise
+    /// the model's button.
+    static func checkButton(_ modelButton: CheckButton) -> CheckButton {
+        #if DEBUG
+            switch UserDefaults.standard.string(forKey: "PreviewUpdates") {
+            case "checking": return .checking
+            case "updating": return .updating
+            default: break
+            }
+        #endif
+        return modelButton
+    }
+
+    /// The one alert `alert` shows at the first opening; nil otherwise, and always nil in Release.
+    static func alert(running: AppVersion) -> UpdateAlert? {
+        #if DEBUG
+            if UserDefaults.standard.string(forKey: "PreviewUpdates") == "alert" {
+                return .updateAvailable(from: running, to: AppVersion("9.9.9"))
+            }
+        #endif
+        return nil
+    }
 }

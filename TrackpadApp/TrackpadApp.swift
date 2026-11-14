@@ -54,7 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let signer
         else { return nil }
         return UpdatePorts(
-            copy, engine: SparkleEngine(bundle: location.running, signer: signer), connection: SystemConnection())
+            copy, engine: SparkleEngine(bundle: location.running, signer: signer), connection: SystemConnection(),
+            deadline: LayerCheckDeadline())
     }
 
     /// The open event exists only from here.
