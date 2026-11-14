@@ -18,7 +18,8 @@ import LauncherCore
     /// `record` is what an earlier run saved: these apps on these gestures. nil is a Mac that holds no settings.
     init(
         apps: [String] = ["Arc", "Notes"], accessGranted: Bool = true, record: [Gesture: String]? = nil,
-        corner: ThumbCorner = .topLeft, hidesBackgroundApps: Bool = false, loginItemOn: Bool = false
+        corner: ThumbCorner = .topLeft, hidesBackgroundApps: Bool = false, loginItemOn: Bool = false,
+        automaticUpdates: Bool = true
     ) {
         mac = World(apps: apps, accessGranted: accessGranted)
         if let record {
@@ -28,6 +29,7 @@ import LauncherCore
             for (gesture, name) in record { settings.assignments[gesture] = Assignment(first: AssignedApp(mac.app(name))) }
             mac.freshStore().save(settings)
         }
+        if !automaticUpdates { mac.seedSuite(["automaticUpdatesOff": true]) }
         loginItem.isOn = loginItemOn
         recordEveryEffect()
     }
@@ -130,6 +132,7 @@ extension AppVersion: ExpressibleByStringLiteral {
     struct Published: Equatable {
         let window: Launcher.Window
         let card: UpdateCard?
+        let isAutomaticUpdatesOn: Bool
         /// Taken after a fake delivered something, not after an intent.
         var afterDelivery = false
     }
@@ -182,7 +185,8 @@ extension AppVersion: ExpressibleByStringLiteral {
     }
 
     private func record(afterDelivery: Bool = false) {
-        history.append(Published(window: window, card: card, afterDelivery: afterDelivery))
+        history.append(Published(
+            window: window, card: card, isAutomaticUpdatesOn: updater.isAutomaticUpdatesOn, afterDelivery: afterDelivery))
     }
 
     var launcher: Launcher { resident! }
@@ -190,6 +194,11 @@ extension AppVersion: ExpressibleByStringLiteral {
 
     func launch(_ opening: Opening, diskImageToEject: DiskImage? = nil) {
         lifecycle.launched(Launch(opening: opening, diskImageToEject: diskImageToEject))
+        record()
+    }
+
+    func setAutomaticUpdates(on: Bool) {
+        updater.setAutomaticUpdates(on: on)
         record()
     }
 

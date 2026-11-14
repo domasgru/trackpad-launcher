@@ -19,6 +19,11 @@ import LauncherCore
         #expect(ButtonTitle.progress(.checking).text == "Checking…")
     }
 
+    @Test func theUpdatesRowIsTitledAndQuotesTheVersionWithoutABuildNumber() {
+        #expect(Copy.automaticUpdatesRow == "Automatic updates")
+        #expect(Copy.currentVersion("1.1.22") == "Current version: 1.1.22")
+    }
+
     @Test func theMixedTrackpadsRowsAreNamedAndTitled() {
         #expect(Copy.thumbCornerGroupTitle == "Thumb corner:")
         #expect(Copy.macBookTrackpadRow == "MacBook trackpad")

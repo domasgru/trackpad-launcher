@@ -52,7 +52,7 @@ struct SettingsView: View {
     var body: some View {
         let drawn = launcher.drawnThumbCorner
         let gestureThumb = launcher.gestureThumbCorner
-        let updateCard = UpdatesPreview.card(updater.card)
+        let updateCard = UpdatesPreview.card(updater.card, isAutomaticUpdatesOn: updater.isAutomaticUpdatesOn)
         VStack(spacing: 0) {
             if updateCard != nil || launcher.showsAccessibilityHint {
                 WholeHeight {
@@ -98,6 +98,7 @@ struct SettingsView: View {
                         Text("Hide background apps").formRow(height: Self.oneLineRowHeight)
                     }
                     .toggleStyle(.switch)
+                    UpdatesRow(updater: updater)
                 }
             }
             .formStyle(.grouped)

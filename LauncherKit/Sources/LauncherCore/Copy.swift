@@ -26,6 +26,10 @@ public enum Copy {
     public static let checkingWord = "Checking"
     public static let updatingWord = "Updating"
 
+    /// The settings window's Automatic updates row.
+    public static let automaticUpdatesRow = "Automatic updates"
+    public static func currentVersion(_ version: AppVersion) -> String { "Current version: \(version)" }
+
     /// The settings window's thumb corner row and its pop-up's choices.
     public static let thumbCornerRow = "Thumb corner"
     public static let thumbCornerGroupTitle = "Thumb corner:"

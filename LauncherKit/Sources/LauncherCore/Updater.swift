@@ -118,6 +118,9 @@ public final class Updater {
         return state.window == .card ? .available : nil
     }
 
+    /// The Automatic updates switch. Read once at init; saved at once by `setAutomaticUpdates`.
+    public private(set) var isAutomaticUpdatesOn: Bool
+
     @ObservationIgnored private let ports: UpdatePorts?
     @ObservationIgnored private let store: SettingsStore
     @ObservationIgnored private weak var launcher: Launcher?
@@ -125,7 +128,7 @@ public final class Updater {
 
     private struct State: Equatable {
         var phase = Phase.resting
-        /// What the open window has at stake in the list's next answer. `.none` while it is closed.
+        /// What the open window has at stake in the list's next answer. `.none` while it is closed or the switch is off.
         var window = WindowStake.none
         /// A download the user asked for while a cycle ran; it starts when the engine is free.
         var queued: Install?
@@ -144,6 +147,9 @@ public final class Updater {
         /// `dropped`: the connection fell during that retry, so its network failure owes a fresh retry rather than a
         /// spent one.
         case checkingAtLogin(retry: Bool, dropped: Bool)
+        /// The switch went off while the login cycle read the list. It cannot be stopped, so it runs on; its offer is
+        /// declined, so nothing downloads. `listAnswered`: the offer has come.
+        case abandonedAtLogin(listAnswered: Bool)
         /// The login update: its offer was taken, it downloads, is checked and prepared. Silent.
         case updatingAtLogin
         /// A download the user asked for: it reads the list once more, then downloads, the newest it finds.
@@ -170,11 +176,11 @@ public final class Updater {
         case card
     }
 
-    /// `store` is kept for the switch that is still to come.
     public init(version: AppVersion, store: SettingsStore, ports: UpdatePorts?) {
         self.version = version
         self.store = store
         self.ports = ports
+        isAutomaticUpdatesOn = store.loadAutomaticUpdates()
     }
 
     /// Once, from a resident only. A login start of a copy that can replace itself runs the update cycle whatever the
@@ -189,7 +195,7 @@ public final class Updater {
         ports.engine.shouldDownload = { [unowned self] version in offered(version) }
         ports.connection.onChange = { [unowned self] connected in connectionChanged(connected) }
         switch opening {
-        case .atLogin where ports.canReplaceItself:
+        case .atLogin where ports.canReplaceItself && isAutomaticUpdatesOn:
             begin(.checkingAtLogin(retry: false, dropped: false))
         case .afterUpdate:
             break
@@ -205,15 +211,33 @@ public final class Updater {
         settle()
     }
 
+    /// Saved at once, on a change only. Off drops what waits on a check and keeps every download; on starts nothing.
+    public func setAutomaticUpdates(on: Bool) {
+        guard on != isAutomaticUpdatesOn else { return }
+        store.saveAutomaticUpdates(on)
+        isAutomaticUpdatesOn = on
+        guard ports != nil, !on else { return }
+        var next = state
+        next.window = .none
+        switch state.phase {
+        case .awaitingConnection: next.phase = .resting
+        case .checking: next.phase = .checking(debt: .none)
+        case .checkingAtLogin: next.phase = .abandonedAtLogin(listAnswered: false)
+        case .resting, .abandonedAtLogin, .updatingAtLogin, .installing, .handedOver: break
+        }
+        enter(next)
+        settle()
+    }
+
     // MARK: Inputs
 
     private func windowEdge(_ isOpen: Bool) {
         var next = state
         if isOpen {
-            guard ports != nil, state.queued == nil else { return }
+            guard ports != nil, isAutomaticUpdatesOn, state.queued == nil else { return }
             switch state.phase {
             case .checkingAtLogin, .updatingAtLogin, .installing, .handedOver: return
-            case .resting, .awaitingConnection, .checking: break
+            case .resting, .awaitingConnection, .checking, .abandonedAtLogin: break
             }
             next.window = .check
         } else {
@@ -242,7 +266,10 @@ public final class Updater {
         case (.checkingAtLogin(let retry, let dropped), .cycleEnded(let outcome)):
             listAnswered(outcome, into: &next)
             next.phase = outcome == .requestFailed ? .awaitingConnection(spent: retry && !dropped) : .resting
-        case (.updatingAtLogin, .cycleEnded):
+        case (.abandonedAtLogin(false), .cycleEnded(let outcome)):
+            listAnswered(outcome, into: &next)
+            next.phase = .resting
+        case (.abandonedAtLogin(true), .cycleEnded), (.updatingAtLogin, .cycleEnded):
             next.phase = .resting
         case (.installing(let install), .cycleEnded(let outcome)):
             installEnded(install, outcome, into: &next)
@@ -279,6 +306,13 @@ public final class Updater {
             enter(next)
             settle()
             return true
+        case .abandonedAtLogin(false):
+            var next = state
+            listAnswered(.found(version), into: &next)
+            next.phase = .abandonedAtLogin(listAnswered: true)
+            enter(next)
+            settle()
+            return false
         case .installing:
             return true
         default:
@@ -322,7 +356,7 @@ public final class Updater {
         switch next {
         case .checking: ports.engine.probe()
         case .checkingAtLogin, .installing: ports.engine.update()
-        case .resting, .awaitingConnection, .updatingAtLogin, .handedOver: break
+        case .resting, .awaitingConnection, .abandonedAtLogin, .updatingAtLogin, .handedOver: break
         }
     }
 
@@ -372,7 +406,9 @@ public final class Updater {
     }
 
     private func installEnded(_ install: Install, _ outcome: CycleOutcome, into next: inout State) {
-        if install.showsCard, outcome != .nothingNew, launcher?.isWindowOpen == true { next.window = .card }
+        if install.showsCard, outcome != .nothingNew, launcher?.isWindowOpen == true, isAutomaticUpdatesOn {
+            next.window = .card
+        }
     }
 
     /// Arm, or discard and let the cycle's `.failed` resolve through the phase.

@@ -88,6 +88,7 @@ private enum HandMode: String, Codable {
     private let defaults: UserDefaults
     private let key = "settings"
     private let externalCornerKey = "externalThumbCorner"
+    private let automaticUpdatesOffKey = "automaticUpdatesOff"
 
     public init(defaults: UserDefaults) {
         self.defaults = defaults
@@ -119,6 +120,26 @@ private enum HandMode: String, Codable {
     /// clears the record.
     func saveExternalCorner(_ corner: ThumbCorner) {
         defaults.set(SavedCorner(corner).rawValue, forKey: externalCornerKey)
+    }
+}
+
+extension SettingsStore {
+    /// The Automatic updates switch: one key beside the record, `automaticUpdatesOff`, whose presence is the fact.
+    /// Absent: on, so a new install and an upgrade need no code. Present, whatever it holds: off, so a value this
+    /// build cannot read never turns automatic requests back on. A version that does not know the key never rewrites
+    /// it, so an off survives a downgrade and its saves; it neither ends nor fakes a first run. Read once, by
+    /// `Updater.init`.
+    func loadAutomaticUpdates() -> Bool {
+        defaults.object(forKey: automaticUpdatesOffKey) == nil
+    }
+
+    /// One synchronous write, on a change of the switch only: off sets the key, on removes it.
+    func saveAutomaticUpdates(_ on: Bool) {
+        if on {
+            defaults.removeObject(forKey: automaticUpdatesOffKey)
+        } else {
+            defaults.set(true, forKey: automaticUpdatesOffKey)
+        }
     }
 }
 
