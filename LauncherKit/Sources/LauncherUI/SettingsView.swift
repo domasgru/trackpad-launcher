@@ -282,13 +282,13 @@ struct HandGuide: View {
             }
             BundleImage.view("right-hand", type: "png", width: 60)
                 .opacity(0.9)
-                .offset(x: 55, y: 24)
+                .offset(x: 54.5, y: 26)
             if showsHoldHand {
                 HandLabel(text: "Hold", dot: .hold)
                     .offset(x: -11, y: 49)
             }
             HandLabel(text: "Tap", dot: .tap)
-                .offset(x: 92, y: 55)
+                .offset(x: 82, y: 65)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
@@ -298,7 +298,7 @@ struct HandGuide: View {
     }
 }
 
-/// A small light tooltip: a dot, then the word, in the macOS tooltip's 11 pt medium. The shadows sit on the background
+/// A small light tooltip: a dot, then the word, in the macOS tooltip's 11 pt regular. The shadows sit on the background
 /// shape alone, so the text and the dot are never rasterised through them.
 struct HandLabel: View {
     /// The name of the dot's SVG in the bundle.
@@ -310,7 +310,7 @@ struct HandLabel: View {
     var body: some View {
         HStack(spacing: 4) {
             BundleImage.view(dot.rawValue)
-            Text(text).font(.system(size: 11, weight: .medium)).foregroundStyle(.black)
+            Text(text).font(.system(size: 11)).foregroundStyle(.black)
         }
         .padding(.leading, 6).padding(.trailing, 6).padding(.top, 3).padding(.bottom, 2)
         .frame(height: 18)
