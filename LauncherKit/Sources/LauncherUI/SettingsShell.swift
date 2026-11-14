@@ -15,7 +15,7 @@ import UniformTypeIdentifiers
 /// The thin AppKit shell: maps AppKit signals to `Launcher` intents and renders `Launcher` state.
 /// Create it before `Launcher.start()`: its first icon pass must finish before gestures run.
 ///
-/// It renders `launcher.window`: the settings window opens centred on the pointer's display, at most 90% of that
+/// It renders `launcher.window`: the settings window opens centred on the pointer's display, at most 95% of that
 /// display's visible height and scrolling beyond it, and the app joins the
 /// Dock and ⌘-Tab; closing it removes both. It is the only place the activation policy changes. The window closes
 /// only through the model: the close button, ⌘W, Escape and Close Settings (⌘Q) all send `closeWindow()`.
@@ -205,7 +205,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
 
     private func renderIcons() { icons.renderOffMainActor(Self.iconTargets(launcher)) }
 
-    /// Sizes the window to its content, keeping the top edge where it is. The window is never taller than 90% of the
+    /// Sizes the window to its content, keeping the top edge where it is. The window is never taller than 95% of the
     /// visible height of `screen` (the window's own display by default): content taller than that scrolls inside the
     /// window's scroll view, and content that fits leaves the window as tall as it is.
     private func fit(on screen: NSScreen? = nil) {

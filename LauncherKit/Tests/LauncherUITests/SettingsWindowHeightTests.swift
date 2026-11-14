@@ -6,10 +6,10 @@ import Testing
 @Suite struct SettingsWindowHeightTests {
     private let titleBar: CGFloat = 28
 
-    @Test func aTallContentIsCappedSoTheWholeWindowIsNinetyPercentOfTheVisibleHeight() {
+    @Test func aTallContentIsCappedSoTheWholeWindowIsNinetyFivePercentOfTheVisibleHeight() {
         let content = SettingsWindowHeight.contentHeight(fitting: 1_000 - 28, titleBar: titleBar, visible: 800)
-        #expect(content == 692)
-        #expect(content + titleBar == 720)
+        #expect(content == 732)
+        #expect(content + titleBar == 760)
     }
 
     @Test func aContentThatFitsKeepsItsOwnHeight() {
@@ -18,11 +18,11 @@ import Testing
 
     @Test func theWindowGrowsToTheCapAndNoFurther() {
         #expect(SettingsWindowHeight.contentHeight(fitting: 860, titleBar: titleBar, visible: 1_000) == 860)
-        #expect(SettingsWindowHeight.contentHeight(fitting: 960, titleBar: titleBar, visible: 1_000) == 872)
+        #expect(SettingsWindowHeight.contentHeight(fitting: 960, titleBar: titleBar, visible: 1_000) == 922)
     }
 
     @Test func aContentExactlyAtTheCapIsReturnedAsIs() {
-        #expect(SettingsWindowHeight.contentHeight(fitting: 872, titleBar: titleBar, visible: 1_000) == 872)
+        #expect(SettingsWindowHeight.contentHeight(fitting: 922, titleBar: titleBar, visible: 1_000) == 922)
     }
 
     @Test func aCappedWindowWidensByALegacyScrollersWidth() {
