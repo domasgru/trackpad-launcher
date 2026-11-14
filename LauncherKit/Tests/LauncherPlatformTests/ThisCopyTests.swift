@@ -84,6 +84,27 @@ import Testing
         #expect(ThisCopy.opening(of: Self.event(AEEventID(kAEReopenApplication), loginMarker: false)) == .byHand)
     }
 
+    private static func bundle(_ info: [String: Any]) throws -> (BundleFixture, Bundle) {
+        let fixture = try BundleFixture()
+        let contents = try fixture.folder("Fixture.app/Contents")
+        try (info as NSDictionary).write(to: contents.appending(path: "Info.plist"))
+        return (fixture, try #require(Bundle(url: contents.deletingLastPathComponent())))
+    }
+
+    @Test func theVersionIsTheShortVersionNeverTheBuild() throws {
+        let (fixture, bundle) = try Self.bundle(["CFBundleShortVersionString": "1.1.22", "CFBundleVersion": "25"])
+        defer { withExtendedLifetime(fixture) {} }
+
+        #expect(ThisCopy.version(of: bundle) == AppVersion("1.1.22"))
+    }
+
+    @Test func aBundleWithOnlyABuildReadsAsAnEmptyVersion() throws {
+        let (fixture, bundle) = try Self.bundle(["CFBundleVersion": "25"])
+        defer { withExtendedLifetime(fixture) {} }
+
+        #expect(ThisCopy.version(of: bundle) == AppVersion(""))
+    }
+
     @Test func unrelatedArgumentsAreIgnored() {
         let launch = ThisCopy.launch(event: nil, arguments: ["TrackpadApp", "-NSDocumentRevisionsDebugMode", "YES"])
         #expect(launch == Launch(opening: .byHand))

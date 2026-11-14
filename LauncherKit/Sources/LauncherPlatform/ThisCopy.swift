@@ -27,6 +27,16 @@ public enum ThisCopy {
         return marker == OSType(keyAELaunchedAsLogInItem) ? .atLogin : .byHand
     }
 
+    /// This process's own `CFBundleShortVersionString`, read once at start: after a swap the bundle is the new one's.
+    public static func version() -> AppVersion { version(of: .main) }
+
+    /// A bundle's `CFBundleShortVersionString`, never its `CFBundleVersion`. A bundle without the key reads as an empty
+    /// version: a built copy always has it, from `MARKETING_VERSION`. Beside `version()` as `location(of:)` sits beside
+    /// `location()`, so a test can point it at a fixture bundle.
+    static func version(of bundle: Bundle) -> AppVersion {
+        AppVersion(bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+    }
+
     /// Where this copy lies: a quarantined copy macOS translocated is traced back to the bundle the user opened. The
     /// disk image holding the original, if any, comes from `DiskImages.image(holding:)`.
     public static func location() -> Location {

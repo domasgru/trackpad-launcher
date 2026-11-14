@@ -104,10 +104,15 @@ import LauncherCore
 struct RunningBuild {
     var developerIDSigned: Bool
     var canWrite: Bool
+    var version: AppVersion = "1.1.22"
 
     static let development = RunningBuild(developerIDSigned: false, canWrite: true)
     static let release = RunningBuild(developerIDSigned: true, canWrite: true)
     static func release(canWrite: Bool) -> RunningBuild { RunningBuild(developerIDSigned: true, canWrite: canWrite) }
+}
+
+extension AppVersion: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) { self.init(value) }
 }
 
 @MainActor final class OneProcess {
@@ -121,22 +126,27 @@ struct RunningBuild {
     let system = RecordingSystemActions()
     private(set) var residentsBuilt = 0
 
-    /// What the settings window shows after an intent.
+    /// What the settings window shows after an intent or a delivery.
     struct Published: Equatable {
         let window: Launcher.Window
         let card: UpdateCard?
+        /// Taken after a fake delivered something, not after an intent.
+        var afterDelivery = false
     }
 
-    /// The window and the update card after each intent, in order.
+    /// The window and the update card after each intent and each delivery of a fake, in order.
     private(set) var history: [Published] = []
-    var windows: [Launcher.Window] { history.map(\.window) }
+    /// The window after each intent: a delivery of a fake is not one.
+    var windows: [Launcher.Window] { history.filter { !$0.afterDelivery }.map(\.window) }
     var cards: [UpdateCard?] { history.map(\.card) }
-    var card: UpdateCard? { updater?.card }
+    var card: UpdateCard? { updater.card }
     /// Kept apart from `lifecycle.launcher`, which is nil once the process is ending.
     private var resident: Launcher?
 
+    /// Every copy has one; the gate decides only whether it has ports.
+    let updater: Updater
     /// Nil when the gate lets this copy through nowhere.
-    let updater: Updater?
+    let ports: UpdatePorts?
     let engine = InMemoryUpdateEngine()
     let connection = InMemoryConnection()
 
@@ -149,13 +159,16 @@ struct RunningBuild {
         hardware = InMemoryTrackpads(attached: attached)
         let engine = self.engine
         let connection = self.connection
-        updater = UpdatableCopy(
+        ports = UpdatableCopy(
             placement: placement, developerIDSigned: running.developerIDSigned, canReplaceItself: running.canWrite
-        ).map { Updater($0, engine: engine, connection: connection) }
+        ).map { UpdatePorts($0, engine: engine, connection: connection) }
+        updater = Updater(version: running.version, store: mac.freshStore(), ports: ports)
         lifecycle = Lifecycle(
             placement: placement, copies: copies, installer: installer, startAtLogin: startAtLogin,
             makeResident: { [unowned self] in makeResident() }, updater: updater)
         copies.lifecycle = lifecycle
+        engine.onDelivered = { [unowned self] in record(afterDelivery: true) }
+        connection.onDelivered = { [unowned self] in record(afterDelivery: true) }
     }
 
     private func makeResident() -> Launcher {
@@ -168,7 +181,9 @@ struct RunningBuild {
         return launcher
     }
 
-    private func record() { history.append(Published(window: window, card: card)) }
+    private func record(afterDelivery: Bool = false) {
+        history.append(Published(window: window, card: card, afterDelivery: afterDelivery))
+    }
 
     var launcher: Launcher { resident! }
     var window: Launcher.Window { resident?.window ?? .closed }

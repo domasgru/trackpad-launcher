@@ -191,15 +191,4 @@ import Testing
     ) {
         #expect(UpdateArchive.admits(path: row.path, kind: row.kind, linkTarget: row.link) == row.admitted)
     }
-
-    // MARK: the offer's answer
-
-    @Test(arguments: [
-        (stage: UpdateOffer.Stage.notDownloaded, answer: UpdateOffer.Answer.install),
-        (stage: .downloaded, answer: .install),
-        (stage: .installing, answer: .skip),
-    ])
-    func anOfferIsInstalledUnlessItsInstallerAlreadyRuns(row: (stage: UpdateOffer.Stage, answer: UpdateOffer.Answer)) {
-        #expect(UpdateOffer.answer(for: row.stage) == row.answer)
-    }
 }

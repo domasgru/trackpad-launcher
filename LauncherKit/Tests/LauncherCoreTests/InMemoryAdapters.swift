@@ -835,8 +835,14 @@ final class EffectLog {
 
 /// Counts the engine's calls and records them in the shared log; a test pushes the events Sparkle would.
 @MainActor final class InMemoryUpdateEngine: UpdateEngine {
+    struct Offer: Equatable {
+        let version: AppVersion
+        let accepted: Bool
+    }
+
     var log: EffectLog?
     var onEvent: (@MainActor (UpdateEngineEvent) -> Void)?
+    var shouldDownload: (@MainActor (AppVersion) -> Bool)?
     private(set) var probes = 0
     private(set) var updates = 0
     private(set) var discards = 0
@@ -845,24 +851,48 @@ final class EffectLog {
     /// Every `probe()` or `update()` asked while a cycle it started has not yet been answered by a `.cycleEnded`; a
     /// `.held` keeps the cycle running.
     private(set) var overlaps = 0
+    /// Every `.held` pushed for an update the model never took: a real engine holds nothing it was told not to download.
+    private(set) var unconsented = 0
+    /// Every question the model was asked, with its answer, in order.
+    private(set) var offers: [Offer] = []
+    /// Runs after each delivery to the model, as the process's publishing hook.
+    var onDelivered: (() -> Void)?
     private var cycleRuns = false
+    private var cycleDownloads = false
+    private var cycleOffered = false
+    private var cycleAccepted = false
     var armWorks = true
 
     func probe() {
         probes += 1
         log?.entries.append("probe")
-        startCycle()
+        startCycle(downloads: false)
     }
 
     func update() {
         updates += 1
         log?.entries.append("update")
-        startCycle()
+        startCycle(downloads: true)
     }
 
-    private func startCycle() {
+    private func startCycle(downloads: Bool) {
         if cycleRuns { overlaps += 1 }
         cycleRuns = true
+        cycleDownloads = downloads
+        cycleOffered = false
+        cycleAccepted = false
+    }
+
+    /// The list answered with `version`: asks the model, as Sparkle does inside its callback. Only an update cycle that
+    /// has not been asked yet can be offered.
+    @discardableResult
+    func offer(_ version: AppVersion) -> Bool {
+        precondition(cycleRuns && cycleDownloads && !cycleOffered, "a real engine offers an update cycle once, never a probe")
+        cycleOffered = true
+        cycleAccepted = shouldDownload?(version) ?? false
+        offers.append(Offer(version: version, accepted: cycleAccepted))
+        onDelivered?()
+        return cycleAccepted
     }
 
     func discardHeldUpdate() {
@@ -881,10 +911,19 @@ final class EffectLog {
         return armWorks
     }
 
-    /// A cycle's end is recorded before the event is delivered: the answer may start the next cycle.
+    /// A cycle's end is recorded before the event is delivered: the answer may start the next cycle. A `.held` first
+    /// makes the offer its cycle has not made, and is dropped when the model said no.
     func push(_ event: UpdateEngineEvent) {
         if case .cycleEnded = event { cycleRuns = false }
+        if case .held = event {
+            if cycleRuns, cycleDownloads, !cycleOffered { offer("1.1.23") }
+            guard cycleAccepted else {
+                unconsented += 1
+                return
+            }
+        }
         onEvent?(event)
+        onDelivered?()
     }
 }
 
@@ -906,10 +945,14 @@ final class EffectLog {
 
     func stop() { isWatching = false }
 
+    /// Runs after each change reaches the model, as the process's publishing hook.
+    var onDelivered: (() -> Void)?
+
     func set(_ connected: Bool) {
         reading = connected
         guard isWatching else { return }
         onChange?(connected)
+        onDelivered?()
     }
 }
 

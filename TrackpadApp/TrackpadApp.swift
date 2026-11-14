@@ -17,7 +17,7 @@ enum TrackpadApp {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lifecycle: Lifecycle!
     private var shell: SettingsShell?
-    private var updater: Updater?
+    private var updater: Updater!
     private var moveDialog: MoveDialogPresenter?
     private let quitSignals = QuitSignals()
     private var event: NSAppleEventDescriptor? { NSAppleEventManager.shared().currentAppleEvent }
@@ -32,7 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let location = ThisCopy.location()
         let placement = Placement(
             build: CodeSignature.buildOfThisProcess(arguments: CommandLine.arguments), location: location)
-        updater = makeUpdater(placement: placement, location: location)
+        updater = Updater(
+            version: ThisCopy.version(), store: SettingsStore(defaults: .standard),
+            ports: makeUpdatePorts(placement: placement, location: location))
         let startAtLogin = StartAtLogin(item: SystemLoginItem(), defaults: .standard, placement: placement)
         lifecycle = Lifecycle(
             placement: placement, copies: SystemRunningCopies(), installer: ApplicationsInstaller(location: location),
@@ -42,8 +44,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         moveDialog = MoveDialogPresenter(lifecycle: lifecycle)
     }
 
-    /// The gate is a value only `UpdatableCopy.init?` can make, and `Updater` will not build without one.
-    private func makeUpdater(placement: Placement, location: Location) -> Updater? {
+    /// The gate is a value only `UpdatableCopy.init?` can make, and no engine reaches the model without one.
+    private func makeUpdatePorts(placement: Placement, location: Location) -> UpdatePorts? {
         let signer = CodeSignature.developerIDSigner()
         guard
             let copy = UpdatableCopy(
@@ -51,8 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 canReplaceItself: SparkleEngine.canReplace(location.running)),
             let signer
         else { return nil }
-        return Updater(copy, engine: SparkleEngine(bundle: location.running, signer: signer),
-            connection: SystemConnection())
+        return UpdatePorts(
+            copy, engine: SparkleEngine(bundle: location.running, signer: signer), connection: SystemConnection())
     }
 
     /// The open event exists only from here.

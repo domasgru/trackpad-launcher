@@ -16,8 +16,8 @@ import SwiftUI
 /// not row content: `FirstGestureArt` overlays the form at the gesture group's top-leading corner.
 struct SettingsView: View {
     let launcher: Launcher
-    /// Nil for a copy that never updates.
-    let updater: Updater?
+    /// Every copy has one; a copy that never updates has an updater that never shows a card.
+    let updater: Updater
     let actions: LauncherActions
 
     /// The label of the screen recording button. The form keeps the system's own fonts.
@@ -52,14 +52,14 @@ struct SettingsView: View {
     var body: some View {
         let drawn = launcher.drawnThumbCorner
         let gestureThumb = launcher.gestureThumbCorner
-        let updateCard = UpdateCardPreview.card(updater?.card)
+        let updateCard = UpdateCardPreview.card(updater.card)
         VStack(spacing: 0) {
             if updateCard != nil || launcher.showsAccessibilityHint {
                 WholeHeight {
                     VStack(spacing: Self.cardSpacing) {
                         if let card = updateCard {
                             UpdateCardView(
-                                card: card, updateNow: { updater?.updateNow() }, arrowDrift: actions.arrowDrift)
+                                card: card, updateNow: { updater.updateNow() }, arrowDrift: actions.arrowDrift)
                         }
                         if launcher.showsAccessibilityHint {
                             AccessibilityHintCard(actions: actions)

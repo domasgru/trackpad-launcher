@@ -56,7 +56,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         let twoAppRows: Int
     }
 
-    public init(launcher: Launcher, updater: Updater?, quit: @escaping () -> Void) {
+    public init(launcher: Launcher, updater: Updater, quit: @escaping () -> Void) {
         self.launcher = launcher
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let window = SettingsWindow()
@@ -92,7 +92,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                     Fit(
                         inactiveNotice: launcher.inactiveNotice, showsAccessibilityHint: launcher.showsAccessibilityHint,
                         isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint,
-                        card: UpdateCardPreview.card(updater?.card),
+                        card: UpdateCardPreview.card(updater.card),
                         hasMixedTrackpads: launcher.thumbCorners.hasMixedTrackpads,
                         twoAppRows: launcher.rows.filter { $0.lineCount == 2 }.count)
                 }) {
