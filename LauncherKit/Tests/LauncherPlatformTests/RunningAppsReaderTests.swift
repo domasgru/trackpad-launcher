@@ -43,13 +43,20 @@ import Testing
         var before = Self.dockApps()
         var read = reader.read()
         var after = Self.dockApps()
-        // Another app launching or quitting reaches the reader first: NSWorkspace's list changes only as the main run
-        // loop turns. So a difference gets a few turns of the loop to settle; one that stays is the reader's.
-        for _ in 0..<20 where Set(read.apps.map(Self.identity)) != Set(before.map(Self.identity)) {
+        var active = Self.activeDockApp()
+        // Another app launching, quitting or coming to the front reaches the reader first: NSWorkspace's list and its
+        // frontmost app change only as the main run loop turns. So a difference gets a few turns of the loop to
+        // settle; one that stays is the reader's.
+        func settled() -> Bool {
+            Set(read.apps.map(Self.identity)) == Set(before.map(Self.identity))
+                && (active == nil || read.apps.first.map(Self.identity) == active.map(Self.identity))
+        }
+        for _ in 0..<20 where !settled() {
             try? await Task.sleep(for: .milliseconds(100))
             before = Self.dockApps()
             read = reader.read()
             after = Self.dockApps()
+            active = Self.activeDockApp()
         }
         guard Set(before.map(Self.identity)) == Set(after.map(Self.identity)) else { return }
 
@@ -59,10 +66,18 @@ import Testing
             let entry = try #require(read.apps.first { Self.identity($0) == Self.identity(app) })
             #expect(entry.name == app.localizedName)
         }
-        if let active = NSWorkspace.shared.frontmostApplication, active.activationPolicy == .regular {
+        if let active {
             #expect(read.frontmost.map(Self.identity) == Self.identity(active))
             #expect(read.apps.first.map(Self.identity) == Self.identity(active))
         }
+    }
+
+    /// The active app when it is a Dock app, as the workspace last saw it.
+    private static func activeDockApp() -> NSRunningApplication? {
+        guard let active = NSWorkspace.shared.frontmostApplication, active.activationPolicy == .regular,
+            active.bundleIdentifier != nil, active.bundleURL != nil
+        else { return nil }
+        return active
     }
 
     @Test(arguments: [true, false])
@@ -101,11 +116,13 @@ import Testing
 
     @Test(.enabled(if: dockAppCount >= 3, "Fewer than three Dock apps are running"))
     func withoutTheOrderTheSeedAndThenEachActivationComeFirst() throws {
+        let activeBefore = Self.activeDockApp()
         let reader = RunningAppsReader(order: nil)
         #expect(reader.isTrackingActivations)
         let first = reader.read()
         #expect(Set(first.apps.map(Self.identity)) == Set(Self.dockApps().map(Self.identity)))
-        if let active = NSWorkspace.shared.frontmostApplication, active.activationPolicy == .regular {
+        // An app that came to the front meanwhile may not have reached the seed yet; only a steady one is checked.
+        if let active = Self.activeDockApp(), active.processIdentifier == activeBefore?.processIdentifier {
             #expect(first.apps.first.map(Self.identity) == Self.identity(active))
         }
 
