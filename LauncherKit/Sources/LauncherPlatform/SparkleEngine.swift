@@ -11,6 +11,7 @@ internal import Sparkle
 /// cycles the engine holds a delegate and a user driver and nothing else, and no schedule exists.
 @MainActor public final class SparkleEngine: UpdateEngine {
     public var onEvent: (@MainActor (UpdateEngineEvent) -> Void)?
+    public var shouldDownload: (@MainActor (AppVersion) -> Bool)?
     private let signer: Signer
     private let driver = UpdateUserDriver()
     private let delegate: UpdaterDelegate
@@ -36,6 +37,9 @@ internal import Sparkle
             prefix: prefix, signer: signer, identifier: host?.bundleIdentifier ?? signer.identifier)
         delegate.finished = { [weak self] updater, error in self?.cycleFinished(updater, error) }
         driver.ready = { [weak self] reply in self?.ready(reply) }
+        driver.offered = { [weak self] version, stage in
+            UpdateOffer.reply(for: stage, version: version, asking: self?.shouldDownload)
+        }
     }
 
     /// The read-only mirror of Sparkle's rule that a user can replace the bundle. Where a temporary failure makes the
@@ -114,11 +118,13 @@ internal import Sparkle
 
     /// Public codes of Sparkle's error domain: every failure of a request, feed or archive, reaches this level wrapped in
     /// SUDownloadError, so `feedRead` tells the feed's from the archive's.
-    nonisolated static func outcome(of error: (any Error)?, kind: CycleKind, feedRead: Bool, found: Bool) -> CycleOutcome {
+    nonisolated static func outcome(
+        of error: (any Error)?, kind: CycleKind, feedRead: Bool, found: AppVersion?
+    ) -> CycleOutcome {
         let code = (error as NSError?).flatMap { $0.domain == SUSparkleErrorDomain ? $0.code : nil }
         switch kind {
         case .probe:
-            if error == nil { return found ? .found : .nothingNew }
+            if error == nil { return found.map { .found($0) } ?? .nothingNew }
             switch code {
             case Int(SUError.noUpdateError.rawValue): return .nothingNew
             case Int(SUError.downloadError.rawValue): return .requestFailed
@@ -128,6 +134,7 @@ internal import Sparkle
             switch code {
             case Int(SUError.noUpdateError.rawValue): return .nothingNew
             case Int(SUError.downloadError.rawValue) where !feedRead: return .requestFailed
+            case Int(SUError.installationCanceledError.rawValue): return .cancelled
             default: return .failed
             }
         }
@@ -136,16 +143,21 @@ internal import Sparkle
 
 enum CycleKind: Equatable { case probe, update }
 
-/// What the offer's stage says to answer, as a value a test can call: Sparkle's own `SPUUserUpdateStage` mirrored.
+/// What the offer's stage and the model's answer say to reply, as a value a test can call: Sparkle's own
+/// `SPUUserUpdateStage` mirrored.
 enum UpdateOffer {
-    enum Stage { case notDownloaded, downloaded, installing }
-    enum Answer { case install, skip }
+    enum Stage: Sendable { case notDownloaded, downloaded, installing }
+    enum Reply: Sendable { case install, dismiss, skip }
 
-    /// An installer already running can only follow a crash, and an *install* would send Sparkle's own relaunch.
-    static func answer(for stage: Stage) -> Answer {
+    /// An installer already running can only follow a crash, and an *install* would send Sparkle's own relaunch: it is
+    /// skipped, and the model is never asked. Otherwise the model is asked once: *dismiss* when it declines or nobody
+    /// listens, which downloads nothing and remembers nothing, where *skip* would remember the version.
+    @MainActor static func reply(
+        for stage: Stage, version: AppVersion, asking shouldDownload: (@MainActor (AppVersion) -> Bool)?
+    ) -> Reply {
         switch stage {
-        case .notDownloaded, .downloaded: .install
         case .installing: .skip
+        case .notDownloaded, .downloaded: shouldDownload?(version) == true ? .install : .dismiss
         }
     }
 
@@ -231,7 +243,7 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
     var finished: ((SPUUpdater, (any Error)?) -> Void)?
     /// The facts of the cycle that runs.
     private(set) var feedRead = false
-    private(set) var found = false
+    private(set) var found: AppVersion?
     private(set) var genuine = false
     private var offer: ExpectedUpdate?
 
@@ -243,7 +255,7 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
 
     func beginCycle() {
         feedRead = false
-        found = false
+        found = nil
         genuine = false
         offer = nil
     }
@@ -261,7 +273,7 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
     func updater(_ updater: SPUUpdater, didFinishLoading appcast: SUAppcast) { feedRead = true }
 
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
-        found = true
+        found = AppVersion(item.displayVersionString)
         offer = ExpectedUpdate(
             version: item.displayVersionString, build: item.versionString,
             minimumMacOS: item.minimumSystemVersion ?? "")
@@ -293,6 +305,7 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
 /// Shows nothing and answers every question the same way each time. Sparkle's UI is not built into the vendored copy.
 @MainActor private final class UpdateUserDriver: NSObject, SPUUserDriver {
     var ready: ((@escaping (SPUUserUpdateChoice) -> Void) -> Void)?
+    var offered: ((AppVersion, UpdateOffer.Stage) -> UpdateOffer.Reply)?
 
     func show(_ request: SPUUpdatePermissionRequest, reply: @escaping (SUUpdatePermissionResponse) -> Void) {
         reply(
@@ -303,8 +316,11 @@ func isPinned(enclosure: URL?, under prefix: String?) -> Bool {
     func showUpdateFound(
         with appcastItem: SUAppcastItem, state: SPUUserUpdateState, reply: @escaping (SPUUserUpdateChoice) -> Void
     ) {
-        switch UpdateOffer.answer(for: UpdateOffer.stage(of: state.stage)) {
+        let stage = UpdateOffer.stage(of: state.stage)
+        let version = AppVersion(appcastItem.displayVersionString)
+        switch offered?(version, stage) ?? .dismiss {
         case .install: reply(.install)
+        case .dismiss: reply(.dismiss)
         case .skip: reply(.skip)
         }
     }

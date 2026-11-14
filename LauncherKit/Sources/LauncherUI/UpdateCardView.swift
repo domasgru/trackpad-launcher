@@ -19,7 +19,7 @@ struct UpdateCardView: View {
                 .font(.system(size: 11))
                 .lineSpacing(0)
                 .frame(minHeight: 14)
-            Button(card.buttonTitle, action: updateNow)
+            Button(action: updateNow) { ButtonTitleView(title: card.buttonTitle) }
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.roundedRectangle(radius: 6))
                 .disabled(!card.isButtonEnabled)

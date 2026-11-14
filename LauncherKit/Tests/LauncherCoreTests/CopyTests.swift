@@ -7,6 +7,37 @@ import LauncherCore
         #expect(Copy.openSettingsButton == "Open Settings…")
     }
 
+    @Test func aProgressLabelIsItsWordAndAnEllipsis() {
+        #expect(ProgressLabel.checking.word == "Checking")
+        #expect(ProgressLabel.checking.label == "Checking…")
+        #expect(ProgressLabel.updating.word == "Updating")
+        #expect(ProgressLabel.updating.label == "Updating…")
+    }
+
+    @Test func onlyAProgressTitleIsTypedAsWorkUnderWay() {
+        #expect(ButtonTitle.plain("Check for updates…").text == "Check for updates…")
+        #expect(ButtonTitle.progress(.checking).text == "Checking…")
+    }
+
+    @Test func theUpdatesRowIsTitledAndQuotesTheVersionWithoutABuildNumber() {
+        #expect(Copy.automaticUpdatesRow == "Automatic updates")
+        #expect(Copy.currentVersion("1.1.22") == "Current version: 1.1.22")
+    }
+
+    @Test func theCheckButtonTitlesItselfAndOnlyIdleIsEnabled() {
+        #expect(CheckButton.idle.title == .plain("Check for updates…"))
+        #expect(CheckButton.checking.title == .progress(.checking))
+        #expect(CheckButton.updating.title == .progress(.updating))
+        #expect(CheckButton.allCases.filter(\.isEnabled) == [.idle])
+    }
+
+    @Test func theInstallFailedAlertSaysTheRunningVersionKeepsRunning() {
+        let alert = UpdateAlert.installFailed(running: "1.1.22")
+        #expect(alert.title == "Couldn't install the update")
+        #expect(alert.message == "Trackpad App 1.1.22 keeps running. Try again later.")
+        #expect(alert.buttons.map(\.title) == ["OK"])
+    }
+
     @Test func theMixedTrackpadsRowsAreNamedAndTitled() {
         #expect(Copy.thumbCornerGroupTitle == "Thumb corner:")
         #expect(Copy.macBookTrackpadRow == "MacBook trackpad")

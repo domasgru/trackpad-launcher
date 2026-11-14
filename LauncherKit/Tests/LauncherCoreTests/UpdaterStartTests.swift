@@ -38,7 +38,7 @@ import Testing
 
         let process = world.launch(.atLogin, placement: row.placement, running: running)
 
-        #expect((process.updater != nil) == row.hasUpdater)
+        #expect((process.ports != nil) == row.hasUpdater)
         #expect(process.engine.updates == (row.updatesAtLogin ? 1 : 0))
         #expect(process.engine.probes == 0)
         if !row.updatesAtLogin {
@@ -128,7 +128,7 @@ import Testing
         let world = LifecycleWorld(accessGranted: false)
         let process = world.launch(.byHand, placement: .elsewhere, running: .release)
 
-        #expect(process.updater == nil)
+        #expect(process.ports == nil)
         #expect(process.moveDialog == .asking)
 
         process.answer(.move)

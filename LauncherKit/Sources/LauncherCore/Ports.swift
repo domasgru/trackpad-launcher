@@ -245,17 +245,31 @@ public enum Permission: Hashable, Sendable {
     func stop()
 }
 
-/// Sparkle, and the restart that follows it. No Sparkle type, feed value or version crosses this port.
-/// Real: SparkleEngine. Test: InMemoryUpdateEngine.
+/// The manual check's limit, on Core Animation's clock. A stop of the clock the system causes counts as passed.
+/// Real: LayerCheckDeadline. Test: InMemoryCheckDeadline.
+@MainActor public protocol CheckDeadline: AnyObject {
+    var onPassed: (@MainActor () -> Void)? { get set }
+    /// Calls `onPassed` once after `wait`, unless cancelled or armed again first.
+    func arm(for wait: Duration)
+    func cancel()
+}
+
+/// Sparkle, and the restart that follows it. No Sparkle type or feed value crosses this port; a version crosses only as
+/// `AppVersion`. Real: SparkleEngine. Test: InMemoryUpdateEngine.
 @MainActor public protocol UpdateEngine: AnyObject {
     var onEvent: (@MainActor (UpdateEngineEvent) -> Void)? { get set }
-    /// Reads the feed and downloads nothing. Answers once, `.cycleEnded(.found | .nothingNew | .requestFailed | .failed)`.
-    /// Never asked while a cycle runs.
+    /// An update cycle read the list and found `version`, the newest newer version; nothing has downloaded. True: the
+    /// download begins. False: nothing downloads and nothing is remembered (Sparkle's *dismiss*, never its *skip*);
+    /// `.cycleEnded` follows, whose outcome the model ignores. Asked at most once per update cycle, inside Sparkle's
+    /// callback, answered at once. Never asked for a probe, nor for an update Sparkle is already installing (a crash's
+    /// leftover, which the engine skips itself). Unset: false.
+    var shouldDownload: (@MainActor (AppVersion) -> Bool)? { get set }
+    /// Reads the list and downloads nothing. Answers once, `.cycleEnded`. Never asked while a cycle runs.
     func probe()
-    /// Reads the feed, downloads the newest version, refuses one that is not genuine before any installer exists, asks
+    /// Reads the list, asks `shouldDownload`, downloads, refuses an ungenuine archive before any installer exists, asks
     /// for an administrator when this user cannot replace the bundle, prepares it and pushes `.held`; the update
-    /// installs at this process's end. `.cycleEnded` follows only when `.held` is never reached or the held update is
-    /// discarded. Never asked while a cycle runs.
+    /// installs at this process's end. `.cycleEnded` follows only when `.held` is never reached, the offer is declined
+    /// or the held update is discarded. Never asked while a cycle runs.
     func update()
     /// Stops the held update: the installer is cancelled, then Sparkle's cycle ends `.failed`.
     func discardHeldUpdate()

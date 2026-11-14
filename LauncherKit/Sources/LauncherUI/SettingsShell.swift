@@ -26,6 +26,8 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
     private let icons = AppIcons { SettingsWindow.pinnedAppearance ?? NSApp.effectiveAppearance }
     private let switcherPresenter: SwitcherPresenter
     private let windowSwitcherPresenter: WindowSwitcherPresenter
+    /// Built with the resident, in the turn of the start's own opening, so a Debug preview alert shows over that window.
+    private let alerts: UpdateAlertPresenter
     private let window: SettingsWindow
     private var isShown = false
     private var observations: [Task<Void, Never>] = []
@@ -56,7 +58,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         let twoAppRows: Int
     }
 
-    public init(launcher: Launcher, updater: Updater?, quit: @escaping () -> Void) {
+    public init(launcher: Launcher, updater: Updater, quit: @escaping () -> Void) {
         self.launcher = launcher
         icons.renderOnMainActor(Self.iconTargets(launcher))
         let window = SettingsWindow()
@@ -77,6 +79,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
         self.window = window
         switcherPresenter = SwitcherPresenter()
         windowSwitcherPresenter = WindowSwitcherPresenter()
+        alerts = UpdateAlertPresenter(updater: updater)
         super.init()
         switcherPresenter.observe(launcher)
         windowSwitcherPresenter.observe(launcher)
@@ -92,7 +95,7 @@ public final class SettingsShell: NSObject, NSWindowDelegate {
                     Fit(
                         inactiveNotice: launcher.inactiveNotice, showsAccessibilityHint: launcher.showsAccessibilityHint,
                         isSwipeOn: launcher.isSwipeOn, screenRecordingHint: launcher.screenRecordingHint,
-                        card: UpdateCardPreview.card(updater?.card),
+                        card: UpdatesPreview.card(updater.card, isAutomaticUpdatesOn: updater.isAutomaticUpdatesOn),
                         hasMixedTrackpads: launcher.thumbCorners.hasMixedTrackpads,
                         twoAppRows: launcher.rows.filter { $0.lineCount == 2 }.count)
                 }) {

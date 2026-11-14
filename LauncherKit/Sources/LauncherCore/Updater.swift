@@ -12,6 +12,44 @@ public struct UpdatableCopy: Equatable, Sendable {
     }
 }
 
+/// A version as people read it ("1.1.22"), never the build number: `CFBundleShortVersionString`, or the feed's
+/// `sparkle:shortVersionString`. Made at the two boundaries that read one. Display text only: Sparkle compares builds.
+public struct AppVersion: Equatable, Sendable, CustomStringConvertible {
+    public let description: String
+
+    public init(_ text: String) { description = text }
+}
+
+/// Work under way: a still word, then three dots that step while it runs.
+public enum ProgressLabel: Equatable, Sendable {
+    case checking
+    case updating
+
+    /// The part that never moves.
+    public var word: String {
+        switch self {
+        case .checking: Copy.checkingWord
+        case .updating: Copy.updatingWord
+        }
+    }
+
+    /// What VoiceOver reads and Reduce motion shows.
+    public var label: String { word + "…" }
+}
+
+/// A button's title. Only `.progress` animates; an ellipsis meaning "opens something" is `.plain`.
+public enum ButtonTitle: Equatable, Sendable {
+    case plain(String)
+    case progress(ProgressLabel)
+
+    public var text: String {
+        switch self {
+        case .plain(let text): text
+        case .progress(let progress): progress.label
+        }
+    }
+}
+
 /// The update card the settings window shows, as values.
 public enum UpdateCard: Equatable, Sendable {
     case available
@@ -19,24 +57,104 @@ public enum UpdateCard: Equatable, Sendable {
 
     public var text: String { Copy.updateAvailable }
 
-    public var buttonTitle: String {
+    public var buttonTitle: ButtonTitle {
         switch self {
-        case .available: Copy.updateNowButton
-        case .updating: Copy.updatingButton
+        case .available: .plain(Copy.updateNowButton)
+        case .updating: .progress(.updating)
         }
     }
 
     public var isButtonEnabled: Bool { self == .available }
 }
 
+/// The row's *Check for updates…* button, in every copy.
+public enum CheckButton: Equatable, Sendable, CaseIterable {
+    case idle, checking, updating
+
+    public var title: ButtonTitle {
+        switch self {
+        case .idle: .plain(Copy.checkForUpdatesButton)
+        case .checking: .progress(.checking)
+        case .updating: .progress(.updating)
+        }
+    }
+
+    public var isEnabled: Bool { self == .idle }
+}
+
+/// An update alert, as values. Only a *Check for updates…* click, or the download its *Update* asked for, raises one,
+/// and only while the window is open.
+public enum UpdateAlert: Equatable, Sendable {
+    /// A waiting manual check heard "newer".
+    case updateAvailable(from: AppVersion, to: AppVersion)
+    /// A waiting manual check heard "nothing new", or the alert's *Update* re-read the list and found nothing.
+    case upToDate(AppVersion)
+    /// A manual check failed, or heard nothing within its limit.
+    case checkFailed
+    /// A download the alert's *Update* asked for ended without installing, the window open.
+    case installFailed(running: AppVersion)
+    /// *Check for updates…* in a copy without ports.
+    case unavailable
+
+    public var title: String {
+        switch self {
+        case .updateAvailable: Copy.restartToUpdateTitle
+        case .upToDate: Copy.upToDateTitle
+        case .checkFailed: Copy.checkFailedTitle
+        case .installFailed: Copy.installFailedTitle
+        case .unavailable: Copy.updatesUnavailableTitle
+        }
+    }
+
+    public var message: String {
+        switch self {
+        case .updateAvailable(let running, let new): Copy.restartToUpdateMessage(from: running, to: new)
+        case .upToDate(let running): Copy.upToDateMessage(running)
+        case .checkFailed: Copy.checkFailedMessage
+        case .installFailed(let running): Copy.installFailedMessage(running: running)
+        case .unavailable: Copy.updatesUnavailableMessage
+        }
+    }
+
+    /// In AppKit's order: the first is the default. `isCancel` takes Escape.
+    public var buttons: [AlertButton] {
+        switch self {
+        case .updateAvailable:
+            [
+                AlertButton(title: Copy.updateButton, answer: .update, isCancel: false),
+                AlertButton(title: Copy.notNowButton, answer: .dismissed, isCancel: true),
+            ]
+        case .upToDate, .checkFailed, .installFailed, .unavailable:
+            [AlertButton(title: Copy.okButton, answer: .dismissed, isCancel: false)]
+        }
+    }
+}
+
+public struct AlertButton: Equatable, Sendable {
+    public let title: String
+    public let answer: AlertAnswer
+    public let isCancel: Bool
+
+    public init(title: String, answer: AlertAnswer, isCancel: Bool) {
+        self.title = title
+        self.answer = answer
+        self.isCancel = isCancel
+    }
+}
+
+/// `.dismissed`: *Not now*, *OK*, Escape, or a session the presenter ended.
+public enum AlertAnswer: Equatable, Sendable { case update, dismissed }
+
 public enum CycleOutcome: Equatable, Sendable {
-    /// A probe found a newer version. Never an update's outcome.
-    case found
+    /// A probe found a newer version: the newest, as its display version. Never an update's outcome.
+    case found(AppVersion)
     case nothingNew
-    /// The feed's request failed: what a lost connection looks like, and what earns a login start's retry.
+    /// The feed's request failed: what a lost connection looks like, and the only outcome that earns a login start's
+    /// retry.
     case requestFailed
-    /// Anything after the feed was read: a download that failed, a refused enclosure, a cancelled prompt, a bad
-    /// signature, a discarded update.
+    /// The user cancelled the administrator prompt. An update's outcome only.
+    case cancelled
+    /// Anything else after the feed was read: a download that failed, a refused or ungenuine archive, a discarded update.
     case failed
 }
 
@@ -48,167 +166,440 @@ public enum UpdateEngineEvent: Equatable, Sendable {
     case cycleEnded(CycleOutcome)
 }
 
-/// Owns every update decision. Exists only for a copy the gate lets through.
+/// What an update-capable copy updates through. Only the gate's value makes one, so a copy the gate turns away has no
+/// engine and no path monitor: nothing in it can make a request.
+@MainActor public struct UpdatePorts {
+    let engine: any UpdateEngine
+    let connection: any Connection
+    let deadline: any CheckDeadline
+    let canReplaceItself: Bool
+
+    public init(
+        _ copy: UpdatableCopy, engine: any UpdateEngine, connection: any Connection, deadline: any CheckDeadline
+    ) {
+        self.engine = engine
+        self.connection = connection
+        self.deadline = deadline
+        canReplaceItself = copy.canReplaceItself
+    }
+}
+
+/// Owns every update decision, in every copy. Without ports its phase never leaves `resting`, so it makes no request.
 @MainActor @Observable
 public final class Updater {
+    public let version: AppVersion
     /// The process must end now, through `end()`. Set once by `Lifecycle`.
     @ObservationIgnored public var onHandOver: (@MainActor () -> Void)?
-    /// What the settings window shows above its rows. Derived from the phase, so no phase can show a stale card.
+
+    /// What the settings window shows above its rows. Derived, so no state can show a stale card.
     public var card: UpdateCard? {
-        switch phase {
-        case .offering: .available
-        case .updatingFromCard: .updating
-        default: nil
+        switch state.phase {
+        case .installing(let install): return install.showsCard ? .updating : nil
+        case .updatingAtLogin, .handedOver: return nil
+        default: break
         }
+        if let install = state.queued { return install.showsCard ? .updating : nil }
+        return state.window == .card ? .available : nil
     }
 
-    @ObservationIgnored private let engine: any UpdateEngine
-    @ObservationIgnored private let connection: any Connection
-    @ObservationIgnored private let canReplaceItself: Bool
+    /// The row's button. Derived from the same state as the card, so the two never disagree.
+    public var checkButton: CheckButton {
+        switch state.phase {
+        case .installing, .updatingAtLogin, .handedOver: return .updating
+        default: break
+        }
+        if state.queued != nil { return .updating }
+        return state.manualWaits ? .checking : .idle
+    }
+
+    /// The alert that shows, if any: at most one, and only while the window is open.
+    public var alert: UpdateAlert? { state.alert }
+
+    static let checkLimit = Duration.seconds(30)
+
+    /// The Automatic updates switch. Read once at init; saved at once by `setAutomaticUpdates`.
+    public private(set) var isAutomaticUpdatesOn: Bool
+
+    @ObservationIgnored private let ports: UpdatePorts?
+    @ObservationIgnored private let store: SettingsStore
     @ObservationIgnored private weak var launcher: Launcher?
+    private var state = State()
 
-    /// A login start's wait for a connection, carried through the phases it can pass through: none; owed with this
-    /// reading's retry unmade; owed with it made, so only a drop and a return earn another.
-    private enum RetryDebt: Equatable { case none, owed(spent: Bool) }
+    private struct State: Equatable {
+        var phase = Phase.resting
+        /// What the open window has at stake in the list's next answer. `.none` while it is closed or the switch is off.
+        var window = WindowStake.none
+        /// A download the user asked for while a cycle ran; it starts when the engine is free.
+        var queued: Install?
+        /// A *Check for updates…* click waits for the list's answer: *Checking…*, and the deadline is armed.
+        var manualWaits = false
+        var alert: UpdateAlert?
+    }
 
+    /// What the engine is doing, and what a login start is still owed. A cycle runs in every phase but `resting`,
+    /// `awaitingConnection` and `handedOver`.
     private enum Phase: Equatable {
         case resting
         /// The login check failed for the network; the path monitor runs. `spent`: this reading's one retry has been
         /// made, so only a drop and a return earn another. One bit; no timer, no backoff.
         case awaitingConnection(spent: Bool)
-        /// The login cycle runs: the check, the download, the preparation. `retry`: a returned connection started it, so
-        /// the watch stays through it; `dropped`: the connection fell during that retry, so its network failure owes a
-        /// fresh retry rather than a spent one.
-        case updatingAtLogin(retry: Bool, dropped: Bool)
-        /// Terminal. The restart is armed and the process is ending in this same turn.
+        /// A read that downloads nothing. `debt`: what an interrupted login wait still owes.
+        case checking(debt: RetryDebt)
+        /// The login cycle reads the list. `retry`: a returned connection started it, so the watch stays through it;
+        /// `dropped`: the connection fell during that retry, so its network failure owes a fresh retry rather than a
+        /// spent one.
+        case checkingAtLogin(retry: Bool, dropped: Bool)
+        /// The switch went off while the login cycle read the list. It cannot be stopped, so it runs on; its offer is
+        /// declined, so nothing downloads. `listAnswered`: the offer has come.
+        case abandonedAtLogin(listAnswered: Bool)
+        /// The login update: its offer was taken, it downloads, is checked and prepared. Silent.
+        case updatingAtLogin
+        /// A download the user asked for: it reads the list once more, then downloads, the newest it finds.
+        case installing(Install)
+        /// Terminal: the restart is armed and the process ends in this turn.
         case handedOver
-        /// The window's check runs. `debt`: what a login start's wait it interrupted still owes; any check that
-        /// completes settles it.
-        case probing(debt: RetryDebt)
-        /// The window closed during its check. The check still runs, its answer is ignored, and no second check starts
-        /// until it has come: one cycle at a time.
-        case droppedProbe(debt: RetryDebt)
-        /// The card shows *Update available*. Nothing of Sparkle exists.
-        case offering
-        /// *Update now*'s cycle runs; the card shows *Updating…*, window open or closed.
-        case updatingFromCard
     }
 
-    private var phase = Phase.resting
+    /// A login start's wait for a connection, carried through the phases it can pass through: none; owed with this
+    /// reading's retry unmade; owed with it made, so only a drop and a return earn another.
+    private enum RetryDebt: Equatable { case none, owed(spent: Bool) }
 
-    public init(_ copy: UpdatableCopy, engine: any UpdateEngine, connection: any Connection) {
-        self.engine = engine
-        self.connection = connection
-        canReplaceItself = copy.canReplaceItself
+    /// A download the user asked for, and whether the card reads *Updating…* through it.
+    private enum Install: Equatable {
+        case fromCard
+        /// `overCard`: the card was showing when *Update* was clicked.
+        case fromAlert(overCard: Bool)
+        var showsCard: Bool { self == .fromCard || self == .fromAlert(overCard: true) }
+    }
+
+    private enum WindowStake: Equatable {
+        case none
+        /// This opening's check has not answered yet.
+        case check
+        /// It found a newer version: the card shows *Update available*.
+        case card
+    }
+
+    public init(version: AppVersion, store: SettingsStore, ports: UpdatePorts?) {
+        self.version = version
+        self.store = store
+        self.ports = ports
+        isAutomaticUpdatesOn = store.loadAutomaticUpdates()
     }
 
     /// Once, from a resident only. A login start of a copy that can replace itself runs the update cycle whatever the
-    /// window is doing; a start with its window open makes one check; every other start makes no request.
+    /// window is doing; any other start with its window open goes through the open edge, standing in for the first
+    /// window edge, which never reaches `onWindowEdge`. A start after an update makes no request. Without ports it
+    /// only watches the window.
     public func start(watching launcher: Launcher, opening: Opening, opensWindow: Bool) {
         self.launcher = launcher
-        engine.onEvent = { [unowned self] event in handle(event) }
-        connection.onChange = { [unowned self] connected in connectionChanged(connected) }
         launcher.onWindowEdge = { [unowned self] isOpen in windowEdge(isOpen) }
+        guard let ports else { return }
+        ports.deadline.onPassed = { [unowned self] in deadlinePassed() }
+        ports.engine.onEvent = { [unowned self] event in handle(event) }
+        ports.engine.shouldDownload = { [unowned self] version in offered(version) }
+        ports.connection.onChange = { [unowned self] connected in connectionChanged(connected) }
         switch opening {
-        case .atLogin where canReplaceItself:
-            enter(.updatingAtLogin(retry: false, dropped: false))
-            engine.update()
+        case .atLogin where ports.canReplaceItself && isAutomaticUpdatesOn:
+            begin(.checkingAtLogin(retry: false, dropped: false))
         case .afterUpdate:
             break
         case .atLogin, .byHand:
-            if opensWindow { probe(owing: .none) }
+            if opensWindow { windowEdge(true) }
         }
     }
 
     /// *Update now*: only while the card offers it.
     public func updateNow() {
-        guard phase == .offering else { return }
-        enter(.updatingFromCard)
-        engine.update()
+        guard card == .available else { return }
+        want(.fromCard)
+        settle()
     }
 
-    private func probe(owing debt: RetryDebt) {
-        enter(.probing(debt: debt))
-        engine.probe()
+    /// *Check for updates…*, whatever the switch says. Without ports it only says so. Otherwise it waits for one read of
+    /// the list, which may be one already running, and never adds the card.
+    public func checkForUpdates() {
+        guard state.alert == nil else { return }
+        var next = state
+        guard ports != nil else {
+            next.alert = .unavailable
+            enter(next)
+            return
+        }
+        guard checkButton == .idle else { return }
+        next.manualWaits = true
+        if next.window == .check { next.window = .none }
+        enter(next)
+        settle()
     }
+
+    /// Ignored unless `alert` is still the one that shows, so a session the model withdrew answers nothing.
+    public func answer(_ answer: AlertAnswer, to alert: UpdateAlert) {
+        guard state.alert == alert else { return }
+        var next = state
+        next.alert = nil
+        enter(next)
+        if answer == .update, case .updateAvailable = alert {
+            want(.fromAlert(overCard: state.window == .card))
+        }
+        settle()
+    }
+
+    /// Saved at once, on a change only. Off drops what waits on a check and keeps every download; on starts nothing.
+    public func setAutomaticUpdates(on: Bool) {
+        guard on != isAutomaticUpdatesOn else { return }
+        store.saveAutomaticUpdates(on)
+        isAutomaticUpdatesOn = on
+        guard ports != nil, !on else { return }
+        var next = state
+        next.window = .none
+        switch state.phase {
+        case .awaitingConnection: next.phase = .resting
+        case .checking: next.phase = .checking(debt: .none)
+        case .checkingAtLogin: next.phase = .abandonedAtLogin(listAnswered: false)
+        case .resting, .abandonedAtLogin, .updatingAtLogin, .installing, .handedOver: break
+        }
+        enter(next)
+        settle()
+    }
+
+    // MARK: Inputs
 
     private func windowEdge(_ isOpen: Bool) {
-        switch (phase, isOpen) {
-        case (.resting, true): probe(owing: .none)
-        case (.awaitingConnection(let spent), true): probe(owing: .owed(spent: spent))
-        case (.droppedProbe(let debt), true): enter(.probing(debt: debt))
-        case (.probing(let debt), false): enter(.droppedProbe(debt: debt))
-        case (.offering, false): enter(.resting)
-        default: break
+        var next = state
+        if isOpen {
+            guard ports != nil, isAutomaticUpdatesOn, state.queued == nil else { return }
+            switch state.phase {
+            case .checkingAtLogin, .updatingAtLogin, .installing, .handedOver: return
+            case .resting, .awaitingConnection, .checking, .abandonedAtLogin: break
+            }
+            next.window = .check
+        } else {
+            next.window = .none
+            next.manualWaits = false
+            next.alert = nil
         }
+        enter(next)
+        settle()
+    }
+
+    /// The check's limit: it fails the wait, never the cycle, which runs on with no one waiting.
+    private func deadlinePassed() {
+        guard state.manualWaits else { return }
+        var next = state
+        next.manualWaits = false
+        next.alert = .checkFailed
+        enter(next)
+        settle()
     }
 
     private func handle(_ event: UpdateEngineEvent) {
-        switch (phase, event) {
+        var next = state
+        switch (state.phase, event) {
         case (.updatingAtLogin, .held):
             handOver(opensWindow: launcher?.isWindowOpen ?? false)
-        case (.updatingFromCard, .held):
+            return
+        case (.installing, .held):
             handOver(opensWindow: true)
-        case (.updatingAtLogin(let retry, let dropped), .cycleEnded(let outcome)):
-            enter(outcome == .requestFailed ? .awaitingConnection(spent: retry && !dropped) : .resting)
-        case (.probing(let debt), .cycleEnded(let outcome)):
-            enter(outcome == .found ? .offering : afterCheck(outcome, owing: debt))
-        case (.droppedProbe(let debt), .cycleEnded(let outcome)):
-            enter(afterCheck(outcome, owing: debt))
-        case (.updatingFromCard, .cycleEnded(let outcome)):
-            enter(outcome != .nothingNew && launcher?.isWindowOpen == true ? .offering : .resting)
-        default: break
-        }
-    }
-
-    private func afterCheck(_ outcome: CycleOutcome, owing debt: RetryDebt) -> Phase {
-        if outcome == .requestFailed, case .owed(let spent) = debt { return .awaitingConnection(spent: spent) }
-        return .resting
-    }
-
-    private func handOver(opensWindow: Bool) {
-        guard engine.armRestart(opensWindow: opensWindow) else {
-            // Refused: the process never ends without a restart armed, so the held update goes; the cycle then ends
-            // `.failed`.
-            engine.discardHeldUpdate()
+            return
+        case (.checking(let debt), .cycleEnded(let outcome)):
+            listAnswered(outcome, into: &next)
+            if outcome == .requestFailed, case .owed(let spent) = debt {
+                next.phase = .awaitingConnection(spent: spent)
+            } else {
+                next.phase = .resting
+            }
+        case (.checkingAtLogin(let retry, let dropped), .cycleEnded(let outcome)):
+            listAnswered(outcome, into: &next)
+            next.phase = outcome == .requestFailed ? .awaitingConnection(spent: retry && !dropped) : .resting
+        case (.abandonedAtLogin(false), .cycleEnded(let outcome)):
+            listAnswered(outcome, into: &next)
+            next.phase = .resting
+        case (.abandonedAtLogin(true), .cycleEnded), (.updatingAtLogin, .cycleEnded):
+            next.phase = .resting
+        case (.installing(let install), .cycleEnded(let outcome)):
+            installEnded(install, outcome, into: &next)
+            next.phase = .resting
+        default:
             return
         }
-        enter(.handedOver)
-        onHandOver?()
+        enter(next)
+        settle()
     }
 
     private func connectionChanged(_ connected: Bool) {
-        switch phase {
+        switch state.phase {
         case .awaitingConnection(let spent):
             if !connected {
-                phase = .awaitingConnection(spent: false)
+                state.phase = .awaitingConnection(spent: false)
             } else if !spent {
-                // Written before the cycle: the engine may answer inside the call.
-                enter(.updatingAtLogin(retry: true, dropped: false))
-                engine.update()
+                begin(.checkingAtLogin(retry: true, dropped: false))
             }
-        case .updatingAtLogin(true, _):
-            if !connected { phase = .updatingAtLogin(retry: true, dropped: true) }
+        case .checkingAtLogin(true, _):
+            if !connected { state.phase = .checkingAtLogin(retry: true, dropped: true) }
         default: break
+        }
+    }
+
+    /// `shouldDownload`, asked inside Sparkle's `showUpdateFound`.
+    private func offered(_ version: AppVersion) -> Bool {
+        switch state.phase {
+        case .checkingAtLogin:
+            var next = state
+            listAnswered(.found(version), into: &next)
+            next.window = .none
+            next.phase = .updatingAtLogin
+            enter(next)
+            settle()
+            return true
+        case .abandonedAtLogin(false):
+            var next = state
+            listAnswered(.found(version), into: &next)
+            next.phase = .abandonedAtLogin(listAnswered: true)
+            enter(next)
+            settle()
+            return false
+        case .installing:
+            return true
+        default:
+            return false
+        }
+    }
+
+    // MARK: Transitions
+
+    /// After every input. A free engine takes what waits: first a download the user asked for, then a check someone
+    /// waits for. Idempotent.
+    private func settle() {
+        guard ports != nil else { return }
+        let debt: RetryDebt
+        switch state.phase {
+        case .resting: debt = .none
+        case .awaitingConnection(let spent): debt = .owed(spent: spent)
+        default: return
+        }
+        if let install = state.queued {
+            var next = state
+            next.queued = nil
+            enter(next)
+            begin(.installing(install))
+        } else if state.manualWaits || state.window == .check {
+            begin(.checking(debt: debt))
+        }
+    }
+
+    /// The one place a cycle starts, and only from a phase that runs none. The phase is entered first: the engine may
+    /// answer inside the call.
+    private func begin(_ next: Phase) {
+        guard let ports else { return }
+        switch state.phase {
+        case .resting, .awaitingConnection: break
+        default: return
+        }
+        var entered = state
+        entered.phase = next
+        enter(entered)
+        switch next {
+        case .checking: ports.engine.probe()
+        case .checkingAtLogin, .installing: ports.engine.update()
+        case .resting, .awaitingConnection, .abandonedAtLogin, .updatingAtLogin, .handedOver: break
+        }
+    }
+
+    /// The one place a lasting effect starts or stops, from the diff of `state` and `next`: the check's deadline runs
+    /// while a click waits; the connection watch runs in `awaitingConnection` and through a login retry. The watch is
+    /// last, because it pushes the present reading inside the call.
+    private func enter(_ next: State) {
+        let previous = state.phase
+        let wasWaiting = state.manualWaits
+        state = next
+        guard let ports else { return }
+        if !wasWaiting, next.manualWaits {
+            ports.deadline.arm(for: Self.checkLimit)
+        } else if wasWaiting, !next.manualWaits {
+            ports.deadline.cancel()
+        }
+        if case .awaitingConnection = next.phase {
+            if case .awaitingConnection = previous { return }
+            ports.connection.watch()
+        } else if watches(previous), !watches(next.phase) {
+            ports.connection.stop()
         }
     }
 
     private func watches(_ phase: Phase) -> Bool {
         switch phase {
-        case .awaitingConnection, .updatingAtLogin(retry: true, _): true
+        case .awaitingConnection, .checkingAtLogin(retry: true, _): true
         default: false
         }
     }
 
-    /// The one place a lasting effect starts or stops, so leaving a phase cannot leave one armed.
-    private func enter(_ next: Phase) {
-        let previous = phase
-        phase = next
-        // After the assignment: the watch pushes the present reading inside the call.
-        if case .awaitingConnection = next {
-            connection.watch()
-        } else if watches(previous), !watches(next) {
-            connection.stop()
+    /// The list answered. Everyone waiting takes the answer; a read nobody waits for answers no one.
+    private func listAnswered(_ outcome: CycleOutcome, into next: inout State) {
+        if next.manualWaits {
+            next.manualWaits = false
+            switch outcome {
+            case .found(let new): next.alert = .updateAvailable(from: version, to: new)
+            case .nothingNew: next.alert = .upToDate(version)
+            case .requestFailed, .cancelled, .failed: next.alert = .checkFailed
+            }
         }
+        switch (next.window, outcome) {
+        case (.check, .found): next.window = .card
+        case (.check, _): next.window = .none
+        case (.card, .nothingNew): next.window = .none
+        default: break
+        }
+    }
+
+    /// *Update now* and the alert's *Update*. At most one download.
+    private func want(_ install: Install) {
+        switch state.phase {
+        case .installing, .handedOver: return
+        case .updatingAtLogin:
+            // The running login download becomes the user's: it hands over with the window and reports a failure.
+            var next = state
+            next.manualWaits = false
+            next.phase = .installing(install)
+            enter(next)
+            return
+        default: break
+        }
+        guard state.queued == nil else { return }
+        var next = state
+        next.manualWaits = false
+        next.window = .none
+        next.queued = install
+        enter(next)
+    }
+
+    private func installEnded(_ install: Install, _ outcome: CycleOutcome, into next: inout State) {
+        let isWindowOpen = launcher?.isWindowOpen == true
+        if install.showsCard, outcome != .nothingNew, isWindowOpen, isAutomaticUpdatesOn {
+            next.window = .card
+        }
+        if case .fromAlert = install, isWindowOpen {
+            switch outcome {
+            case .nothingNew: next.alert = .upToDate(version)
+            case .cancelled: break
+            default: next.alert = .installFailed(running: version)
+            }
+        }
+    }
+
+    /// Arm, or discard and let the cycle's `.failed` resolve through the phase.
+    private func handOver(opensWindow: Bool) {
+        guard let ports else { return }
+        guard ports.engine.armRestart(opensWindow: opensWindow) else {
+            // Refused: the process never ends without a restart armed, so the held update goes; the cycle then ends
+            // `.failed`.
+            ports.engine.discardHeldUpdate()
+            return
+        }
+        var next = state
+        next.phase = .handedOver
+        next.alert = nil
+        enter(next)
+        onHandOver?()
     }
 }

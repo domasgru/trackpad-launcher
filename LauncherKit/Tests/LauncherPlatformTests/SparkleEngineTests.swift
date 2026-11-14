@@ -10,34 +10,35 @@ import Testing
         let domain: String?
         let code: Int
         let feedRead: Bool
-        let found: Bool
+        let found: AppVersion?
         let outcome: CycleOutcome
         var testDescription: String {
-            "\(kind) \(domain ?? "no error") \(code) feedRead=\(feedRead) found=\(found)"
+            "\(kind) \(domain ?? "no error") \(code) feedRead=\(feedRead) found=\(found?.description ?? "nothing")"
         }
     }
 
     private static let sparkle = "SUSparkleErrorDomain"
 
     nonisolated static let outcomes: [OutcomeRow] = [
-        OutcomeRow(kind: .probe, domain: nil, code: 0, feedRead: true, found: true, outcome: .found),
-        OutcomeRow(kind: .probe, domain: nil, code: 0, feedRead: true, found: false, outcome: .nothingNew),
-        OutcomeRow(kind: .probe, domain: sparkle, code: 1001, feedRead: true, found: false, outcome: .nothingNew),
-        OutcomeRow(kind: .probe, domain: sparkle, code: 2001, feedRead: false, found: false, outcome: .requestFailed),
-        OutcomeRow(kind: .probe, domain: sparkle, code: 2001, feedRead: true, found: false, outcome: .requestFailed),
-        OutcomeRow(kind: .probe, domain: sparkle, code: 1000, feedRead: false, found: false, outcome: .failed),
-        OutcomeRow(kind: .probe, domain: sparkle, code: 4005, feedRead: true, found: true, outcome: .failed),
-        OutcomeRow(kind: .probe, domain: "NSURLErrorDomain", code: 2001, feedRead: false, found: false, outcome: .failed),
-        OutcomeRow(kind: .update, domain: sparkle, code: 1001, feedRead: true, found: false, outcome: .nothingNew),
-        OutcomeRow(kind: .update, domain: sparkle, code: 2001, feedRead: false, found: false, outcome: .requestFailed),
-        OutcomeRow(kind: .update, domain: nil, code: 0, feedRead: true, found: true, outcome: .failed),
-        OutcomeRow(kind: .update, domain: sparkle, code: 2001, feedRead: true, found: true, outcome: .failed),
-        OutcomeRow(kind: .update, domain: sparkle, code: 3001, feedRead: true, found: true, outcome: .failed),
-        OutcomeRow(kind: .update, domain: sparkle, code: 4004, feedRead: true, found: true, outcome: .failed),
-        OutcomeRow(kind: .update, domain: sparkle, code: 4005, feedRead: true, found: true, outcome: .failed),
-        OutcomeRow(kind: .update, domain: sparkle, code: 4007, feedRead: true, found: true, outcome: .failed),
-        OutcomeRow(kind: .update, domain: sparkle, code: 4008, feedRead: true, found: true, outcome: .failed),
-        OutcomeRow(kind: .update, domain: "NSURLErrorDomain", code: 2001, feedRead: false, found: false, outcome: .failed),
+        OutcomeRow(kind: .probe, domain: nil, code: 0, feedRead: true, found: AppVersion("1.1.23"), outcome: .found(AppVersion("1.1.23"))),
+        OutcomeRow(kind: .probe, domain: nil, code: 0, feedRead: true, found: nil, outcome: .nothingNew),
+        OutcomeRow(kind: .probe, domain: sparkle, code: 1001, feedRead: true, found: nil, outcome: .nothingNew),
+        OutcomeRow(kind: .probe, domain: sparkle, code: 2001, feedRead: false, found: nil, outcome: .requestFailed),
+        OutcomeRow(kind: .probe, domain: sparkle, code: 2001, feedRead: true, found: nil, outcome: .requestFailed),
+        OutcomeRow(kind: .probe, domain: sparkle, code: 1000, feedRead: false, found: nil, outcome: .failed),
+        OutcomeRow(kind: .probe, domain: sparkle, code: 4005, feedRead: true, found: AppVersion("1.1.23"), outcome: .failed),
+        OutcomeRow(kind: .probe, domain: sparkle, code: 4007, feedRead: true, found: nil, outcome: .failed),
+        OutcomeRow(kind: .probe, domain: "NSURLErrorDomain", code: 2001, feedRead: false, found: nil, outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 1001, feedRead: true, found: nil, outcome: .nothingNew),
+        OutcomeRow(kind: .update, domain: sparkle, code: 2001, feedRead: false, found: nil, outcome: .requestFailed),
+        OutcomeRow(kind: .update, domain: nil, code: 0, feedRead: true, found: AppVersion("1.1.23"), outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 2001, feedRead: true, found: AppVersion("1.1.23"), outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 3001, feedRead: true, found: AppVersion("1.1.23"), outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 4004, feedRead: true, found: AppVersion("1.1.23"), outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 4005, feedRead: true, found: AppVersion("1.1.23"), outcome: .failed),
+        OutcomeRow(kind: .update, domain: sparkle, code: 4007, feedRead: true, found: AppVersion("1.1.23"), outcome: .cancelled),
+        OutcomeRow(kind: .update, domain: sparkle, code: 4008, feedRead: true, found: AppVersion("1.1.23"), outcome: .failed),
+        OutcomeRow(kind: .update, domain: "NSURLErrorDomain", code: 2001, feedRead: false, found: nil, outcome: .failed),
     ]
 
     @Test(arguments: outcomes)

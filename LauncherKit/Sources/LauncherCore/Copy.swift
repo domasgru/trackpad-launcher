@@ -23,7 +23,32 @@ public enum Copy {
     /// The update card's text and its button's two titles.
     public static let updateAvailable = "Update available"
     public static let updateNowButton = "Update now"
-    public static let updatingButton = "Updating…"
+    public static let checkingWord = "Checking"
+    public static let updatingWord = "Updating"
+
+    /// The settings window's Automatic updates row.
+    public static let automaticUpdatesRow = "Automatic updates"
+    public static func currentVersion(_ version: AppVersion) -> String { "Current version: \(version)" }
+    public static let checkForUpdatesButton = "Check for updates…"
+
+    /// The update alerts.
+    public static let restartToUpdateTitle = "Restart Trackpad App to update?"
+    public static func restartToUpdateMessage(from running: AppVersion, to new: AppVersion) -> String {
+        "Update Trackpad App from \(running) to \(new).\n\nTrackpad App will quit to install the update and open again."
+    }
+    public static let upToDateTitle = "Trackpad App is up to date"
+    public static func upToDateMessage(_ running: AppVersion) -> String { "You're running the latest version, \(running)." }
+    public static let checkFailedTitle = "Couldn't check for updates"
+    public static let checkFailedMessage = "Check your internet connection and try again."
+    public static let installFailedTitle = "Couldn't install the update"
+    public static func installFailedMessage(running: AppVersion) -> String {
+        "Trackpad App \(running) keeps running. Try again later."
+    }
+    public static let updatesUnavailableTitle = "Updates aren't available for this copy"
+    public static let updatesUnavailableMessage = "This copy of Trackpad App can't update itself."
+    public static let updateButton = "Update"
+    public static let notNowButton = "Not now"
+    public static let okButton = "OK"
 
     /// The settings window's thumb corner row and its pop-up's choices.
     public static let thumbCornerRow = "Thumb corner"

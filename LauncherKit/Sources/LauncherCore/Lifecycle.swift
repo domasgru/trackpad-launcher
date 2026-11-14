@@ -150,7 +150,7 @@ public final class Lifecycle {
     @ObservationIgnored private let installer: any Installer
     @ObservationIgnored private let startAtLogin: StartAtLogin
     @ObservationIgnored private let makeResident: @MainActor () -> Launcher
-    @ObservationIgnored private let updater: Updater?
+    @ObservationIgnored private let updater: Updater
 
     /// The gesture model once it runs, including while a resident shows the dialog, moves or shows the failure; nil for
     /// a copy that only asks or is still stopping others.
@@ -173,7 +173,7 @@ public final class Lifecycle {
 
     public init(
         placement: Placement, copies: any RunningCopies, installer: any Installer, startAtLogin: StartAtLogin,
-        makeResident: @escaping @MainActor () -> Launcher, updater: Updater? = nil
+        makeResident: @escaping @MainActor () -> Launcher, updater: Updater
     ) {
         self.placement = placement
         self.installer = installer
@@ -181,7 +181,7 @@ public final class Lifecycle {
         self.startAtLogin = startAtLogin
         self.makeResident = makeResident
         self.updater = updater
-        updater?.onHandOver = { [unowned self] in handedOver() }
+        updater.onHandOver = { [unowned self] in handedOver() }
     }
 
     /// Once, from applicationDidFinishLaunching. A second call does nothing.
@@ -213,7 +213,11 @@ public final class Lifecycle {
     /// From applicationShouldTerminate.
     public func shouldEnd(_ request: QuitRequest) -> Bool {
         switch stage {
-        case .ending, .idle, .replacingOthers, .askingToMove, .moveFailed: return true
+        case .ending, .idle, .replacingOthers: return true
+        case .askingToMove, .moveFailed:
+            // A button answered after this, as AppKit does when it ends the modal on a quit, must move nothing.
+            stage = .ending
+            return true
         case .moving: return request == .system
         case .resident(let launcher):
             // Logout, restart and shutdown always end.
@@ -225,6 +229,15 @@ public final class Lifecycle {
             }
             // With the window closed, an ordinary quit is a script's: end.
             return true
+        }
+    }
+
+    /// From `NSWorkspace.willPowerOffNotification`: a dialog still up is over, whether or not the quit event that follows
+    /// reaches `shouldEnd` before its session ends.
+    public func powerOffAnnounced() {
+        switch stage {
+        case .askingToMove, .moveFailed: stage = .ending
+        default: break
         }
     }
 
@@ -258,7 +271,8 @@ public final class Lifecycle {
         copies.stop(others) { [unowned self] in othersExited() }
     }
 
-    /// The only place the updater starts, so a copy about to end, or asking to move, never reaches the network.
+    /// The only place the updater starts, so a copy about to end, or asking to move, never reaches the network. Every
+    /// resident's updater starts; only one with ports can make a request.
     private func othersExited() {
         guard case .replacingOthers(let opening, let opensWindow, let eject) = stage else { return }
         let launcher = makeResident()
@@ -267,7 +281,7 @@ public final class Lifecycle {
         if opensWindow { launcher.openedByHand() }
         // The mover has exited, so its volume is free.
         if let eject { installer.eject(eject) }
-        updater?.start(watching: launcher, opening: opening, opensWindow: opensWindow)
+        updater.start(watching: launcher, opening: opening, opensWindow: opensWindow)
     }
 
     /// `end()`, never `quit()`: starting at login stays as it is.

@@ -19,14 +19,14 @@ import Testing
     /// A by-hand resident whose card shows.
     private func offering(_ world: LifecycleWorld) -> OneProcess {
         let process = byHand(world)
-        process.engine.push(.cycleEnded(.found))
+        process.engine.push(.cycleEnded(.found("1.1.23")))
         return process
     }
 
     /// A by-hand resident whose *Update now* runs.
     private func updating(_ world: LifecycleWorld) -> OneProcess {
         let process = offering(world)
-        process.updater?.updateNow()
+        process.updater.updateNow()
         return process
     }
 
@@ -57,7 +57,7 @@ import Testing
         process.openAgain(.byHand)
         #expect(process.engine.probes == 3)
         process.closeWindow()
-        process.engine.push(.cycleEnded(.found))
+        process.engine.push(.cycleEnded(.found("1.1.23")))
         #expect(process.card == nil)
         process.openAgain(.byHand)
         #expect(process.engine.probes == 4)
@@ -73,7 +73,7 @@ import Testing
 
         #expect(process.engine.probes == 1)
         #expect(process.card == nil)
-        process.engine.push(.cycleEnded(.found))
+        process.engine.push(.cycleEnded(.found("1.1.23")))
         #expect(process.card == .available)
         #expect(process.engine.overlaps == 0)
     }
@@ -92,7 +92,7 @@ import Testing
         let process = byHand(world())
         #expect(process.engine.updates == 0)
 
-        process.engine.push(.cycleEnded(.found))
+        process.engine.push(.cycleEnded(.found("1.1.23")))
 
         #expect(process.card == .available)
         #expect(process.engine.updates == 0)
@@ -198,8 +198,8 @@ import Testing
 
         #expect(process.engine.probes == row.probes)
         #expect(process.engine.updates == 0)
-        #expect((process.updater != nil) == (row.probes == 1))
-        process.engine.push(.cycleEnded(.found))
+        #expect((process.ports != nil) == (row.probes == 1))
+        process.engine.push(.cycleEnded(.found("1.1.23")))
         #expect((process.card != nil) == (row.probes == 1))
         #expect(process.engine.overlaps == 0)
     }
@@ -222,7 +222,7 @@ import Testing
         let world = world()
         let process = offering(world)
 
-        process.updater?.updateNow()
+        process.updater.updateNow()
 
         #expect(process.engine.updates == 1)
         #expect(process.card == .updating)
@@ -248,12 +248,12 @@ import Testing
     @Test func updateNowOnlyActsWhileTheCardOffersIt() {
         let process = byHand(world())
 
-        process.updater?.updateNow()
+        process.updater.updateNow()
         #expect(process.engine.updates == 0)
 
-        process.engine.push(.cycleEnded(.found))
-        process.updater?.updateNow()
-        process.updater?.updateNow()
+        process.engine.push(.cycleEnded(.found("1.1.23")))
+        process.updater.updateNow()
+        process.updater.updateNow()
         #expect(process.engine.updates == 1)
         #expect(process.engine.overlaps == 0)
     }
@@ -266,7 +266,7 @@ import Testing
 
             #expect(process.card == .available)
             #expect(!process.connection.isWatching)
-            process.updater?.updateNow()
+            process.updater.updateNow()
             #expect(process.engine.updates == 2)
             #expect(process.engine.overlaps == 0)
         }
@@ -307,7 +307,7 @@ import Testing
         process.openAgain(.byHand)
         #expect(process.engine.probes == 2)
         #expect(process.card == nil)
-        process.engine.push(.cycleEnded(.found))
+        process.engine.push(.cycleEnded(.found("1.1.23")))
         #expect(process.card == .available)
         #expect(process.engine.overlaps == 0)
     }
@@ -368,9 +368,9 @@ import Testing
     @Test func theCardsTextAndButtonFollowItsState() {
         #expect(UpdateCard.available.text == "Update available")
         #expect(UpdateCard.updating.text == "Update available")
-        #expect(UpdateCard.available.buttonTitle == "Update now")
+        #expect(UpdateCard.available.buttonTitle == .plain("Update now"))
         #expect(UpdateCard.available.isButtonEnabled)
-        #expect(UpdateCard.updating.buttonTitle == "Updating…")
+        #expect(UpdateCard.updating.buttonTitle == .progress(.updating))
         #expect(!UpdateCard.updating.isButtonEnabled)
     }
 }
